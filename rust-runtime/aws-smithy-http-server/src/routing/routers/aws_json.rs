@@ -23,7 +23,7 @@ pub enum Error {
     /// Relative URI was not "/".
     NotRootUrl,
     /// Method was not `POST`.
-    MethodDisallowed,
+    MethodNotAllowed,
     /// Missing the `x-amz-target` header.
     MissingHeader,
     /// Unable to parse header into UTF-8.
@@ -35,7 +35,7 @@ pub enum Error {
 impl IntoResponse<AwsJson10> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
-            Error::MethodDisallowed => super::method_disallowed(),
+            Error::MethodNotAllowed => super::method_disallowed(),
             _ => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
                 .header("Content-Type", "application/x-amz-json-1.0")
@@ -51,7 +51,7 @@ impl IntoResponse<AwsJson10> for Error {
 impl IntoResponse<AwsJson11> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
-            Error::MethodDisallowed => super::method_disallowed(),
+            Error::MethodNotAllowed => super::method_disallowed(),
             _ => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
                 .header("Content-Type", "application/x-amz-json-1.1")
@@ -121,7 +121,7 @@ where
 
         // Only `Method::POST` is allowed.
         if request.method() != http::Method::POST {
-            return Err(Error::MethodDisallowed);
+            return Err(Error::MethodNotAllowed);
         }
 
         // Find the `x-amz-target` header.

@@ -29,7 +29,7 @@ fn method_disallowed() -> http::Response<BoxBody> {
     http::Response::builder()
         .status(http::StatusCode::METHOD_NOT_ALLOWED)
         .body(empty())
-        .expect("valid HTTP response")
+        .expect("invalid HTTP response")
 }
 
 /// An interface for retrieving an inner [`Service`] given a [`http::Request`].

@@ -25,7 +25,7 @@ pub enum Error {
     /// Operation not found.
     NotFound,
     /// Method was not allowed.
-    MethodDisallowed,
+    MethodNotAllowed,
 }
 
 impl IntoResponse<AwsRestJson1> for Error {
@@ -40,7 +40,7 @@ impl IntoResponse<AwsRestJson1> for Error {
                 ))
                 .body(crate::body::to_boxed("{}"))
                 .expect("invalid HTTP response"),
-            Error::MethodDisallowed => super::method_disallowed(),
+            Error::MethodNotAllowed => super::method_disallowed(),
         }
     }
 }
@@ -56,7 +56,7 @@ impl IntoResponse<AwsRestXml> for Error {
                 ))
                 .body(crate::body::to_boxed(""))
                 .expect("invalid HTTP response"),
-            Error::MethodDisallowed => super::method_disallowed(),
+            Error::MethodNotAllowed => super::method_disallowed(),
         }
     }
 }
@@ -122,7 +122,7 @@ where
         if method_allowed {
             Err(Error::NotFound)
         } else {
-            Err(Error::MethodDisallowed)
+            Err(Error::MethodNotAllowed)
         }
     }
 }
