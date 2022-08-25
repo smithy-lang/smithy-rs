@@ -37,11 +37,11 @@ class RestXmlParserGenerator(
             if (!allowInvalidRoot) {
                 rustTemplate(
                     """
-                    if !(${XmlBindingTraitParserGenerator.XmlName(shapeName).matchExpression("start_el")}) {
+                    if !${XmlBindingTraitParserGenerator.XmlName(shapeName).matchExpression("start_el")} {
                         return Err(
-                            #{XmlError}::custom(format!("encountered invalid XML root: \
-                                expected $shapeName but got {:?}. \
-                                This is likely a bug in the SDK.", start_el)
+                            #{XmlError}::custom(
+                                format!("encountered invalid XML root: expected $shapeName but got {:?}. This is likely a bug in the SDK.", start_el)
+                            )
                         )
                     }
                     """,
