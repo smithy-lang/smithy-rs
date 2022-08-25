@@ -61,7 +61,7 @@ impl VersionsManifest {
             .text()
             .await
             .context("failed to download release manifest content")?;
-        Ok(Self::from_str(&manifest_contents).context("failed to parse versions.toml file")?)
+        Self::from_str(&manifest_contents).context("failed to parse versions.toml file")
     }
 
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
