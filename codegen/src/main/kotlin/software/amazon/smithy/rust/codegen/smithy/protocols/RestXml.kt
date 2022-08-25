@@ -119,6 +119,6 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
  */
 class AllowInvalidXmlRoot : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
-        val ID: ShapeId = ShapeId.from("aws.api.internal#allowInvalidXmlRoot")
+        val ID: ShapeId = ShapeId.from("smithy.api.internal#allowInvalidXmlRoot")
     }
 }
