@@ -75,21 +75,18 @@ data class RuntimeConfig(
         /**
          * Load a `RuntimeConfig` from an [ObjectNode] (JSON)
          */
-        fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
-            return if (node.isPresent) {
-                val crateVersionMap = node.get().getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
-                    val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
-                    CrateVersionMap(map)
-                }
-                val path = node.get().getStringMember("relativePath").orNull()?.value
-                val runtimeCrateLocation = RuntimeCrateLocation(path = path, versions = crateVersionMap)
-                RuntimeConfig(
-                    node.get().getStringMemberOrDefault("cratePrefix", "aws-smithy"),
-                    runtimeCrateLocation = runtimeCrateLocation,
-                )
-            } else {
-                RuntimeConfig()
+        fun fromNode(node_: Optional<ObjectNode>): RuntimeConfig {
+            val node = node_.orElse(Node.objectNode())
+            val crateVersionMap = node.getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
+                val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
+                CrateVersionMap(map)
             }
+            val path = node.getStringMember("relativePath").orNull()?.value
+            val runtimeCrateLocation = RuntimeCrateLocation(path = path, versions = crateVersionMap)
+            return RuntimeConfig(
+                node.getStringMemberOrDefault("cratePrefix", "aws-smithy"),
+                runtimeCrateLocation = runtimeCrateLocation,
+            )
         }
     }
 
