@@ -855,7 +855,9 @@ A toy implementation of the combined proposal is presented in [this PR](https://
 
 ## Changes Checklist
 
-- [ ] Add protocol specific routers to `rust-runtime/aws-smithy-http-server`.
-- [ ] Add middleware primitives and error types to `rust-runtime/aws-smithy-http-server`.
+- [x] Add protocol specific routers to `rust-runtime/aws-smithy-http-server`.
+  - https://github.com/awslabs/smithy-rs/pull/1666
+- [x] Add middleware primitives and error types to `rust-runtime/aws-smithy-http-server`.
+  - https://github.com/awslabs/smithy-rs/pull/1679
 - [ ] Add code generation which outputs new service builder.
 - [ ] Deprecate `OperationRegistryBuilder`, `OperationRegistry` and `Router`.
