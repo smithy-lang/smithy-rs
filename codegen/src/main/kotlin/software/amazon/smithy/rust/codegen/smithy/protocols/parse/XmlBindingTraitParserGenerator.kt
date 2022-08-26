@@ -196,6 +196,7 @@ class XmlBindingTraitParserGenerator(
 
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
+                    ##[allow(unused_variables)]
                     let start_el = decoder.start_el();
                     """,
                     *codegenScope,
