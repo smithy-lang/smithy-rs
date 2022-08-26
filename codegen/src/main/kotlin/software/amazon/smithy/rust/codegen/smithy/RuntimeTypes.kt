@@ -75,8 +75,8 @@ data class RuntimeConfig(
         /**
          * Load a `RuntimeConfig` from an [ObjectNode] (JSON)
          */
-        fun fromNode(node_: Optional<ObjectNode>): RuntimeConfig {
-            val node = node_.orElse(Node.objectNode())
+        fun fromNode(maybeNode: Optional<ObjectNode>): RuntimeConfig {
+            val node = maybeNode.orElse(Node.objectNode())
             val crateVersionMap = node.getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
                 val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
                 CrateVersionMap(map)
