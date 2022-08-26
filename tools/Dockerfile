@@ -45,8 +45,8 @@ RUN set -eux; \
 # Rust & Tools Installation Stage
 #
 FROM bare_base_image AS install_rust
-ARG rust_stable_version=1.58.1
-ARG rust_nightly_version=nightly-2022-03-29
+ARG rust_stable_version=1.61.0
+ARG rust_nightly_version=nightly-2022-07-25
 ARG cargo_udeps_version=0.1.29
 ARG cargo_hack_version=0.5.14
 ARG cargo_minimal_versions_version=0.1.4
@@ -102,7 +102,7 @@ RUN set -eux; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
     cargo install --locked --path tools/publisher; \
-    cargo +${rust_nightly_version} install --locked --path tools/api-linter; \
+    cargo install --locked --path tools/cargo-check-external-types; \
     cargo install --locked --path tools/changelogger; \
     cargo install --locked --path tools/crate-hasher; \
     cargo install --locked --path tools/sdk-lints; \
@@ -114,8 +114,8 @@ RUN set -eux; \
 # Final image
 #
 FROM bare_base_image AS final_image
-ARG rust_stable_version=1.58.1
-ARG rust_nightly_version=nightly-2022-03-29
+ARG rust_stable_version=1.61.0
+ARG rust_nightly_version=nightly-2022-07-25
 RUN set -eux; \
     yum -y updateinfo; \
     yum -y install \
@@ -154,7 +154,7 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
-RUN npm install -g diff2html-cli@5.1.11 && pip3 install --no-cache-dir uvloop==0.16.0
+RUN npm install -g diff2html-cli@5.1.11 && pip3 install --no-cache-dir uvloop==0.16.0 aiohttp==3.8.1
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

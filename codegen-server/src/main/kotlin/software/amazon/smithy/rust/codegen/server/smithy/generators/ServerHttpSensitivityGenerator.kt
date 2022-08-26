@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.util.dq
@@ -133,7 +132,7 @@ class ServerHttpSensitivityGenerator(
                     it.direction == RelationshipDirection.DIRECTED
                 }
                 .filter {
-                    it.hasTrait<SensitiveTrait>()
+                    isDirectedRelationshipSensitive<SensitiveTrait>(it)
                 }.mapNotNull {
                     it as? MemberShape
                 }
@@ -295,7 +294,7 @@ class ServerHttpSensitivityGenerator(
                 it.direction == RelationshipDirection.DIRECTED && !it.shape.hasTrait<A>()
             }
             .filter {
-                it.hasTrait<A>()
+                isDirectedRelationshipSensitive<A>(it)
             }
             .flatMap {
                 Walker(model)
@@ -304,11 +303,18 @@ class ServerHttpSensitivityGenerator(
                         it.direction == RelationshipDirection.DIRECTED
                     }
                     .filter {
-                        it.hasTrait<B>()
+                        isDirectedRelationshipSensitive<B>(it)
                     }.mapNotNull {
                         it as? MemberShape
                     }
             }
+    }
+
+    internal inline fun <reified A : Trait> isDirectedRelationshipSensitive(partnerShape: Shape): Boolean {
+        return partnerShape.hasTrait<A>() || (
+            partnerShape.asMemberShape().isPresent() &&
+                model.expectShape(partnerShape.asMemberShape().get().getTarget()).hasTrait<A>()
+            )
     }
 
     // Find member shapes with trait `T` contained in a shape enjoying `SensitiveTrait`.
@@ -355,62 +361,62 @@ class ServerHttpSensitivityGenerator(
     }
 
     fun renderRequestFmt(writer: RustWriter) {
-        writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::RequestFmt::new()", ";", *codegenScope) {
-            // Sensitivity only applies when http trait is applied to the operation
-            val httpTrait = operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
-            val inputShape = input() ?: return@withBlockTemplate
+        writer.rustTemplate("#{SmithyHttpServer}::logging::sensitivity::RequestFmt::new()", *codegenScope)
 
-            // httpHeader/httpPrefixHeaders bindings
-            val headerSensitivity = findHeaderSensitivity(inputShape)
-            if (headerSensitivity.hasRedactions()) {
-                withBlock(".header(", ")") {
-                    renderHeaderClosure(writer, headerSensitivity)
-                }
+        // Sensitivity only applies when http trait is applied to the operation
+        val httpTrait = operation.getTrait<HttpTrait>() ?: return
+        val inputShape = input() ?: return
+
+        // httpHeader/httpPrefixHeaders bindings
+        val headerSensitivity = findHeaderSensitivity(inputShape)
+        if (headerSensitivity.hasRedactions()) {
+            writer.withBlock(".header(", ")") {
+                renderHeaderClosure(writer, headerSensitivity)
             }
+        }
 
-            // httpLabel bindings
-            when (val label = findLabel(httpTrait.uri, inputShape)) {
-                is LabelSensitivity.Normal -> {
-                    if (label.indexes.isNotEmpty()) {
-                        withBlock(".label(", ")") {
-                            renderLabelClosure(writer, label.indexes)
-                        }
+        // httpLabel bindings
+        when (val label = findLabel(httpTrait.uri, inputShape)) {
+            is LabelSensitivity.Normal -> {
+                if (label.indexes.isNotEmpty()) {
+                    writer.withBlock(".label(", ")") {
+                        renderLabelClosure(writer, label.indexes)
                     }
                 }
-                is LabelSensitivity.Greedy -> {
-                    rust(".greedy_label(${label.suffixPosition})")
-                }
             }
+            is LabelSensitivity.Greedy -> {
+                writer.rust(".greedy_label(${label.suffixPosition})")
+            }
+        }
 
-            // httpQuery/httpQueryParams bindings
-            val querySensitivity = findQuerySensitivity(inputShape)
-            if (querySensitivity.hasRedactions()) {
-                withBlock(".query(", ")") {
-                    renderQueryClosure(writer, querySensitivity)
-                }
+        // httpQuery/httpQueryParams bindings
+        val querySensitivity = findQuerySensitivity(inputShape)
+        if (querySensitivity.hasRedactions()) {
+            writer.withBlock(".query(", ")") {
+                renderQueryClosure(writer, querySensitivity)
             }
         }
     }
 
     fun renderResponseFmt(writer: RustWriter) {
-        writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", ";", *codegenScope) {
-            // Sensitivity only applies when HTTP trait is applied to the operation
-            operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
-            val outputShape = output() ?: return@withBlockTemplate
+        writer.rustTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", *codegenScope)
 
-            // httpHeader/httpPrefixHeaders bindings
-            val headerSensitivity = findHeaderSensitivity(outputShape)
-            if (headerSensitivity.hasRedactions()) {
-                withBlock(".header(", ")") {
-                    renderHeaderClosure(writer, headerSensitivity)
-                }
-            }
+        // Sensitivity only applies when HTTP trait is applied to the operation
+        operation.getTrait<HttpTrait>() ?: return
+        val outputShape = output() ?: return
 
-            // Status code bindings
-            val hasResponseStatusCode = findSensitiveBoundTrait<HttpResponseCodeTrait>(outputShape).isNotEmpty()
-            if (hasResponseStatusCode) {
-                rust(".status_code()")
+        // httpHeader/httpPrefixHeaders bindings
+        val headerSensitivity = findHeaderSensitivity(outputShape)
+        if (headerSensitivity.hasRedactions()) {
+            writer.withBlock(".header(", ")") {
+                renderHeaderClosure(writer, headerSensitivity)
             }
+        }
+
+        // Status code bindings
+        val hasResponseStatusCode = findSensitiveBoundTrait<HttpResponseCodeTrait>(outputShape).isNotEmpty()
+        if (hasResponseStatusCode) {
+            writer.rust(".status_code()")
         }
     }
 }

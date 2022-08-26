@@ -10,6 +10,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -55,7 +56,7 @@ class ServerOperationRegistryGenerator(
     private val model = coreCodegenContext.model
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val serviceName = coreCodegenContext.serviceShape.toShapeId().name
-    private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
+    private val operationNames = operations.map { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
@@ -287,7 +288,7 @@ ${operationImplementationStubs(operations)}
             operations.forEachIndexed { i, operation ->
                 rustTemplate(
                     """
-                    Op$i: #{ServerOperationHandler}::Handler<B, In$i, #{OperationInput}>,
+                    Op$i: #{ServerOperationHandler}::Handler<B, In$i, ${symbolProvider.toSymbol(operation.inputShape(model)).fullName}>,
                     In$i: 'static + Send,
                     """,
                     *codegenScope,
@@ -385,7 +386,7 @@ ${operationImplementationStubs(operations)}
             "Result<$t, $e>"
         }
 
-        val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
+        val operationName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(this).name.toSnakeCase())
         return "async fn $operationName(input: $inputT) -> $outputT"
     }
 

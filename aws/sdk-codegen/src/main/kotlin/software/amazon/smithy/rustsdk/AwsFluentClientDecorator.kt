@@ -138,15 +138,14 @@ private class AwsFluentClientExtensions(types: Types) {
                     C: #{SmithyConnector}<Error = E> + Send + 'static,
                     E: Into<#{ConnectorError}>,
                 {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
+                    let retry_config = conf.retry_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
                     let mut builder = #{aws_smithy_client}::Builder::new()
                         .connector(#{DynConnector}::new(conn))
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
                     builder.set_retry_config(retry_config.into());
                     builder.set_timeout_config(timeout_config);
-                    if let Some(sleep_impl) = sleep_impl {
+                    if let Some(sleep_impl) = conf.sleep_impl() {
                         builder.set_sleep_impl(Some(sleep_impl));
                     }
                     let client = builder.build();
@@ -162,16 +161,15 @@ private class AwsFluentClientExtensions(types: Types) {
                 /// Creates a new client from the service [`Config`](crate::Config).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
+                    let retry_config = conf.retry_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
                     let mut builder = #{aws_smithy_client}::Builder::dyn_https()
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
                     builder.set_retry_config(retry_config.into());
                     builder.set_timeout_config(timeout_config);
                     // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
                     // only set it if we actually have a sleep impl.
-                    if let Some(sleep_impl) = sleep_impl {
+                    if let Some(sleep_impl) = conf.sleep_impl() {
                         builder.set_sleep_impl(Some(sleep_impl));
                     }
                     let client = builder.build();
@@ -185,17 +183,21 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
+private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
     private val serviceName = coreCodegenContext.serviceShape.expectTrait<TitleTrait>().value
     private val serviceShape = coreCodegenContext.serviceShape
     private val crateName = coreCodegenContext.moduleUseName()
     private val codegenScope =
         arrayOf("aws_config" to coreCodegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
 
-    // Usage docs on STS must be suppressed—aws-config cannot be added as a dev-dependency because it would create
-    // a circular dependency
+    // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
+    // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
     private fun suppressUsageDocs(): Boolean =
-        setOf(ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"), ShapeId.from("com.amazonaws.sso#SWBPortalService")).contains(serviceShape.id)
+        SdkSettings.from(coreCodegenContext.settings).awsConfigVersion == null ||
+            setOf(
+                ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
+                ShapeId.from("com.amazonaws.sso#SWBPortalService"),
+            ).contains(serviceShape.id)
 
     override fun section(section: FluentClientSection): Writable {
         return when (section) {

@@ -30,13 +30,32 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
-    private val logger: Logger = Logger.getLogger(javaClass.name)
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
-        mapOf("package" to mapOf("readme" to "README.md"))
+        if (generateReadme(codegenContext)) {
+            mapOf("package" to mapOf("readme" to "README.md"))
+        } else {
+            emptyMap()
+        }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        if (generateReadme(codegenContext)) {
+            AwsSdkReadmeGenerator().generateReadme(codegenContext, rustCrate)
+        }
+    }
+
+    private fun generateReadme(codegenContext: ClientCodegenContext) =
+        SdkSettings.from(codegenContext.settings).generateReadme
+}
+
+internal class AwsSdkReadmeGenerator {
+    private val logger: Logger = Logger.getLogger(javaClass.name)
+
+    internal fun generateReadme(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
+            ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
         rustCrate.withFile("README.md") { writer ->
             val description = normalizeDescription(
                 codegenContext.moduleName,
@@ -110,9 +129,6 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
             )
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     /**
      * Strips HTML from the description and makes it human-readable Markdown.

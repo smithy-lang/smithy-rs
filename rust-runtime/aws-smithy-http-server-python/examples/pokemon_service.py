@@ -3,20 +3,24 @@
 #  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #  SPDX-License-Identifier: Apache-2.0
 
+import itertools
 import logging
+import random
+import threading
 from dataclasses import dataclass
 from typing import List, Optional
-import itertools
-import threading
 
-from libpokemon_service_server_sdk.error import \
-    ResourceNotFoundException
+import aiohttp
+from libpokemon_service_server_sdk import App
+from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
-    EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput)
+    EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
+    HealthCheckOperationInput, StreamPokemonRadioOperationInput)
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
-    EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput)
-from libpokemon_service_server_sdk import App
+    EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
+    HealthCheckOperationOutput, StreamPokemonRadioOperationOutput)
+from libpokemon_service_server_sdk.types import ByteStream
 
 
 # A slightly more atomic counter using a threading lock.
@@ -58,7 +62,7 @@ class FastWriteCounter:
 class Context:
     # In our case it simulates an in-memory database containing the description of Pikachu in multiple
     # languages.
-    _database = {
+    _pokemon_database = {
         "pikachu": [
             FlavorText(
                 flavor_text="""When several of these Pokémon gather, their electricity could build and cause lightning storms.""",
@@ -75,19 +79,27 @@ class Context:
             FlavorText(
                 flavor_text="ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。",
                 language=Language.Japanese,
-            )
+            ),
         ]
     }
     _calls_count = FastWriteCounter()
+    _radio_database = [
+        "https://ia800107.us.archive.org/33/items/299SoundEffectCollection/102%20Palette%20Town%20Theme.mp3",
+        "https://ia600408.us.archive.org/29/items/PocketMonstersGreenBetaLavenderTownMusicwwwFlvtoCom/Pocket%20Monsters%20Green%20Beta-%20Lavender%20Town%20Music-%5Bwww_flvto_com%5D.mp3",
+    ]
 
     def get_pokemon_description(self, name: str) -> Optional[List[FlavorText]]:
-        return self._database.get(name)
+        return self._pokemon_database.get(name)
 
     def increment_calls_count(self) -> None:
         self._calls_count.increment()
+        return None
 
     def get_calls_count(self) -> int:
         return self._calls_count.value()
+
+    def get_random_radio_stream(self) -> str:
+        return random.choice(self._radio_database)
 
 
 ###########################################################
@@ -105,7 +117,7 @@ app.context(Context())
 # Empty operation used for raw benchmarking.
 @app.empty_operation
 def empty_operation(_: EmptyOperationInput) -> EmptyOperationOutput:
-    logging.debug("Running the empty operation")
+    # logging.debug("Running the empty operation")
     return EmptyOperationOutput()
 
 
@@ -135,6 +147,25 @@ def get_server_statistics(
     calls_count = context.get_calls_count()
     logging.debug("The service handled %d requests", calls_count)
     return GetServerStatisticsOutput(calls_count=calls_count)
+
+
+# Run a shallow healthcheck of the service.
+@app.health_check_operation
+def health_check_operation(_: HealthCheckOperationInput) -> HealthCheckOperationOutput:
+    return HealthCheckOperationOutput()
+
+
+# Stream a random Pokémon song.
+@app.stream_pokemon_radio_operation
+async def stream_pokemon_radio(_: StreamPokemonRadioOperationInput, context: Context):
+    radio_url = context.get_random_radio_stream()
+    logging.info("Random radio URL for this stream is %s", radio_url)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(radio_url) as response:
+            data = ByteStream(await response.read())
+        logging.debug("Successfully fetched radio url %s", radio_url)
+    return StreamPokemonRadioOperationOutput(data=data)
+
 
 ###########################################################
 # Run the server.

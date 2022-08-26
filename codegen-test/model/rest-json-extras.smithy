@@ -73,15 +73,25 @@ service RestJsonExtras {
 @httpResponseTests([
     {
         documentation: "Upper case error modeled lower case",
-        id: "ServiceLevelError",
+        id: "ServiceLevelErrorClient",
         protocol: "aws.protocols#restJson1",
         code: 500,
         body: "",
         headers: { "X-Amzn-Errortype": "ExtraError" },
-        params: {}
+        params: {},
+        appliesTo: "client",
+    },
+    {
+        documentation: "Upper case error modeled lower case",
+        id: "ServiceLevelErrorServer",
+        protocol: "aws.protocols#restJson1",
+        code: 500,
+        body: "{}",
+        headers: { "X-Amzn-Errortype": "ExtraError" },
+        params: {},
+        appliesTo: "server",
     }
 ])
-@error("server")
 @error("server")
 structure ExtraError {}
 
@@ -113,7 +123,8 @@ structure StringPayloadInput {
     uri: "/primitive-document",
     method: "POST",
     body: "{}",
-    params: {}
+    headers: { "Content-Type": "application/json" },
+    params: {},
 }])
 @http(uri: "/primitive-document", method: "POST")
 operation PrimitiveIntOp {
@@ -131,14 +142,14 @@ structure PrimitiveIntDocument {
         protocol: "aws.protocols#restJson1",
         code: 200,
         headers: { "x-field": "123" },
-        params: { field: 123 }
+        params: { field: 123 },
     },
     {
         id: "DeserPrimitiveHeaderMissing",
         protocol: "aws.protocols#restJson1",
         code: 200,
         headers: { },
-        params: { field: 0 }
+        params: { field: 0 },
     }
 ])
 @http(uri: "/primitive", method: "POST")
@@ -201,7 +212,8 @@ structure MapWithEnumKeyInputOutput {
         method: "POST",
         protocol: "aws.protocols#restJson1",
         body: "{\"map\":{\"enumvalue\":\"something\"}}",
-        params: { map: { "enumvalue": "something" } }
+        headers: { "Content-Type": "application/json" },
+        params: { map: { "enumvalue": "something" } },
     },
 ])
 @httpResponseTests([
@@ -239,6 +251,7 @@ structure EscapedStringValuesInputOutput {
         method: "POST",
         protocol: "aws.protocols#restJson1",
         body: "{\"enum\":\"has\\\"quotes\",\"also\\\"has\\\"quotes\":\"test\"}",
+        headers: { "Content-Type": "application/json" },
         params: { enum: "has\"quotes", someString: "test" },
     }
 ])
@@ -283,6 +296,7 @@ structure NullInNonSparseOutput {
         code: 200,
         body: "{\"list\":[null,\"one\",null,\"two\",null],\"map\":{\"zero\":null,\"one\":\"1\"}}",
         params: { list: ["one", "two"], map: { "one": "1" } },
+        appliesTo: "client",
     }
 ])
 operation NullInNonSparse {
@@ -296,13 +310,14 @@ operation CaseInsensitiveErrorOperation {
 
 @httpResponseTests([
     {
-        documentation: "Upper case error modeled lower case",
+        documentation: "Upper case error modeled lower case. See: https://github.com/awslabs/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
         id: "UpperErrorModeledLower",
         protocol: "aws.protocols#restJson1",
         code: 500,
         body: "{\"Message\": \"hello\"}",
         headers: { "X-Amzn-Errortype": "CaseInsensitiveError" },
-        params: { message: "hello" }
+        params: { message: "hello" },
+        appliesTo: "client",
     }
 ])
 @error("server")
@@ -322,7 +337,8 @@ structure EmptyStructWithContentOnWireOpOutput {
         protocol: "aws.protocols#restJson1",
         code: 200,
         body: "{\"empty\": {\"value\":\"not actually empty\"}}",
-        params: { empty: {} }
+        params: { empty: {} },
+        appliesTo: "client",
     }
 ])
 operation EmptyStructWithContentOnWireOp {

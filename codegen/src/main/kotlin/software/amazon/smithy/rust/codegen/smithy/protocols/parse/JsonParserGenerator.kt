@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
@@ -65,7 +66,7 @@ class JsonParserGenerator(
     private val target = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
-    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
+    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
@@ -250,7 +251,14 @@ class JsonParserGenerator(
             when (target.hasTrait<EnumTrait>()) {
                 true -> {
                     if (convertsToEnumInServer(target)) {
-                        rust("#T::try_from(u.as_ref())", symbolProvider.toSymbol(target))
+                        rustTemplate(
+                            """
+                            #{EnumSymbol}::try_from(u.as_ref())
+                                .map_err(|e| #{Error}::custom(format!("unknown variant {}", e)))
+                            """,
+                            "EnumSymbol" to symbolProvider.toSymbol(target),
+                            *codegenScope,
+                        )
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
@@ -263,16 +271,28 @@ class JsonParserGenerator(
     private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun RustWriter.deserializeString(target: StringShape) {
-        // additional .transpose()? because Rust does not allow ? up from closures
-        val additionalTranspose = if (convertsToEnumInServer(target)) { ".transpose()?".repeat(2) } else { ".transpose()?" }
+        // Additional `.transpose()?` because we can't use `?` inside the closures that parsed the string.
+        val additionalTranspose = ".transpose()?".repeat(if (convertsToEnumInServer(target)) 2 else 1)
         withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ")$additionalTranspose", *codegenScope) {
             deserializeStringInner(target, "s")
         }
     }
 
     private fun RustWriter.deserializeNumber(target: NumberShape) {
-        val symbol = symbolProvider.toSymbol(target)
-        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())", "T" to symbol, *codegenScope)
+        if (target.isFloatShape) {
+            rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_f32_lossy())", *codegenScope)
+        } else if (target.isDoubleShape) {
+            rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_f64_lossy())", *codegenScope)
+        } else {
+            rustTemplate(
+                """
+                #{expect_number_or_null}(tokens.next())?
+                    .map(|v| v.try_into())
+                    .transpose()?
+                """,
+                *codegenScope,
+            )
+        }
     }
 
     private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {

@@ -10,7 +10,7 @@ use aws.protocols#restJson1
 service PokemonService {
     version: "2021-12-01",
     resources: [PokemonSpecies, Storage],
-    operations: [GetServerStatistics, EmptyOperation, CapturePokemonOperation],
+    operations: [GetServerStatistics, EmptyOperation, CapturePokemonOperation, HealthCheckOperation],
 }
 
 /// A Pokémon species forms the basis for at least one Pokémon.
@@ -240,6 +240,13 @@ structure EmptyOperationInput { }
 
 @output
 structure EmptyOperationOutput { }
+
+/// Health check operation, to check the service is up
+/// Not yet a deep check
+@readonly
+@http(uri: "/ping", method: "GET")
+operation HealthCheckOperation {
+}
 
 @error("client")
 @httpError(404)

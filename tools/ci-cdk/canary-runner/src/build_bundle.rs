@@ -68,7 +68,7 @@ lazy_static! {
 }
 
 #[derive(Debug, Parser, Eq, PartialEq)]
-pub struct BuildBundleOpt {
+pub struct BuildBundleArgs {
     /// Canary Lambda source code path (defaults to current directory)
     #[clap(long)]
     pub canary_path: Option<PathBuf>,
@@ -181,7 +181,7 @@ fn sha1_file(path: &Path) -> Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-pub async fn build_bundle(opt: BuildBundleOpt) -> Result<Option<PathBuf>> {
+pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
     let canary_path = opt
         .canary_path
         .unwrap_or_else(|| std::env::current_dir().expect("current dir"));
@@ -252,20 +252,20 @@ pub async fn build_bundle(opt: BuildBundleOpt) -> Result<Option<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Opt;
+    use crate::Args;
     use clap::Parser;
     use smithy_rs_tool_common::package::PackageCategory;
     use smithy_rs_tool_common::versions_manifest::CrateVersion;
 
     #[test]
     fn test_arg_parsing() {
-        assert!(Opt::try_parse_from(["./canary-runner", "build-bundle"]).is_err());
+        assert!(Args::try_parse_from(["./canary-runner", "build-bundle"]).is_err());
         assert!(
-            Opt::try_parse_from(["./canary-runner", "build-bundle", "--sdk-release-tag"]).is_err()
+            Args::try_parse_from(["./canary-runner", "build-bundle", "--sdk-release-tag"]).is_err()
         );
-        assert!(Opt::try_parse_from(["./canary-runner", "build-bundle", "--sdk-path"]).is_err());
-        assert!(Opt::try_parse_from(["./canary-runner", "build-bundle", "--musl"]).is_err());
-        assert!(Opt::try_parse_from([
+        assert!(Args::try_parse_from(["./canary-runner", "build-bundle", "--sdk-path"]).is_err());
+        assert!(Args::try_parse_from(["./canary-runner", "build-bundle", "--musl"]).is_err());
+        assert!(Args::try_parse_from([
             "./canary-runner",
             "build-bundle",
             "--sdk-release-tag",
@@ -275,14 +275,14 @@ mod tests {
         ])
         .is_err());
         assert_eq!(
-            Opt::BuildBundle(BuildBundleOpt {
+            Args::BuildBundle(BuildBundleArgs {
                 canary_path: None,
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: false,
                 manifest_only: false,
             }),
-            Opt::try_parse_from([
+            Args::try_parse_from([
                 "./canary-runner",
                 "build-bundle",
                 "--sdk-release-tag",
@@ -292,14 +292,14 @@ mod tests {
             .expect("valid args")
         );
         assert_eq!(
-            Opt::BuildBundle(BuildBundleOpt {
+            Args::BuildBundle(BuildBundleArgs {
                 canary_path: Some("some-canary-path".into()),
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
                 manifest_only: false,
             }),
-            Opt::try_parse_from([
+            Args::try_parse_from([
                 "./canary-runner",
                 "build-bundle",
                 "--sdk-path",
@@ -311,14 +311,14 @@ mod tests {
             .expect("valid args")
         );
         assert_eq!(
-            Opt::BuildBundle(BuildBundleOpt {
+            Args::BuildBundle(BuildBundleArgs {
                 canary_path: None,
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: true,
                 manifest_only: true,
             }),
-            Opt::try_parse_from([
+            Args::try_parse_from([
                 "./canary-runner",
                 "build-bundle",
                 "--sdk-release-tag",

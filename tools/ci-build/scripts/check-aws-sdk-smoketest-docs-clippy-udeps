@@ -23,3 +23,15 @@ mv aws-sdk-smoketest smithy-rs/aws/sdk/build/aws-sdk
 pushd smithy-rs/aws/sdk/integration-tests
 cargo check
 popd &>/dev/null
+
+pushd smithy-rs/aws/sdk/build/aws-sdk/sdk &>/dev/null
+for crate_path in $(ls | grep -v "aws-"); do
+    if [[ -d "${crate_path}" ]]; then
+        pushd "${crate_path}" &>/dev/null
+        # Override "fail on warning" for smoke test docs since DynamoDB's modeled docs cause rustdoc warnings,
+        # and `cargo-check-external-types` relies on rustdoc JSON output.
+        RUSTDOCFLAGS="" cargo +"${RUST_NIGHTLY_VERSION}" check-external-types --all-features --config ../../../../sdk-external-types.toml
+        popd &>/dev/null
+    fi
+done
+popd &>/dev/null
