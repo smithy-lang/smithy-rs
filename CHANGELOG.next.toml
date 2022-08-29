@@ -214,3 +214,30 @@ fn f1(n: aws_smithy_types::Number) {
 references = ["smithy-rs#1274"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy."
+references = ["smithy-rs#1699"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy."
+references = ["smithy-rs#1699"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The AWS S3 `GetObjectAttributes` operation will no longer fail with an XML error."
+references = ["aws-sdk-rust#609"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+It is now possible to exempt specific operations from XML body root checking. To do this, add the `AllowInvalidXmlRoot`
+trait to the output struct of the operation you want to exempt.
+"""
+references = ["aws-sdk-rust#609"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "Velfi"

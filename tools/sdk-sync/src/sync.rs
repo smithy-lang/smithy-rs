@@ -354,11 +354,11 @@ impl Sync {
             info!("No example changes to copy over.");
             return Ok(());
         }
-        let examples_head = example_revisions.iter().cloned().next().unwrap();
+        let examples_head = example_revisions.get(0).unwrap();
 
         let sdk_gen = DefaultSdkGenerator::new(
             &self.previous_versions_manifest,
-            &examples_head,
+            examples_head,
             &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
             self.fs.clone(),
             None,
@@ -369,9 +369,7 @@ impl Sync {
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
         self.copy_sdk(generated_sdk.path())
             .context("failed to copy the SDK")?;
-        self.aws_sdk_rust
-            .stage(&PathBuf::from("."))
-            .context(here!())?;
+        self.aws_sdk_rust.stage(Path::new(".")).context(here!())?;
 
         let example_commits: Vec<Commit> = example_revisions
             .iter()
