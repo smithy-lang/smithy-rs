@@ -3,11 +3,6 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
-/*
- *  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *  SPDX-License-Identifier: Apache-2.0
- */
-
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 
 pub(crate) fn is_valid_host_label(
@@ -23,7 +18,7 @@ pub(crate) fn is_valid_host_label(
         }
         true
     } else {
-        if label.len() < 1 || label.len() > 63 {
+        if label.is_empty() || label.len() > 63 {
             e.report_error("host was too short or too long");
             return false;
         }

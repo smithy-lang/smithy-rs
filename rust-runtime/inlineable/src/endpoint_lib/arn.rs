@@ -135,4 +135,19 @@ mod test {
         let arn = "arn:aws:s3:us-east-2:012345678:";
         Arn::parse(arn).expect_err("empty resource");
     }
+
+    #[test]
+    fn arns_with_empty_parts() {
+        let arn = "arn:aws:s3:::my_corporate_bucket/Development/*";
+        assert_eq!(
+            Arn::parse(arn).expect("valid arn"),
+            Arn {
+                partition: "aws",
+                service: "s3",
+                region: "",
+                account_id: "",
+                resource_id: vec!["my_corporate_bucket", "Development", "*"]
+            }
+        );
+    }
 }

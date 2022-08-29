@@ -34,6 +34,10 @@ impl DiagnosticCollector {
         }
     }
 
+    pub(crate) fn take_last_error(&mut self) -> Option<Box<dyn Error + Send + Sync>> {
+        self.last_error.take()
+    }
+
     /// Create a new diagnostic collector
     pub(crate) fn new() -> Self {
         Self { last_error: None }

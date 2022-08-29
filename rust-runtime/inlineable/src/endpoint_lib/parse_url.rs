@@ -17,10 +17,7 @@ pub(crate) struct Url<'a> {
 
 impl<'a> Url<'a> {
     pub(crate) fn is_ip(&self) -> bool {
-        match self.url.host() {
-            Some(Host::Ipv4(_) | Host::Ipv6(_)) => true,
-            _ => false,
-        }
+        matches!(self.url.host(), Some(Host::Ipv4(_) | Host::Ipv6(_)))
     }
     pub(crate) fn scheme(&self) -> &str {
         self.url.scheme()

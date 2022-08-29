@@ -34,7 +34,7 @@ pub(crate) fn substring<'a, 'b>(
     } else {
         (input.len() - stop, input.len() - start)
     };
-    return Some(&input[effective_start..effective_stop]);
+    Some(&input[effective_start..effective_stop])
 }
 
 #[cfg(test)]
@@ -79,9 +79,16 @@ mod test {
     // substring doesn't support unicode, it always returns none
     #[test]
     fn substring_unicode() {
+        let mut collector = DiagnosticCollector::new();
+        assert_eq!(substring("a🐱b", 0, 2, false, &mut collector), None);
         assert_eq!(
-            substring("a🐱b", 0, 2, false, &mut DiagnosticCollector::new()),
-            None
+            format!(
+                "{}",
+                collector
+                    .take_last_error()
+                    .expect("last error should be set")
+            ),
+            "the input to substring was not ascii"
         );
     }
 
