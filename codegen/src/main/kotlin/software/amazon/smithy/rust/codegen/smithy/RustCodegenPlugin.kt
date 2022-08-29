@@ -10,6 +10,7 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
@@ -34,6 +35,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
+        val codegenContext = context.toBuilder().model(ModelTransformer.create().flattenAndRemoveMixins(context.model)).build()
         // Discover `RustCodegenDecorators` on the classpath. `RustCodegenDecorator` returns different types of
         // customizations. A customization is a function of:
         // - location (e.g. the mutate section of an operation)
@@ -41,7 +43,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
         // - writer: The active RustWriter at the given location
         val codegenDecorator =
             CombinedCodegenDecorator.fromClasspath(
-                context,
+                codegenContext,
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
@@ -49,7 +51,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
             )
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code
-        CodegenVisitor(context, codegenDecorator).execute()
+        CodegenVisitor(codegenContext, codegenDecorator).execute()
     }
 
     companion object {
