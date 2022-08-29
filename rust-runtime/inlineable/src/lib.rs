@@ -16,6 +16,8 @@ mod rest_xml_wrapped_errors;
 #[allow(unused)]
 mod server_operation_handler_trait;
 
+#[allow(unused)]
+mod endpoint_lib;
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
 #[cfg(test)]
