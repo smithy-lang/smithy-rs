@@ -88,6 +88,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     private fun baselineTransform(model: Model) =
         model
+            // Flattens mixins out of the model and removes them from the model
+            .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
