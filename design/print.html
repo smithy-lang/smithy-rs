@@ -450,50 +450,40 @@ pub enum Document {
     Null,
 }
 
+impl From&lt;bool&gt; for Document {
+    fn from(value: bool) -&gt; Self {
+        Document::Bool(value)
+    }
+}
+
+impl From&lt;String&gt; for Document {
+    fn from(value: String) -&gt; Self {
+        Document::String(value)
+    }
+}
+
+impl From&lt;Vec&lt;Document&gt;&gt; for Document {
+    fn from(values: Vec&lt;Document&gt;) -&gt; Self {
+        Document::Array(values)
+    }
+}
+
+impl From&lt;HashMap&lt;String, Document&gt;&gt; for Document {
+    fn from(values: HashMap&lt;String, Document&gt;) -&gt; Self {
+        Document::Object(values)
+    }
+}
+
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// &lt;https://docs.serde.rs/src/serde_json/number.rs.html#20-22&gt;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Number {
-    /// Unsigned 64-bit integer value
+    /// Unsigned 64-bit integer value.
     PosInt(u64),
-    /// Signed 64-bit integer value
+    /// Signed 64-bit integer value. The wrapped value is _always_ negative.
     NegInt(i64),
-    /// 64-bit floating-point value
+    /// 64-bit floating-point value.
     Float(f64),
-}
-
-macro_rules! to_num_fn {
-    ($name:ident, $typ:ident, $styp:expr) =&gt; {
-        #[doc = &quot;Converts to a `&quot;]
-        #[doc = $styp]
-        #[doc = &quot;`. This conversion may be lossy.&quot;]
-        pub fn $name(self) -&gt; $typ {
-            match self {
-                Number::PosInt(val) =&gt; val as $typ,
-                Number::NegInt(val) =&gt; val as $typ,
-                Number::Float(val) =&gt; val as $typ,
-            }
-        }
-    };
-
-    ($name:ident, $typ:ident) =&gt; {
-        to_num_fn!($name, $typ, stringify!($typ));
-    };
-}
-
-impl Number {
-    to_num_fn!(to_f32, f32);
-    to_num_fn!(to_f64, f64);
-
-    to_num_fn!(to_i8, i8);
-    to_num_fn!(to_i16, i16);
-    to_num_fn!(to_i32, i32);
-    to_num_fn!(to_i64, i64);
-
-    to_num_fn!(to_u8, u8);
-    to_num_fn!(to_u16, u16);
-    to_num_fn!(to_u32, u32);
-    to_num_fn!(to_u64, u64);
 }
 
 <span class="boring">}
