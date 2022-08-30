@@ -114,8 +114,14 @@ class UnconstrainedUnionGenerator(
             "UnconstrainedSymbol" to symbol
         )
 
+        val constraintViolationVisibility = if (publicConstrainedTypes) {
+            Visibility.PUBLIC
+        } else {
+            Visibility.PUBCRATE
+        }
         modelsModuleWriter.withModule(
-            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()
+            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
+            RustMetadata(visibility = constraintViolationVisibility)
         ) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
             rustBlock("pub enum $constraintViolationName") {

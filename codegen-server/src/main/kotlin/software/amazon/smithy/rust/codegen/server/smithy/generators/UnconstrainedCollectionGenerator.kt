@@ -86,8 +86,14 @@ class UnconstrainedCollectionGenerator(
             )
         }
 
+        val constraintViolationVisibility = if (publicConstrainedTypes) {
+            Visibility.PUBLIC
+        } else {
+            Visibility.PUBCRATE
+        }
         modelsModuleWriter.withModule(
-            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()
+            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
+            RustMetadata(visibility = constraintViolationVisibility)
         ) {
             rustTemplate(
                 """

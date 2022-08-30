@@ -349,11 +349,7 @@ open class ServerCodegenVisitor(
 
         if (isDirectlyConstrained || renderUnconstrainedMap) {
             rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
-                MapConstraintViolationGenerator(
-                    codegenContext,
-                    modelsModuleWriter,
-                    shape
-                ).render()
+                MapConstraintViolationGenerator(codegenContext, modelsModuleWriter, shape).render()
             }
         }
     }
@@ -367,20 +363,8 @@ open class ServerCodegenVisitor(
         shape.getTrait<EnumTrait>()?.also { enum ->
             logger.info("[rust-server-codegen] Generating an enum $shape")
             rustCrate.useShapeWriter(shape) { writer ->
-                ServerEnumGenerator(
-                    model,
-                    symbolProvider,
-                    constraintViolationSymbolProvider,
-                    writer,
-                    shape,
-                    enum
-                ).render()
-                ConstrainedTraitForEnumGenerator(
-                    model,
-                    symbolProvider,
-                    writer,
-                    shape
-                ).render()
+                ServerEnumGenerator(codegenContext, writer, shape, enum).render()
+                ConstrainedTraitForEnumGenerator(model, symbolProvider, writer, shape).render()
             }
         }
 
@@ -396,11 +380,7 @@ open class ServerCodegenVisitor(
         } else if (shape.isDirectlyConstrained(symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) { writer ->
-                ConstrainedStringGenerator(
-                    codegenContext,
-                    writer,
-                    shape
-                ).render()
+                ConstrainedStringGenerator(codegenContext, writer, shape).render()
             }
         }
     }
