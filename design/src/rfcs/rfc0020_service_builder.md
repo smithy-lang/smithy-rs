@@ -283,15 +283,15 @@ let new_routes = old_routes
 
 Historically, `smithy-rs` has borrowed from [axum](https://github.com/tokio-rs/axum). Despite various divergences the code bases still have much in common:
 
-* Reliance on `Handler` trait to abstract over different closure signatures:
-  * [axum::handler::Handler](https://docs.rs/axum/latest/axum/handler/trait.Handler.html)
-  * [Handlers](#handlers)
-* A mechanism for turning `H: Handler` into a `tower::Service`:
-  * [axum::handler::IntoService](https://docs.rs/axum/latest/axum/handler/struct.IntoService.html)
-  * [OperationHandler](#handlers)
-* A `Router` to route requests to various handlers:
-  * [axum::Router](https://docs.rs/axum/latest/axum/struct.Router.html)
-  * [aws_smithy_http_server::routing::Router](#router)
+- Reliance on `Handler` trait to abstract over different closure signatures:
+  - [axum::handler::Handler](https://docs.rs/axum/latest/axum/handler/trait.Handler.html)
+  - [Handlers](#handlers)
+- A mechanism for turning `H: Handler` into a `tower::Service`:
+  - [axum::handler::IntoService](https://docs.rs/axum/latest/axum/handler/struct.IntoService.html)
+  - [OperationHandler](#handlers)
+- A `Router` to route requests to various handlers:
+  - [axum::Router](https://docs.rs/axum/latest/axum/struct.Router.html)
+  - [aws_smithy_http_server::routing::Router](#router)
 
 To identify where the implementations should differ we should classify in what ways the use cases differ. There are two primary areas which we describe below.
 
@@ -782,7 +782,7 @@ let service_0: Service0 = Service0::builder()
     .into();
 ```
 
-With [Remove two-step build procedure](#remove-two-step-build-procedure), [Switch `From<OperationRegistry> for Router` to a `OperationRegistry::build` method](#switch-fromoperationregistry-for-router-to-a-operationregistrybuild-method), and [Statically check for missing Handlers](#statically-check-for-missing-handlers) we obtain the following API:
+With [Remove two-step build procedure](#remove-two-step-build-procedure), [Switch `From<OperationRegistry> for Router` to a `OperationRegistry::build` method](#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method), and [Statically check for missing Handlers](#statically-check-for-missing-handlers) we obtain the following API:
 
 ```rust
 let service_0: Service0 = Service0::builder()
@@ -856,8 +856,8 @@ A toy implementation of the combined proposal is presented in [this PR](https://
 ## Changes Checklist
 
 - [x] Add protocol specific routers to `rust-runtime/aws-smithy-http-server`.
-  - https://github.com/awslabs/smithy-rs/pull/1666
+  - <https://github.com/awslabs/smithy-rs/pull/1666>
 - [x] Add middleware primitives and error types to `rust-runtime/aws-smithy-http-server`.
-  - https://github.com/awslabs/smithy-rs/pull/1679
+  - <https://github.com/awslabs/smithy-rs/pull/1679>
 - [ ] Add code generation which outputs new service builder.
 - [ ] Deprecate `OperationRegistryBuilder`, `OperationRegistry` and `Router`.
