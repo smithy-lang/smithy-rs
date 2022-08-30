@@ -7,4 +7,5 @@ mod arn;
 mod diagnostic;
 mod host;
 mod parse_url;
+mod partition;
 mod substring;
