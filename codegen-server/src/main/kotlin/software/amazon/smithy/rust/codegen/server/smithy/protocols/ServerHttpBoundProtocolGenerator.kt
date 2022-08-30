@@ -118,7 +118,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
-    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
+    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
@@ -126,7 +126,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.asType(),
         "HttpBody" to CargoDependency.HttpBody.asType(),
-        "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
+        "header_util" to CargoDependency.smithyHttp(runtimeConfig).asType().member("header"),
         "Hyper" to CargoDependency.Hyper.asType(),
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
         "Mime" to ServerCargoDependency.Mime.asType(),
@@ -134,7 +134,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "OnceCell" to ServerCargoDependency.OnceCell.asType(),
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
+        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
@@ -979,7 +979,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                     """
                                     let v = <_ as #T>::parse_smithy_primitive(&v)?;
                                     """.trimIndent(),
-                                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
+                                    CargoDependency.smithyTypes(runtimeConfig).asType().member("primitive::Parse"),
                                 )
                             }
                         }

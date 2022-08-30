@@ -110,7 +110,7 @@ class XmlBindingTraitParserGenerator(
         "next_start_element" to smithyXml.member("decode::next_start_element"),
         "try_data" to smithyXml.member("decode::try_data"),
         "ScopedDecoder" to scopedDecoder,
-        "aws_smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType(),
+        "aws_smithy_types" to CargoDependency.smithyTypes(runtimeConfig).asType(),
     )
     private val model = coreCodegenContext.model
     private val index = HttpBindingIndex.of(model)

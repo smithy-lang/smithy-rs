@@ -26,7 +26,7 @@ import java.util.logging.Logger
  *
  * This is the entrypoint for code generation, triggered by the smithy-build plugin.
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
- * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
+ * enables the smithy-build plugin to invoke `execute` with all the Smithy plugin context + models.
  */
 class RustCodegenPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-codegen"

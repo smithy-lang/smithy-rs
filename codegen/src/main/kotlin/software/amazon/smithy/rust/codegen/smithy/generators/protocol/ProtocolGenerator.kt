@@ -38,7 +38,7 @@ interface ProtocolPayloadGenerator {
     data class PayloadMetadata(val takesOwnership: Boolean)
 
     /**
-     * Code generation needs to handle whether or not [generatePayload] takes ownership of the input or output
+     * Code generation needs to handle whether [generatePayload] takes ownership of the input or output
      * for a given operation shape.
      *
      * Most operations will use the HTTP payload as a reference, but for operations that will consume the entire stream

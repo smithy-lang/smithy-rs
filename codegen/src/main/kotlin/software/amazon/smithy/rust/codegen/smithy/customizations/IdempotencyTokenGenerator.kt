@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
-class IdempotencyTokenGenerator(coreCodegenContext: CoreCodegenContext, private val operationShape: OperationShape) :
+class IdempotencyTokenGenerator(coreCodegenContext: CoreCodegenContext, operationShape: OperationShape) :
     OperationCustomization() {
     private val model = coreCodegenContext.model
     private val symbolProvider = coreCodegenContext.symbolProvider

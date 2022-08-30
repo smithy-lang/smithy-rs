@@ -8,18 +8,17 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * Default delegator to enable easily decorating another symbol provider.
@@ -54,9 +53,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
             is MemberShape -> memberMeta(shape)
             is StructureShape -> structureMeta(shape)
             is UnionShape -> unionMeta(shape)
-            is StringShape -> if (shape.hasTrait<EnumTrait>()) {
-                enumMeta(shape)
-            } else null
+            is EnumShape -> enumMeta(shape)
             else -> null
         }
         return baseSymbol.toBuilder().meta(meta).build()
@@ -70,7 +67,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
 
 /**
  * The base metadata supports a list of attributes that are used by generators to decorate code.
- * By default we apply #[non_exhaustive] only to client structures since model changes should
+ * By default, we apply #[non_exhaustive] only to client structures since model changes should
  * be considered as breaking only when generating server code.
  */
 class BaseSymbolMetadataProvider(
@@ -102,7 +99,6 @@ class BaseSymbolMetadataProvider(
             }
             container.isUnionShape ||
                 container.isListShape ||
-                container.isSetShape ||
                 container.isMapShape
             -> RustMetadata(visibility = Visibility.PUBLIC)
             else -> TODO("Unrecognized container type: $container")

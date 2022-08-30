@@ -50,7 +50,7 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
         .map { coreCodegenContext.model.expectShape(it, StructureShape::class.java) }
         .sortedBy { it.id.getName(coreCodegenContext.serviceShape) }
 
-    private val sdkError = CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType().member("result::SdkError")
+    private val sdkError = CargoDependency.smithyHttp(coreCodegenContext.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.default("error_meta", visibility = Visibility.PRIVATE)) { writer ->
             writer.renderDefinition()

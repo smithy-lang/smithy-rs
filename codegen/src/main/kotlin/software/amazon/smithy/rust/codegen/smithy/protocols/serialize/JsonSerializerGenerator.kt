@@ -150,7 +150,7 @@ class JsonSerializerGenerator(
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val target = coreCodegenContext.target
     private val runtimeConfig = coreCodegenContext.runtimeConfig
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
+    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
@@ -163,7 +163,7 @@ class JsonSerializerGenerator(
     private val serializerUtil = SerializerUtil(model)
     private val operationSerModule = RustModule.private("operation_ser")
     private val jsonSerModule = RustModule.private("json_ser")
-    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
+    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
 
     /**
      * Reusable structure serializer implementation that can be used to generate serializing code for
@@ -175,8 +175,8 @@ class JsonSerializerGenerator(
         structureShape: StructureShape,
         includedMembers: List<MemberShape>,
     ): RuntimeType {
-        return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustBlockTemplate(
+        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
+            writer.rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(structureShape),

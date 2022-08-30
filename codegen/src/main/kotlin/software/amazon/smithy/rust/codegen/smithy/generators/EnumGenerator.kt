@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.DocumentationTrait
@@ -85,8 +86,8 @@ open class EnumGenerator(
     private val shape: StringShape,
     private val enumTrait: EnumTrait,
 ) {
-    protected val symbol = symbolProvider.toSymbol(shape)
-    protected val enumName = symbol.name
+    protected val symbol: Symbol = symbolProvider.toSymbol(shape)
+    protected val enumName: String = symbol.name
     protected val meta = symbol.expectRustMetadata()
     protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }

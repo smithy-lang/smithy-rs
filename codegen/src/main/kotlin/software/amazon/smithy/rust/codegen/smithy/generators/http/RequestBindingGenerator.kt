@@ -49,7 +49,7 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
  * Generates methods to serialize and deserialize requests based on the HTTP trait. Specifically:
  * 1. `fn update_http_request(builder: http::request::Builder) -> Builder`
  *
- * This method takes a builder (perhaps pre configured with some headers) from the caller and sets the HTTP
+ * This method takes a builder (perhaps pre-configured with some headers) from the caller and sets the HTTP
  * headers & URL based on the HTTP trait implementation.
  */
 class RequestBindingGenerator(
@@ -64,7 +64,7 @@ class RequestBindingGenerator(
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
     private val httpBindingGenerator = HttpBindingGenerator(protocol, coreCodegenContext, operationShape)
     private val index = HttpBindingIndex.of(model)
-    private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
+    private val encoder = CargoDependency.smithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -238,7 +238,7 @@ class RequestBindingGenerator(
                 throw IllegalArgumentException("lists should be handled at a higher level")
             }
             else -> {
-                "${writer.format(Encoder)}::from(${autoDeref(targetName)}).encode()"
+                "${writer.format(encoder)}::from(${autoDeref(targetName)}).encode()"
             }
         }
     }
@@ -273,7 +273,7 @@ class RequestBindingGenerator(
             else -> {
                 rust(
                     "let mut ${outputVar}_encoder = #T::from(${autoDeref(input)}); let $outputVar = ${outputVar}_encoder.encode();",
-                    Encoder,
+                    encoder,
                 )
             }
         }

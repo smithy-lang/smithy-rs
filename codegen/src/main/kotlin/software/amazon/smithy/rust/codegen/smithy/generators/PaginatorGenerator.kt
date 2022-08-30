@@ -105,10 +105,10 @@ class PaginatorGenerator private constructor(
         "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
 
         // SDK Types
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType()
+        "SdkError" to CargoDependency.smithyHttp(runtimeConfig).asType()
             .copy(name = "result::SdkError"),
-        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
-        "fn_stream" to CargoDependency.SmithyAsync(runtimeConfig).asType().member("future::fn_stream"),
+        "client" to CargoDependency.smithyClient(runtimeConfig).asType(),
+        "fn_stream" to CargoDependency.smithyAsync(runtimeConfig).asType().member("future::fn_stream"),
 
         // External Types
         "Stream" to CargoDependency.TokioStream.asType().member("Stream"),

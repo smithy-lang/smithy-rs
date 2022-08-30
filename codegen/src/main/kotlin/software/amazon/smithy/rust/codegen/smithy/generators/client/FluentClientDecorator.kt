@@ -119,7 +119,7 @@ abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSec
 
 class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
     private val moduleUseName = coreCodegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
+    private val clientDep = CargoDependency.smithyClient(coreCodegenContext.runtimeConfig)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
@@ -293,8 +293,8 @@ class FluentClientGenerator(
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
-        retryDefault = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType().member("retry::Standard"),
-        client = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType(),
+        retryDefault = CargoDependency.smithyClient(coreCodegenContext.runtimeConfig).asType().member("retry::Standard"),
+        client = CargoDependency.smithyClient(coreCodegenContext.runtimeConfig).asType(),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
@@ -314,7 +314,7 @@ class FluentClientGenerator(
         TopDownIndex.of(coreCodegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val model = coreCodegenContext.model
-    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
+    private val clientDep = CargoDependency.smithyClient(coreCodegenContext.runtimeConfig)
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
@@ -519,7 +519,7 @@ class FluentClientGenerator(
                         """,
                         "ok" to outputType,
                         "operation_err" to errorType,
-                        "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
+                        "sdk_err" to CargoDependency.smithyHttp(runtimeConfig).asType()
                             .copy(name = "result::SdkError"),
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
                     )

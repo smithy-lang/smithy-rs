@@ -81,7 +81,7 @@ class ProtocolTestGenerator(
     }
 
     private val codegenScope = arrayOf(
-        "SmithyHttp" to CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType(),
+        "SmithyHttp" to CargoDependency.smithyHttp(coreCodegenContext.runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
         "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
     )
@@ -151,12 +151,12 @@ class ProtocolTestGenerator(
         testModuleWriter: RustWriter,
         block: RustWriter.() -> Unit,
     ) {
-        testModuleWriter.setNewlinePrefix("/// ")
+        testModuleWriter.newlinePrefix = "/// "
         testCase.documentation.map {
             testModuleWriter.writeWithNoFormatting(it)
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
-        testModuleWriter.setNewlinePrefix("")
+        testModuleWriter.newlinePrefix = ""
         TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
@@ -296,7 +296,7 @@ class ProtocolTestGenerator(
             """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
-            "parse_http_response" to CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType()
+            "parse_http_response" to CargoDependency.smithyHttp(coreCodegenContext.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
@@ -464,7 +464,7 @@ class ProtocolTestGenerator(
 
     /**
      * wraps `inner` in a call to `aws_smithy_protocol_test::assert_ok`, a convenience wrapper
-     * for pretty prettying protocol test helper results
+     * for pretty printing protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
         rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "assert_ok"))
@@ -490,12 +490,12 @@ class ProtocolTestGenerator(
         // These could be configured via runtime configuration, but since this won't be long-lasting,
         // it makes sense to do the simplest thing for now.
         // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
-        private val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
-        private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
-        private val RestJson = "aws.protocoltests.restjson#RestJson"
-        private val RestXml = "aws.protocoltests.restxml#RestXml"
-        private val AwsQuery = "aws.protocoltests.query#AwsQuery"
-        private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
+        private const val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
+        private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
+        private const val RestJson = "aws.protocoltests.restjson#RestJson"
+        private const val RestXml = "aws.protocoltests.restxml#RestXml"
+        private const val AwsQuery = "aws.protocoltests.query#AwsQuery"
+        private const val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>()
         private val RunOnly: Set<String>? = null
 

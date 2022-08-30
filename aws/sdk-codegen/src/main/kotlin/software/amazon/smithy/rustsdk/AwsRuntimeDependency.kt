@@ -50,9 +50,9 @@ object AwsRuntimeType {
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "middleware", visibility = Visibility.PUBLIC,
-            CargoDependency.SmithyHttp(this),
-            CargoDependency.SmithyHttpTower(this),
-            CargoDependency.SmithyClient(this),
+            CargoDependency.smithyHttp(this),
+            CargoDependency.smithyHttpTower(this),
+            CargoDependency.smithyClient(this),
             CargoDependency.Tower,
             awsHttp(),
             awsEndpoint(),

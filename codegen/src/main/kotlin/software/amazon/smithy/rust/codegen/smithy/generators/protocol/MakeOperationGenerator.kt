@@ -39,7 +39,7 @@ open class MakeOperationGenerator(
     private val protocol: Protocol,
     private val bodyGenerator: ProtocolPayloadGenerator,
     private val public: Boolean,
-    /** Whether or not to include default values for content-length and content-type */
+    /** Whether to include default values for content-length and content-type */
     private val includeDefaultPayloadHeaders: Boolean,
     private val functionName: String = "make_operation",
 ) {
@@ -54,7 +54,7 @@ open class MakeOperationGenerator(
 
     private val codegenScope = arrayOf(
         "config" to RuntimeType.Config,
-        "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
+        "header_util" to CargoDependency.smithyHttp(runtimeConfig).asType().member("header"),
         "http" to RuntimeType.http,
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
         "OpBuildError" to coreCodegenContext.runtimeConfig.operationBuildError(),

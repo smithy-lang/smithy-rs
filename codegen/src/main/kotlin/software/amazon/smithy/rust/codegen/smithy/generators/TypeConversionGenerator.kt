@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -19,13 +18,13 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.rustType
 
 /*
- * Utility class used to force casting a non primitive type into one overriden by a new symbol provider,
+ * Utility class used to force casting a non-primitive type into one overridden by a new symbol provider,
  * by explicitly calling `from()` or into().
  *
  * For example we use this in the server Python implementation, where we override types like [Blob] and [DateTime]
  * with wrappers compatible with Python, without touching the original implementation coming from `aws-smithy-types`.
  */
-class TypeConversionGenerator(private val model: Model, private val symbolProvider: RustSymbolProvider, private val runtimeConfig: RuntimeConfig) {
+class TypeConversionGenerator(private val symbolProvider: RustSymbolProvider, private val runtimeConfig: RuntimeConfig) {
     private fun findOldSymbol(shape: Shape): Symbol {
         return when (shape) {
             is BlobShape -> RuntimeType.Blob(runtimeConfig).toSymbol()

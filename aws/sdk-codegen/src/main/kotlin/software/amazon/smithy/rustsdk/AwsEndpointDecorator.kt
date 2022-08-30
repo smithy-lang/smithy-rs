@@ -96,7 +96,7 @@ class EndpointConfigCustomization(
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().asType().copy(name = "ResolveAwsEndpoint")
     private val smithyEndpointResolver =
-        CargoDependency.SmithyHttp(runtimeConfig).asType().member("endpoint::ResolveEndpoint")
+        CargoDependency.smithyHttp(runtimeConfig).asType().member("endpoint::ResolveEndpoint")
     private val placeholderEndpointParams = runtimeConfig.awsEndpoint().asType().member("Params")
     private val endpointShim = runtimeConfig.awsEndpoint().asType().member("EndpointShim")
     private val moduleUseName = coreCodegenContext.moduleUseName()
@@ -200,7 +200,7 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::endpoint::Endpoint;",
-                    CargoDependency.SmithyHttp(runtimeConfig).asType(),
+                    CargoDependency.smithyHttp(runtimeConfig).asType(),
                 )
             }
             else -> emptySection

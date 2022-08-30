@@ -56,7 +56,7 @@ object OperationNormalizer {
             // Generate or modify the input and output of the given `Operation` to be a unique shape
             listOf(syntheticInputShape(model, operation), syntheticOutputShape(model, operation))
         }
-        val shapeConflict = newShapes.firstOrNull() { shape -> model.getShape(shape.id).isPresent }
+        val shapeConflict = newShapes.firstOrNull { shape -> model.getShape(shape.id).isPresent }
         check(
             shapeConflict == null,
         ) { "shape $shapeConflict conflicted with an existing shape in the model (${model.getShape(shapeConflict!!.id)}. This is a bug." }

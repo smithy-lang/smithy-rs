@@ -24,7 +24,7 @@ fun EndpointTrait.prefixFormatString(): String {
     return this.hostPrefix.rustFormatString("", "")
 }
 
-fun RuntimeConfig.smithyHttp() = CargoDependency.SmithyHttp(this).asType()
+fun RuntimeConfig.smithyHttp() = CargoDependency.smithyHttp(this).asType()
 
 class EndpointTraitBindings(
     model: Model,

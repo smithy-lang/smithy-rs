@@ -56,7 +56,7 @@ class EventStreamUnmarshallerGenerator(
     private val target: CodegenTarget,
 ) {
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
     private val errorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType("MessageStreamError", smithyEventStream, "aws_smithy_http::event_stream").toSymbol()
     } else {
@@ -64,14 +64,14 @@ class EventStreamUnmarshallerGenerator(
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
+        "Blob" to RuntimeType("Blob", CargoDependency.smithyTypes(runtimeConfig), "aws_smithy_types"),
         "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
         "expect_fns" to RuntimeType("smithy", smithyEventStream, "aws_smithy_eventstream"),
         "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
         "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
         "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
         "OpError" to errorSymbol,
-        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
+        "SmithyError" to RuntimeType("Error", CargoDependency.smithyTypes(runtimeConfig), "aws_smithy_types"),
         "tracing" to CargoDependency.Tracing.asType(),
         "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
         "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),

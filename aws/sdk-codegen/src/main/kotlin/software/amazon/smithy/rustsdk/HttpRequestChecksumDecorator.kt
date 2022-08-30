@@ -31,9 +31,9 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
         "http_body_checksum", visibility = Visibility.PUBLIC,
         CargoDependency.Http,
         CargoDependency.HttpBody,
-        CargoDependency.SmithyHttp(this),
-        CargoDependency.SmithyChecksums(this),
-        CargoDependency.SmithyTypes(this),
+        CargoDependency.smithyHttp(this),
+        CargoDependency.smithyChecksums(this),
+        CargoDependency.smithyTypes(this),
         CargoDependency.Bytes,
         CargoDependency.Tracing,
         this.sigAuth(),
@@ -104,7 +104,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             };
             """,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to CargoDependency.SmithyChecksums(runtimeConfig).asType().member("ChecksumAlgorithm"),
+            "ChecksumAlgorithm" to CargoDependency.smithyChecksums(runtimeConfig).asType().member("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing

@@ -10,7 +10,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
@@ -82,8 +81,7 @@ object RecursiveShapeBoxer {
         return loop.find {
             when (it) {
                 is ListShape,
-                is MapShape,
-                is SetShape, -> true
+                is MapShape, -> true
                 else -> it.hasTrait<RustBoxTrait>()
             }
         } != null

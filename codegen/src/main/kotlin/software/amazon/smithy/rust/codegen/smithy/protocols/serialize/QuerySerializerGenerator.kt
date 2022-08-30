@@ -93,7 +93,7 @@ abstract class QuerySerializerGenerator(coreCodegenContext: CoreCodegenContext) 
     private val target = coreCodegenContext.target
     private val serviceShape = coreCodegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
+    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
     private val serdeUtil = SerializerUtil(model)
     private val codegenScope = arrayOf(

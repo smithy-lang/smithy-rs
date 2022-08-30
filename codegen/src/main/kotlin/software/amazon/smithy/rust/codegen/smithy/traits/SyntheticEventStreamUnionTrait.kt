@@ -14,6 +14,6 @@ class SyntheticEventStreamUnionTrait(
     val errorMembers: List<MemberShape>,
 ) : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
-        val ID = ShapeId.from("smithy.api.internal#syntheticEventStreamUnion")
+        val ID: ShapeId = ShapeId.from("smithy.api.internal#syntheticEventStreamUnion")
     }
 }

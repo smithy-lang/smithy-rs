@@ -41,7 +41,7 @@ fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
 }
 
 /**
- * Write docs.rs metdata settings into Cargo.toml
+ * Write docs.rs metadata settings into Cargo.toml
  *
  * docs.rs can be configured via data set at `[package.metadata.docs.rs]`. This decorator will write [DocsRsMetadataSettings]
  * into the appropriate location.

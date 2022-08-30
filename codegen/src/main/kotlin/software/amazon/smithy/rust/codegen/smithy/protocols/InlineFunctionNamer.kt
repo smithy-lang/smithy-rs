@@ -10,13 +10,14 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.util.PANIC
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 fun RustSymbolProvider.lensName(prefix: String, root: Shape, path: List<MemberShape>): String {
@@ -63,8 +64,11 @@ private fun RustSymbolProvider.shapeFunctionName(prefix: String, shape: Shape): 
         is MapShape -> "map_${shape.id.toRustIdentifier()}"
         is MemberShape -> "member_${shape.container.toRustIdentifier()}_${shape.memberName.toSnakeCase()}"
         is OperationShape -> "operation_$symbolNameSnakeCase"
-        is SetShape -> "set_${shape.id.toRustIdentifier()}" // set shape check MUST come before list, it is a subclass
-        is ListShape -> "list_${shape.id.toRustIdentifier()}"
+        is ListShape -> if (shape.hasTrait<UniqueItemsTrait>()) {
+            "set_${shape.id.toRustIdentifier()}"
+        } else {
+            "list_${shape.id.toRustIdentifier()}"
+        }
         is StructureShape -> "structure_$symbolNameSnakeCase"
         is UnionShape -> "union_$symbolNameSnakeCase"
         is DocumentShape -> "document"

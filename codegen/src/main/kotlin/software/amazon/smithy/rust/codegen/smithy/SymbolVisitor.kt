@@ -25,7 +25,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
 import software.amazon.smithy.model.shapes.ShortShape
@@ -37,6 +36,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
@@ -79,7 +79,6 @@ data class SymbolLocation(val namespace: String) {
 val Models = SymbolLocation("model")
 val Errors = SymbolLocation("error")
 val Operations = SymbolLocation("operation")
-val Serializers = SymbolLocation("serializer")
 val Inputs = SymbolLocation("input")
 val Outputs = SymbolLocation("output")
 
@@ -211,7 +210,7 @@ open class SymbolVisitor(
     private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
         if (config.handleRequired && member.isRequired) {
             symbol
-        } else if (nullableIndex.isNullable(member)) {
+        } else if (nullableIndex.isMemberNullable(member)) {
             symbol.makeOptional()
         } else {
             symbol
@@ -254,12 +253,7 @@ open class SymbolVisitor(
 
     override fun listShape(shape: ListShape): Symbol {
         val inner = this.toSymbol(shape.member)
-        return symbolBuilder(RustType.Vec(inner.rustType())).addReference(inner).build()
-    }
-
-    override fun setShape(shape: SetShape): Symbol {
-        val inner = this.toSymbol(shape.member)
-        val builder = if (model.expectShape(shape.member.target).isStringShape) {
+        val builder = if (model.expectShape(shape.member.target).isStringShape && shape.hasTrait<UniqueItemsTrait>()) {
             symbolBuilder(RustType.HashSet(inner.rustType()))
         } else {
             // only strings get put into actual sets because floats are unhashable
@@ -334,7 +328,7 @@ open class SymbolVisitor(
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
         val targetSymbol = this.toSymbol(target)
-        // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
+        // Handle boxing first, so we end up with Option<Box<_>>, not Box<Option<_>>
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }.let {
@@ -372,7 +366,7 @@ fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::c
 fun Symbol.Builder.setDefault(default: Default): Symbol.Builder = this.putProperty(SYMBOL_DEFAULT, default)
 
 /**
- * Type representing the default value for a given type. (eg. for Strings, this is `""`)
+ * Type representing the default value for a given type. (e.g. for Strings, this is `""`)
  */
 sealed class Default {
     /**

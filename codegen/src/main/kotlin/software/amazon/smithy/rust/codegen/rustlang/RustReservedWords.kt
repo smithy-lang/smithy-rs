@@ -73,7 +73,7 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
                 val previousName = base.toMemberName(shape)
                 val escapedName = this.toMemberName(shape)
                 val baseSymbol = base.toSymbol(shape)
-                // if the names don't match and it isn't a simple escaping with `r#`, record a rename
+                // if the names don't match, and it isn't a simple escaping with `r#`, record a rename
                 baseSymbol.letIf(escapedName != previousName && !escapedName.contains("r#")) {
                     it.toBuilder().renamedFrom(previousName).build()
                 }

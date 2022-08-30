@@ -195,7 +195,7 @@ class TestWriterDelegator(
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
     val baseDir: Path = fileManifest.baseDir
 
-    fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
+    private fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
     fun printGeneratedFiles() {
         generatedFiles().forEach { path ->
             println("file:///$path")

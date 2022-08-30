@@ -20,7 +20,6 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -28,6 +27,7 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
+import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -82,9 +82,14 @@ class Instantiator(
             is UnionShape -> renderUnion(writer, shape, arg as ObjectNode, ctx)
 
             // Collections
-            is ListShape -> renderList(writer, shape, arg as ArrayNode, ctx)
+            is ListShape -> {
+                if (shape.hasTrait<UniqueItemsTrait>()) {
+                    renderSet(writer, shape, arg as ArrayNode, ctx)
+                } else {
+                    renderList(writer, shape, arg as ArrayNode, ctx)
+                }
+            }
             is MapShape -> renderMap(writer, shape, arg as ObjectNode, ctx)
-            is SetShape -> renderSet(writer, shape, arg as ArrayNode, ctx)
 
             // Members, supporting potentially optional members
             is MemberShape -> renderMember(writer, shape, arg, ctx)
@@ -121,7 +126,7 @@ class Instantiator(
                     writer.rust(
                         """<#T as #T>::parse_smithy_primitive(${arg.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
-                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
+                        CargoDependency.smithyTypes(runtimeConfig).asType().member("primitive::Parse"),
                     )
                 }
                 is NumberNode -> writer.write(arg.value)
@@ -181,7 +186,7 @@ class Instantiator(
         }
     }
 
-    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) {
+    private fun renderSet(writer: RustWriter, shape: ListShape, data: ArrayNode, ctx: Ctx) {
         renderList(writer, shape, data, ctx)
     }
 

@@ -32,7 +32,7 @@ import java.util.function.BiFunction
 /**
  * # RustWriter (and Friends)
  *
- * RustWriter contains a set of features to make generating Rust code much more ergonomic ontop of the Smithy CodeWriter
+ * RustWriter contains a set of features to make generating Rust code much more ergonomic on top of the Smithy CodeWriter
  * interface.
  *
  * ## Recommended Patterns
@@ -139,7 +139,7 @@ fun <T : AbstractCodeWriter<T>> T.rust(
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
-    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
+    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
         val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
         if (!scope.toMap().keys.contains(keyName)) {
@@ -315,7 +315,7 @@ private fun Element.changeInto(tagName: String) {
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
-fun RustWriter.raw(text: String) = writeInline(escape(text))
+fun RustWriter.raw(text: String): RustWriter = writeInline(escape(text))
 
 typealias Writable = RustWriter.() -> Unit
 
@@ -377,7 +377,7 @@ class RustWriter private constructor(
     override fun write(content: Any?, vararg args: Any?): RustWriter {
         // TODO(https://github.com/rust-lang/rustfmt/issues/5425): The second condition introduced here is to prevent
         // this rustfmt bug
-        if (debugMode && (content as? String?)?.let { it.trim() != "," } ?: false) {
+        if (debugMode && (content as? String?)?.let { it.trim() != "," } == true) {
             val location = Thread.currentThread().stackTrace
             location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
                 ?.also { super.writeInline(it) }

@@ -23,8 +23,8 @@ sealed class LibRsSection(name: String) : Section(name) {
     data class ModuleDocumentation(val subsection: String) : LibRsSection("ModuleDocumentation")
     data class Body(val model: Model) : LibRsSection("Body")
     companion object {
-        val Examples = "Examples"
-        val CrateOrganization = "CrateOrganization"
+        const val Examples = "Examples"
+        const val CrateOrganization = "CrateOrganization"
     }
 }
 

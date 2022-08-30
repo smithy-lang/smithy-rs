@@ -144,7 +144,7 @@ class AwsInputPresignedMethod(
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
+        "SdkError" to CargoDependency.smithyHttp(runtimeConfig).asType().member("result::SdkError"),
         "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").asType(),
         "sig_auth" to runtimeConfig.sigAuth().asType(),
         "tower" to CargoDependency.Tower.asType(),
@@ -251,7 +251,7 @@ class AwsPresignedFluentBuilderMethod(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
+        "SdkError" to CargoDependency.smithyHttp(runtimeConfig).asType().member("result::SdkError"),
     )
 
     override fun section(section: FluentClientSection): Writable = writable {

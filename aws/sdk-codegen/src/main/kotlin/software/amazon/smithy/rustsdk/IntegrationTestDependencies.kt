@@ -64,10 +64,10 @@ class IntegrationTestDependencies(
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Body -> writable {
             if (hasTests) {
-                val smithyClient = CargoDependency.SmithyClient(runtimeConfig)
+                val smithyClient = CargoDependency.smithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
-                addDependency(CargoDependency.SmithyProtocolTestHelpers(runtimeConfig))
+                addDependency(CargoDependency.smithyProtocolTestHelpers(runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)

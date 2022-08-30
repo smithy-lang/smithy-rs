@@ -118,7 +118,7 @@ class XmlBindingTraitSerializerGenerator(
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
+                // create a scope for writer. This ensures that writer has been dropped before returning the
                 // string and ensures that all closing tags get written
                 rustBlock("") {
                     rustTemplate(
@@ -150,7 +150,7 @@ class XmlBindingTraitSerializerGenerator(
                 *codegenScope,
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
+                // create a scope for writer. This ensures that writer has been dropped before returning the
                 // string and ensures that all closing tags get written
                 rustBlock("") {
                     rustTemplate(
@@ -207,7 +207,7 @@ class XmlBindingTraitSerializerGenerator(
                 *codegenScope, "target" to symbolProvider.toSymbol(outputShape),
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
+                // create a scope for writer. This ensures that writer has been dropped before returning the
                 // string and ensures that all closing tags get written
                 rustBlock("") {
                     rustTemplate(
@@ -237,7 +237,7 @@ class XmlBindingTraitSerializerGenerator(
                 *codegenScope, "target" to symbolProvider.toSymbol(errorShape),
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
+                // create a scope for writer. This ensures that writer has been dropped before returning the
                 // string and ensures that all closing tags get written
                 rustBlock("") {
                     rustTemplate(
@@ -295,7 +295,7 @@ class XmlBindingTraitSerializerGenerator(
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
-                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder"),
+                    CargoDependency.smithyTypes(runtimeConfig).asType().member("primitive::Encoder"),
                 )
             }
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))

@@ -47,7 +47,7 @@ class EventStreamMarshallerGeneratorTest {
         )
 
         test.project.lib { writer ->
-            val protocolTestHelpers = CargoDependency.SmithyProtocolTestHelpers(TestRuntimeConfig)
+            val protocolTestHelpers = CargoDependency.smithyProtocolTestHelpers(TestRuntimeConfig)
                 .copy(scope = DependencyScope.Compile)
             writer.rustTemplate(
                 """

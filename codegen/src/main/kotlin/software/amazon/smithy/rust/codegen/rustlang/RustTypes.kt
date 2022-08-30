@@ -282,7 +282,7 @@ data class RustMetadata(
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
 
     fun withoutDerives(vararg withoutDerives: RuntimeType) =
-        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives))
+        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives.toSet()))
 
     private fun attributes(): List<Attribute> = additionalAttributes + derives
 
