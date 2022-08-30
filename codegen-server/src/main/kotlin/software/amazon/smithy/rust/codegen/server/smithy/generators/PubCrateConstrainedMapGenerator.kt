@@ -21,6 +21,11 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
 
+// TODO I'm looking at this class and `ConstrainedMapGenerator` and cannot help but think that we could dispense with
+//   the stuff `PubCrate*` (i.e. the entire `constrained module), by just generating the `Constrained*` shapes and
+//   marking them `pub(crate)`. After all, when `publicConstrainedTypes` is `false`, we're still generating the
+//   constrained types and using them in the deser path, but we're marking them `pub(crate)`, and it works fine.
+
 /**
  * A generator for a wrapper tuple newtype over a map shape's symbol type.
  *

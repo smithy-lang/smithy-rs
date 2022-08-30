@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -18,12 +17,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -35,15 +33,24 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 // TODO Docs
 class UnconstrainedUnionGenerator(
-    val model: Model,
-    val symbolProvider: RustSymbolProvider,
-    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
+    val codegenContext: ServerCodegenContext,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-    private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
     val shape: UnionShape
 ) {
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val constraintViolationSymbolProvider =
+        with (codegenContext.constraintViolationSymbolProvider) {
+            if (publicConstrainedTypes) {
+                this
+            } else {
+                PubCrateConstraintViolationSymbolProvider(this)
+            }
+        }
     private val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
 
@@ -154,10 +161,10 @@ class UnconstrainedUnionGenerator(
                     ) {
                         if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
                             val targetShape = model.expectShape(member.target)
-                            val resolveToNonPublicConstrainedType =
-                                !targetShape.isDirectlyConstrained(symbolProvider) &&
+                            val resolveToNonPublicConstrainedType = !publicConstrainedTypes ||
+                                (!targetShape.isDirectlyConstrained(symbolProvider) &&
                                 !targetShape.isStructureShape &&
-                                !targetShape.isUnionShape
+                                !targetShape.isUnionShape)
 
                             val hasBox = member.hasTrait<RustBoxTrait>()
                             if (hasBox) {
@@ -165,15 +172,21 @@ class UnconstrainedUnionGenerator(
                             }
 
                             if (resolveToNonPublicConstrainedType) {
+                                val constrainedSymbol =
+                                    if (!publicConstrainedTypes && targetShape.isDirectlyConstrained(symbolProvider)) {
+                                        codegenContext.constrainedShapeSymbolProvider.toSymbol(targetShape)
+                                    } else {
+                                        pubCrateConstrainedShapeSymbolProvider.toSymbol(targetShape)
+                                    }
                                 rustTemplate(
                                     """
-                                    let constrained: #{PubCrateConstrainedShapeSymbol} = unconstrained
+                                    let constrained: #{ConstrainedSymbol} = unconstrained
                                         .try_into()
                                         ${ if (hasBox) ".map(Box::new).map_err(Box::new)" else "" }
                                         .map_err(Self::Error::${ConstraintViolation(member).name()})?;
                                     constrained.into()
                                     """,
-                                    "PubCrateConstrainedShapeSymbol" to pubCrateConstrainedShapeSymbolProvider.toSymbol(targetShape)
+                                    "ConstrainedSymbol" to constrainedSymbol
                                 )
                             } else {
                                 rust(

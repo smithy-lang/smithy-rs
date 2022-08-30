@@ -427,11 +427,8 @@ open class ServerCodegenVisitor(
             rustCrate.withModule(unconstrainedModule) { unconstrainedModuleWriter ->
                 rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
                     UnconstrainedUnionGenerator(
-                        model,
-                        symbolProvider,
-                        unconstrainedShapeSymbolProvider,
+                        codegenContext,
                         pubCrateConstrainedShapeSymbolProvider,
-                        constraintViolationSymbolProvider,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
                         shape
