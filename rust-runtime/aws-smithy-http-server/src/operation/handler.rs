@@ -40,7 +40,7 @@ impl<Ok, Error> ToResult<Ok, Error> for Result<Ok, Error> {
     }
 }
 
-// We can convert from `Ok` to `Result<Ok, Error>`.
+// We can convert from `Ok` to `Result<Ok, Infallible>`.
 impl<Ok> ToResult<Ok, Infallible> for Ok {
     fn into_result(self) -> Result<Ok, Infallible> {
         Ok(self)

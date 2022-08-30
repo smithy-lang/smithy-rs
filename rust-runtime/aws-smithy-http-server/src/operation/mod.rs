@@ -93,9 +93,9 @@
 //!
 //! The following are examples of [`Service`](tower::Service)s which implement [`OperationService`]:
 //!
-//! - `Service<CartIdentifier, Response = ShoppingCart, Error = Infallible>`.
-//! - `Service<(CartIdentifier, Extension<Context>), Response = ShoppingCart, Error = GetShoppingCartError>`.
-//! - `Service<(CartIdentifier, Extension<Context>, Extension<ExtraContext>), Response = ShoppingCart, Error = GetShoppingCartError)`.
+//! - `Service<CartIdentifier, Response = ShoppingCart, Error = OperationError<Infallible, Infallible>>`.
+//! - `Service<(CartIdentifier, Extension<Context>), Response = ShoppingCart, Error = OperationError<GetShoppingCartError, Infallible>>`.
+//! - `Service<(CartIdentifier, Extension<Context>, Extension<ExtraContext>), Response = ShoppingCart, Error = OperationError<GetShoppingCartError, PollError>)`.
 //!
 //! Notice the parallels between [`OperationService`] and [`Handler`].
 //!
@@ -133,7 +133,7 @@
 //!
 //! pub struct OpService;
 //!
-//! impl Service<(CartIdentifier, ())> for OpService {
+//! impl Service<CartIdentifier> for OpService {
 //!     type Response = ShoppingCart;
 //!     type Error = OperationError<GetShoppingError, PollError>;
 //!     type Future = OpFuture;
@@ -202,6 +202,14 @@ pub struct Operation<S, L = Identity> {
 type StackedUpgradeService<P, Op, E, B, L, S> = <Stack<UpgradeLayer<P, Op, E, B>, L> as Layer<S>>::Service;
 
 impl<S, L> Operation<S, L> {
+    /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
+    pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
+        Operation {
+            inner: self.inner,
+            layer: Stack::new(self.layer, layer),
+        }
+    }
+
     /// Takes the [`Operation`], containing the inner [`Service`](tower::Service) `S`, the HTTP [`Layer`] `L` and
     /// composes them together using [`UpgradeLayer`] for a specific protocol and [`OperationShape`].
     ///
@@ -241,16 +249,6 @@ impl<Op, H> Operation<IntoService<Op, H>> {
         Self {
             inner: handler.into_service(),
             layer: Identity::new(),
-        }
-    }
-}
-
-impl<S, L> Operation<S, L> {
-    /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
-    pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
-        Operation {
-            inner: self.inner,
-            layer: Stack::new(self.layer, layer),
         }
     }
 }
