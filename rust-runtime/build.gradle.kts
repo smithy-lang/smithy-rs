@@ -30,13 +30,6 @@ tasks["assemble"].apply {
     dependsOn("fixManifests")
 }
 
-tasks.jar {
-    from("$rootDir/rust-runtime") {
-        include("aws-smithy-inlineable/src/*.rs")
-        include("aws-smithy-inlineable/Cargo.toml")
-    }
-}
-
 tasks.register<Copy>("copyRuntimeCrates") {
     from("$rootDir/rust-runtime") {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { include("$it/**") }

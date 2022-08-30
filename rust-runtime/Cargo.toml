@@ -8,7 +8,6 @@ members = [
     "aws-smithy-eventstream",
     "aws-smithy-http",
     "aws-smithy-http-tower",
-    "aws-smithy-inlineable",
     "aws-smithy-json",
     "aws-smithy-protocol-test",
     "aws-smithy-query",

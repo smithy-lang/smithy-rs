@@ -189,7 +189,7 @@ let response = client.some_operation()
     .await?;
 ```
 """
-references = ["smithy-rs#1112"]
+references = ["smithy-rs#1647", "smithy-rs#1112"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
 
@@ -237,7 +237,7 @@ let response = client.some_operation()
     .await?;
 ```
 """
-references = ["smithy-rs#1112"]
+references = ["smithy-rs#1647", "smithy-rs#1112"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "Velfi"
 
