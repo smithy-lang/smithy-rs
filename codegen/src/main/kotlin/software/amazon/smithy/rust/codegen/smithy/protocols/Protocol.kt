@@ -100,7 +100,7 @@ interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C : CoreCodegenCon
     fun support(): ProtocolSupport
 }
 
-class ProtocolLoader<C : CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
+open class ProtocolLoader<C : CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape,

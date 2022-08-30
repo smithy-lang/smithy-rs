@@ -13,7 +13,7 @@ use aws.protocols#restJson1
 service PokemonService {
     version: "2021-12-01",
     resources: [PokemonSpecies],
-    operations: [GetServerStatistics, EmptyOperation, HealthCheckOperation],
+    operations: [GetServerStatistics, EmptyOperation, HealthCheckOperation, StreamPokemonRadioOperation],
 }
 
 /// A Pokémon species forms the basis for at least one Pokémon.
@@ -69,6 +69,22 @@ structure GetServerStatisticsOutput {
     @required
     calls_count: Long,
 }
+
+/// Fetch the radio song from the database and stream it back as a playable audio.
+@readonly
+@http(uri: "/radio", method: "GET")
+operation StreamPokemonRadioOperation {
+    output: StreamPokemonRadioOutput,
+}
+
+@output
+structure StreamPokemonRadioOutput {
+    @httpPayload
+    data: StreamingBlob,
+}
+
+@streaming
+blob StreamingBlob
 
 list FlavorTextEntries {
     member: FlavorText
@@ -127,8 +143,7 @@ structure EmptyOperationOutput { }
 /// Not yet a deep check
 @readonly
 @http(uri: "/ping", method: "GET")
-operation HealthCheckOperation {
-}
+operation HealthCheckOperation { }
 
 @error("client")
 @httpError(404)

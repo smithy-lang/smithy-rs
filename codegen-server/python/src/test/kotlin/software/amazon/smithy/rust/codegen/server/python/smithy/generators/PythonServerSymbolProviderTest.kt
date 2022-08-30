@@ -9,9 +9,8 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.testutil.TestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 
 internal class PythonServerSymbolProviderTest {
@@ -24,6 +23,11 @@ internal class PythonServerSymbolProviderTest {
             namespace test
 
             structure TimestampStruct {
+                @required
+                inner: Timestamp
+            }
+
+            structure TimestampStructOptional {
                 inner: Timestamp
             }
 
@@ -40,11 +44,15 @@ internal class PythonServerSymbolProviderTest {
                 value: Timestamp
             }
         """.asSmithyModel()
-        val provider = PythonServerSymbolProvider(SymbolVisitor(model, null, TestSymbolVisitorConfig), model)
+        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
 
         // Struct test
         val timestamp = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampStruct\$inner"))).rustType()
         timestamp shouldBe pythonTimestampType
+
+        // Optional struct test
+        val optionalTimestamp = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampStructOptional\$inner"))).rustType()
+        optionalTimestamp shouldBe RustType.Option(pythonTimestampType)
 
         // List test
         val timestampList = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampList"))).rustType()
@@ -65,6 +73,11 @@ internal class PythonServerSymbolProviderTest {
             namespace test
 
             structure BlobStruct {
+                @required
+                inner: Blob
+            }
+
+            structure BlobStructOptional {
                 inner: Blob
             }
 
@@ -81,11 +94,15 @@ internal class PythonServerSymbolProviderTest {
                 value: Blob
             }
         """.asSmithyModel()
-        val provider = PythonServerSymbolProvider(SymbolVisitor(model, null, TestSymbolVisitorConfig), model)
+        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
 
         // Struct test
         val blob = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobStruct\$inner"))).rustType()
         blob shouldBe pythonBlobType
+
+        // Optional struct test
+        val optionalBlob = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobStructOptional\$inner"))).rustType()
+        optionalBlob shouldBe RustType.Option(pythonBlobType)
 
         // List test
         val blobList = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobList"))).rustType()

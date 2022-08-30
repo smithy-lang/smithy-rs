@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
@@ -13,6 +14,7 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyLocation
 import software.amazon.smithy.rust.codegen.rustlang.Local
+import java.util.Optional
 
 class RuntimeTypesTest {
     @ParameterizedTest
@@ -24,6 +26,13 @@ class RuntimeTypesTest {
         val node = Node.parse(runtimeConfig)
         val cfg = RuntimeConfig.fromNode(node.asObjectNode())
         cfg.runtimeCrateLocation shouldBe expectedCrateLocation
+    }
+
+    @Test
+    fun `succeeded to provide a default runtime config if missing`() {
+        // This default config should share the same behaviour with `{}` empty object.
+        val cfg = RuntimeConfig.fromNode(Optional.empty())
+        cfg.runtimeCrateLocation shouldBe RuntimeCrateLocation(null, CrateVersionMap(mapOf()))
     }
 
     @ParameterizedTest

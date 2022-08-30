@@ -1,4 +1,5 @@
 # Example changelog entries
+# 
 # [[aws-sdk-rust]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
@@ -10,6 +11,12 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[aws-sdk-rust]]
+message = """Refactor endpoint resolution internals to use `aws_smithy_types::Endpoint` internally. The public internal
+functions `aws_endpoint::set_endpoint_resolver` and `aws_endpoint::get_endpoint_resolver were removed."""
+references = ["smithy-rs#1641"]
+meta = { breaking = true, "tada" = false, "bug" = false }
+author = "rcoh"
 
 [[aws-sdk-rust]]
 message = """
@@ -46,6 +53,36 @@ These classes have been renamed:
 references = ["smithy-rs#1598"]
 meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Update Smithy dependency to 1.23.1. Models using version 2.0 of the IDL are now supported."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Fix detecting sensitive members through their target shape having the @sensitive trait applied."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Remove @sensitive trait tests which applied trait to member. The ability to mark members with @sensitive was removed in Smithy 1.22."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Fix SetShape matching needing to occur before ListShape since it is now a subclass. Sets were deprecated in Smithy 1.22."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Fix Union shape test data having an invalid empty union. Break fixed from Smithy 1.21 to Smithy 1.22."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ogudavid"
 
 [[smithy-rs]]
 message = "Add codegen version to generated package metadata"
@@ -273,3 +310,30 @@ fn f1(n: aws_smithy_types::Number) {
 references = ["smithy-rs#1274"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy."
+references = ["smithy-rs#1699"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy."
+references = ["smithy-rs#1699"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The AWS S3 `GetObjectAttributes` operation will no longer fail with an XML error."
+references = ["aws-sdk-rust#609"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+It is now possible to exempt specific operations from XML body root checking. To do this, add the `AllowInvalidXmlRoot`
+trait to the output struct of the operation you want to exempt.
+"""
+references = ["aws-sdk-rust#609"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "Velfi"

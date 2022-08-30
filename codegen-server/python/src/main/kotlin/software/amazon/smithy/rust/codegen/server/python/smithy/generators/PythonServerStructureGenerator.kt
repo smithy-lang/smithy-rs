@@ -88,6 +88,8 @@ class PythonServerStructureGenerator(
 
     private fun renderStructBodyMembers(): Writable =
         writable {
-            forEachMember(members) { _, memberName, _ -> rust("$memberName,") }
+            forEachMember(members) { _, memberName, _ ->
+                rust("$memberName,")
+            }
         }
 }

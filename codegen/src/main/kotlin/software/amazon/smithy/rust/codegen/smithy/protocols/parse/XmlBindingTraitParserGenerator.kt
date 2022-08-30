@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
@@ -64,6 +65,7 @@ data class OperationWrapperContext(
     val shape: OperationShape,
     val outputShapeName: String,
     val xmlErrorType: RuntimeType,
+    val model: Model,
 )
 
 class XmlBindingTraitParserGenerator(
@@ -194,11 +196,12 @@ class XmlBindingTraitParserGenerator(
 
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
+                    ##[allow(unused_variables)]
                     let start_el = decoder.start_el();
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
                 if (operationShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
                     unwrappedResponseParser("builder", "decoder", "start_el", outputShape.members())
                 } else {
@@ -264,7 +267,7 @@ class XmlBindingTraitParserGenerator(
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
                 writeOperationWrapper(context) { tagName ->
                     parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
                 }

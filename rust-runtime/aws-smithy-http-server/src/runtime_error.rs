@@ -25,13 +25,12 @@ use crate::{protocols::Protocol, response::Response};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
-    /// The requested operation does not exist.
-    UnknownOperation,
     /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),
     /// As of writing, this variant can only occur upon failure to extract an
     /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1663)
     // UnsupportedMediaType,
     NotAcceptable,
 }
@@ -44,7 +43,6 @@ impl RuntimeErrorKind {
         match self {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
-            RuntimeErrorKind::UnknownOperation => "UnknownOperationException",
             RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
         }
     }
@@ -61,7 +59,6 @@ impl RuntimeError {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
-            RuntimeErrorKind::UnknownOperation => http::StatusCode::NOT_FOUND,
             RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
         };
 
