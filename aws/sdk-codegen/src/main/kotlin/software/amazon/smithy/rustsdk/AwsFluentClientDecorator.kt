@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientCustomization
@@ -33,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClient
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
+import java.util.Optional
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
@@ -71,6 +73,10 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
 
     /** Bounds for generated `send()` functions */
     override fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType): Writable = writable { }
+
+    override fun toGenericsGenerator(): GenericsGenerator {
+        return GenericsGenerator(mutableListOf())
+    }
 }
 
 class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
@@ -80,15 +86,20 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val types = Types(codegenContext.runtimeConfig)
+        val runtimeConfig = codegenContext.runtimeConfig
+        val types = Types(runtimeConfig)
+        val generics = AwsClientGenerics(types)
         FluentClientGenerator(
             codegenContext,
-            generics = AwsClientGenerics(types),
+            generics,
             customizations = listOf(
-                AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig),
+                AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
         ).render(rustCrate)
+        rustCrate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
+            renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
+        }
         rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
             AwsFluentClientExtensions(types).render(writer)
         }
@@ -245,4 +256,44 @@ private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenCon
             else -> emptySection
         }
     }
+}
+
+private fun renderCustomizableOperationSendMethod(
+    runtimeConfig: RuntimeConfig,
+    generics: FluentClientGenerics,
+    writer: RustWriter
+) {
+    val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
+
+    val operationGenerics = GenericsGenerator(mutableListOf("O" to Optional.empty(), "Retry" to Optional.empty()))
+    val handleGenerics = generics.toGenericsGenerator()
+    val combinedGenerics = operationGenerics + handleGenerics
+
+    val codegenScope = arrayOf(
+        "combined_generics_decl" to combinedGenerics.declaration(),
+        "handle_generics_bounds" to handleGenerics.bounds(),
+        "SdkSuccess" to smithyHttp.member("result::SdkSuccess"),
+        "ClassifyResponse" to smithyHttp.member("retry::ClassifyResponse"),
+        "ParseHttpResponse" to smithyHttp.member("response::ParseHttpResponse"),
+    )
+
+    writer.rustTemplate(
+        """
+        impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
+        where
+            #{handle_generics_bounds:W}
+        {
+            /// Sends this operation's request
+            pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
+            where
+                E: std::error::Error,
+                O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
+                Retry: #{ClassifyResponse}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
+            {
+                self.handle.client.call(self.operation).await
+            }
+        }
+        """,
+        *codegenScope,
+    )
 }

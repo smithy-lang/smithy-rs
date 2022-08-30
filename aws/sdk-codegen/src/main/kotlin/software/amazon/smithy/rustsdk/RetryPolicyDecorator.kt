@@ -5,7 +5,10 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -16,6 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.traits.RetryPolicyTrait
 
 class RetryPolicyDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "RetryPolicy"
@@ -31,6 +35,21 @@ class RetryPolicyDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        // Allow downstream codegen that needs to know the retry type for a given operation
+        // to recreate it by passing the `runtimeConfig`
+        return ModelTransformer.create().mapShapes(model) { shape ->
+            if (shape is OperationShape) {
+                val retryType = { runtimeConfig: RuntimeConfig ->
+                    runtimeConfig.awsHttp().asType().member("retry::AwsErrorRetryPolicy")
+                }
+                shape.toBuilder().addTrait(RetryPolicyTrait(retryType)).build()
+            } else {
+                shape
+            }
+        }
+    }
 }
 
 class RetryPolicyFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
