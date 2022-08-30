@@ -18,7 +18,7 @@ use tower::Service;
 
 use super::{OperationError, OperationShape};
 
-/// A utility trait used to provide an even interface for all handlers.
+/// A utility trait used to provide an even interface for all operation handlers.
 pub trait Handler<Op, Exts>
 where
     Op: OperationShape,
@@ -29,19 +29,19 @@ where
 }
 
 /// A utility trait used to provide an even interface over return types `Result<Ok, Error>`/`Ok`.
-trait ToResult<Ok, Error> {
+trait IntoResult<Ok, Error> {
     fn into_result(self) -> Result<Ok, Error>;
 }
 
 // We can convert from `Result<Ok, Error>` to `Result<Ok, Error>`.
-impl<Ok, Error> ToResult<Ok, Error> for Result<Ok, Error> {
+impl<Ok, Error> IntoResult<Ok, Error> for Result<Ok, Error> {
     fn into_result(self) -> Result<Ok, Error> {
         self
     }
 }
 
-// We can convert from `Ok` to `Result<Ok, Infallible>`.
-impl<Ok> ToResult<Ok, Infallible> for Ok {
+// We can convert from `T` to `Result<T, Infallible>`.
+impl<Ok> IntoResult<Ok, Infallible> for Ok {
     fn into_result(self) -> Result<Ok, Infallible> {
         Ok(self)
     }
@@ -53,12 +53,12 @@ where
     Op: OperationShape,
     F: Fn(Op::Input) -> Fut,
     Fut: Future,
-    Fut::Output: ToResult<Op::Output, Op::Error>,
+    Fut::Output: IntoResult<Op::Output, Op::Error>,
 {
     type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
 
     fn call(&mut self, input: Op::Input, _exts: ()) -> Self::Future {
-        (self)(input).map(ToResult::into_result)
+        (self)(input).map(IntoResult::into_result)
     }
 }
 
@@ -68,12 +68,12 @@ where
     Op: OperationShape,
     F: Fn(Op::Input, Ext0) -> Fut,
     Fut: Future,
-    Fut::Output: ToResult<Op::Output, Op::Error>,
+    Fut::Output: IntoResult<Op::Output, Op::Error>,
 {
     type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
 
     fn call(&mut self, input: Op::Input, exts: (Ext0,)) -> Self::Future {
-        (self)(input, exts.0).map(ToResult::into_result)
+        (self)(input, exts.0).map(IntoResult::into_result)
     }
 }
 
@@ -83,12 +83,12 @@ where
     Op: OperationShape,
     F: Fn(Op::Input, Ext0, Ext1) -> Fut,
     Fut: Future,
-    Fut::Output: ToResult<Op::Output, Op::Error>,
+    Fut::Output: IntoResult<Op::Output, Op::Error>,
 {
     type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
 
     fn call(&mut self, input: Op::Input, exts: (Ext0, Ext1)) -> Self::Future {
-        (self)(input, exts.0, exts.1).map(ToResult::into_result)
+        (self)(input, exts.0, exts.1).map(IntoResult::into_result)
     }
 }
 

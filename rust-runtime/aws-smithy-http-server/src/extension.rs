@@ -177,10 +177,9 @@ pub struct MissingExtension;
 
 impl<Protocol> IntoResponse<Protocol> for MissingExtension {
     fn into_response(self) -> http::Response<BoxBody> {
-        http::Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(empty())
-            .expect("invalid HTTP response for missing extensions; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+        let mut response = http::Response::new(empty());
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        response
     }
 }
 

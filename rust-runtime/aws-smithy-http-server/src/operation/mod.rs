@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! # Operations
+//! # Operations.
 //!
 //! The shape of a [Smithy operation] is modelled by the [`OperationShape`] trait, it's associated types
 //! [`OperationShape::Input`], [`OperationShape::Output`], and [`OperationShape::Error`] map to the structures
 //! representing the Smithy inputs, outputs, and errors respectively. When an operation error is not specified
 //! [`OperationShape::Error`] is [`Infallible`](std::convert::Infallible).
 //!
-//! A ZST for each Smithy operation is generated and [`OperationShape`] should be implemented on it, this will be used
-//! as a helper which provides static methods and parameterizes other traits.
+//! We should generate a zero-sized type (ZST) for each Smithy operation and [`OperationShape`] should be implemented
+//! on it. This will be used as a helper - providing static methods and parameterizing other traits.
 //!
 //! The model
 //!
@@ -25,7 +25,7 @@
 //!
 //! is identified with the implementation
 //!
-//! ```rust
+//! ```rust,no_run
 //! # use aws_smithy_http_server::operation::OperationShape;
 //! # pub struct CartIdentifier;
 //! # pub struct ShoppingCart;
@@ -55,7 +55,7 @@
 //! [`Result`]<[`OperationShape::Output`],[`OperationShape::Error`]>. The following are examples of closures which
 //! implement [`Handler`]:
 //!
-//! ```rust
+//! ```rust,no_run
 //! # use aws_smithy_http_server::Extension;
 //! # pub struct CartIdentifier;
 //! # pub struct ShoppingCart;
@@ -86,7 +86,7 @@
 //! ## [`OperationService`]
 //!
 //! Similarly, the [`OperationService`] trait is implemented by all `Service<(Op::Input, ...)>` with
-//! `Response = Op::Output`, and `Error = OperationError<Op::Output, PollError>`.
+//! `Response = Op::Output`, and `Error = OperationError<Op::Error, PollError>`.
 //!
 //! We use [`OperationError`], with a `PollError` not constrained by the model, to allow the user to provide a custom
 //! [`Service::poll_ready`](tower::Service::poll_ready) implementation.
@@ -103,7 +103,7 @@
 //!
 //! The following is an example of using both construction approaches:
 //!
-//! ```rust
+//! ```rust,no_run
 //! # use std::task::{Poll, Context};
 //! # use aws_smithy_http_server::operation::*;
 //! # use tower::Service;
@@ -143,7 +143,7 @@
 //!         todo!()
 //!     }
 //!
-//!     fn call(&mut self, request: (CartIdentifier, ())) -> Self::Future {
+//!     fn call(&mut self, request: CartIdentifier) -> Self::Future {
 //!         // NOTE: This MUST NOT return `Err(OperationError::Poll(_))`.
 //!         todo!()
 //!     }
@@ -156,7 +156,7 @@
 //! ## Upgrading Smithy services to HTTP services
 //!
 //! Both [`Handler`] and [`OperationService`] accept and return Smithy model structures. After an [`Operation`] is
-//! constructed they are converted to a normal form
+//! constructed they are converted to a canonical form
 //! `Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>>`. The
 //! [`UpgradeLayer`] acts upon such services by converting them to
 //! `Service<http::Request, Response = http::Response, Error = PollError>`.
@@ -262,5 +262,5 @@ pub enum OperationError<ModelError, PollError> {
     /// An error modelled by the Smithy model occurred.
     Model(ModelError),
     /// A [`Service::poll_ready`](tower::Service::poll_ready) failure occurred.
-    Poll(PollError),
+    PollReady(PollError),
 }

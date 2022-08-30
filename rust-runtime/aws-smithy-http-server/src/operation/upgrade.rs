@@ -124,7 +124,7 @@ pin_project! {
     }
 }
 
-impl<P, Op, E, B, S, PollError, OpError> Future for UpgradeFuture<P, Op, E, B, S>
+impl<P, Op, Exts, B, S, PollError, OpError> Future for UpgradeFuture<P, Op, Exts, B, S>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -136,10 +136,10 @@ where
     OpError: IntoResponse<P>,
 
     // Must be able to convert extensions
-    E: FromParts<P>,
+    Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    S: Service<(Op::Input, E), Response = Op::Output, Error = OperationError<OpError, PollError>>,
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<OpError, PollError>>,
 {
     type Output = Result<http::Response<crate::body::BoxBody>, PollError>;
 
@@ -161,7 +161,7 @@ where
                     let output = match result {
                         Ok(ok) => ok.into_response(),
                         Err(OperationError::Model(err)) => err.into_response(),
-                        Err(OperationError::Poll(_)) => {
+                        Err(OperationError::PollReady(_)) => {
                             unreachable!("poll error should not be raised")
                         }
                     };
@@ -174,7 +174,7 @@ where
     }
 }
 
-impl<P, Op, E, B, S, PollError, OpError> Service<http::Request<B>> for Upgrade<P, Op, E, B, S>
+impl<P, Op, Exts, B, S, PollError, OpError> Service<http::Request<B>> for Upgrade<P, Op, Exts, B, S>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -186,18 +186,18 @@ where
     OpError: IntoResponse<P>,
 
     // Must be able to convert extensions
-    E: FromParts<P>,
+    Exts: FromParts<P>,
 
     // The signature of the inner service is correct
-    S: Service<(Op::Input, E), Response = Op::Output, Error = OperationError<OpError, PollError>> + Clone,
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<OpError, PollError>> + Clone,
 {
     type Response = http::Response<crate::body::BoxBody>;
     type Error = PollError;
-    type Future = UpgradeFuture<P, Op, E, B, S>;
+    type Future = UpgradeFuture<P, Op, Exts, B, S>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx).map_err(|err| match err {
-            OperationError::Poll(err) => err,
+            OperationError::PollReady(err) => err,
             OperationError::Model(_) => unreachable!("operation error should not be raised"),
         })
     }
@@ -206,7 +206,7 @@ where
         UpgradeFuture {
             service: self.inner.clone(),
             inner: Inner::FromRequest {
-                inner: <(Op::Input, E) as FromRequest<P, B>>::from_request(req),
+                inner: <(Op::Input, Exts) as FromRequest<P, B>>::from_request(req),
             },
         }
     }
