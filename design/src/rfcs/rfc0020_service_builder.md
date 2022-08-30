@@ -768,6 +768,7 @@ Currently the service builder is named `OperationRegistryBuilder`. Despite the n
 Similarly, the output of the service builder is `Router`. This ties the output of the service builder to a structure in `rust-runtime`. Introducing a type erasure here around `Router` using a newtype named `{Service}` would:
 
 - Ensure we are free to change the implementation of `{Service}` without changing the `Router` implementation.
+- Hide the router type, which is determined by the protocol specified in the model.
 - Allow us to put a `builder` method on `{Service}` which returns `{Service}Builder`.
 
 This is compatible with [Protocol specific Routers](#protocol-specific-routers), we simply newtype the protocol specific router rather than `Router`.
