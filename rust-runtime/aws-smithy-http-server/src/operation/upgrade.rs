@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![allow(clippy::type_complexity)]
-
 use std::{
     future::Future,
     marker::PhantomData,
@@ -96,20 +94,6 @@ where
 }
 
 pin_project! {
-    /// The [`Service::Future`] of [`Upgrade`].
-    pub struct UpgradeFuture<Protocol, Operation, Exts, B, S>
-    where
-        Operation: OperationShape,
-        (Operation::Input, Exts): FromRequest<Protocol, B>,
-        S: Service<(Operation::Input, Exts)>,
-    {
-        service: S,
-        #[pin]
-        inner: Inner<<(Operation::Input, Exts) as FromRequest<Protocol, B>>::Future, S::Future>
-    }
-}
-
-pin_project! {
     #[project = InnerProj]
     #[project_replace = InnerProjReplace]
     enum Inner<FromFut, HandlerFut> {
@@ -121,6 +105,22 @@ pin_project! {
             #[pin]
             call: HandlerFut
         }
+    }
+}
+
+type InnerAlias<Input, Exts, Protocol, B, Fut> = Inner<<(Input, Exts) as FromRequest<Protocol, B>>::Future, Fut>;
+
+pin_project! {
+    /// The [`Service::Future`] of [`Upgrade`].
+    pub struct UpgradeFuture<Protocol, Operation, Exts, B, S>
+    where
+        Operation: OperationShape,
+        (Operation::Input, Exts): FromRequest<Protocol, B>,
+        S: Service<(Operation::Input, Exts)>,
+    {
+        service: S,
+        #[pin]
+        inner: InnerAlias<Operation::Input, Exts, Protocol, B, S::Future>
     }
 }
 

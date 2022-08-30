@@ -141,7 +141,7 @@ pub trait FromRequest<Protocol, B>: Sized {
     fn from_request(request: Request<B>) -> Self::Future;
 }
 
-impl<'a, P, B, T1> FromRequest<P, B> for (T1,)
+impl<P, B, T1> FromRequest<P, B> for (T1,)
 where
     T1: FromRequest<P, B>,
 {
