@@ -101,7 +101,7 @@ open class ServerCodegenVisitor(
      * Base model transformation applied to all services.
      * See below for details.
      */
-    protected fun baselineTransform(model: Model) =
+    internal fun baselineTransform(model: Model) =
         model
             // Flattens mixins out of the model and removes them from the model
             .let { ModelTransformer.create().flattenAndRemoveMixins(it) }

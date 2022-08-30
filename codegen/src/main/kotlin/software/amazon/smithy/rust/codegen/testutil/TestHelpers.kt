@@ -94,6 +94,12 @@ fun String.asSmithyModel(sourceLocation: String? = null): Model {
         .unwrap()
 }
 
+fun String.asSmithyModel_Version2(sourceLocation: String? = null): Model {
+    val processed = letIf(!this.startsWith("\$version")) { "\$version: \"2.0\"\n$it" }
+    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
+        .unwrap()
+}
+
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
