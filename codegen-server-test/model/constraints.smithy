@@ -209,8 +209,7 @@ structure ConA {
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
     constrainedUnion: ConstrainedUnion,
-//  enumString: EnumString,
-    // TODO Uncomment enumString from union when above line is uncommented.
+    enumString: EnumString,
 
 //  listOfLengthString: ListOfLengthString,
 
@@ -265,7 +264,7 @@ string MediaTypeLengthString
 
 /// A union with constrained members.
 union ConstrainedUnion {
-    //enumString: EnumString,
+    enumString: EnumString,
     lengthString: LengthString,
 
     constrainedStructure: ConB,
