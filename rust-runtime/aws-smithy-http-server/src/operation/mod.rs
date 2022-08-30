@@ -5,7 +5,7 @@
 
 //! # Operations.
 //!
-//! The shape of a [Smithy operation] is modelled by the [`OperationShape`] trait, it's associated types
+//! The shape of a [Smithy operation] is modelled by the [`OperationShape`] trait. Its associated types
 //! [`OperationShape::Input`], [`OperationShape::Output`], and [`OperationShape::Error`] map to the structures
 //! representing the Smithy inputs, outputs, and errors respectively. When an operation error is not specified
 //! [`OperationShape::Error`] is [`Infallible`](std::convert::Infallible).
@@ -62,12 +62,12 @@
 //! # pub enum GetShoppingError {}
 //! # pub struct Context;
 //! # pub struct ExtraContext;
-//! // Simple handler where no error is given.
+//! // Simple handler where no error is modelled.
 //! async fn handler_a(input: CartIdentifier) -> ShoppingCart {
 //!     todo!()
 //! }
 //!
-//! // Handler with an extension where no error is given.
+//! // Handler with an extension where no error is modelled.
 //! async fn handler_b(input: CartIdentifier, ext: Extension<Context>) -> ShoppingCart {
 //!     todo!()
 //! }
@@ -77,7 +77,7 @@
 //!     todo!()
 //! }
 //!
-//! // When an error is given we must return a `Result`.
+//! // When an error is modelled we must return a `Result`.
 //! async fn handler_d(input: CartIdentifier, ext: Extension<Context>) -> Result<ShoppingCart, GetShoppingError> {
 //!     todo!()
 //! }
@@ -256,8 +256,8 @@ impl<Op, H> Operation<IntoService<Op, H>> {
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
 pub struct OperationNotSet;
 
-/// The operation [`Service`](tower::Service) has two classes of failure modes - the failure models specified by
-/// the Smithy model and failures to [`Service::poll_ready`](tower::Service::poll_ready).
+/// The operation [`Service`](tower::Service) has two classes of failure modes - those specified by the Smithy model
+/// and those associated with [`Service::poll_ready`](tower::Service::poll_ready).
 pub enum OperationError<ModelError, PollError> {
     /// An error modelled by the Smithy model occurred.
     Model(ModelError),

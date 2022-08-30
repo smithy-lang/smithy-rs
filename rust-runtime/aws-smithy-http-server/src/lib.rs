@@ -16,8 +16,6 @@ pub mod extension;
 #[doc(hidden)]
 pub mod logging;
 #[doc(hidden)]
-pub mod make_service;
-#[doc(hidden)]
 pub mod operation;
 #[doc(hidden)]
 pub mod protocols;
