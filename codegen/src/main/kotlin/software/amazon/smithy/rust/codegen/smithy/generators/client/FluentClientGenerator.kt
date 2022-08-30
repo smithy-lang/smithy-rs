@@ -57,7 +57,6 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.Optional
 
-
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
@@ -100,12 +99,11 @@ class FluentClientGenerator(
 
         crate.withModule(customizableOperationModule) { writer ->
             renderCustomizableOperationModule(runtimeConfig, generics, writer)
-            
+
             if (codegenContext.settings.codegenConfig.includeFluentClient) {
                 renderCustomizableOperationSend(runtimeConfig, generics, writer)
             }
         }
-
     }
 
     private fun renderFluentClient(writer: RustWriter) {
@@ -221,10 +219,10 @@ class FluentClientGenerator(
                 rust(
                     """
                     pub fn ${
-                        clientOperationFnName(
-                            operation,
-                            symbolProvider,
-                        )
+                    clientOperationFnName(
+                        operation,
+                        symbolProvider,
+                    )
                     }(&self) -> fluent_builders::$name${generics.inst} {
                         fluent_builders::$name::new(self.handle.clone())
                     }
@@ -376,7 +374,7 @@ class FluentClientGenerator(
 private fun renderCustomizableOperationModule(
     runtimeConfig: RuntimeConfig,
     generics: FluentClientGenerics,
-    writer: RustWriter
+    writer: RustWriter,
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
@@ -464,11 +462,10 @@ private fun renderCustomizableOperationModule(
     )
 }
 
-
 private fun renderCustomizableOperationSend(
     runtimeConfig: RuntimeConfig,
     generics: FluentClientGenerics,
-    writer: RustWriter
+    writer: RustWriter,
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
     val smithyClient = CargoDependency.SmithyClient(runtimeConfig).asType()
@@ -517,7 +514,7 @@ private fun generateOperationShapeDocs(
     writer: RustWriter,
     symbolProvider: SymbolProvider,
     operation: OperationShape,
-    model: Model
+    model: Model,
 ): List<String> {
     val input = operation.inputShape(model)
     val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(symbolProvider)
@@ -547,7 +544,7 @@ private fun generateShapeMemberDocs(
     writer: RustWriter,
     symbolProvider: SymbolProvider,
     shape: StructureShape,
-    model: Model
+    model: Model,
 ): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->

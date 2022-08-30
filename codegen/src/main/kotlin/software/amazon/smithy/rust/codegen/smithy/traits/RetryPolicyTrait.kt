@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 class RetryPolicyTrait(
-    val getRetryPolicy: (runtimeConfig: RuntimeConfig) -> RuntimeType
+    val getRetryPolicy: (runtimeConfig: RuntimeConfig) -> RuntimeType,
 ) : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
         val ID = ShapeId.from("smithy.api.internal#retryPolicy")

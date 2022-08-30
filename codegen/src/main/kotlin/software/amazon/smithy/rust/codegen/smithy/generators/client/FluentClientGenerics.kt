@@ -93,8 +93,8 @@ data class FlexibleClientGenerics(
             mutableListOf(
                 "C" to Optional.of(client.member("bounds::SmithyConnector")),
                 "M" to Optional.of(client.member("bounds::SmithyMiddleware<C>")),
-                "R" to Optional.of(client.member("retry::NewRequestPolicy"))
-            )
+                "R" to Optional.of(client.member("retry::NewRequestPolicy")),
+            ),
         )
     }
 

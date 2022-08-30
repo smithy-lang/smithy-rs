@@ -13,12 +13,12 @@ import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.Optional
 
 class GenericsGenerator(
-    private val types: MutableList<Pair<String, Optional<RuntimeType>>>
+    private val types: MutableList<Pair<String, Optional<RuntimeType>>>,
 ) {
     fun add(type: Pair<String, RuntimeType>) {
         types.add(type.first to Optional.of(type.second))
     }
-    
+
     fun declaration() = writable {
         // Write nothing if this generator is empty
         if (types.isNotEmpty()) {
@@ -26,7 +26,7 @@ class GenericsGenerator(
             rust("<$typeArgs>")
         }
     }
-    
+
     fun bounds() = writable {
         // Only write bounds for generic type params with a bound
         types.filter { it.second.isPresent }.map {

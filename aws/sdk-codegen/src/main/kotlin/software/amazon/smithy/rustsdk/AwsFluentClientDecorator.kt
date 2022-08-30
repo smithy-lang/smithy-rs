@@ -261,7 +261,7 @@ private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenCon
 private fun renderCustomizableOperationSendMethod(
     runtimeConfig: RuntimeConfig,
     generics: FluentClientGenerics,
-    writer: RustWriter
+    writer: RustWriter,
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
