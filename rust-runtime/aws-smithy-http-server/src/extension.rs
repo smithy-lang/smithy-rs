@@ -50,9 +50,14 @@
 
 use std::ops::Deref;
 
+use http::StatusCode;
 use thiserror::Error;
 
-use crate::request::RequestParts;
+use crate::{
+    body::{empty, BoxBody},
+    request::{FromParts, RequestParts},
+    response::IntoResponse,
+};
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
 /// This extension type is set when it has been correctly determined that the request should be
@@ -162,6 +167,30 @@ impl<T> Deref for Extension<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+/// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
+#[derive(Debug, Error)]
+#[error("the `Extension` is not present in the `http::Request`")]
+pub struct MissingExtension;
+
+impl<Protocol> IntoResponse<Protocol> for MissingExtension {
+    fn into_response(self) -> http::Response<BoxBody> {
+        let mut response = http::Response::new(empty());
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        response
+    }
+}
+
+impl<Protocol, T> FromParts<Protocol> for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    type Rejection = MissingExtension;
+
+    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        parts.extensions.remove::<T>().map(Extension).ok_or(MissingExtension)
     }
 }
 
