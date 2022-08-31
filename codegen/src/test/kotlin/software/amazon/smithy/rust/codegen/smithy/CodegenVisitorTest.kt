@@ -24,15 +24,15 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomiza
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 
-fun String.asSmithyModel_Version2(sourceLocation: String? = null): Model {
-    val processed = letIf(!this.startsWith("\$version")) { "\$version: \"2.0\"\n$it" }
-    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
-        .unwrap()
-}
+// fun String.asSmithyModel_Version2(sourceLocation: String? = null): Model {
+//     val processed = letIf(!this.startsWith("\$version")) { "\$version: \"2.0\"\n$it" }
+//     return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
+//         .unwrap()
+// }
 
-class BaselineTransformTest {
+class CodegenVisitorTest {
     @Test
-    fun `verify mixins removed`() {
+    fun `baseline transform verify mixins removed`() {
         val model = """
             namespace com.example
 
@@ -58,7 +58,7 @@ class BaselineTransformTest {
             ] {
                 greeting: String
             }
-        """.asSmithyModel_Version2()
+        """.asSmithyModel(smithyVersion = "2.0")
         val (ctx, _) = generatePluginContext(model)
         val codegenDecorator =
             CombinedCodegenDecorator.fromClasspath(

@@ -88,14 +88,8 @@ fun testCodegenContext(
 )
 
 private const val SmithyVersion = "1.0"
-fun String.asSmithyModel(sourceLocation: String? = null): Model {
-    val processed = letIf(!this.startsWith("\$version")) { "\$version: ${SmithyVersion.dq()}\n$it" }
-    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
-        .unwrap()
-}
-
-fun String.asSmithyModel_Version2(sourceLocation: String? = null): Model {
-    val processed = letIf(!this.startsWith("\$version")) { "\$version: \"2.0\"\n$it" }
+fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion): Model {
+    val processed = letIf(!this.startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
     return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
         .unwrap()
 }
