@@ -39,8 +39,8 @@ license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 # More documentation about the 'bans' section can be found here:
 # https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
 [bans]
-multiple-versions = "deny" # Don't allow multiple versions of the same crate in a single Cargo.toml file
-wildcards = "deny"         # Don't allow wildcard dependencies
+multiple-versions = "allow"
+wildcards = "deny" # Don't allow wildcard dependencies
 highlight = "all"
 deny = []
 
