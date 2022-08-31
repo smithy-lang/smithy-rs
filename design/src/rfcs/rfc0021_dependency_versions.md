@@ -24,12 +24,8 @@ The Rust crates within smithy-rs can be divided up into two categories:
 2. **Application Crates:** All examples, binaries, tools, standalone tests, or other crates that are
    not published to crates.io with the intent of being depended on by other projects.
 
-### Code generated crates
-
-Generated clients must be considered library crates even if they're not published since they are intended
+All generated crates must be considered library crates even if they're not published since they are intended
 to be pulled into other Rust projects with other dependencies.
-
-Generated servers must be considered application crates.
 
 ### Support crates for Applications
 
@@ -63,7 +59,6 @@ Changes Checklist
 -----------------
 
 Some work needs to be done to establish these guidelines:
-- [ ] Use separate default dependency versions in codegen based on if a client or server is being generated
 - [ ] Establish automation for enforcing minimum secure versions for the direct dependencies of library crates
 
 <!-- # Links -->
