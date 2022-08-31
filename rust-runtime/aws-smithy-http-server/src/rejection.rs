@@ -43,6 +43,8 @@
 
 use strum_macros::Display;
 
+use crate::response::IntoResponse;
+
 /// Rejection used for when failing to extract an [`crate::Extension`] from an incoming [request's
 /// extensions]. Contains one variant for each way the extractor can fail.
 ///
@@ -265,3 +267,22 @@ convert_to_request_rejection!(hyper::Error, HttpBody);
 
 // Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
 convert_to_request_rejection!(lambda_http::Error, HttpBody);
+
+/// A sum type rejection, implementing [`IntoResponse`] when both variants do.
+pub enum EitherRejection<Left, Right> {
+    Left(Left),
+    Right(Right),
+}
+
+impl<P, L, R> IntoResponse<P> for EitherRejection<L, R>
+where
+    L: IntoResponse<P>,
+    R: IntoResponse<P>,
+{
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        match self {
+            EitherRejection::Left(left) => left.into_response(),
+            EitherRejection::Right(right) => right.into_response(),
+        }
+    }
+}
