@@ -8,13 +8,13 @@ package software.amazon.smithy.rust.codegen.smithy
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
+import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.NoOpEventStreamSigningDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.smithy.customize.NoOpEventStreamSigningDecorator
-import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
-import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 
 class CodegenVisitorTest {
     @Test
