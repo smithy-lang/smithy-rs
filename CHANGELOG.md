@@ -1,4 +1,109 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 31st, 2022
+=================
+**Breaking Changes:**
+- ⚠🎉 (client, [smithy-rs#1598](https://github.com/awslabs/smithy-rs/issues/1598)) Previously, the config customizations that added functionality related to retry configs, timeout configs, and the
+    async sleep impl were defined in the smithy codegen module but were being loaded in the AWS codegen module. They
+    have now been updated to be loaded during smithy codegen. The affected classes are all defined in the
+    `software.amazon.smithy.rust.codegen.smithy.customizations` module of smithy codegen.` This change does not affect
+    the generated code.
+
+    These classes have been removed:
+    - `RetryConfigDecorator`
+    - `SleepImplDecorator`
+    - `TimeoutConfigDecorator`
+
+    These classes have been renamed:
+    - `RetryConfigProviderConfig` is now `RetryConfigProviderCustomization`
+    - `PubUseRetryConfig` is now `PubUseRetryConfigGenerator`
+    - `SleepImplProviderConfig` is now `SleepImplProviderCustomization`
+    - `TimeoutConfigProviderConfig` is now `TimeoutConfigProviderCustomization`
+- ⚠🎉 (all, [smithy-rs#1635](https://github.com/awslabs/smithy-rs/issues/1635), [smithy-rs#1416](https://github.com/awslabs/smithy-rs/issues/1416), @weihanglo) Support granular control of specifying runtime crate versions.
+
+    For code generation, the field `runtimeConfig.version` in smithy-build.json has been removed.
+    The new field `runtimeConfig.versions` is an object whose keys are runtime crate names (e.g. `aws-smithy-http`),
+    and values are user-specified versions.
+
+    If you previously set `version = "DEFAULT"`, the migration path is simple.
+    By setting `versions` with an empty object or just not setting it at all,
+    the version number of the code generator will be used as the version for all runtime crates.
+
+    If you specified a certain version such as `version = "0.47.0", you can migrate to a special reserved key `DEFAULT`.
+    The equivalent JSON config would look like:
+
+    ```json
+    {
+      "runtimeConfig": {
+          "versions": {
+              "DEFAULT": "0.47.0"
+          }
+      }
+    }
+    ```
+
+    Then all runtime crates are set with version 0.47.0 by default unless overridden by specific crates. For example,
+
+    ```json
+    {
+      "runtimeConfig": {
+          "versions": {
+              "DEFAULT": "0.47.0",
+              "aws-smithy-http": "0.47.1"
+          }
+      }
+    }
+    ```
+
+    implies that we're using `aws-smithy-http` 0.47.1 specifically. For the rest of the crates, it will default to 0.47.0.
+- ⚠ (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Remove @sensitive trait tests which applied trait to member. The ability to mark members with @sensitive was removed in Smithy 1.22.
+- ⚠ (server, [smithy-rs#1544](https://github.com/awslabs/smithy-rs/issues/1544)) Servers now allow requests' ACCEPT header values to be:
+    - `*/*`
+    - `type/*`
+    - `type/subtype`
+- 🐛⚠ (all, [smithy-rs#1274](https://github.com/awslabs/smithy-rs/issues/1274)) Lossy converters into integer types for `aws_smithy_types::Number` have been
+    removed. Lossy converters into floating point types for
+    `aws_smithy_types::Number` have been suffixed with `_lossy`. If you were
+    directly using the integer lossy converters, we recommend you use the safe
+    converters.
+    _Before:_
+    ```rust
+    fn f1(n: aws_smithy_types::Number) {
+        let foo: f32 = n.to_f32(); // Lossy conversion!
+        let bar: u32 = n.to_u32(); // Lossy conversion!
+    }
+    ```
+    _After:_
+    ```rust
+    fn f1(n: aws_smithy_types::Number) {
+        use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.
+        let foo: f32 = n.try_into().expect("lossy conversion detected"); // Or handle the error instead of panicking.
+        // You can still do lossy conversions, but only into floating point types.
+        let foo: f32 = n.to_f32_lossy();
+        // To lossily convert into integer types, use an `as` cast directly.
+        let bar: u32 = n as u32; // Lossy conversion!
+    }
+    ```
+- ⚠ (all, [smithy-rs#1699](https://github.com/awslabs/smithy-rs/issues/1699)) Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy.
+
+**New this release:**
+- 🎉 (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Update Smithy dependency to 1.23.1. Models using version 2.0 of the IDL are now supported.
+- 🎉 (server, [smithy-rs#1551](https://github.com/awslabs/smithy-rs/issues/1551), @hugobast) There is a canonical and easier way to run smithy-rs on Lambda [see example].
+
+    [see example]: https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/lambda.rs
+- 🐛 (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Fix detecting sensitive members through their target shape having the @sensitive trait applied.
+- (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Fix SetShape matching needing to occur before ListShape since it is now a subclass. Sets were deprecated in Smithy 1.22.
+- (all, [smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623), @ogudavid) Fix Union shape test data having an invalid empty union. Break fixed from Smithy 1.21 to Smithy 1.22.
+- (all, [smithy-rs#1612](https://github.com/awslabs/smithy-rs/issues/1612), @unexge) Add codegen version to generated package metadata
+- (client, [aws-sdk-rust#609](https://github.com/awslabs/aws-sdk-rust/issues/609)) It is now possible to exempt specific operations from XML body root checking. To do this, add the `AllowInvalidXmlRoot`
+    trait to the output struct of the operation you want to exempt.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @hugobast ([smithy-rs#1551](https://github.com/awslabs/smithy-rs/issues/1551))
+- @ogudavid ([smithy-rs#1623](https://github.com/awslabs/smithy-rs/issues/1623))
+- @unexge ([smithy-rs#1612](https://github.com/awslabs/smithy-rs/issues/1612))
+- @weihanglo ([smithy-rs#1416](https://github.com/awslabs/smithy-rs/issues/1416), [smithy-rs#1635](https://github.com/awslabs/smithy-rs/issues/1635))
+
 August 4th, 2022
 ================
 **Breaking Changes:**
