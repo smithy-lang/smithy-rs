@@ -85,17 +85,10 @@ class SymbolBuilderTest {
         val model = """
             namespace test
 
-            @enum([
-                {
-                    value: "Count",
-                    name: "COUNT",
-                },
-                {
-                    value: "None",
-                    name: "NONE",
-                }
-            ])
-            string StandardUnit
+            enum StandardUnit {
+                COUNT = "Count",
+                NONE = "None",
+            }
         """.asSmithyModel()
         val shape = model.expectShape(ShapeId.from("test#StandardUnit"))
         val provider: SymbolProvider = testSymbolProvider(model)

@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2.0"
 namespace naming_obs_structs
 
 use aws.protocols#awsJson1_1

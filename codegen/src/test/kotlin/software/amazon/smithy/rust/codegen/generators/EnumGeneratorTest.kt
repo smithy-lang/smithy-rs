@@ -27,18 +27,16 @@ class EnumGeneratorTest {
     inner class EnumMemberModelTests {
         private val testModel = """
             namespace test
-            @enum([
-                { value: "some-value-1",
-                  name: "some_name_1",
-                  documentation: "Some documentation." },
-                { value: "some-value-2",
-                  name: "someName2",
-                  documentation: "More documentation #escape" },
-                { value: "unknown",
-                  name: "unknown",
-                  documentation: "It has some docs that #need to be escaped" }
-            ])
-            string EnumWithUnknown
+            enum EnumWithUnknown {
+                  @documentation("Some documentation.")
+                  some_name_1 = "some-value-1",
+
+                  @documentation("More documentation #escape")
+                  someName2 = "some-value-2",
+
+                  @documentation("It has some docs that #need to be escaped")
+                  unknown = "unknown",
+            }
         """.asSmithyModel()
         private val symbolProvider = testSymbolProvider(testModel)
 
@@ -90,23 +88,17 @@ class EnumGeneratorTest {
         fun `it generates named enums`() {
             val model = """
                 namespace test
-                @enum([
-                    {
-                        value: "t2.nano",
-                        name: "T2_NANO",
-                        documentation: "T2 instances are Burstable Performance Instances.",
-                        tags: ["ebsOnly"]
-                    },
-                    {
-                        value: "t2.micro",
-                        name: "T2_MICRO",
-                        documentation: "T2 instances are Burstable Performance Instances.",
-                        deprecated: true,
-                        tags: ["ebsOnly"]
-                    },
-                ])
                 @deprecated(since: "1.2.3")
-                string InstanceType
+                enum InstanceType {
+                    @documentation("T2 instances are Burstable Performance Instances.")
+                    @tags(["ebsOnly"])
+                    T2_NANO = "t2.nano",
+        
+                    @documentation("T2 instances are Burstable Performance Instances.")
+                    @tags(["ebsOnly"])
+                    @deprecated
+                    T2_MICRO = "t2.micro",
+                }
             """.asSmithyModel()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
@@ -136,16 +128,10 @@ class EnumGeneratorTest {
         fun `named enums implement eq and hash`() {
             val model = """
                 namespace test
-                @enum([
-                {
-                    value: "Foo",
-                    name: "Foo",
-                },
-                {
-                    value: "Bar",
-                    name: "Bar"
-                }])
-                string FooEnum
+                enum FooEnum {
+                    Foo = "Foo",
+                    Bar = "Bar",
+                }
             """.asSmithyModel()
             val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
@@ -164,17 +150,14 @@ class EnumGeneratorTest {
 
         @Test
         fun `unnamed enums implement eq and hash`() {
+            // TODO Is this test even valid anymore?
             val model = """
                 namespace test
-                @enum([
-                {
-                    value: "Foo",
-                },
-                {
-                    value: "Bar",
-                }])
                 @deprecated
-                string FooEnum
+                enum FooEnum {
+                    Foo,
+                    Bar,
+                }
             """.asSmithyModel()
             val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
@@ -194,26 +177,16 @@ class EnumGeneratorTest {
 
         @Test
         fun `it generates unnamed enums`() {
+            // TODO is this test even valid anymore?
             val model = """
                 namespace test
-                @enum([
-                    {
-                        value: "Foo",
-                    },
-                    {
-                        value: "Baz",
-                    },
-                    {
-                        value: "Bar",
-                    },
-                    {
-                        value: "1",
-                    },
-                    {
-                        value: "0",
-                    },
-                ])
-                string FooEnum
+                enum FooEnum {
+                    Foo,
+                    Baz,
+                    Bar,
+                    1,
+                    0
+                }
             """.asSmithyModel()
             val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
@@ -234,12 +207,11 @@ class EnumGeneratorTest {
         fun `it escapes the Unknown variant if the enum has an unknown value in the model`() {
             val model = """
                 namespace test
-                @enum([
-                    { name: "Known", value: "Known" },
-                    { name: "Unknown", value: "Unknown" },
-                    { name: "UnknownValue", value: "UnknownValue" },
-                ])
-                string SomeEnum
+                enum SomeEnum {
+                    Known = "Known",
+                    Unknown = "Unknown",
+                    UnknownValue = "UnknownValue",
+                }
             """.asSmithyModel()
 
             val shape: StringShape = model.lookup("test#SomeEnum")
@@ -263,11 +235,10 @@ class EnumGeneratorTest {
                 namespace test
 
                 /// Some top-level documentation.
-                @enum([
-                    { name: "Known", value: "Known" },
-                    { name: "Unknown", value: "Unknown" },
-                ])
-                string SomeEnum
+                enum SomeEnum {
+                    Known = "Known",
+                    Unknown = "Unknown",
+                }
             """.asSmithyModel()
 
             val shape: StringShape = model.lookup("test#SomeEnum")
@@ -285,15 +256,15 @@ class EnumGeneratorTest {
 
         @Test
         fun `it should generate documentation for unnamed enums`() {
+            // TODO is this test valid anymore?
             val model = """
                 namespace test
 
                 /// Some top-level documentation.
-                @enum([
-                    { value: "One" },
-                    { value: "Two" },
-                ])
-                string SomeEnum
+                enum SomeEnum{
+                    One,
+                    Two,
+                }
             """.asSmithyModel()
 
             val shape: StringShape = model.lookup("test#SomeEnum")
@@ -312,11 +283,10 @@ class EnumGeneratorTest {
     fun `it handles variants that clash with Rust reserved words`() {
         val model = """
             namespace test
-            @enum([
-                { name: "Known", value: "Known" },
-                { name: "Self", value: "other" },
-            ])
-            string SomeEnum
+            enum SomeEnum {
+                Known = "Known",
+                Self = "other",
+            }
         """.asSmithyModel()
 
         val shape: StringShape = model.lookup("test#SomeEnum")

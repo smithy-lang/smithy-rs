@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2.0"
 
 namespace aws.protocoltests.misc
 
@@ -191,11 +191,11 @@ structure EmptyStructure {}
 @http(method: "GET", uri: "/responseCodeRequiredOperation", code: 200)
 operation ResponseCodeRequiredOperation {
     input: EmptyStructure,
-    output: ResponseCodeRequiredOutput,
+    output: ResponseCodeRequiredOperationOutput,
 }
 
 @output
-structure ResponseCodeRequiredOutput {
+structure ResponseCodeRequiredOperationOutput {
     @required
     @httpResponseCode
     responseCode: Integer,

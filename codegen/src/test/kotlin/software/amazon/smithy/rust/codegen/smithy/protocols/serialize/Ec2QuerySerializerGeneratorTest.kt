@@ -44,8 +44,9 @@ class Ec2QuerySerializerGeneratorTest {
             top: Top,
         }
 
-        @enum([{name: "FOO", value: "FOO"}])
-        string FooEnum
+        enum FooEnum {
+            FOO
+        }
 
         map MyMap {
             key: String,

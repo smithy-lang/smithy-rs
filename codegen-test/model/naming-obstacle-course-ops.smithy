@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2.0"
 namespace crate
 
 use smithy.test#httpRequestTests
@@ -137,11 +137,10 @@ structure CollidingException {
 // structure ErrCollisionsException { }
 
 // The "Unknown" value on this enum collides with the code generated "Unknown" variant used for backwards compatibility
-@enum([
-    { name: "Known", value: "Known" },
-    { name: "Unknown", value: "Unknown" },
-    { name: "Self", value: "Self" },
-    { name: "UnknownValue", value: "UnknownValue" },
-    { name: "SelfValue", value: "SelfValue" }
-])
-string UnknownVariantCollidingEnum
+enum UnknownVariantCollidingEnum {
+    KNOWN = "Known",
+    UNKNOWN = "Unknown",
+    SELF = "Self",
+    UNKNOWNVALUE = "UnknownValue",
+    SELFVALUE = "SelfValue"
+}

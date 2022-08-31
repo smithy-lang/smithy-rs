@@ -1,5 +1,5 @@
 {
-  "smithy": "1.0",
+  "smithy": "2.0",
   "metadata": {
     "suppressions": [
       {
@@ -59,22 +59,26 @@
       }
     },
     "com.amazonaws.dynamodb#AttributeAction": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ADD",
-            "name": "ADD"
-          },
-          {
-            "value": "PUT",
-            "name": "PUT"
-          },
-          {
-            "value": "DELETE",
-            "name": "DELETE"
+      "type": "enum",
+      "members": {
+        "ADD": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ADD"
           }
-        ]
+        },
+        "PUT": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "PUT"
+          }
+        },
+        "DELETE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DELETE"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#AttributeDefinition": {
@@ -270,7 +274,7 @@
           "min": 1,
           "max": 256
         },
-        "smithy.api#pattern": "\\p{Print}+"
+        "smithy.api#pattern": "^\\p{Print}+$"
       }
     },
     "com.amazonaws.dynamodb#AutoScalingPolicyUpdate": {
@@ -301,7 +305,7 @@
           "min": 1,
           "max": 1600
         },
-        "smithy.api#pattern": "[\\u0020-\\uD7FF\\uE000-\\uFFFD\\uD800\\uDC00-\\uDBFF\\uDFFF\\r\\n\\t]*"
+        "smithy.api#pattern": "^[\\u0020-\\uD7FF\\uE000-\\uFFFD\\uD800\\uDC00-\\uDBFF\\uDFFF\\r\\n\\t]*$"
       }
     },
     "com.amazonaws.dynamodb#AutoScalingSettingsDescription": {
@@ -448,9 +452,7 @@
     },
     "com.amazonaws.dynamodb#Backfilling": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#BackupArn": {
       "type": "string",
@@ -564,7 +566,7 @@
           "min": 3,
           "max": 255
         },
-        "smithy.api#pattern": "[a-zA-Z0-9_.-]+"
+        "smithy.api#pattern": "^[a-zA-Z0-9_.-]+$"
       }
     },
     "com.amazonaws.dynamodb#BackupNotFoundException": {
@@ -582,29 +584,32 @@
     "com.amazonaws.dynamodb#BackupSizeBytes": {
       "type": "long",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0
         }
       }
     },
     "com.amazonaws.dynamodb#BackupStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "CREATING",
-            "name": "CREATING"
-          },
-          {
-            "value": "DELETED",
-            "name": "DELETED"
-          },
-          {
-            "value": "AVAILABLE",
-            "name": "AVAILABLE"
+      "type": "enum",
+      "members": {
+        "CREATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CREATING"
           }
-        ]
+        },
+        "DELETED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DELETED"
+          }
+        },
+        "AVAILABLE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "AVAILABLE"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#BackupSummaries": {
@@ -682,51 +687,60 @@
       }
     },
     "com.amazonaws.dynamodb#BackupType": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "USER",
-            "name": "USER"
-          },
-          {
-            "value": "SYSTEM",
-            "name": "SYSTEM"
-          },
-          {
-            "value": "AWS_BACKUP",
-            "name": "AWS_BACKUP"
+      "type": "enum",
+      "members": {
+        "USER": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "USER"
           }
-        ]
+        },
+        "SYSTEM": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "SYSTEM"
+          }
+        },
+        "AWS_BACKUP": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "AWS_BACKUP"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#BackupTypeFilter": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "USER",
-            "name": "USER"
-          },
-          {
-            "value": "SYSTEM",
-            "name": "SYSTEM"
-          },
-          {
-            "value": "AWS_BACKUP",
-            "name": "AWS_BACKUP"
-          },
-          {
-            "value": "ALL",
-            "name": "ALL"
+      "type": "enum",
+      "members": {
+        "USER": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "USER"
           }
-        ]
+        },
+        "SYSTEM": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "SYSTEM"
+          }
+        },
+        "AWS_BACKUP": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "AWS_BACKUP"
+          }
+        },
+        "ALL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ALL"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#BackupsInputLimit": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 1,
           "max": 100
@@ -894,54 +908,74 @@
       }
     },
     "com.amazonaws.dynamodb#BatchStatementErrorCodeEnum": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ConditionalCheckFailed",
-            "name": "ConditionalCheckFailed"
-          },
-          {
-            "value": "ItemCollectionSizeLimitExceeded",
-            "name": "ItemCollectionSizeLimitExceeded"
-          },
-          {
-            "value": "RequestLimitExceeded",
-            "name": "RequestLimitExceeded"
-          },
-          {
-            "value": "ValidationError",
-            "name": "ValidationError"
-          },
-          {
-            "value": "ProvisionedThroughputExceeded",
-            "name": "ProvisionedThroughputExceeded"
-          },
-          {
-            "value": "TransactionConflict",
-            "name": "TransactionConflict"
-          },
-          {
-            "value": "ThrottlingError",
-            "name": "ThrottlingError"
-          },
-          {
-            "value": "InternalServerError",
-            "name": "InternalServerError"
-          },
-          {
-            "value": "ResourceNotFound",
-            "name": "ResourceNotFound"
-          },
-          {
-            "value": "AccessDenied",
-            "name": "AccessDenied"
-          },
-          {
-            "value": "DuplicateItem",
-            "name": "DuplicateItem"
+      "type": "enum",
+      "members": {
+        "CONDITIONAL_CHECK_FAILED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CONDITIONAL_CHECK_FAILED"
           }
-        ]
+        },
+        "ITEM_COLLECTION_SIZE_LIMIT_EXCEEDED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ITEM_COLLECTION_SIZE_LIMIT_EXCEEDED"
+          }
+        },
+        "REQUEST_LIMIT_EXCEEDED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "REQUEST_LIMIT_EXCEEDED"
+          }
+        },
+        "VALIDATION_ERROR": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "VALIDATION_ERROR"
+          }
+        },
+        "PROVISIONED_THROUGHPUT_EXCEEDED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "PROVISIONED_THROUGHPUT_EXCEEDED"
+          }
+        },
+        "TRANSACTION_CONFLICT": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "TRANSACTION_CONFLICT"
+          }
+        },
+        "THROTTLING_ERROR": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "THROTTLING_ERROR"
+          }
+        },
+        "INTERNAL_SERVER_ERROR": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INTERNAL_SERVER_ERROR"
+          }
+        },
+        "RESOURCE_NOT_FOUND": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "RESOURCE_NOT_FOUND"
+          }
+        },
+        "ACCESS_DENIED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ACCESS_DENIED"
+          }
+        },
+        "DUPLICATE_ITEM": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DUPLICATE_ITEM"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#BatchStatementRequest": {
@@ -1097,25 +1131,26 @@
     "com.amazonaws.dynamodb#BilledSizeBytes": {
       "type": "long",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0
         }
       }
     },
     "com.amazonaws.dynamodb#BillingMode": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "PROVISIONED",
-            "name": "PROVISIONED"
-          },
-          {
-            "value": "PAY_PER_REQUEST",
-            "name": "PAY_PER_REQUEST"
+      "type": "enum",
+      "members": {
+        "PROVISIONED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "PROVISIONED"
           }
-        ]
+        },
+        "PAY_PER_REQUEST": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "PAY_PER_REQUEST"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#BillingModeSummary": {
@@ -1149,15 +1184,11 @@
     },
     "com.amazonaws.dynamodb#BooleanAttributeValue": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#BooleanObject": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#CancellationReason": {
       "type": "structure",
@@ -1239,62 +1270,86 @@
       "type": "string"
     },
     "com.amazonaws.dynamodb#ComparisonOperator": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "EQ",
-            "name": "EQ"
-          },
-          {
-            "value": "NE",
-            "name": "NE"
-          },
-          {
-            "value": "IN",
-            "name": "IN"
-          },
-          {
-            "value": "LE",
-            "name": "LE"
-          },
-          {
-            "value": "LT",
-            "name": "LT"
-          },
-          {
-            "value": "GE",
-            "name": "GE"
-          },
-          {
-            "value": "GT",
-            "name": "GT"
-          },
-          {
-            "value": "BETWEEN",
-            "name": "BETWEEN"
-          },
-          {
-            "value": "NOT_NULL",
-            "name": "NOT_NULL"
-          },
-          {
-            "value": "NULL",
-            "name": "NULL"
-          },
-          {
-            "value": "CONTAINS",
-            "name": "CONTAINS"
-          },
-          {
-            "value": "NOT_CONTAINS",
-            "name": "NOT_CONTAINS"
-          },
-          {
-            "value": "BEGINS_WITH",
-            "name": "BEGINS_WITH"
+      "type": "enum",
+      "members": {
+        "EQ": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "EQ"
           }
-        ]
+        },
+        "NE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NE"
+          }
+        },
+        "IN": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "IN"
+          }
+        },
+        "LE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "LE"
+          }
+        },
+        "LT": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "LT"
+          }
+        },
+        "GE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "GE"
+          }
+        },
+        "GT": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "GT"
+          }
+        },
+        "BETWEEN": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "BETWEEN"
+          }
+        },
+        "NOT_NULL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NOT_NULL"
+          }
+        },
+        "NULL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NULL"
+          }
+        },
+        "CONTAINS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CONTAINS"
+          }
+        },
+        "NOT_CONTAINS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NOT_CONTAINS"
+          }
+        },
+        "BEGINS_WITH": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "BEGINS_WITH"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#Condition": {
@@ -1384,25 +1439,26 @@
       }
     },
     "com.amazonaws.dynamodb#ConditionalOperator": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "AND",
-            "name": "AND"
-          },
-          {
-            "value": "OR",
-            "name": "OR"
+      "type": "enum",
+      "members": {
+        "AND": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "AND"
           }
-        ]
+        },
+        "OR": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "OR"
+          }
+        }
       }
+
     },
     "com.amazonaws.dynamodb#ConsistentRead": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#ConsumedCapacity": {
       "type": "structure",
@@ -1462,9 +1518,7 @@
     },
     "com.amazonaws.dynamodb#ConsumedCapacityUnits": {
       "type": "double",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#ContinuousBackupsDescription": {
       "type": "structure",
@@ -1488,18 +1542,20 @@
       }
     },
     "com.amazonaws.dynamodb#ContinuousBackupsStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ENABLED",
-            "name": "ENABLED"
-          },
-          {
-            "value": "DISABLED",
-            "name": "DISABLED"
+      "type": "enum",
+      "members": {
+        "ENABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLED"
           }
-        ]
+        },
+        "DISABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLED"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ContinuousBackupsUnavailableException": {
@@ -1515,24 +1571,26 @@
       }
     },
     "com.amazonaws.dynamodb#ContributorInsightsAction": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ENABLE",
-            "name": "ENABLE"
-          },
-          {
-            "value": "DISABLE",
-            "name": "DISABLE"
+      "type": "enum",
+      "members": {
+        "ENABLE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLE"
           }
-        ]
+        },
+        "DISABLE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLE"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ContributorInsightsRule": {
       "type": "string",
       "traits": {
-        "smithy.api#pattern": "[A-Za-z0-9][A-Za-z0-9\\-\\_\\.]{0,126}[A-Za-z0-9]"
+        "smithy.api#pattern": "^[A-Za-z0-9][A-Za-z0-9\\-\\_\\.]{0,126}[A-Za-z0-9]$"
       }
     },
     "com.amazonaws.dynamodb#ContributorInsightsRuleList": {
@@ -1542,30 +1600,38 @@
       }
     },
     "com.amazonaws.dynamodb#ContributorInsightsStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ENABLING",
-            "name": "ENABLING"
-          },
-          {
-            "value": "ENABLED",
-            "name": "ENABLED"
-          },
-          {
-            "value": "DISABLING",
-            "name": "DISABLING"
-          },
-          {
-            "value": "DISABLED",
-            "name": "DISABLED"
-          },
-          {
-            "value": "FAILED",
-            "name": "FAILED"
+      "type": "enum",
+      "members": {
+        "ENABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLING"
           }
-        ]
+        },
+        "ENABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLED"
+          }
+        },
+        "DISABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLING"
+          }
+        },
+        "DISABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLED"
+          }
+        },
+        "FAILED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "FAILED"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ContributorInsightsSummaries": {
@@ -2898,30 +2964,38 @@
       }
     },
     "com.amazonaws.dynamodb#DestinationStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ENABLING",
-            "name": "ENABLING"
-          },
-          {
-            "value": "ACTIVE",
-            "name": "ACTIVE"
-          },
-          {
-            "value": "DISABLING",
-            "name": "DISABLING"
-          },
-          {
-            "value": "DISABLED",
-            "name": "DISABLED"
-          },
-          {
-            "value": "ENABLE_FAILED",
-            "name": "ENABLE_FAILED"
+      "type": "enum",
+      "members": {
+        "ENABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLING"
           }
-        ]
+        },
+        "ACTIVE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ACTIVE"
+          }
+        },
+        "DISABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLING"
+          }
+        },
+        "DISABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLED"
+          }
+        },
+        "ENABLE_FAILED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLE_FAILED"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#DisableKinesisStreamingDestination": {
@@ -2955,9 +3029,7 @@
     },
     "com.amazonaws.dynamodb#Double": {
       "type": "double",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#DuplicateItemException": {
       "type": "structure",
@@ -3553,19 +3625,22 @@
       "type": "timestamp"
     },
     "com.amazonaws.dynamodb#ExportFormat": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "DYNAMODB_JSON",
-            "name": "DYNAMODB_JSON"
-          },
-          {
-            "value": "ION",
-            "name": "ION"
+      "type": "enum",
+      "members": {
+        "DYNAMODB_JSON": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DYNAMODB_JSON"
           }
-        ]
+        },
+        "ION": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ION"
+          }
+        }
       }
+
     },
     "com.amazonaws.dynamodb#ExportManifest": {
       "type": "string"
@@ -3589,23 +3664,28 @@
       "type": "timestamp"
     },
     "com.amazonaws.dynamodb#ExportStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "IN_PROGRESS",
-            "name": "IN_PROGRESS"
-          },
-          {
-            "value": "COMPLETED",
-            "name": "COMPLETED"
-          },
-          {
-            "value": "FAILED",
-            "name": "FAILED"
+      "type": "enum",
+      "members": {
+        "IN_PROGRESS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "IN_PROGRESS"
           }
-        ]
+        },
+        "COMPLETED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "COMPLETED"
+          }
+        },
+        "FAILED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "FAILED"
+          }
+        }
       }
+
     },
     "com.amazonaws.dynamodb#ExportSummaries": {
       "type": "list",
@@ -4270,26 +4350,32 @@
       }
     },
     "com.amazonaws.dynamodb#GlobalTableStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "CREATING",
-            "name": "CREATING"
-          },
-          {
-            "value": "ACTIVE",
-            "name": "ACTIVE"
-          },
-          {
-            "value": "DELETING",
-            "name": "DELETING"
-          },
-          {
-            "value": "UPDATING",
-            "name": "UPDATING"
+      "type": "enum",
+      "members": {
+        "CREATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CREATING"
           }
-        ]
+        },
+        "ACTIVE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ACTIVE"
+          }
+        },
+        "DELETING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DELETING"
+          }
+        },
+        "UPDATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UPDATING"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#IdempotentParameterMismatchException": {
@@ -4311,7 +4397,7 @@
           "min": 3,
           "max": 255
         },
-        "smithy.api#pattern": "[a-zA-Z0-9_.-]+"
+        "smithy.api#pattern": "^[a-zA-Z0-9_.-]+$"
       }
     },
     "com.amazonaws.dynamodb#IndexNotFoundException": {
@@ -4327,36 +4413,41 @@
       }
     },
     "com.amazonaws.dynamodb#IndexStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "CREATING",
-            "name": "CREATING"
-          },
-          {
-            "value": "UPDATING",
-            "name": "UPDATING"
-          },
-          {
-            "value": "DELETING",
-            "name": "DELETING"
-          },
-          {
-            "value": "ACTIVE",
-            "name": "ACTIVE"
+      "type": "enum",
+      "members": {
+        "CREATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CREATING"
           }
-        ]
+        },
+        "UPDATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UPDATING"
+          }
+        },
+        "DELETING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DELETING"
+          }
+        },
+        "ACTIVE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ACTIVE"
+          }
+        }
       }
+
     },
     "com.amazonaws.dynamodb#Integer": {
       "type": "integer"
     },
     "com.amazonaws.dynamodb#IntegerObject": {
       "type": "integer",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#InternalServerError": {
       "type": "structure",
@@ -4455,9 +4546,7 @@
     },
     "com.amazonaws.dynamodb#ItemCollectionSizeEstimateBound": {
       "type": "double",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#ItemCollectionSizeEstimateRange": {
       "type": "list",
@@ -4483,7 +4572,6 @@
     "com.amazonaws.dynamodb#ItemCount": {
       "type": "long",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0
         }
@@ -4604,19 +4692,22 @@
       }
     },
     "com.amazonaws.dynamodb#KeyType": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "HASH",
-            "name": "HASH"
-          },
-          {
-            "value": "RANGE",
-            "name": "RANGE"
+      "type": "enum",
+      "members": {
+        "HASH": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "HASH"
           }
-        ]
+        },
+        "RANGE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "RANGE"
+          }
+        }
       }
+
     },
     "com.amazonaws.dynamodb#KeysAndAttributes": {
       "type": "structure",
@@ -4876,7 +4967,8 @@
         "MaxResults": {
           "target": "com.amazonaws.dynamodb#ListContributorInsightsLimit",
           "traits": {
-            "smithy.api#documentation": "<p>Maximum number of results to return per page.</p>"
+            "smithy.api#documentation": "<p>Maximum number of results to return per page.</p>",
+            "smithy.api#default": 5
           }
         }
       }
@@ -4957,7 +5049,6 @@
     "com.amazonaws.dynamodb#ListExportsMaxLimit": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 1,
           "max": 25
@@ -5090,7 +5181,6 @@
     "com.amazonaws.dynamodb#ListTablesInputLimit": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 1,
           "max": 100
@@ -5331,7 +5421,6 @@
     "com.amazonaws.dynamodb#NonNegativeLongObject": {
       "type": "long",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0
         }
@@ -5339,9 +5428,7 @@
     },
     "com.amazonaws.dynamodb#NullAttributeValue": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#NumberAttributeValue": {
       "type": "string"
@@ -5463,18 +5550,20 @@
       }
     },
     "com.amazonaws.dynamodb#PointInTimeRecoveryStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ENABLED",
-            "name": "ENABLED"
-          },
-          {
-            "value": "DISABLED",
-            "name": "DISABLED"
+      "type": "enum",
+      "members": {
+        "ENABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLED"
           }
-        ]
+        },
+        "DISABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLED"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#PointInTimeRecoveryUnavailableException": {
@@ -5492,7 +5581,6 @@
     "com.amazonaws.dynamodb#PositiveIntegerObject": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 1
         }
@@ -5501,7 +5589,6 @@
     "com.amazonaws.dynamodb#PositiveLongObject": {
       "type": "long",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 1
         }
@@ -5542,22 +5629,26 @@
       "type": "string"
     },
     "com.amazonaws.dynamodb#ProjectionType": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ALL",
-            "name": "ALL"
-          },
-          {
-            "value": "KEYS_ONLY",
-            "name": "KEYS_ONLY"
-          },
-          {
-            "value": "INCLUDE",
-            "name": "INCLUDE"
+      "type": "enum",
+      "members": {
+        "ALL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ALL"
           }
-        ]
+        },
+        "KEYS_ONLY": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "KEYS_ONLY"
+          }
+        },
+        "INCLUDE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INCLUDE"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ProvisionedThroughput": {
@@ -6008,13 +6099,15 @@
         "Count": {
           "target": "com.amazonaws.dynamodb#Integer",
           "traits": {
-            "smithy.api#documentation": "<p>The number of items in the response.</p>\n         <p>If you used a <code>QueryFilter</code> in the request, then <code>Count</code> is the number of items\n      returned after the filter was applied, and <code>ScannedCount</code> is the number of\n      matching items before the filter was applied.</p>\n         <p>If you did not use a filter in the request, then <code>Count</code> and <code>ScannedCount</code> are the\n      same.</p>"
+            "smithy.api#documentation": "<p>The number of items in the response.</p>\n         <p>If you used a <code>QueryFilter</code> in the request, then <code>Count</code> is the number of items\n      returned after the filter was applied, and <code>ScannedCount</code> is the number of\n      matching items before the filter was applied.</p>\n         <p>If you did not use a filter in the request, then <code>Count</code> and <code>ScannedCount</code> are the\n      same.</p>",
+            "smithy.api#default": 0
           }
         },
         "ScannedCount": {
           "target": "com.amazonaws.dynamodb#Integer",
           "traits": {
-            "smithy.api#documentation": "<p>The number of items evaluated, before any <code>QueryFilter</code> is applied. A high\n        <code>ScannedCount</code> value with few, or no, <code>Count</code> results indicates an inefficient\n        <code>Query</code> operation. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/QueryAndScan.html#Count\">Count and ScannedCount</a> in the\n      <i>Amazon DynamoDB Developer Guide</i>.</p>\n         <p>If you did not use a filter in the request, then <code>ScannedCount</code> is the same as\n        <code>Count</code>.</p>"
+            "smithy.api#documentation": "<p>The number of items evaluated, before any <code>QueryFilter</code> is applied. A high\n        <code>ScannedCount</code> value with few, or no, <code>Count</code> results indicates an inefficient\n        <code>Query</code> operation. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/QueryAndScan.html#Count\">Count and ScannedCount</a> in the\n      <i>Amazon DynamoDB Developer Guide</i>.</p>\n         <p>If you did not use a filter in the request, then <code>ScannedCount</code> is the same as\n        <code>Count</code>.</p>",
+            "smithy.api#default": 0
           }
         },
         "LastEvaluatedKey": {
@@ -6528,38 +6621,50 @@
       }
     },
     "com.amazonaws.dynamodb#ReplicaStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "CREATING",
-            "name": "CREATING"
-          },
-          {
-            "value": "CREATION_FAILED",
-            "name": "CREATION_FAILED"
-          },
-          {
-            "value": "UPDATING",
-            "name": "UPDATING"
-          },
-          {
-            "value": "DELETING",
-            "name": "DELETING"
-          },
-          {
-            "value": "ACTIVE",
-            "name": "ACTIVE"
-          },
-          {
-            "value": "REGION_DISABLED",
-            "name": "REGION_DISABLED"
-          },
-          {
-            "value": "INACCESSIBLE_ENCRYPTION_CREDENTIALS",
-            "name": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
+      "type": "enum",
+      "members": {
+        "CREATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CREATING"
           }
-        ]
+        },
+        "CREATION_FAILED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CREATION_FAILED"
+          }
+        },
+        "UPDATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UPDATING"
+          }
+        },
+        "DELETING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DELETING"
+          }
+        },
+        "ACTIVE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ACTIVE"
+          }
+        },
+        "REGION_DISABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "REGION_DISABLED"
+          }
+        },
+        "INACCESSIBLE_ENCRYPTION_CREDENTIALS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ReplicaStatusDescription": {
@@ -6684,9 +6789,7 @@
     },
     "com.amazonaws.dynamodb#RestoreInProgress": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#RestoreSummary": {
       "type": "structure",
@@ -6933,80 +7036,98 @@
       }
     },
     "com.amazonaws.dynamodb#ReturnConsumedCapacity": {
-      "type": "string",
-      "traits": {
-        "smithy.api#documentation": "<p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>INDEXES</code> - The response includes the aggregate <code>ConsumedCapacity</code> for the operation, together with <code>ConsumedCapacity</code> for each table and secondary index that was accessed.</p>\n               <p>Note that some operations, such as <code>GetItem</code> and <code>BatchGetItem</code>, do not access any indexes at all.  In these cases, specifying <code>INDEXES</code> will only return <code>ConsumedCapacity</code> information for table(s).</p>\n            </li>\n            <li>\n               <p>\n                  <code>TOTAL</code> - The response includes only the aggregate <code>ConsumedCapacity</code> for the operation.</p>\n            </li>\n            <li>\n               <p>\n                  <code>NONE</code> - No <code>ConsumedCapacity</code> details are included in the response.</p>\n            </li>\n         </ul>",
-        "smithy.api#enum": [
-          {
-            "value": "INDEXES",
-            "name": "INDEXES"
-          },
-          {
-            "value": "TOTAL",
-            "name": "TOTAL"
-          },
-          {
-            "value": "NONE",
-            "name": "NONE"
+      "type": "enum",
+      "members": {
+        "INDEXES": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INDEXES"
           }
-        ]
+        },
+        "TOTAL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "TOTAL"
+          }
+        },
+        "NONE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NONE"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "<p>Determines the level of detail about provisioned throughput consumption that is returned in the response:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>INDEXES</code> - The response includes the aggregate <code>ConsumedCapacity</code> for the operation, together with <code>ConsumedCapacity</code> for each table and secondary index that was accessed.</p>\n               <p>Note that some operations, such as <code>GetItem</code> and <code>BatchGetItem</code>, do not access any indexes at all.  In these cases, specifying <code>INDEXES</code> will only return <code>ConsumedCapacity</code> information for table(s).</p>\n            </li>\n            <li>\n               <p>\n                  <code>TOTAL</code> - The response includes only the aggregate <code>ConsumedCapacity</code> for the operation.</p>\n            </li>\n            <li>\n               <p>\n                  <code>NONE</code> - No <code>ConsumedCapacity</code> details are included in the response.</p>\n            </li>\n         </ul>"
       }
     },
     "com.amazonaws.dynamodb#ReturnItemCollectionMetrics": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "SIZE",
-            "name": "SIZE"
-          },
-          {
-            "value": "NONE",
-            "name": "NONE"
+      "type": "enum",
+      "members": {
+        "SIZE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "SIZE"
           }
-        ]
+        },
+        "NONE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NONE"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ReturnValue": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "NONE",
-            "name": "NONE"
-          },
-          {
-            "value": "ALL_OLD",
-            "name": "ALL_OLD"
-          },
-          {
-            "value": "UPDATED_OLD",
-            "name": "UPDATED_OLD"
-          },
-          {
-            "value": "ALL_NEW",
-            "name": "ALL_NEW"
-          },
-          {
-            "value": "UPDATED_NEW",
-            "name": "UPDATED_NEW"
+      "type": "enum",
+      "members": {
+        "NONE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NONE"
           }
-        ]
+        },
+        "ALL_OLD": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ALL_OLD"
+          }
+        },
+        "UPDATED_OLD": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UPDATED_OLD"
+          }
+        },
+        "ALL_NEW": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ALL_NEW"
+          }
+        },
+        "UPDATED_NEW": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UPDATED_NEW"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ReturnValuesOnConditionCheckFailure": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ALL_OLD",
-            "name": "ALL_OLD"
-          },
-          {
-            "value": "NONE",
-            "name": "NONE"
+      "type": "enum",
+      "members": {
+        "NONE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NONE"
           }
-        ]
+        },
+        "ALL_OLD": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ALL_OLD"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#S3Bucket": {
@@ -7019,18 +7140,20 @@
       "type": "string"
     },
     "com.amazonaws.dynamodb#S3SseAlgorithm": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "AES256",
-            "name": "AES256"
-          },
-          {
-            "value": "KMS",
-            "name": "KMS"
+      "type": "enum",
+      "members": {
+        "AES256": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "AES256"
           }
-        ]
+        },
+        "KMS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "KMS"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#S3SseKmsKeyId": {
@@ -7076,9 +7199,7 @@
     },
     "com.amazonaws.dynamodb#SSEEnabled": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#SSESpecification": {
       "type": "structure",
@@ -7107,64 +7228,78 @@
       }
     },
     "com.amazonaws.dynamodb#SSEStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ENABLING",
-            "name": "ENABLING"
-          },
-          {
-            "value": "ENABLED",
-            "name": "ENABLED"
-          },
-          {
-            "value": "DISABLING",
-            "name": "DISABLING"
-          },
-          {
-            "value": "DISABLED",
-            "name": "DISABLED"
-          },
-          {
-            "value": "UPDATING",
-            "name": "UPDATING"
+      "type": "enum",
+      "members": {
+        "ENABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLING"
           }
-        ]
+        },
+        "ENABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLED"
+          }
+        },
+        "DISABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLING"
+          }
+        },
+        "DISABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLED"
+          }
+        },
+        "UPDATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UPDATING"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#SSEType": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "AES256",
-            "name": "AES256"
-          },
-          {
-            "value": "KMS",
-            "name": "KMS"
+      "type": "enum",
+      "members": {
+        "AES256": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "AES256"
           }
-        ]
+        },
+        "KMS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "KMS"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#ScalarAttributeType": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "S",
-            "name": "S"
-          },
-          {
-            "value": "N",
-            "name": "N"
-          },
-          {
-            "value": "B",
-            "name": "B"
+      "type": "enum",
+      "members": {
+        "S": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "S"
           }
-        ]
+        },
+        "N": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "N"
+          }
+        },
+        "B": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "B"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#Scan": {
@@ -7348,7 +7483,6 @@
     "com.amazonaws.dynamodb#ScanSegment": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0,
           "max": 999999
@@ -7358,7 +7492,6 @@
     "com.amazonaws.dynamodb#ScanTotalSegments": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 1,
           "max": 1000000
@@ -7375,26 +7508,32 @@
       }
     },
     "com.amazonaws.dynamodb#Select": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ALL_ATTRIBUTES",
-            "name": "ALL_ATTRIBUTES"
-          },
-          {
-            "value": "ALL_PROJECTED_ATTRIBUTES",
-            "name": "ALL_PROJECTED_ATTRIBUTES"
-          },
-          {
-            "value": "SPECIFIC_ATTRIBUTES",
-            "name": "SPECIFIC_ATTRIBUTES"
-          },
-          {
-            "value": "COUNT",
-            "name": "COUNT"
+      "type": "enum",
+      "members": {
+        "ALL_ATTRIBUTES": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ALL_ATTRIBUTES"
           }
-        ]
+        },
+        "ALL_PROJECTED_ATTRIBUTES": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ALL_PROJECTED_ATTRIBUTES"
+          }
+        },
+        "SPECIFIC_ATTRIBUTES": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "SPECIFIC_ATTRIBUTES"
+          }
+        },
+        "COUNT": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "COUNT"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#SourceTableDetails": {
@@ -7423,7 +7562,8 @@
         "TableSizeBytes": {
           "target": "com.amazonaws.dynamodb#Long",
           "traits": {
-            "smithy.api#documentation": "<p>Size of the table in bytes. Note that this is an approximate value.</p>"
+            "smithy.api#documentation": "<p>Size of the table in bytes. Note that this is an approximate value.</p>",
+            "smithy.api#default": 0
           }
         },
         "KeySchema": {
@@ -7450,7 +7590,8 @@
         "ItemCount": {
           "target": "com.amazonaws.dynamodb#ItemCount",
           "traits": {
-            "smithy.api#documentation": "<p>Number of items in the table. Note that this is an approximate value. </p>"
+            "smithy.api#documentation": "<p>Number of items in the table. Note that this is an approximate value. </p>",
+            "smithy.api#default": 0
           }
         },
         "BillingMode": {
@@ -7513,9 +7654,7 @@
     },
     "com.amazonaws.dynamodb#StreamEnabled": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#StreamSpecification": {
       "type": "structure",
@@ -7539,26 +7678,32 @@
       }
     },
     "com.amazonaws.dynamodb#StreamViewType": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "NEW_IMAGE",
-            "name": "NEW_IMAGE"
-          },
-          {
-            "value": "OLD_IMAGE",
-            "name": "OLD_IMAGE"
-          },
-          {
-            "value": "NEW_AND_OLD_IMAGES",
-            "name": "NEW_AND_OLD_IMAGES"
-          },
-          {
-            "value": "KEYS_ONLY",
-            "name": "KEYS_ONLY"
+      "type": "enum",
+      "members": {
+        "NEW_IMAGE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NEW_IMAGE"
           }
-        ]
+        },
+        "OLD_IMAGE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "OLD_IMAGE"
+          }
+        },
+        "NEW_AND_OLD_IMAGES": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "NEW_AND_OLD_IMAGES"
+          }
+        },
+        "KEYS_ONLY": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "KEYS_ONLY"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#String": {
@@ -7754,7 +7899,7 @@
     "com.amazonaws.dynamodb#TableId": {
       "type": "string",
       "traits": {
-        "smithy.api#pattern": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+        "smithy.api#pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
       }
     },
     "com.amazonaws.dynamodb#TableInUseException": {
@@ -7776,7 +7921,7 @@
           "min": 3,
           "max": 255
         },
-        "smithy.api#pattern": "[a-zA-Z0-9_.-]+"
+        "smithy.api#pattern": "^[a-zA-Z0-9_.-]+$"
       }
     },
     "com.amazonaws.dynamodb#TableNameList": {
@@ -7798,38 +7943,50 @@
       }
     },
     "com.amazonaws.dynamodb#TableStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "CREATING",
-            "name": "CREATING"
-          },
-          {
-            "value": "UPDATING",
-            "name": "UPDATING"
-          },
-          {
-            "value": "DELETING",
-            "name": "DELETING"
-          },
-          {
-            "value": "ACTIVE",
-            "name": "ACTIVE"
-          },
-          {
-            "value": "INACCESSIBLE_ENCRYPTION_CREDENTIALS",
-            "name": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
-          },
-          {
-            "value": "ARCHIVING",
-            "name": "ARCHIVING"
-          },
-          {
-            "value": "ARCHIVED",
-            "name": "ARCHIVED"
+      "type": "enum",
+      "members": {
+        "CREATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "CREATING"
           }
-        ]
+        },
+        "UPDATING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UPDATING"
+          }
+        },
+        "DELETING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DELETING"
+          }
+        },
+        "ACTIVE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ACTIVE"
+          }
+        },
+        "INACCESSIBLE_ENCRYPTION_CREDENTIALS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INACCESSIBLE_ENCRYPTION_CREDENTIALS"
+          }
+        },
+        "ARCHIVING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ARCHIVING"
+          }
+        },
+        "ARCHIVED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ARCHIVED"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#Tag": {
@@ -7966,9 +8123,7 @@
     },
     "com.amazonaws.dynamodb#TimeToLiveEnabled": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.dynamodb#TimeToLiveSpecification": {
       "type": "structure",
@@ -7993,26 +8148,32 @@
       }
     },
     "com.amazonaws.dynamodb#TimeToLiveStatus": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ENABLING",
-            "name": "ENABLING"
-          },
-          {
-            "value": "DISABLING",
-            "name": "DISABLING"
-          },
-          {
-            "value": "ENABLED",
-            "name": "ENABLED"
-          },
-          {
-            "value": "DISABLED",
-            "name": "DISABLED"
+      "type": "enum",
+      "members": {
+        "ENABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLING"
           }
-        ]
+        },
+        "DISABLING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLING"
+          }
+        },
+        "ENABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ENABLED"
+          }
+        },
+        "DISABLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DISABLED"
+          }
+        }
       }
     },
     "com.amazonaws.dynamodb#TransactGetItem": {

@@ -56,8 +56,9 @@ internal class XmlBindingTraitParserGeneratorTest {
             blob: Blob
         }
 
-        @enum([{name: "FOO", value: "FOO"}])
-        string FooEnum
+        enum FooEnum {
+            FOO
+        }
 
         map MyMap {
             @xmlName("Name")

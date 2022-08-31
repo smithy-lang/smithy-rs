@@ -101,29 +101,16 @@ structure FlavorText {
 }
 
 /// Supported languages for FlavorText entries.
-@enum([
-    {
-        name: "ENGLISH",
-        value: "en",
-        documentation: "American English.",
-    },
-    {
-        name: "SPANISH",
-        value: "es",
-        documentation: "Español.",
-    },
-    {
-        name: "ITALIAN",
-        value: "it",
-        documentation: "Italiano.",
-    },
-    {
-        name: "JAPANESE",
-        value: "jp",
-        documentation: "日本語。",
-    },
-])
-string Language
+enum Language {
+    @documentation("American English.")
+    ENGLISH = "en",
+    @documentation("Español.")
+    SPANISH = "es",
+    @documentation("Italiano.")
+    ITALIAN = "it",
+    @documentation("日本語。")
+    JAPANESE = "jp",
+}
 
 /// Empty operation, used to stress test the framework.
 @readonly

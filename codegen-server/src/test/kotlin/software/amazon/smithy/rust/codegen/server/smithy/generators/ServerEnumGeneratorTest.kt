@@ -19,21 +19,15 @@ import software.amazon.smithy.rust.codegen.util.lookup
 class ServerEnumGeneratorTest {
     private val model = """
         namespace test
-        @enum([
-            {
-                value: "t2.nano",
-                name: "T2_NANO",
-                documentation: "T2 instances are Burstable Performance Instances.",
-                tags: ["ebsOnly"]
-            },
-            {
-                value: "t2.micro",
-                name: "T2_MICRO",
-                documentation: "T2 instances are Burstable Performance Instances.",
-                tags: ["ebsOnly"]
-            },
-        ])
-        string InstanceType
+        enum InstanceType {
+            @documentation("T2 instances are Burstable Performance Instances.")
+            @tags(["ebsOnly"])
+            T2_NANO = "t2.nano",
+
+            @documentation("T2 instances are Burstable Performance Instances.")
+            @tags(["ebsOnly"])
+            T2_MICRO = "t2.micro",
+        }
     """.asSmithyModel()
 
     @Test

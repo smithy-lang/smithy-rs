@@ -73,8 +73,9 @@ structure PrimitiveIntDocument {
     defaultedValue: PrimitiveInt
 }
 
-@enum([{"value": "enumvalue", "name": "V"}])
-string StringEnum
+enum StringEnum {
+    V = "enumvalue"
+}
 
 integer PrimitiveInt
 

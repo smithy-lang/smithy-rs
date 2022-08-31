@@ -1,5 +1,5 @@
 {
-  "smithy": "1.0",
+  "smithy": "2.0",
   "metadata": {
     "suppressions": [
       {
@@ -50,19 +50,22 @@
       }
     },
     "com.amazonaws.ebs#AccessDeniedExceptionReason": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "UNAUTHORIZED_ACCOUNT",
-            "name": "UNAUTHORIZED_ACCOUNT"
-          },
-          {
-            "value": "DEPENDENCY_ACCESS_DENIED",
-            "name": "DEPENDENCY_ACCESS_DENIED"
+      "type": "enum",
+      "members": {
+        "UNAUTHORIZED_ACCOUNT": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UNAUTHORIZED_ACCOUNT"
           }
-        ]
-      }
+        },
+        "DEPENDENCY_ACCESS_DENIED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DEPENDENCY_ACCESS_DENIED"
+          }
+        }
+      },
+      "traits": {}
     },
     "com.amazonaws.ebs#Block": {
       "type": "structure",
@@ -94,7 +97,6 @@
     "com.amazonaws.ebs#BlockIndex": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0
         }
@@ -102,9 +104,7 @@
     },
     "com.amazonaws.ebs#BlockSize": {
       "type": "integer",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.ebs#BlockToken": {
       "type": "string",
@@ -127,9 +127,7 @@
     },
     "com.amazonaws.ebs#Boolean": {
       "type": "boolean",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.ebs#ChangedBlock": {
       "type": "structure",
@@ -167,7 +165,6 @@
     "com.amazonaws.ebs#ChangedBlocksCount": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0
         }
@@ -184,14 +181,16 @@
       }
     },
     "com.amazonaws.ebs#ChecksumAggregationMethod": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "LINEAR",
-            "name": "CHECKSUM_AGGREGATION_LINEAR"
+      "type": "enum",
+      "members": {
+        "CHECKSUM_AGGREGATION_LINEAR": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "LINEAR"
           }
-        ],
+        }
+      },
+      "traits": {
         "smithy.api#length": {
           "min": 0,
           "max": 32
@@ -200,14 +199,16 @@
       }
     },
     "com.amazonaws.ebs#ChecksumAlgorithm": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "SHA256",
-            "name": "CHECKSUM_ALGORITHM_SHA256"
+      "type": "enum",
+      "members": {
+        "CHECKSUM_ALGORITHM_SHA256": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "SHA256"
           }
-        ],
+        }
+      },
+      "traits" : {
         "smithy.api#length": {
           "min": 0,
           "max": 32
@@ -333,9 +334,7 @@
     },
     "com.amazonaws.ebs#DataLength": {
       "type": "integer",
-      "traits": {
-        "smithy.api#box": {}
-      }
+      "traits": {}
     },
     "com.amazonaws.ebs#Description": {
       "type": "string",
@@ -488,7 +487,8 @@
           "target": "com.amazonaws.ebs#BlockData",
           "traits": {
             "smithy.api#documentation": "<p>The data content of the block.</p>",
-            "smithy.api#httpPayload": {}
+            "smithy.api#httpPayload": {},
+            "smithy.api#required": {}
           }
         }
       }
@@ -523,7 +523,7 @@
           "min": 1,
           "max": 2048
         },
-        "smithy.api#pattern": "arn:aws[a-z\\-]*:kms:.*:[0-9]{12}:key/.*",
+        "smithy.api#pattern": "^arn:aws[a-z\\-]*:kms:.*:[0-9]{12}:key/.*$",
         "smithy.api#sensitive": {}
       }
     },
@@ -759,7 +759,6 @@
     "com.amazonaws.ebs#MaxResults": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 100,
           "max": 10000
@@ -773,7 +772,7 @@
           "min": 1,
           "max": 24
         },
-        "smithy.api#pattern": "\\S+"
+        "smithy.api#pattern": "^\\S+$"
       }
     },
     "com.amazonaws.ebs#PageToken": {
@@ -789,7 +788,6 @@
     "com.amazonaws.ebs#Progress": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 0,
           "max": 100
@@ -826,7 +824,9 @@
       ],
       "traits": {
         "aws.auth#unsignedPayload": {},
-        "smithy.api#auth": ["aws.auth#sigv4"],
+        "smithy.api#auth": [
+          "aws.auth#sigv4"
+        ],
         "smithy.api#documentation": "<p>Writes a block of data to a snapshot. If the specified block contains\n            data, the existing data is overwritten. The target snapshot must be in the\n                <code>pending</code> state.</p>  \t\n    \t    <p>Data written to a snapshot must be aligned with 512-byte sectors.</p>",
         "smithy.api#http": {
           "method": "PUT",
@@ -934,19 +934,22 @@
       }
     },
     "com.amazonaws.ebs#RequestThrottledExceptionReason": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "ACCOUNT_THROTTLED",
-            "name": "ACCOUNT_THROTTLED"
-          },
-          {
-            "value": "DEPENDENCY_REQUEST_THROTTLED",
-            "name": "DEPENDENCY_REQUEST_THROTTLED"
+      "type": "enum",
+      "members": {
+        "ACCOUNT_THROTTLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "ACCOUNT_THROTTLED"
           }
-        ]
-      }
+        },
+        "DEPENDENCY_REQUEST_THROTTLED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DEPENDENCY_REQUEST_THROTTLED"
+          }
+        }
+      },
+      "traits": {}
     },
     "com.amazonaws.ebs#ResourceNotFoundException": {
       "type": "structure",
@@ -968,19 +971,22 @@
       }
     },
     "com.amazonaws.ebs#ResourceNotFoundExceptionReason": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "SNAPSHOT_NOT_FOUND",
-            "name": "SNAPSHOT_NOT_FOUND"
-          },
-          {
-            "value": "DEPENDENCY_RESOURCE_NOT_FOUND",
-            "name": "DEPENDENCY_RESOURCE_NOT_FOUND"
+      "type": "enum",
+      "members": {
+        "SNAPSHOT_NOT_FOUND": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "SNAPSHOT_NOT_FOUND"
           }
-        ]
-      }
+        },
+        "DEPENDENCY_RESOURCE_NOT_FOUND": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DEPENDENCY_RESOURCE_NOT_FOUND"
+          }
+        }
+      },
+      "traits": {}
     },
     "com.amazonaws.ebs#ServiceQuotaExceededException": {
       "type": "structure",
@@ -1002,15 +1008,16 @@
       }
     },
     "com.amazonaws.ebs#ServiceQuotaExceededExceptionReason": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "DEPENDENCY_SERVICE_QUOTA_EXCEEDED",
-            "name": "DEPENDENCY_SERVICE_QUOTA_EXCEEDED"
+      "type": "enum",
+      "members": {
+        "DEPENDENCY_SERVICE_QUOTA_EXCEEDED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "DEPENDENCY_SERVICE_QUOTA_EXCEEDED"
           }
-        ]
-      }
+        }
+      },
+      "traits": {}
     },
     "com.amazonaws.ebs#SnapshotId": {
       "type": "string",
@@ -1186,22 +1193,28 @@
       }
     },
     "com.amazonaws.ebs#Status": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "completed",
-            "name": "COMPLETED"
-          },
-          {
-            "value": "pending",
-            "name": "PENDING"
-          },
-          {
-            "value": "error",
-            "name": "ERROR"
+      "type": "enum",
+      "members": {
+        "COMPLETED": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "completed"
           }
-        ],
+        },
+        "PENDING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "pending"
+          }
+        },
+        "ERROR": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "error"
+          }
+        }
+      },
+      "traits": {
         "smithy.api#length": {
           "min": 0,
           "max": 32
@@ -1260,7 +1273,6 @@
     "com.amazonaws.ebs#Timeout": {
       "type": "integer",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 10,
           "max": 60
@@ -1287,60 +1299,80 @@
       }
     },
     "com.amazonaws.ebs#ValidationExceptionReason": {
-      "type": "string",
-      "traits": {
-        "smithy.api#enum": [
-          {
-            "value": "INVALID_CUSTOMER_KEY",
-            "name": "INVALID_CUSTOMER_KEY"
-          },
-          {
-            "value": "INVALID_PAGE_TOKEN",
-            "name": "INVALID_PAGE_TOKEN"
-          },
-          {
-            "value": "INVALID_BLOCK_TOKEN",
-            "name": "INVALID_BLOCK_TOKEN"
-          },
-          {
-            "value": "INVALID_SNAPSHOT_ID",
-            "name": "INVALID_SNAPSHOT_ID"
-          },
-          {
-            "value": "UNRELATED_SNAPSHOTS",
-            "name": "UNRELATED_SNAPSHOTS"
-          },
-          {
-            "value": "INVALID_BLOCK",
-            "name": "INVALID_BLOCK"
-          },
-          {
-            "value": "INVALID_CONTENT_ENCODING",
-            "name": "INVALID_CONTENT_ENCODING"
-          },
-          {
-            "value": "INVALID_TAG",
-            "name": "INVALID_TAG"
-          },
-          {
-            "value": "INVALID_DEPENDENCY_REQUEST",
-            "name": "INVALID_DEPENDENCY_REQUEST"
-          },
-          {
-            "value": "INVALID_PARAMETER_VALUE",
-            "name": "INVALID_PARAMETER_VALUE"
-          },
-          {
-            "value": "INVALID_VOLUME_SIZE",
-            "name": "INVALID_VOLUME_SIZE"
+      "type": "enum",
+      "members": {
+        "INVALID_CUSTOMER_KEY": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_CUSTOMER_KEY"
           }
-        ]
-      }
+        },
+        "INVALID_PAGE_TOKEN": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_PAGE_TOKEN"
+          }
+        },
+        "INVALID_BLOCK_TOKEN": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_BLOCK_TOKEN"
+          }
+        },
+        "INVALID_SNAPSHOT_ID": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_SNAPSHOT_ID"
+          }
+        },
+        "UNRELATED_SNAPSHOTS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "UNRELATED_SNAPSHOTS"
+          }
+        },
+        "INVALID_BLOCK": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_BLOCK"
+          }
+        },
+        "INVALID_CONTENT_ENCODING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_CONTENT_ENCODING"
+          }
+        },
+        "INVALID_TAG": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_TAG"
+          }
+        },
+        "INVALID_DEPENDENCY_REQUEST": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_DEPENDENCY_REQUEST"
+          }
+        },
+        "INVALID_PARAMETER_VALUE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_PARAMETER_VALUE"
+          }
+        },
+        "INVALID_VOLUME_SIZE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "INVALID_VOLUME_SIZE"
+          }
+        }
+      },
+      "traits": {}
     },
     "com.amazonaws.ebs#VolumeSize": {
       "type": "long",
       "traits": {
-        "smithy.api#box": {},
         "smithy.api#range": {
           "min": 1
         }

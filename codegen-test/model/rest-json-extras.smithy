@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2.0"
 
 namespace aws.protocoltests.restjson
 
@@ -192,6 +192,7 @@ operation StatusResponse {
 
 structure StatusOutput {
     @httpResponseCode
+    @required
     field: PrimitiveInt
 }
 
@@ -230,12 +231,11 @@ operation MapWithEnumKeyOp {
     output: MapWithEnumKeyInputOutput,
 }
 
-
-@enum([
-    { value: "has\"quotes", name: "HAS_QUOTES", documentation: "this needs#tobe escaped" },
-    { value: "normal", name: "NORMAL" },
-])
-string EnumWithEscapedChars
+enum EnumWithEscapedChars {
+    @documentation("this needs#tobe escaped")
+    HAS_QUOTES = "has\"quotes",
+    NORMAL = "normal",
+}
 
 structure EscapedStringValuesInputOutput {
     enum: EnumWithEscapedChars,

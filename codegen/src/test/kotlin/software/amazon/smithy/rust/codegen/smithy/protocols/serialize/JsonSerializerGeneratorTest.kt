@@ -50,8 +50,9 @@ class JsonSerializerGeneratorTest {
             top: Top,
         }
 
-        @enum([{name: "FOO", value: "FOO"}])
-        string FooEnum
+        enum FooEnum {
+            FOO
+        }
 
         map MyMap {
             key: String,
