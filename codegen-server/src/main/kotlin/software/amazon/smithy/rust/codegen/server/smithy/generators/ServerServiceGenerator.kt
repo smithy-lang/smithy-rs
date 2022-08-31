@@ -9,6 +9,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -66,6 +67,28 @@ open class ServerServiceGenerator(
         ) { writer ->
             renderOperationRegistry(writer, operations)
         }
+
+        // TODO: Remove, this is temporary.
+        rustCrate.withModule(
+            RustModule.public("operations", "TODO"),
+        ) { writer ->
+            for (operation in operations) {
+                ServerOperationGenerator(coreCodegenContext, operation).render(writer)
+            }
+        }
+
+        // TODO: Remove, this is temporary.
+        rustCrate.withModule(
+            RustModule.public("services", "TODO"),
+        ) { writer ->
+            val serverProtocol = ServerProtocol.fromCoreProtocol(coreCodegenContext.runtimeConfig, protocol)
+            ServerServiceGeneratorV2(
+                coreCodegenContext.runtimeConfig,
+                coreCodegenContext.serviceShape,
+                serverProtocol,
+            ).render(writer)
+        }
+
         renderExtras(operations)
     }
 
