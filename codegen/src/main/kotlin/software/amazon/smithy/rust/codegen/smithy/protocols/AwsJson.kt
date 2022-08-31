@@ -143,6 +143,8 @@ open class AwsJson(
     )
     private val jsonDeserModule = RustModule.private("json_deser")
 
+    val version: AwsJsonVersion get() = awsJsonVersion
+
     override val httpBindingResolver: HttpBindingResolver =
         AwsJsonHttpBindingResolver(coreCodegenContext.model, awsJsonVersion)
 
