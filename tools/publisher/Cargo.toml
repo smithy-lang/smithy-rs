@@ -23,7 +23,6 @@ crates_io_api = "0.7.3"
 dialoguer = "0.8"
 handlebars = "4.2"
 lazy_static = "1"
-num_cpus = "1.13"
 regex = "1.5.4"
 semver = "1.0"
 serde = { version = "1", features = ["derive"] }
