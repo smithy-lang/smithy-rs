@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 object PythonServerCargoDependency {
     val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.16"), features = setOf("extension-module"))
     val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.16"), features = setOf("attributes", "tokio-runtime"))
-    val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.0"), features = setOf("full"))
+    val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TowerHttp: CargoDependency = CargoDependency("tower-http", CratesIo("0.3"), features = setOf("trace"))

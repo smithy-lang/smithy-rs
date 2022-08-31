@@ -6,6 +6,6 @@ edition = "2021"
 [dev-dependencies]
 aws-sdk-ec2 = { path = "../../build/aws-sdk/sdk/ec2" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"]}
-tokio = { version = "1.0.0", features = ["full"]}
+tokio = { version = "1.8.4", features = ["full"]}
 http = "0.2.0"
 tokio-stream = "0.1.5"
