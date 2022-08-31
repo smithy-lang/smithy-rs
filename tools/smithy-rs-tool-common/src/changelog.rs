@@ -61,7 +61,7 @@ impl<'de> Deserialize<'de> for SdkAffected {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Meta {
     pub bug: bool,
@@ -125,7 +125,7 @@ impl FromStr for Reference {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HandAuthoredEntry {
     pub message: String,
     pub meta: Meta,
@@ -135,6 +135,11 @@ pub struct HandAuthoredEntry {
     /// Optional commit hash to indicate "since when" these changes were made
     #[serde(rename = "since-commit")]
     pub since_commit: Option<String>,
+    /// Optional age of this entry, for the SDK use-case where entries must be
+    /// preserved across multiple smithy-rs releases. This allows the changelogger
+    /// to eventually cull older entries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub age: Option<usize>,
 }
 
 impl HandAuthoredEntry {

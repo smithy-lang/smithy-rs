@@ -30,7 +30,7 @@ tracing = "0.1"
 [dev-dependencies]
 bytes-utils = "0.1.2"
 pretty_assertions = "1.2"
-tokio = { version = "1.6", features = ["macros", "rt"] }
+tokio = { version = "1.8.4", features = ["macros", "rt"] }
 tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
