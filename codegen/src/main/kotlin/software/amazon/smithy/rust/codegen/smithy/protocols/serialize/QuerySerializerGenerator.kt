@@ -205,10 +205,7 @@ abstract class QuerySerializerGenerator(coreCodegenContext: CoreCodegenContext) 
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
-            is StringShape -> when (target.hasTrait<EnumTrait>()) {
-                true -> rust("$writer.string(${value.name}.as_str());")
-                false -> rust("$writer.string(${value.name});")
-            }
+            is StringShape -> rust("$writer.string(${value.name}.as_str());")
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
             is NumberShape -> {
                 val numberType = when (symbolProvider.toSymbol(target).rustType()) {

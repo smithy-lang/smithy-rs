@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -212,12 +213,15 @@ class HttpBoundProtocolTraitImplGenerator(
                                         )
                                     }
                                 }
-                                if (errorShape.errorMessageMember() != null) {
+                                val errMsg = errorShape.errorMessageMember()
+                                // If the error message shape exists but is optional, insert a fallback to replace it
+                                // with a generic message. Otherwise, no fallback is necessary.
+                                if (errMsg != null && NullableIndex.of(model).isMemberNullable(errMsg)) {
                                     rust(
                                         """
-                                        if (&tmp.message).is_none() {
-                                            tmp.message = _error_message;
-                                        }
+                                            if (&tmp.message).is_none() {
+                                                tmp.message = _error_message;
+                                            }
                                         """,
                                     )
                                 }

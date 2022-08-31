@@ -150,14 +150,17 @@ class EnumGeneratorTest {
 
         @Test
         fun `unnamed enums implement eq and hash`() {
-            // TODO Is this test even valid anymore?
             val model = """
                 namespace test
+                @enum([
+                {
+                    value: "Foo",
+                },
+                {
+                    value: "Bar",
+                }])
                 @deprecated
-                enum FooEnum {
-                    Foo,
-                    Bar,
-                }
+                string FooEnum
             """.asSmithyModel()
             val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
@@ -177,16 +180,26 @@ class EnumGeneratorTest {
 
         @Test
         fun `it generates unnamed enums`() {
-            // TODO is this test even valid anymore?
             val model = """
                 namespace test
-                enum FooEnum {
-                    Foo,
-                    Baz,
-                    Bar,
-                    1,
-                    0
-                }
+                @enum([
+                    {
+                        value: "Foo",
+                    },
+                    {
+                        value: "Baz",
+                    },
+                    {
+                        value: "Bar",
+                    },
+                    {
+                        value: "1",
+                    },
+                    {
+                        value: "0",
+                    },
+                ])
+                string FooEnum
             """.asSmithyModel()
             val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
@@ -256,15 +269,15 @@ class EnumGeneratorTest {
 
         @Test
         fun `it should generate documentation for unnamed enums`() {
-            // TODO is this test valid anymore?
             val model = """
                 namespace test
 
                 /// Some top-level documentation.
-                enum SomeEnum{
-                    One,
-                    Two,
-                }
+                @enum([
+                    { value: "One" },
+                    { value: "Two" },
+                ])
+                string SomeEnum
             """.asSmithyModel()
 
             val shape: StringShape = model.lookup("test#SomeEnum")
