@@ -76,7 +76,7 @@ class PubCrateConstrainedShapeSymbolProvider(
         "This symbol provider was called with $shape. However, it can only be called with a shape that is transitively constrained."
 
     override fun toSymbol(shape: Shape): Symbol {
-        require(shape.isTransitivelyConstrained(model, base)) { errorMessage(shape) }
+        require(shape.isTransitivelyButNotDirectlyConstrained(model, base)) { errorMessage(shape) }
 
         return when (shape) {
             is CollectionShape, is MapShape -> {

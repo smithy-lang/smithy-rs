@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
@@ -15,16 +14,18 @@ import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
+import software.amazon.smithy.rust.codegen.smithy.isTransitivelyButNotDirectlyConstrained
 
 // TODO I'm looking at this class and `ConstrainedMapGenerator` and cannot help but think that we could dispense with
 //   the stuff `PubCrate*` (i.e. the entire `constrained module), by just generating the `Constrained*` shapes and
 //   marking them `pub(crate)`. After all, when `publicConstrainedTypes` is `false`, we're still generating the
 //   constrained types and using them in the deser path, but we're marking them `pub(crate)`, and it works fine.
+//   Maybe this approach is better, since this is less code than the public constrained types' generators, and it
+//   makes the distinction between what is directly constrained vs what is transitively but not directly constrained
+//   clearer.
 
 /**
  * A generator for a wrapper tuple newtype over a map shape's symbol type.
@@ -41,13 +42,17 @@ import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
  * instead.
  */
 class PubCrateConstrainedMapGenerator(
-    val model: Model,
-    val symbolProvider: RustSymbolProvider,
-    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
+    val codegenContext: ServerCodegenContext,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape
 ) {
+    private val model = codegenContext.model
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
+    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
+    private val symbolProvider = codegenContext.symbolProvider
+
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
@@ -58,18 +63,21 @@ class PubCrateConstrainedMapGenerator(
         val name = constrainedSymbol.name
         val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
         val valueShape = model.expectShape(shape.value.target)
-        val keySymbol = symbolProvider.toSymbol(keyShape)
-        val valueSymbol = if (valueShape.isTransitivelyConstrained(model, symbolProvider)) {
+        val keySymbol = constrainedShapeSymbolProvider.toSymbol(keyShape)
+        val valueSymbol = if (valueShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
             pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
         } else {
-            symbolProvider.toSymbol(valueShape)
+            constrainedShapeSymbolProvider.toSymbol(valueShape)
         }
 
-        // Unless the map holds an aggregate shape as its value shape whose symbol's type is _not_ `pub(crate)`, the
-        // `.into()` calls are useless.
-        // See the comment in [ConstrainedCollectionShape] for a more detailed explanation.
-        val innerNeedsConstraining =
-            !valueShape.isDirectlyConstrained(symbolProvider) && (valueShape is CollectionShape || valueShape.isMapShape)
+        val codegenScope = arrayOf(
+            "KeySymbol" to keySymbol,
+            "ValueSymbol" to valueSymbol,
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "UnconstrainedSymbol" to unconstrainedSymbol,
+            "Symbol" to symbol,
+            "From" to RuntimeType.From,
+        )
 
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
@@ -80,33 +88,53 @@ class PubCrateConstrainedMapGenerator(
                 impl #{ConstrainedTrait} for $name  {
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
-
-                impl From<#{Symbol}> for $name {
-                    fn from(v: #{Symbol}) -> Self {
-                        ${ if (innerNeedsConstraining) {
-                            "Self(v.into_iter().map(|(k, v)| (k, v.into())).collect())"
-                        } else {
-                            "Self(v)"
-                        } }
-                    }
-                }
-
-                impl From<$name> for #{Symbol} {
-                    fn from(v: $name) -> Self {
-                        ${ if (innerNeedsConstraining) {
-                            "v.0.into_iter().map(|(k, v)| (k, v.into())).collect()"
-                        } else {
-                            "v.0"
-                        } }
-                    }
-                }
                 """,
-                "KeySymbol" to keySymbol,
-                "ValueSymbol" to valueSymbol,
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
-                "UnconstrainedSymbol" to unconstrainedSymbol,
-                "Symbol" to symbol,
+                *codegenScope
             )
+
+            if (publicConstrainedTypes) {
+                // Unless the map holds an aggregate shape as its value shape whose symbol's type is _not_ `pub(crate)`, the
+                // `.into()` calls are useless.
+                // See the comment in [ConstrainedCollectionShape] for a more detailed explanation.
+                val innerNeedsConstraining =
+                    !valueShape.isDirectlyConstrained(symbolProvider) && (valueShape is CollectionShape || valueShape is MapShape)
+
+                rustTemplate(
+                    """
+                    impl #{From}<#{Symbol}> for $name {
+                        fn from(v: #{Symbol}) -> Self {
+                            ${ if (innerNeedsConstraining) {
+                                "Self(v.into_iter().map(|(k, v)| (k, v.into())).collect())"
+                            } else {
+                                "Self(v)"
+                            } }
+                        }
+                    }
+
+                    impl #{From}<$name> for #{Symbol} {
+                        fn from(v: $name) -> Self {
+                            ${ if (innerNeedsConstraining) {
+                                "v.0.into_iter().map(|(k, v)| (k, v.into())).collect()"
+                            } else {
+                                "v.0"
+                            } }
+                        }
+                    }
+                    """,
+                    *codegenScope
+                )
+            } else {
+                rustTemplate(
+                    """
+                    impl #{From}<$name> for #{Symbol} {
+                        fn from(v: $name) -> Self {
+                            v.0.into_iter().map(|(k, v)| (k.into(), v.into())).collect()
+                        }
+                    }
+                    """,
+                    *codegenScope
+                )
+            }
         }
     }
 }

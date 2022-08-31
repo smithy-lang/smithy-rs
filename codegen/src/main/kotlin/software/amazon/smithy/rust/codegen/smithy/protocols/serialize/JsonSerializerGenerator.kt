@@ -431,7 +431,7 @@ class JsonSerializerGenerator(
             val keyTarget = model.expectShape(context.shape.key.target)
             val workingWithPublicConstrainedWrapperTupleType =
                 codegenTarget == CodegenTarget.SERVER && keyTarget.hasPublicConstrainedWrapperTupleType(model)
-            val keyExpression = if (workingWithPublicConstrainedWrapperTupleType) {
+            val keyExpression = if (publicConstrainedTypes && workingWithPublicConstrainedWrapperTupleType) {
                 "$keyName.0.as_str()"
             } else if (keyTarget.hasTrait<EnumTrait>()) {
                 "$keyName.as_str()"

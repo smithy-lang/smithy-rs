@@ -5,19 +5,18 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
+import software.amazon.smithy.rust.codegen.smithy.isTransitivelyButNotDirectlyConstrained
 
 /**
  * A generator for a wrapper tuple newtype over a collection shape's symbol
@@ -36,42 +35,40 @@ import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
  *  instead.
  */
 class PubCrateConstrainedCollectionGenerator(
-    val model: Model,
-    val symbolProvider: RustSymbolProvider,
-    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
+    val codegenContext: ServerCodegenContext,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     val writer: RustWriter,
     val shape: CollectionShape
 ) {
+    private val model = codegenContext.model
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
+    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
+    private val symbolProvider = codegenContext.symbolProvider
+
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
         val symbol = symbolProvider.toSymbol(shape)
         val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
+
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerConstrainedSymbol = if (innerShape.isTransitivelyConstrained(model, symbolProvider)) {
+        val innerConstrainedSymbol = if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
             pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
         } else {
-            symbolProvider.toSymbol(innerShape)
+            constrainedShapeSymbolProvider.toSymbol(innerShape)
         }
 
-        // If the target member shape is itself _not_ directly constrained, and is an aggregate non-Structure shape,
-        // then its corresponding constrained type is the `pub(crate)` wrapper tuple type, which needs converting into
-        // the public type the user is exposed to. The two types are isomorphic, and we can convert between them using
-        // `From`. So we track this particular case here in order to iterate over the list's members and convert
-        // each of them.
-        //
-        // Note that we could add the iteration code unconditionally and it would still be correct, but the `into()` calls
-        // would be useless. Clippy flags this as [`useless_conversion`]. We could deactivate the lint, but it's probably
-        // best that we just don't emit a useless iteration, lest the compiler not optimize it away, and to make the
-        // generated code a little bit simpler.
-        //
-        // [`useless_conversion`]: https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion.
-        val innerNeedsConstraining =
-            !innerShape.isDirectlyConstrained(symbolProvider) && (innerShape is CollectionShape || innerShape.isMapShape)
+        val codegenScope = arrayOf(
+            "InnerConstrainedSymbol" to innerConstrainedSymbol,
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "UnconstrainedSymbol" to unconstrainedSymbol,
+            "Symbol" to symbol,
+            "From" to RuntimeType.From,
+        )
 
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
@@ -82,32 +79,62 @@ class PubCrateConstrainedCollectionGenerator(
                 impl #{ConstrainedTrait} for $name  {
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
-
-                impl From<#{Symbol}> for $name {
-                    fn from(v: #{Symbol}) -> Self {
-                        ${ if (innerNeedsConstraining) {
-                            "Self(v.into_iter().map(|item| item.into()).collect())"
-                        } else {
-                            "Self(v)"
-                        } }
-                    }
-                }
-
-                impl From<$name> for #{Symbol} {
-                    fn from(v: $name) -> Self {
-                        ${ if (innerNeedsConstraining) {
-                            "v.0.into_iter().map(|item| item.into()).collect()"
-                        } else {
-                            "v.0"
-                        } }
-                    }
-                }
                 """,
-                "InnerConstrainedSymbol" to innerConstrainedSymbol,
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
-                "UnconstrainedSymbol" to unconstrainedSymbol,
-                "Symbol" to symbol,
+                *codegenScope
             )
+
+            if (publicConstrainedTypes) {
+                // If the target member shape is itself _not_ directly constrained, and is an aggregate non-Structure shape,
+                // then its corresponding constrained type is the `pub(crate)` wrapper tuple type, which needs converting into
+                // the public type the user is exposed to. The two types are isomorphic, and we can convert between them using
+                // `From`. So we track this particular case here in order to iterate over the list's members and convert
+                // each of them.
+                //
+                // Note that we could add the iteration code unconditionally and it would still be correct, but the `into()` calls
+                // would be useless. Clippy flags this as [`useless_conversion`]. We could deactivate the lint, but it's probably
+                // best that we just don't emit a useless iteration, lest the compiler not optimize it away, and to make the
+                // generated code a little bit simpler.
+                //
+                // [`useless_conversion`]: https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion.
+                val innerNeedsConstraining =
+                    !innerShape.isDirectlyConstrained(symbolProvider) && (innerShape is CollectionShape || innerShape is MapShape)
+
+                rustTemplate(
+                    """
+                    impl #{From}<#{Symbol}> for $name {
+                        fn from(v: #{Symbol}) -> Self {
+                            ${ if (innerNeedsConstraining) {
+                                "Self(v.into_iter().map(|item| item.into()).collect())"
+                            } else {
+                                "Self(v)"
+                            } }
+                        }
+                    }
+
+                    impl #{From}<$name> for #{Symbol} {
+                        fn from(v: $name) -> Self {
+                            ${ if (innerNeedsConstraining) {
+                                "v.0.into_iter().map(|item| item.into()).collect()"
+                            } else {
+                                "v.0"
+                            } }
+                        }
+                    }
+                    """,
+                    *codegenScope
+                )
+            } else {
+                rustTemplate(
+                    """
+                    impl #{From}<$name> for #{Symbol} {
+                        fn from(v: $name) -> Self {
+                            v.0.into_iter().map(|item| item.into()).collect()
+                        }
+                    }
+                    """,
+                    *codegenScope
+                )
+            }
         }
     }
 }

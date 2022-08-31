@@ -100,7 +100,7 @@ class UnconstrainedMapGenerator(
 
                     rustTemplate(
                         """
-                        let res: Result<std::collections::HashMap<#{KeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
+                        let res: Result<std::collections::HashMap<#{ConstrainedKeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
                                 ${if (isKeyConstrained(keyShape, symbolProvider)) "let k = k.try_into().map_err(Self::Error::Key)?;" else ""}
@@ -110,7 +110,7 @@ class UnconstrainedMapGenerator(
                             .collect();
                         let hm = res?;
                         """,
-                        "KeySymbol" to symbolProvider.toSymbol(keyShape),
+                        "ConstrainedKeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape),
                         "ConstrainedValueSymbol" to constrainedValueSymbol
                     )
 

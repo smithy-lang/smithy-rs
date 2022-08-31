@@ -37,9 +37,9 @@ class ConstrainedMapGenerator(
     val shape: MapShape,
     private val unconstrainedSymbol: Symbol? = null,
 ) {
-    val model = codegenContext.model
-    val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
-    val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val model = codegenContext.model
+    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
         with (codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {

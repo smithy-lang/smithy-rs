@@ -291,9 +291,7 @@ open class ServerCodegenVisitor(
             logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
             rustCrate.withModule(constrainedModule) { writer ->
                 PubCrateConstrainedCollectionGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
+                    codegenContext,
                     pubCrateConstrainedShapeSymbolProvider,
                     writer,
                     shape
@@ -324,9 +322,7 @@ open class ServerCodegenVisitor(
                 logger.info("[rust-server-codegen] Generating a constrained type for map $shape")
                 rustCrate.withModule(constrainedModule) { writer ->
                     PubCrateConstrainedMapGenerator(
-                        model,
-                        symbolProvider,
-                        unconstrainedShapeSymbolProvider,
+                        codegenContext,
                         pubCrateConstrainedShapeSymbolProvider,
                         writer,
                         shape

@@ -211,9 +211,9 @@ structure ConA {
     constrainedUnion: ConstrainedUnion,
     enumString: EnumString,
 
-//  listOfLengthString: ListOfLengthString,
-
-//  setOfLengthString: SetOfLengthString,
+    listOfLengthString: ListOfLengthString,
+    setOfLengthString: SetOfLengthString,
+    mapOfLengthString: MapOfLengthString,
 }
 
 map MapOfLengthString {
