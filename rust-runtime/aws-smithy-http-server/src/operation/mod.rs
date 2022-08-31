@@ -233,7 +233,7 @@ impl<Op, S, PollError> Operation<Normalize<Op, S, PollError>> {
         S: OperationService<Op, Exts, PollError>,
     {
         Self {
-            inner: inner.into_unflatten(),
+            inner: inner.canonicalize(),
             layer: Identity::new(),
         }
     }

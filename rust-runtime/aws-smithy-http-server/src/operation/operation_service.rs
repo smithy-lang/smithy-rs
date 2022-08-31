@@ -73,7 +73,7 @@ where
     Op: OperationShape,
 {
     /// Convert the [`OperationService`] into a canonicalized [`Service`].
-    fn into_unflatten(self) -> Normalize<Op, Self, PollError>
+    fn canonicalize(self) -> Normalize<Op, Self, PollError>
     where
         Self: Sized,
     {
