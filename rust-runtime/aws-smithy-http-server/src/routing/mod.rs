@@ -7,17 +7,18 @@
 //!
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
+use std::{
+    convert::Infallible,
+    task::{Context, Poll},
+};
+
 use self::request_spec::RequestSpec;
-use self::routers::{aws_json::AwsJsonRouter, rest::RestRouter, RoutingService};
+use self::routers::{aws_json::AwsJsonRouter, rest::RestRouter};
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::error::BoxError;
 use crate::protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml};
 
 use http::{Request, Response};
-use std::{
-    convert::Infallible,
-    task::{Context, Poll},
-};
 use tower::layer::Layer;
 use tower::{Service, ServiceBuilder};
 use tower_http::map_response_body::MapResponseBodyLayer;
@@ -35,6 +36,7 @@ mod tiny_map;
 
 pub use self::lambda_handler::LambdaHandler;
 pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
+pub use routers::*;
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.
