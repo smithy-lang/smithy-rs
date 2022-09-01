@@ -13,19 +13,17 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.util.runCommand
+import software.amazon.smithy.rust.testutil.AddRustTestsDecorator
 
 // If any of these tests fail, and you want to understand why, run them with logging:
 // ```
@@ -60,39 +58,30 @@ internal class HttpVersionListGeneratorTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val testWriter = object : RustCodegenDecorator<ClientCodegenContext> {
-            override val name: String = "add tests"
-            override val order: Byte = 0
-
-            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-                rustCrate.withFile("tests/validate_defaults.rs") {
-                    TokioTest.render(it)
-                    it.rust(
-                        """
-                        async fn test_http_version_list_defaults() {
-                            let conf = $moduleName::Config::builder().build();
-                            let op = $moduleName::operation::SayHello::builder()
-                                .greeting("hello")
-                                .build().expect("valid operation")
-                                .make_operation(&conf).await.expect("hello is a valid prefix");
-                            let properties = op.properties();
-                            let actual_http_versions = properties.get::<Vec<http::Version>>()
-                                .expect("http versions list should be in property bag");
-                            let expected_http_versions = &vec![http::Version::HTTP_11];
-                            assert_eq!(actual_http_versions, expected_http_versions);
-                        }
-                        """,
-                    )
-                }
-            }
-
-            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-                clazz.isAssignableFrom(ClientCodegenContext::class.java)
-        }
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
-            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(testWriter)
-        val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
-        visitor.execute()
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
+                .withDecorator(
+                    AddRustTestsDecorator("validate_defaults") {
+                        TokioTest.render(this)
+                        rust(
+                            """
+                            async fn test_http_version_list_defaults() {
+                                let conf = $moduleName::Config::builder().build();
+                                let op = $moduleName::operation::SayHello::builder()
+                                    .greeting("hello")
+                                    .build().expect("valid operation")
+                                    .make_operation(&conf).await.expect("hello is a valid prefix");
+                                let properties = op.properties();
+                                let actual_http_versions = properties.get::<Vec<http::Version>>()
+                                    .expect("http versions list should be in property bag");
+                                let expected_http_versions = &vec![http::Version::HTTP_11];
+                                assert_eq!(actual_http_versions, expected_http_versions);
+                            }
+                            """,
+                        )
+                    },
+                )
+        CodegenVisitor(ctx, combinedCodegenDecorator).execute()
         "cargo test".runCommand(testDir)
     }
 
@@ -125,40 +114,30 @@ internal class HttpVersionListGeneratorTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val testWriter = object : RustCodegenDecorator<ClientCodegenContext> {
-            override val name: String = "add tests"
-            override val order: Byte = 0
-
-            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-                rustCrate.withFile("tests/validate_http.rs") {
-                    TokioTest.render(it)
-                    it.rust(
-                        """
-                        async fn test_http_version_list_defaults() {
-                            let conf = $moduleName::Config::builder().build();
-                            let op = $moduleName::operation::SayHello::builder()
-                                .greeting("hello")
-                                .build().expect("valid operation")
-                                .make_operation(&conf).await.expect("hello is a valid prefix");
-                            let properties = op.properties();
-                            let actual_http_versions = properties.get::<Vec<http::Version>>()
-                                .expect("http versions list should be in property bag");
-                            let expected_http_versions = &vec![http::Version::HTTP_11, http::Version::HTTP_2];
-                            assert_eq!(actual_http_versions, expected_http_versions);
-                        }
-                        """,
-                    )
-                }
-            }
-
-            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-                clazz.isAssignableFrom(ClientCodegenContext::class.java)
-        }
-
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
-            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(testWriter)
-        val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
-        visitor.execute()
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
+                .withDecorator(
+                    AddRustTestsDecorator("validate_http") {
+                        TokioTest.render(this)
+                        rust(
+                            """
+                            async fn test_http_version_list_defaults() {
+                                let conf = $moduleName::Config::builder().build();
+                                let op = $moduleName::operation::SayHello::builder()
+                                    .greeting("hello")
+                                    .build().expect("valid operation")
+                                    .make_operation(&conf).await.expect("hello is a valid prefix");
+                                let properties = op.properties();
+                                let actual_http_versions = properties.get::<Vec<http::Version>>()
+                                    .expect("http versions list should be in property bag");
+                                let expected_http_versions = &vec![http::Version::HTTP_11, http::Version::HTTP_2];
+                                assert_eq!(actual_http_versions, expected_http_versions);
+                            }
+                            """,
+                        )
+                    },
+                )
+        CodegenVisitor(ctx, combinedCodegenDecorator).execute()
         "cargo test".runCommand(testDir)
     }
 
@@ -204,21 +183,12 @@ internal class HttpVersionListGeneratorTest {
 
         val (ctx, testDir) = generatePluginContext(model, addModuleToEventStreamAllowList = true)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val codegenDecorator = object : RustCodegenDecorator<ClientCodegenContext> {
-            override val name: String = "add tests"
-            override val order: Byte = 0
 
-            override fun configCustomizations(
-                codegenContext: ClientCodegenContext,
-                baseCustomizations: List<ConfigCustomization>,
-            ): List<ConfigCustomization> {
-                return super.configCustomizations(codegenContext, baseCustomizations) + FakeSigningConfig(codegenContext.runtimeConfig)
-            }
-
-            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-                rustCrate.withFile("tests/validate_eventstream_http.rs") {
-                    TokioTest.render(it)
-                    it.rust(
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
+                .withDecorator(object : AddRustTestsDecorator<ClientCodegenContext>("validate_eventstream_http", {
+                    TokioTest.render(this)
+                    rust(
                         """
                         async fn test_http_version_list_defaults() {
                             let conf = $moduleName::Config::builder().build();
@@ -233,17 +203,16 @@ internal class HttpVersionListGeneratorTest {
                         }
                         """,
                     )
-                }
-            }
-
-            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-                clazz.isAssignableFrom(ClientCodegenContext::class.java)
-        }
-
-        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
-            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)
-        val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
-        visitor.execute()
+                },) {
+                        override fun configCustomizations(
+                            codegenContext: ClientCodegenContext,
+                            baseCustomizations: List<ConfigCustomization>,
+                        ): List<ConfigCustomization> {
+                            return super.configCustomizations(codegenContext, baseCustomizations) + FakeSigningConfig(codegenContext.runtimeConfig)
+                        }
+                    },
+                )
+        CodegenVisitor(ctx, combinedCodegenDecorator).execute()
         "cargo test".runCommand(testDir)
     }
 }
