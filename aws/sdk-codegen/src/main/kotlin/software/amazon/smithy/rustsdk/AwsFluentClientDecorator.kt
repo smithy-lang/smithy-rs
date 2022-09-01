@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.GenericTypeArg
 import software.amazon.smithy.rust.codegen.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
@@ -34,7 +35,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClient
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
-import java.util.Optional
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
@@ -75,7 +75,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType): Writable = writable { }
 
     override fun toGenericsGenerator(): GenericsGenerator {
-        return GenericsGenerator(mutableListOf())
+        return GenericsGenerator()
     }
 }
 
@@ -265,7 +265,7 @@ private fun renderCustomizableOperationSendMethod(
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(mutableListOf("O" to Optional.empty(), "Retry" to Optional.empty()))
+    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
     val handleGenerics = generics.toGenericsGenerator()
     val combinedGenerics = operationGenerics + handleGenerics
 

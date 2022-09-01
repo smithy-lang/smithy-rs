@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
@@ -41,6 +42,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.smithy.generators.GenericTypeArg
 import software.amazon.smithy.rust.codegen.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -55,7 +57,6 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-import java.util.Optional
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
@@ -280,6 +281,7 @@ class FluentClientGenerator(
                     val retryType =
                         operation.getTrait<RetryPolicyTrait>()?.let { it.getRetryPolicy(runtimeConfig).fullyQualifiedName() } ?: "()"
 
+                    // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
@@ -289,12 +291,8 @@ class FluentClientGenerator(
 
                         /// Consume this builder, creating a customizable operation that can be modified before being
                         /// sent. The operation's inner [http::Request] can be modified as well.
-                        pub async fn customize(self) -> Result<
-                            crate::customizable_operation::CustomizableOperation<
-                                #{Operation},
-                                $retryType,
-                                ${generics.inst.trimStart('<').trimEnd('>')}
-                            >,
+                        pub async fn customize(self) -> std::result::Result<
+                            crate::customizable_operation::CustomizableOperation#{customizable_op_type_params:W},
                             #{SdkError}<#{OperationError}>
                         > #{send_bounds:W} {
                             let handle = self.handle.clone();
@@ -323,12 +321,16 @@ class FluentClientGenerator(
                         }
                         """,
                         "ClassifyResponse" to runtimeConfig.smithyHttp().member("retry::ClassifyResponse"),
-                        "Operation" to symbolProvider.toSymbol(operation),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
                         "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
                         "SdkSuccess" to runtimeConfig.smithyHttp().member("result::SdkSuccess"),
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
+                        "customizable_op_type_params" to rustTypeParameters(
+                            symbolProvider.toSymbol(operation),
+                            retryType,
+                            generics.toGenericsGenerator(),
+                        ),
                     )
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
@@ -378,7 +380,7 @@ private fun renderCustomizableOperationModule(
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(mutableListOf("O" to Optional.empty(), "Retry" to Optional.empty()))
+    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
     val handleGenerics = generics.toGenericsGenerator()
     val combinedGenerics = operationGenerics + handleGenerics
 
@@ -470,7 +472,7 @@ private fun renderCustomizableOperationSend(
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
     val smithyClient = CargoDependency.SmithyClient(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(mutableListOf("O" to Optional.empty(), "Retry" to Optional.empty()))
+    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
     val handleGenerics = generics.toGenericsGenerator()
     val combinedGenerics = operationGenerics + handleGenerics
 

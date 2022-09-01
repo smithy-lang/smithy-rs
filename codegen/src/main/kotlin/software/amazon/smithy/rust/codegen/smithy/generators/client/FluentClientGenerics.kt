@@ -11,8 +11,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.GenericTypeArg
 import software.amazon.smithy.rust.codegen.smithy.generators.GenericsGenerator
-import java.util.Optional
 
 interface FluentClientGenerics {
     /** Declaration with defaults set */
@@ -90,11 +90,9 @@ data class FlexibleClientGenerics(
 
     override fun toGenericsGenerator(): GenericsGenerator {
         return GenericsGenerator(
-            mutableListOf(
-                "C" to Optional.of(client.member("bounds::SmithyConnector")),
-                "M" to Optional.of(client.member("bounds::SmithyMiddleware<C>")),
-                "R" to Optional.of(client.member("retry::NewRequestPolicy")),
-            ),
+            GenericTypeArg("C", client.member("bounds::SmithyConnector")),
+            GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
+            GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
         )
     }
 

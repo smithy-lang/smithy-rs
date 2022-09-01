@@ -5,37 +5,58 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustInline
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.util.orNull
-import java.util.Optional
 
-class GenericsGenerator(
-    private val types: MutableList<Pair<String, Optional<RuntimeType>>>,
-) {
-    fun add(type: Pair<String, RuntimeType>) {
-        types.add(type.first to Optional.of(type.second))
+data class GenericTypeArg(
+    val typeArg: String,
+    val bound: RuntimeType? = null,
+)
+
+class GenericsGenerator(vararg genericTypeArgs: GenericTypeArg) {
+    private val typeArgs: MutableList<GenericTypeArg>
+
+    init {
+        typeArgs = genericTypeArgs.toMutableList()
     }
 
-    fun declaration() = writable {
+    fun add(typeArg: GenericTypeArg) {
+        typeArgs.add(typeArg)
+    }
+
+    fun declaration(withAngleBrackets: Boolean = true) = writable {
         // Write nothing if this generator is empty
-        if (types.isNotEmpty()) {
-            val typeArgs = types.joinToString(", ") { it.first }
-            rust("<$typeArgs>")
+        if (typeArgs.isNotEmpty()) {
+            val typeArgs = typeArgs.joinToString(", ") { it.typeArg }
+
+            conditionalBlock(
+                "<",
+                ">",
+                conditional = withAngleBrackets,
+            ) {
+                rustInline(typeArgs)
+            }
         }
     }
 
     fun bounds() = writable {
         // Only write bounds for generic type params with a bound
-        types.filter { it.second.isPresent }.map {
-            val (typeArg, runtimeType) = it
-            rustTemplate("$typeArg: #{runtimeType},\n", "runtimeType" to runtimeType.orNull()!!)
+        typeArgs.map {
+            val (typeArg, bound) = it
+
+            if (bound != null) {
+                rustTemplate("$typeArg: #{bound},\n", "bound" to bound)
+            }
         }
     }
 
+    fun parameters() = writable {
+    }
+
     operator fun plus(operationGenerics: GenericsGenerator): GenericsGenerator {
-        return GenericsGenerator(listOf(types, operationGenerics.types).flatten().toMutableList())
+        return GenericsGenerator(*listOf(typeArgs, operationGenerics.typeArgs).flatten().toTypedArray())
     }
 }

@@ -21,8 +21,10 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.AbstractCodeWriter
@@ -136,6 +138,13 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     this.write(contents.trim(), *args)
 }
 
+fun <T : AbstractCodeWriter<T>> T.rustInline(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
+    vararg args: Any,
+) {
+    this.writeInline(contents.trim(), *args)
+}
+
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
@@ -191,6 +200,54 @@ fun RustWriter.rustTemplate(
 ) {
     withTemplate(contents, ctx) { template ->
         write(template)
+    }
+}
+
+/**
+ * Combine multiple writable types into a Rust generic type parameter list
+ *
+ * e.g.
+ *
+ * ```kotlin
+ * rustTemplate(
+ *     "some_fn::<#{type_params:W}>();",
+ *     "type_params" to rustTypeParameters(
+ *         symbolProvider.toSymbol(operation),
+ *         runtimeConfig.smithyHttp().member("body::SdkBody"),
+ *         GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
+ *     )
+ * )
+ * ```
+ * would write out something like:
+ * ```rust
+ * some_fn::<crate::operation::SomeOperation, aws_smithy_http::body::SdkBody, A, B>();
+ * ```
+ */
+fun rustTypeParameters(
+    vararg typeParameters: Any,
+): Writable = writable {
+    if (typeParameters.isNotEmpty()) {
+        rustInline("<")
+
+        val iterator: Iterator<Any> = typeParameters.iterator()
+        while (iterator.hasNext()) {
+            when (val typeParameter = iterator.next()) {
+                is Symbol -> rustTemplate("#{symbol}", "symbol" to typeParameter)
+                is RuntimeType -> rustTemplate("#{rt}", "rt" to typeParameter)
+                is String -> rust(typeParameter)
+                is GenericsGenerator -> rustTemplate(
+                    "#{gg:W}",
+                    "gg" to typeParameter.declaration(withAngleBrackets = false),
+                )
+                else -> PANIC("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+            }
+
+            if (iterator.hasNext()) {
+                rustInline(", ")
+            }
+        }
+
+        rustInline(">")
     }
 }
 
@@ -471,12 +528,15 @@ class RustWriter private constructor(
                     block(derefName)
                 }
             }
+
             shape is NumberShape -> rustBlock("if ${outerField.removePrefix("&")} != 0") {
                 block(outerField)
             }
+
             shape is BooleanShape -> rustBlock("if ${outerField.removePrefix("&")}") {
                 block(outerField)
             }
+
             else -> this.block(outerField)
         }
     }
@@ -555,10 +615,12 @@ class RustWriter private constructor(
                     // for now, use the fully qualified type name
                     t.fullyQualifiedName()
                 }
+
                 is Symbol -> {
                     addDepsRecursively(t)
                     t.rustType().render(fullyQualified = true)
                 }
+
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")
                 // escaping generates `##` sequences for all the common cases where
                 // it will be run through templating, but in this context, we won't be escaped
