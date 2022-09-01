@@ -156,8 +156,8 @@ open class ServerCodegenVisitor(
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
 
-        val walker = Walker(model)
         val inputShapes = model.operationShapes.map { model.expectShape(it.inputShape, StructureShape::class.java) }
+        val walker = Walker(model)
         shapesReachableFromOperationInputs = inputShapes.flatMap { walker.walkShapes(it) }.toSet()
     }
 
@@ -233,15 +233,19 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
-            val serverBuilderGenerator = ServerBuilderGenerator(
-                codegenContext,
-                shape,
-                if (shapesReachableFromOperationInputs.contains(shape)) pubCrateConstrainedShapeSymbolProvider else null
-            )
-            serverBuilderGenerator.render(writer)
-            if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-                writer.implBlock(shape, symbolProvider) {
-                    serverBuilderGenerator.renderConvenienceMethod(this)
+
+            if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shapesReachableFromOperationInputs.contains(shape)) {
+                val serverBuilderGenerator = ServerBuilderGenerator(
+                    codegenContext,
+                    shape,
+                    if (shapesReachableFromOperationInputs.contains(shape)) pubCrateConstrainedShapeSymbolProvider else null
+                )
+                serverBuilderGenerator.render(writer)
+
+                if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+                    writer.implBlock(shape, symbolProvider) {
+                        serverBuilderGenerator.renderConvenienceMethod(this)
+                    }
                 }
             }
 

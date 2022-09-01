@@ -10,7 +10,7 @@ use aws.protocols#restJson1
 service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
-//      ConstrainedHttpBoundShapesOperation,
+        ConstrainedHttpBoundShapesOperation,
 //      ConstrainedRecursiveShapesOperation,
 //      // `httpQueryParams` and `httpPrefixHeaders` are structurually
 //      // exclusive, so we need one operation per target shape type
@@ -108,44 +108,44 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpLabel
     enumStringLabel: EnumString,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
-    // @required
-    @httpPrefixHeaders("X-Prefix-Headers-")
-    lengthStringHeaderMap: MapOfLengthString,
+//  // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
+//  // @required
+//  @httpPrefixHeaders("X-Prefix-Headers-")
+//  lengthStringHeaderMap: MapOfLengthString,
 
-    @httpHeader("X-Length")
-    lengthStringHeader: LengthString,
+//  @httpHeader("X-Length")
+//  lengthStringHeader: LengthString,
 
-    // @httpHeader("X-Length-MediaType")
-    // lengthStringHeaderWithMediaType: MediaTypeLengthString,
+//  // @httpHeader("X-Length-MediaType")
+//  // lengthStringHeaderWithMediaType: MediaTypeLengthString,
 
-    @httpHeader("X-Length-Set")
-    lengthStringSetHeader: SetOfLengthString,
+//  @httpHeader("X-Length-Set")
+//  lengthStringSetHeader: SetOfLengthString,
 
-    @httpHeader("X-Length-List")
-    lengthStringListHeader: ListOfLengthString,
+//  @httpHeader("X-Length-List")
+//  lengthStringListHeader: ListOfLengthString,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-    // @httpHeader("X-Enum")
-    //enumStringHeader: EnumString,
+//  // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+//  // @httpHeader("X-Enum")
+//  //enumStringHeader: EnumString,
 
-    // @httpHeader("X-Enum-List")
-    // enumStringListHeader: ListOfEnumString,
+//  // @httpHeader("X-Enum-List")
+//  // enumStringListHeader: ListOfEnumString,
 
-    @httpQuery("lengthString")
-    lengthStringQuery: LengthString,
+//  @httpQuery("lengthString")
+//  lengthStringQuery: LengthString,
 
-    @httpQuery("enumString")
-    enumStringQuery: EnumString,
+//  @httpQuery("enumString")
+//  enumStringQuery: EnumString,
 
-    @httpQuery("lengthStringList")
-    lengthStringListQuery: ListOfLengthString,
+//  @httpQuery("lengthStringList")
+//  lengthStringListQuery: ListOfLengthString,
 
-    @httpQuery("lengthStringSet")
-    lengthStringSetQuery: SetOfLengthString,
+//  @httpQuery("lengthStringSet")
+//  lengthStringSetQuery: SetOfLengthString,
 
-    @httpQuery("enumStringList")
-    enumStringListQuery: ListOfEnumString,
+//  @httpQuery("enumStringList")
+//  enumStringListQuery: ListOfEnumString,
 }
 
 structure HttpPrefixHeadersTargetingLengthMapOperationInputOutput {
