@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -36,8 +37,10 @@ class ServerServiceGeneratorV2(
 ) {
     private val codegenScope =
         arrayOf(
+            "Http" to CargoDependency.Http.asType(),
             "SmithyHttpServer" to
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+            "Tower" to ServerCargoDependency.Tower.asType(),
         )
 
     private val serviceId = service.id
@@ -200,6 +203,30 @@ class ServerServiceGeneratorV2(
         )
     }
 
+    private fun structServiceImpl(): Writable = writable {
+        rustTemplate(
+            """
+            impl<B, S> #{Tower}::Service<#{Http}::Request<B>> for ${shapeToStructName(serviceId)}<S>
+            where
+                S: #{Tower}::Service<http::Request<B>, Response = http::Response<#{SmithyHttpServer}::body::BoxBody>> + Clone,
+            {
+                type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
+                type Error = S::Error;
+                type Future = #{SmithyHttpServer}::routing::routers::RoutingFuture<S, B>;
+
+                fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
+                    self.router.poll_ready(cx)
+                }
+
+                fn call(&mut self, request: #{Http}::Request<B>) -> Self::Future {
+                    self.router.call(request)
+                }
+            }
+            """,
+            *codegenScope,
+        )
+    }
+
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
@@ -210,11 +237,14 @@ class ServerServiceGeneratorV2(
             #{Struct:W}
 
             #{StructImpl:W}
+
+            #{StructServiceImpl:W}
             """,
             "Builder" to builderDef(),
             "BuilderImpl" to builderImpl(),
             "Struct" to structDef(),
             "StructImpl" to structImpl(),
+            "StructServiceImpl" to structServiceImpl(),
         )
     }
 }
