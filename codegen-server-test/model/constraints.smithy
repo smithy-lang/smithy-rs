@@ -11,7 +11,7 @@ service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
-//      ConstrainedRecursiveShapesOperation,
+        ConstrainedRecursiveShapesOperation,
 //      // `httpQueryParams` and `httpPrefixHeaders` are structurually
 //      // exclusive, so we need one operation per target shape type
 //      // combination.
