@@ -82,6 +82,7 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
         }
     }
 
+    // TODO Zelda figure out how to update this for the new enums thing
     override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
         val baseName = base.toEnumVariantName(definition) ?: return null
         check(definition.name.orNull()?.toPascalCase() == baseName.name) {

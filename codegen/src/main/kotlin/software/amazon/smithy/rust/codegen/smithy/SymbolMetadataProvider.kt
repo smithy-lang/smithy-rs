@@ -11,7 +11,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
@@ -62,7 +61,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
     abstract fun memberMeta(memberShape: MemberShape): RustMetadata
     abstract fun structureMeta(structureShape: StructureShape): RustMetadata
     abstract fun unionMeta(unionShape: UnionShape): RustMetadata
-    abstract fun enumMeta(stringShape: StringShape): RustMetadata
+    abstract fun enumMeta(enumShape: EnumShape): RustMetadata
 }
 
 /**
@@ -113,7 +112,7 @@ class BaseSymbolMetadataProvider(
         return containerDefault
     }
 
-    override fun enumMeta(stringShape: StringShape): RustMetadata {
+    override fun enumMeta(enumShape: EnumShape): RustMetadata {
         return containerDefault.withDerives(
             RuntimeType.std.member("hash::Hash"),
         ).withDerives( // enums can be eq because they can only contain strings

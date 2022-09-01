@@ -8,9 +8,9 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -78,7 +78,7 @@ class StreamingShapeMetadataProvider(
         } else baseMetadata
     }
 
-    override fun enumMeta(stringShape: StringShape): RustMetadata {
-        return base.toSymbol(stringShape).expectRustMetadata()
+    override fun enumMeta(enumShape: EnumShape): RustMetadata {
+        return base.toSymbol(enumShape).expectRustMetadata()
     }
 }

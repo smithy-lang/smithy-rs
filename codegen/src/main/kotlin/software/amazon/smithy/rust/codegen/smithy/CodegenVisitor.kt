@@ -90,6 +90,13 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         model
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
+            // Changes each compatible string shape with the enum trait to an enum shape.
+            // A member will be created on the shape for each entry in the EnumTrait.
+            // Strings with enum traits that don't define names will be converted
+            .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
+            // Add the clientOptional trait to members that are effectively nullable because they are part of a
+            // structure marked with the input trait, or they aren't required and don't have a default trait.
+            .let { ModelTransformer.create().addClientOptional(model, true) }
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)
