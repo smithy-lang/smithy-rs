@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -17,11 +16,6 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.toPascalCase
-
-private fun shapeToStructName(shapeId: ShapeId): String {
-    return shapeId.name.toPascalCase()
-}
 
 class ServerOperationGenerator(
     coreCodegenContext: CoreCodegenContext,
@@ -33,7 +27,9 @@ class ServerOperationGenerator(
             "SmithyHttpServer" to
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         )
+    private val symbolProvider = coreCodegenContext.symbolProvider
 
+    private val operationName = symbolProvider.toSymbol(operation).name
     private val operationId = operation.id
 
     private fun renderStructDef(): Writable = writable {
@@ -44,27 +40,25 @@ class ServerOperationGenerator(
             }
         }
 
-        rust("pub struct ${shapeToStructName(operationId)};")
+        rust("pub struct $operationName;")
     }
 
     private fun operationError(): Writable = writable {
         if (operation.errors.isEmpty()) {
             rust("std::convert::Infallible")
         } else {
-            val operationStructName = shapeToStructName(operationId)
-            rust("crate::error::${operationStructName}Error")
+            rust("crate::error::${operationName}Error")
         }
     }
 
     private fun renderImpl(): Writable = writable {
-        val operationStructName = shapeToStructName(operationId)
         rustTemplate(
             """
-            impl #{SmithyHttpServer}::operation::OperationShape for $operationStructName {
+            impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
                 const NAME: &'static str = "${operationId.toString().replace("#", "##")}";
 
-                type Input = crate::input::${operationStructName}Input;
-                type Output = crate::output::${operationStructName}Output;
+                type Input = crate::input::${operationName}Input;
+                type Output = crate::output::${operationName}Output;
                 type Error = #{Error:W};
             }
             """,

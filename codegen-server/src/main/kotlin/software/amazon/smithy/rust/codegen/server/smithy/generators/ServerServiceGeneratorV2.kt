@@ -5,10 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -17,59 +18,48 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.toPascalCase
+import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-private fun shapeToStructName(shapeId: ShapeId): String {
-    return shapeId.name.toPascalCase()
-}
-
-private fun shapeToFieldName(shapeId: ShapeId): String {
-    return shapeId.name.toSnakeCase()
-}
-
 class ServerServiceGeneratorV2(
-    runtimeConfig: RuntimeConfig,
+    coreCodegenContext: CoreCodegenContext,
     private val service: ServiceShape,
     private val protocol: ServerProtocol,
 ) {
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "Http" to CargoDependency.Http.asType(),
             "SmithyHttpServer" to
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "Tower" to ServerCargoDependency.Tower.asType(),
+            "Tower" to CargoDependency.Tower.asType(),
         )
+    private val model = coreCodegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
 
-    private val serviceId = service.id
+    private val serviceName = service.id.name
+    private val builderName = "${serviceName}Builder"
 
-    private fun builderName(): String {
-        return "${shapeToStructName(serviceId)}Builder"
-    }
+    private val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
 
-    private fun builderGenerics(): Sequence<String> {
-        return sequence {
-            for (index in 1..service.operations.size) {
-                yield("Op$index")
-            }
+    private fun builderGenerics(): Sequence<String> = sequence {
+        for (index in 1..service.operations.size) {
+            yield("Op$index")
         }
     }
 
-    private fun builderFieldNames(): Sequence<String> {
-        return sequence {
-            for (operation in service.operations) {
-                yield(shapeToFieldName(operation))
-            }
+    private fun builderFieldNames(): Sequence<String> = sequence {
+        for (operation in operationShapes) {
+            val field = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
+            yield(field)
         }
     }
 
-    private fun operationStructNames(): Sequence<String> {
-        return sequence {
-            for (operation in service.operations) {
-                yield(shapeToStructName(operation))
-            }
+    private fun operationStructNames(): Sequence<String> = sequence {
+        for (operation in operationShapes) {
+            yield(symbolProvider.toSymbol(operation).name)
         }
     }
 
@@ -83,10 +73,10 @@ class ServerServiceGeneratorV2(
     private fun builderDef(): Writable = writable {
         rustTemplate(
             """
-            /// The service builder for [`${shapeToStructName(serviceId)}`].
+            /// The service builder for [`$serviceName`].
             ///
-            /// Constructed via [`${shapeToStructName(serviceId)}::builder`].
-            pub struct ${builderName()}<${builderGenerics().joinToString(",")}> {
+            /// Constructed via [`$serviceName::builder`].
+            pub struct $builderName<${builderGenerics().joinToString(",")}> {
                 #{Fields:W}
             }
             """,
@@ -117,13 +107,14 @@ class ServerServiceGeneratorV2(
 
             rustTemplate(
                 """
-                /// Sets the `$structName` operation.
+                /// Sets the [`$structName`](crate::operations::$structName) operation.
                 ///
-                /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from [`$structName`](crate::operations::$structName)
-                /// using either [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationExt::from_handler) or
+                /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from
+                /// [`$structName`](crate::operations::$structName) using either
+                /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationExt::from_service).
-                pub fn $fieldName<NewOp>(self, value: NewOp) -> ${builderName()}<${replacedGenerics.joinToString(",")}> {
-                    ${builderName()} {
+                pub fn $fieldName<NewOp>(self, value: NewOp) -> $builderName<${replacedGenerics.joinToString(",")}> {
+                    $builderName {
                         #{SwitchedFields:W}
                     }
                 }
@@ -137,15 +128,56 @@ class ServerServiceGeneratorV2(
         }
     }
 
+    private fun extensionTypes(): Sequence<String> = sequence {
+        for (index in 1..service.operations.size) {
+            yield("Exts$index")
+        }
+    }
+
+    private fun buildConstraints(): Writable = writable {
+        for (tuple in operationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
+            val (first, exts) = tuple
+            val (operation, type) = first
+            // TODO(Relax): The `Error = Infallible` is an excess requirement to stay at parity with existing builder.
+            rustTemplate(
+                """
+                $type: #{SmithyHttpServer}::operation::Upgradable<#{Marker}, crate::operations::${symbolProvider.toSymbol(operation).name}, $exts, B>,
+                $type::Service: Clone + Send + 'static,
+                <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
+
+                $type::Service: #{Tower}::Service<#{Http}::Request<B>, Error = std::convert::Infallible>,
+                """,
+                "Marker" to protocol.markerStruct(), *codegenScope,
+
+            )
+        }
+    }
+
     private fun builderImpl(): Writable = writable {
         val generics = builderGenerics().joinToString(",")
+        val router = protocol.routerConstruction(service, builderFieldNames().map { "self.$it.upgrade()" }.asIterable(), model)
         rustTemplate(
             """
-            impl<$generics> ${builderName()}<$generics> {
+            impl<$generics> $builderName<$generics> {
                 #{Setters:W}
+            }
+
+            impl<$generics> $builderName<$generics> {
+                pub fn build<B, ${extensionTypes().joinToString(",")}>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
+                where
+                    #{BuildConstraints:W}
+                {
+                    let router = #{Router:W};
+                    $serviceName {
+                        router: #{SmithyHttpServer}::routing::routers::RoutingService::new(router),
+                    }
+                }
             }
             """,
             "Setters" to builderSetters(),
+            "BuildConstraints" to buildConstraints(),
+            "Router" to router,
+            *codegenScope,
         )
     }
 
@@ -158,7 +190,7 @@ class ServerServiceGeneratorV2(
         }
         rustTemplate(
             """
-            pub struct ${shapeToStructName(serviceId)}<S> {
+            pub struct $serviceName<S> {
                 router: #{SmithyHttpServer}::routing::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
             """,
@@ -175,9 +207,9 @@ class ServerServiceGeneratorV2(
     }
 
     private fun notSetFields(): Writable = writable {
-        for (operation in service.operations) {
+        for (fieldName in builderFieldNames()) {
             rustTemplate(
-                "${shapeToFieldName(operation)}: #{SmithyHttpServer}::operation::OperationNotSet,",
+                "$fieldName: #{SmithyHttpServer}::operation::OperationNotSet,",
                 *codegenScope,
             )
         }
@@ -186,10 +218,10 @@ class ServerServiceGeneratorV2(
     private fun structImpl(): Writable = writable {
         rustTemplate(
             """
-            impl ${shapeToStructName(serviceId)}<()> {
-                /// Constructs a builder for [`${shapeToStructName(serviceId)}`].
-                pub fn builder() -> ${builderName()}<#{NotSetGenerics:W}> {
-                    ${builderName()} {
+            impl $serviceName<()> {
+                /// Constructs a builder for [`$serviceName`].
+                pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
+                    $builderName {
                         #{NotSetFields:W}
                     }
                 }
@@ -202,7 +234,7 @@ class ServerServiceGeneratorV2(
     private fun structServiceImpl(): Writable = writable {
         rustTemplate(
             """
-            impl<B, S> #{Tower}::Service<#{Http}::Request<B>> for ${shapeToStructName(serviceId)}<S>
+            impl<B, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
             where
                 S: #{Tower}::Service<http::Request<B>, Response = http::Response<#{SmithyHttpServer}::body::BoxBody>> + Clone,
             {
