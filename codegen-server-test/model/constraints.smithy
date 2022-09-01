@@ -108,10 +108,10 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpLabel
     enumStringLabel: EnumString,
 
-//  // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
-//  // @required
-//  @httpPrefixHeaders("X-Prefix-Headers-")
-//  lengthStringHeaderMap: MapOfLengthString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
+    // @required
+    @httpPrefixHeaders("X-Prefix-Headers-")
+    lengthStringHeaderMap: MapOfLengthString,
 
 //  @httpHeader("X-Length")
 //  lengthStringHeader: LengthString,

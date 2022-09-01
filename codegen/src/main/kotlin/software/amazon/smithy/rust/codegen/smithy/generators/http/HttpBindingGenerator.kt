@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
@@ -92,7 +93,7 @@ enum class HttpMessageType {
  */
 class HttpBindingGenerator(
     private val protocol: Protocol,
-    coreCodegenContext: CoreCodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val symbolProvider: RustSymbolProvider,
     private val operationShape: OperationShape
 ) {
@@ -604,12 +605,9 @@ class HttpBindingGenerator(
                     "$func(&$targetName)"
                 } else {
                     // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member traits are not
-                    //  supported yet. Note that here, counterintuitively, in case we're rendering a header for a
-                    //  collection, `member` is still referring to the structure member shape where the `httpHeader` or
-                    //  `httpPrefixHeaders` trait was found, and _not_ to the collection member shape on which we'd have
-                    //  to check for constraint trait precedence. So `member.hasPublicConstrainedWrapperTupleType()` is
-                    //  _not_ what we want.
-                    quoteValue("AsRef::<str>::as_ref(${if (workingWithPublicConstrainedWrapperTupleType(target)) "&$targetName.0" else targetName})")
+                    //  supported yet.
+                    val expr = if (workingWithPublicConstrainedWrapperTupleType(target)) "&$targetName.0" else targetName
+                    quoteValue("AsRef::<str>::as_ref($expr)")
                 }
             }
             target.isTimestampShape -> {
@@ -629,5 +627,7 @@ class HttpBindingGenerator(
     }
 
     private fun workingWithPublicConstrainedWrapperTupleType(shape: Shape) =
-        codegenTarget == CodegenTarget.SERVER && shape.hasPublicConstrainedWrapperTupleType(model)
+        codegenTarget == CodegenTarget.SERVER &&
+            (coreCodegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes &&
+            shape.hasPublicConstrainedWrapperTupleType(model)
 }
