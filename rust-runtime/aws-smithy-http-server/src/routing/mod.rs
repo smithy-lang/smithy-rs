@@ -13,7 +13,7 @@ use std::{
 };
 
 use self::request_spec::RequestSpec;
-use self::routers::{aws_json::AwsJsonRouter, rest::RestRouter};
+use self::routers::{aws_json::AwsJsonRouter, rest::RestRouter, RoutingService};
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::error::BoxError;
 use crate::protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml};
@@ -31,12 +31,12 @@ mod lambda_handler;
 pub mod request_spec;
 
 mod route;
-mod routers;
+#[doc(hidden)]
+pub mod routers;
 mod tiny_map;
 
 pub use self::lambda_handler::LambdaHandler;
 pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
-pub use routers::*;
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.

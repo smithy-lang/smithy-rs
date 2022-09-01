@@ -54,7 +54,7 @@ class AwsJsonServerProtocol(
     }
 
     override fun routerType(): RuntimeType {
-        return RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
+        return RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
     }
 }
 
@@ -71,6 +71,6 @@ class RestJsonServerProtocol(
     }
 
     override fun routerType(): RuntimeType {
-        return RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::rest")
+        return RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::rest")
     }
 }

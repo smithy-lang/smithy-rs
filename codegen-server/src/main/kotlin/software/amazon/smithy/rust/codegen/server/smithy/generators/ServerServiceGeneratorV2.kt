@@ -160,7 +160,7 @@ class ServerServiceGeneratorV2(
         rustTemplate(
             """
             pub struct ${shapeToStructName(serviceId)}<S> {
-                router: #{SmithyHttpServer}::routing::RoutingService<#{Router}<S>, #{Protocol}>,
+                router: #{SmithyHttpServer}::routing::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
             """,
             "Router" to protocol.routerType(),
