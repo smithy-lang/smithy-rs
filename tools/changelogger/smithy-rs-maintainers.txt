@@ -1,6 +1,11 @@
-rcoh
-velfi
-jdisanti
+82marbag
+aws-sdk-rust-ci
 crisidev
 david-perez
-82marbag
+drganjoo
+hlbarber
+jdisanti
+rcoh
+unexge
+velfi
+weihanglo
