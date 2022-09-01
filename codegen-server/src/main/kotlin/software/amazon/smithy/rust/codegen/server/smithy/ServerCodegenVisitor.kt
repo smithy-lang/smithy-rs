@@ -101,7 +101,7 @@ open class ServerCodegenVisitor(
      * Base model transformation applied to all services.
      * See below for details.
      */
-    internal fun baselineTransform(model: Model) =
+    protected fun baselineTransform(model: Model) =
         model
             // Flattens mixins out of the model and removes them from the model
             .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
@@ -115,6 +115,12 @@ open class ServerCodegenVisitor(
             .let { RemoveEventStreamOperations.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
+
+    /**
+     * Exposure purely for unit test purposes.
+     */
+    internal fun baselineTransformInternalTest(model: Model) =
+        baselineTransform(model)
 
     /**
      * Execute code generation

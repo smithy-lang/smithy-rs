@@ -47,7 +47,7 @@ class ServerCodegenVisitorTest {
         val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, ServerRequiredCustomizations())
         val visitor = ServerCodegenVisitor(ctx, codegenDecorator)
-        val baselineModel = visitor.baselineTransform(model)
+        val baselineModel = visitor.baselineTransformInternalTest(model)
         baselineModel.getShapesWithTrait(ShapeId.from("smithy.api#mixin")).isEmpty() shouldBe true
     }
 }
