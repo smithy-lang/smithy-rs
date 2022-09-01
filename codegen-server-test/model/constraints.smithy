@@ -12,18 +12,18 @@ service ConstraintsService {
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedRecursiveShapesOperation,
-//      // `httpQueryParams` and `httpPrefixHeaders` are structurually
-//      // exclusive, so we need one operation per target shape type
-//      // combination.
-//      QueryParamsTargetingLengthMapOperation,
-//      QueryParamsTargetingMapOfLengthStringOperation,
-//      QueryParamsTargetingMapOfEnumStringOperation,
-//      QueryParamsTargetingMapOfListOfLengthStringOperation,
-//      QueryParamsTargetingMapOfSetOfLengthStringOperation,
-//      QueryParamsTargetingMapOfListOfEnumStringOperation,
-//      HttpPrefixHeadersTargetingLengthMapOperation,
-//      // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-//      // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+        // `httpQueryParams` and `httpPrefixHeaders` are structurually
+        // exclusive, so we need one operation per target shape type
+        // combination.
+        QueryParamsTargetingLengthMapOperation,
+        QueryParamsTargetingMapOfLengthStringOperation,
+        QueryParamsTargetingMapOfEnumStringOperation,
+        QueryParamsTargetingMapOfListOfLengthStringOperation,
+        QueryParamsTargetingMapOfSetOfLengthStringOperation,
+        QueryParamsTargetingMapOfListOfEnumStringOperation,
+        HttpPrefixHeadersTargetingLengthMapOperation,
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+        // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
     ],
 }
 
