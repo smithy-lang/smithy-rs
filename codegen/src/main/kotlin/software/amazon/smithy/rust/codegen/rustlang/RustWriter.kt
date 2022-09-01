@@ -21,10 +21,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.AbstractCodeWriter
@@ -203,53 +201,6 @@ fun RustWriter.rustTemplate(
     }
 }
 
-/**
- * Combine multiple writable types into a Rust generic type parameter list
- *
- * e.g.
- *
- * ```kotlin
- * rustTemplate(
- *     "some_fn::<#{type_params:W}>();",
- *     "type_params" to rustTypeParameters(
- *         symbolProvider.toSymbol(operation),
- *         runtimeConfig.smithyHttp().member("body::SdkBody"),
- *         GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
- *     )
- * )
- * ```
- * would write out something like:
- * ```rust
- * some_fn::<crate::operation::SomeOperation, aws_smithy_http::body::SdkBody, A, B>();
- * ```
- */
-fun rustTypeParameters(
-    vararg typeParameters: Any,
-): Writable = writable {
-    if (typeParameters.isNotEmpty()) {
-        rustInline("<")
-
-        val iterator: Iterator<Any> = typeParameters.iterator()
-        while (iterator.hasNext()) {
-            when (val typeParameter = iterator.next()) {
-                is Symbol -> rustTemplate("#{symbol}", "symbol" to typeParameter)
-                is RuntimeType -> rustTemplate("#{rt}", "rt" to typeParameter)
-                is String -> rust(typeParameter)
-                is GenericsGenerator -> rustTemplate(
-                    "#{gg:W}",
-                    "gg" to typeParameter.declaration(withAngleBrackets = false),
-                )
-                else -> PANIC("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
-            }
-
-            if (iterator.hasNext()) {
-                rustInline(", ")
-            }
-        }
-
-        rustInline(">")
-    }
-}
 
 /*
  * Writes a Rust-style block, demarcated by curly braces
@@ -373,21 +324,6 @@ private fun Element.changeInto(tagName: String) {
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
 fun RustWriter.raw(text: String) = writeInline(escape(text))
-
-typealias Writable = RustWriter.() -> Unit
-
-/** Helper to allow coercing the Writeable signature
- *  writable { rust("fn foo() { }")
- */
-fun writable(w: Writable): Writable = w
-
-fun writable(w: String): Writable = writable { rust(w) }
-
-fun Writable.isEmpty(): Boolean {
-    val writer = RustWriter.root()
-    this(writer)
-    return writer.toString() == RustWriter.root().toString()
-}
 
 /**
  * Rustdoc doesn't support `r#` for raw identifiers.
