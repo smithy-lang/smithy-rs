@@ -121,12 +121,8 @@ class ServerServiceGeneratorV2(
                 ///
                 /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from [`$structName`](crate::operations::$structName)
                 /// using either [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationExt::from_handler) or
-                /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationExt::from_handler).
-                pub fn $fieldName<NewOp>(self, value: NewOp) -> ${builderName()}<${
-                replacedGenerics.joinToString(
-                    ",",
-                )
-                }> {
+                /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationExt::from_service).
+                pub fn $fieldName<NewOp>(self, value: NewOp) -> ${builderName()}<${replacedGenerics.joinToString(",")}> {
                     ${builderName()} {
                         #{SwitchedFields:W}
                     }

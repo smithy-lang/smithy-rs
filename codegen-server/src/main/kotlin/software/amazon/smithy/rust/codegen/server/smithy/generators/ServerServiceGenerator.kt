@@ -68,7 +68,7 @@ open class ServerServiceGenerator(
             renderOperationRegistry(writer, operations)
         }
 
-        // TODO: Remove, this is temporary.
+        // TODO(Temporary): Remove, this is temporary.
         rustCrate.withModule(
             RustModule.public("operations", "TODO"),
         ) { writer ->
@@ -77,7 +77,7 @@ open class ServerServiceGenerator(
             }
         }
 
-        // TODO: Remove, this is temporary.
+        // TODO(Temporary): Remove, this is temporary.
         rustCrate.withModule(
             RustModule.public("services", "TODO"),
         ) { writer ->
