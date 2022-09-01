@@ -12,6 +12,69 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "`aws_config::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`."
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`."
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+Direct configuration of `aws_config::SdkConfig` now defaults to retries being disabled.
+If you're using `aws_config::load_from_env()` or `aws_config::from_env()` to configure
+the SDK, then you are NOT affected by this change. If you use `SdkConfig::builder()` to
+configure the SDK, then you ARE affected by this change and should set the retry config
+on that builder.
+"""
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+Client creation now panics if retries or timeouts are enabled without an async sleep
+implementation set on the SDK config.
+If you're using the Tokio runtime and have the `rt-tokio` feature enabled (which is enabled by default),
+then you shouldn't notice this change at all.
+Otherwise, if using something other than Tokio as the async runtime, the `AsyncSleep` trait must be implemented,
+and that implementation given to the config builder via the `sleep_impl` method. Alternatively, retry can be
+explicitly turned off by setting the retry config to `RetryConfig::disabled()`, which will result in successful
+client creation without an async sleep implementation.
+"""
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Client creation now panics if retries or timeouts are enabled without an async sleep implementation.
+If you're using the Tokio runtime and have the `rt-tokio` feature enabled (which is enabled by default),
+then you shouldn't notice this change at all.
+Otherwise, if using something other than Tokio as the async runtime, the `AsyncSleep` trait must be implemented,
+and that implementation given to the config builder via the `sleep_impl` method. Alternatively, retry can be
+explicitly turned off by setting `max_attempts` to 1, which will result in successful client creation without an
+async sleep implementation.
+"""
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+The `default_async_sleep` method on the `Client` builder has been removed. The default async sleep is
+wired up by default if none is provided.
+"""
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+
+[[aws-sdk-rust]]
 message = """
 Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).
 
