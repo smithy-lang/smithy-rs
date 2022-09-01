@@ -72,7 +72,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         model = codegenDecorator.transformModel(service, baseModel)
         symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
-        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
+        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,

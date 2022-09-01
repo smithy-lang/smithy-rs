@@ -19,6 +19,7 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenConfig
@@ -91,7 +92,7 @@ object TestWorkspace {
     }
 
     @Suppress("NAME_SHADOWING")
-    fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
+    fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = true): TestWriterDelegator {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
             override fun config(): SymbolVisitorConfig {
@@ -124,7 +125,13 @@ object TestWorkspace {
  * "cargo test".runCommand(path)
  * ```
  */
-fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectNode.builder().build(), addModuleToEventStreamAllowList: Boolean = false, service: String? = null, runtimeConfig: RuntimeConfig? = null): Pair<PluginContext, Path> {
+fun generatePluginContext(
+    model: Model,
+    additionalSettings: ObjectNode = ObjectNode.builder().build(),
+    addModuleToEventStreamAllowList: Boolean = false,
+    service: String? = null,
+    runtimeConfig: RuntimeConfig? = null,
+): Pair<PluginContext, Path> {
     val testDir = TestWorkspace.subproject()
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
@@ -201,6 +208,15 @@ class TestWriterDelegator(
             println("file:///$path")
         }
     }
+}
+
+fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
+    lib { writer ->
+        writer.unitTest(writer.safeName("test")) {
+            test(this)
+        }
+    }
+    return this
 }
 
 /**
