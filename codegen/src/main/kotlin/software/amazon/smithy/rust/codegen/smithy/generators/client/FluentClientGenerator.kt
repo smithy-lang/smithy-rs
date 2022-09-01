@@ -325,7 +325,7 @@ class FluentClientGenerator(
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),
-                            retryPolicyType ?: "()",
+                            retryPolicyType ?: RustType.Unit,
                             generics.toGenericsGenerator(),
                         ),
                     )

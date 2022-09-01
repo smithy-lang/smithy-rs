@@ -42,6 +42,10 @@ sealed class RustType {
 
     open val namespace: kotlin.String? = null
 
+    object Unit : RustType() {
+        override val name: kotlin.String = "()"
+    }
+
     object Bool : RustType() {
         override val name: kotlin.String = "bool"
     }
@@ -173,6 +177,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         this.namespace?.let { "$it::" } ?: ""
     } else ""
     val base = when (this) {
+        is RustType.Unit -> this.name
         is RustType.Bool -> this.name
         is RustType.Float -> this.name
         is RustType.Integer -> this.name
@@ -282,7 +287,7 @@ data class RustMetadata(
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
 
     fun withoutDerives(vararg withoutDerives: RuntimeType) =
-        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives))
+        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives.toSet()))
 
     private fun attributes(): List<Attribute> = additionalAttributes + derives
 

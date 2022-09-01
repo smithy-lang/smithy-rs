@@ -54,8 +54,8 @@ fun rustTypeParameters(
         val iterator: Iterator<Any> = typeParameters.iterator()
         while (iterator.hasNext()) {
             when (val typeParameter = iterator.next()) {
-                is Symbol -> rustTemplate("#{symbol}", "symbol" to typeParameter)
-                is RuntimeType -> rustTemplate("#{rt}", "rt" to typeParameter)
+                is Symbol, RustType.Unit -> rustTemplate("#{it}", "it" to typeParameter)
+                is RuntimeType -> rustTemplate("#{it:T}", "it" to typeParameter)
                 is String -> rust(typeParameter)
                 is GenericsGenerator -> rustTemplate(
                     "#{gg:W}",
