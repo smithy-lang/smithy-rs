@@ -52,7 +52,7 @@ pub struct Route<B = Body> {
 }
 
 impl<B> Route<B> {
-    pub(super) fn new<T>(svc: T) -> Self
+    pub fn new<T>(svc: T) -> Self
     where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
