@@ -183,13 +183,19 @@ mod upgrade;
 
 use tower::{
     layer::util::{Identity, Stack},
-    Layer,
+    Layer, Service,
 };
 
 pub use handler::*;
 pub use operation_service::*;
 pub use shape::*;
 pub use upgrade::*;
+
+use crate::{
+    body::BoxBody,
+    request::{FromParts, FromRequest},
+    response::IntoResponse,
+};
 
 /// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`] `L`.
 ///
@@ -199,8 +205,6 @@ pub struct Operation<S, L = Identity> {
     layer: L,
 }
 
-type StackedUpgradeService<P, Op, E, B, L, S> = <Stack<UpgradeLayer<P, Op, E, B>, L> as Layer<S>>::Service;
-
 impl<S, L> Operation<S, L> {
     /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
     pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
@@ -208,20 +212,6 @@ impl<S, L> Operation<S, L> {
             inner: self.inner,
             layer: Stack::new(self.layer, layer),
         }
-    }
-
-    /// Takes the [`Operation`], containing the inner [`Service`](tower::Service) `S`, the HTTP [`Layer`] `L` and
-    /// composes them together using [`UpgradeLayer`] for a specific protocol and [`OperationShape`].
-    ///
-    /// The composition is made explicit in the method constraints and return type.
-    pub fn upgrade<P, Op, E, B>(self) -> StackedUpgradeService<P, Op, E, B, L, S>
-    where
-        UpgradeLayer<P, Op, E, B>: Layer<S>,
-        L: Layer<<UpgradeLayer<P, Op, E, B> as Layer<S>>::Service>,
-    {
-        let Self { inner, layer } = self;
-        let layer = Stack::new(UpgradeLayer::new(), layer);
-        layer.layer(inner)
     }
 }
 
@@ -263,4 +253,48 @@ pub enum OperationError<ModelError, PollError> {
     Model(ModelError),
     /// A [`Service::poll_ready`](tower::Service::poll_ready) failure occurred.
     PollReady(PollError),
+}
+
+/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
+/// canonical associated types.
+pub trait Upgradable<Protocol, Operation, Exts, B> {
+    type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
+
+    /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
+    fn upgrade(self) -> Self::Service;
+}
+
+impl<P, Op, Exts, B, S, L, PollError> Upgradable<P, Op, Exts, B> for Operation<S, L>
+where
+    // `Op` is used to specify the operation shape
+    Op: OperationShape,
+
+    // Smithy input must convert from a HTTP request
+    Op::Input: FromRequest<P, B>,
+    // Smithy output must convert into a HTTP response
+    Op::Output: IntoResponse<P>,
+    // Smithy error must convert into a HTTP response
+    Op::Error: IntoResponse<P>,
+
+    // Must be able to convert extensions
+    Exts: FromParts<P>,
+
+    // The signature of the inner service is correct
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
+
+    // `L` can be applied to `Upgrade`
+    L: Layer<Upgrade<P, Op, Exts, B, S>>,
+    L::Service: Service<http::Request<B>, Response = http::Response<BoxBody>>,
+{
+    type Service = L::Service;
+
+    /// Takes the [`Operation`], containing the inner [`Service`](tower::Service) `S`, the HTTP [`Layer`] `L` and
+    /// composes them together using [`UpgradeLayer`] for a specific protocol and [`OperationShape`].
+    ///
+    /// The composition is made explicit in the method constraints and return type.
+    fn upgrade(self) -> Self::Service {
+        let Self { inner, layer } = self;
+        let layer = Stack::new(UpgradeLayer::new(), layer);
+        layer.layer(inner)
+    }
 }
