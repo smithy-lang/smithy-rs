@@ -70,7 +70,7 @@ open class ServerServiceGenerator(
 
         // TODO(Temporary): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule.public("operations", "TODO"),
+            RustModule.public("operations", ""),
         ) { writer ->
             for (operation in operations) {
                 ServerOperationGenerator(coreCodegenContext, operation).render(writer)
@@ -79,7 +79,7 @@ open class ServerServiceGenerator(
 
         // TODO(Temporary): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule.public("services", "TODO"),
+            RustModule.public("services", ""),
         ) { writer ->
             val serverProtocol = ServerProtocol.fromCoreProtocol(coreCodegenContext, protocol)
             ServerServiceGeneratorV2(
