@@ -6,7 +6,10 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.AnnotationTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -109,4 +112,13 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
+}
+
+/**
+ * Indicates that a service is expected to send XML where the root element name does not match the modeled member name.
+ */
+class AllowInvalidXmlRoot : AnnotationTrait(ID, Node.objectNode()) {
+    companion object {
+        val ID: ShapeId = ShapeId.from("smithy.api.internal#allowInvalidXmlRoot")
+    }
 }

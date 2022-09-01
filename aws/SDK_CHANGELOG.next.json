@@ -6,46 +6,20 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Rename EventStreamInput to EventStreamSender",
+      "message": "Refactor endpoint resolution internals to use `aws_smithy_types::Endpoint` internally. The public internal\nfunctions `aws_endpoint::set_endpoint_resolver` and `aws_endpoint::get_endpoint_resolver were removed.",
       "meta": {
         "bug": false,
         "breaking": true,
         "tada": false
       },
-      "author": "82marbag",
+      "author": "rcoh",
       "references": [
-        "smithy-rs#1157"
+        "smithy-rs#1641"
       ],
-      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
     },
     {
-      "message": "The type of streaming unions that contain errors is generated without those errors.\nErrors in a streaming union `Union` are generated as members of the type `UnionError`.\nTaking Transcribe as an example, the `AudioStream` streaming union generates, in the client, both the `AudioStream` type:\n```rust\npub enum AudioStream {\n    AudioEvent(crate::model::AudioEvent),\n    Unknown,\n}\n```\nand its error type,\n```rust\npub struct AudioStreamError {\n    /// Kind of error that occurred.\n    pub kind: AudioStreamErrorKind,\n    /// Additional metadata about the error, including error code, message, and request ID.\n    pub(crate) meta: aws_smithy_types::Error,\n}\n```\n`AudioStreamErrorKind` contains all error variants for the union.\nBefore, the generated code looked as:\n```rust\npub enum AudioStream {\n    AudioEvent(crate::model::AudioEvent),\n    ... all error variants,\n    Unknown,\n}\n```\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "82marbag",
-      "references": [
-        "smithy-rs#1157"
-      ],
-      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
-    },
-    {
-      "message": "`aws_smithy_http::event_stream::EventStreamSender` and `aws_smithy_http::event_stream::Receiver` are now generic over `<T, E>`,\nwhere `T` is a streaming union and `E` the union's errors.\nThis means that event stream errors are now sent as `Err` of the union's error type.\nWith this example model:\n```smithy\n@streaming union Event {\n    throttlingError: ThrottlingError\n}\n@error(\"client\") structure ThrottlingError {}\n```\nBefore:\n```rust\nstream! { yield Ok(Event::ThrottlingError ...) }\n```\nAfter:\n```rust\nstream! { yield Err(EventError::ThrottlingError ...) }\n```\nAn example from the SDK is in [transcribe streaming](https://github.com/awslabs/smithy-rs/blob/4f51dd450ea3234a7faf481c6025597f22f03805/aws/sdk/integration-tests/transcribestreaming/tests/test.rs#L80).\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "82marbag",
-      "references": [
-        "smithy-rs#1157"
-      ],
-      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
-    },
-    {
-      "message": "The AWS SDK for Rust now supports [additional checksum algorithms for Amazon S3](https://aws.amazon.com/blogs/aws/new-additional-checksum-algorithms-for-amazon-s3/).\nWhen getting and putting objects, you may now request that the request body be validated with a checksum. The supported\nalgorithms are SHA-1, SHA-256, CRC-32, and CRC-32C.\n\n```rust\n#[tokio::main]\nasync fn main() -> Result<(), Box<dyn std::error::Error>> {\n    let sdk_config = aws_config::load_from_env().await;\n    let s3_client = aws_sdk_s3::Client::new(&sdk_config);\n    let body = aws_sdk_s3::types::ByteStream::read_from()\n        .path(std::path::Path::new(\"./path/to/your/file.txt\"))\n        .build()\n        .await\n        .unwrap();\n\n    let _ = s3_client\n        .put_object()\n        .bucket(\"your-bucket\")\n        .key(\"file.txt\")\n        .body(body)\n        // When using this field, the checksum will be calculated for you\n        .checksum_algorithm(aws_sdk_s3::model::ChecksumAlgorithm::Crc32C)\n        .send()\n        .await?;\n\n    let body = aws_sdk_s3::types::ByteStream::read_from()\n        .path(std::path::Path::new(\"./path/to/your/other-file.txt\"))\n        .build()\n        .await\n        .unwrap();\n\n    let _ = s3_client\n        .put_object()\n        .bucket(\"your-bucket\")\n        .key(\"other-file.txt\")\n        .body(body)\n        // Alternatively, you can pass a checksum that you've calculated yourself. It must be base64\n        // encoded. Also, make sure that you're base64 encoding the bytes of the checksum, not its\n        // string representation.\n        .checksum_crc32_c(aws_smithy_types::base64::encode(&A_PRECALCULATED_CRC_32_C_CHECKSUM[..]))\n        .send()\n        .await?;\n}\n```\n",
+      "message": "Service configs are now generated with new accessors for:\n- `Config::retry_config()` - Returns a reference to the inner retry configuration.\n- `Config::timeout_config()` - Returns a reference to the inner timeout configuration.\n- `Config::sleep_impl()` - Returns a clone of the inner async sleep implementation.\n\nPreviously, these were only accessible through `SdkConfig`.\n",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -53,37 +27,48 @@
       },
       "author": "Velfi",
       "references": [
-        "smithy-rs#1482"
+        "smithy-rs#1598"
       ],
-      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
     },
     {
-      "message": "SDK crate READMEs now include an example of creating a client",
+      "message": "Lossy converters into integer types for `aws_smithy_types::Number` have been\nremoved. Lossy converters into floating point types for\n`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were\ndirectly using the integer lossy converters, we recommend you use the safe\nconverters.\n_Before:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    let foo: f32 = n.to_f32(); // Lossy conversion!\n    let bar: u32 = n.to_u32(); // Lossy conversion!\n}\n```\n_After:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.\n    let foo: f32 = n.try_into().expect(\"lossy conversion detected\"); // Or handle the error instead of panicking.\n    // You can still do lossy conversions, but only into floating point types.\n    let foo: f32 = n.to_f32_lossy();\n    // To lossily convert into integer types, use an `as` cast directly.\n    let bar: u32 = n as u32; // Lossy conversion!\n}\n```\n",
+      "meta": {
+        "bug": true,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "david-perez",
+      "references": [
+        "smithy-rs#1274"
+      ],
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+    },
+    {
+      "message": "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy.",
       "meta": {
         "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1699"
+      ],
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+    },
+    {
+      "message": "The AWS S3 `GetObjectAttributes` operation will no longer fail with an XML error.",
+      "meta": {
+        "bug": true,
         "breaking": false,
         "tada": true
       },
-      "author": "jdisanti",
+      "author": "Velfi",
       "references": [
-        "smithy-rs#1571",
-        "smithy-rs#1385"
+        "aws-sdk-rust#609"
       ],
-      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
-    },
-    {
-      "message": "Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#1573",
-        "smithy-rs#1569"
-      ],
-      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
     }
   ],
   "aws-sdk-model": []
