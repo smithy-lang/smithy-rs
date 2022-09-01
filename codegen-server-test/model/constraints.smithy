@@ -24,6 +24,8 @@ service ConstraintsService {
         HttpPrefixHeadersTargetingLengthMapOperation,
         // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
         // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+
+        BlobStreamingOperation,
     ],
 }
 
@@ -92,6 +94,12 @@ operation HttpPrefixHeadersTargetingLengthMapOperation {
 operation HttpPrefixHeadersTargetingMapOfEnumStringOperation {
     input: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
     output: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
+}
+
+@http(uri: "/blob-streaming-operation", method: "GET")
+operation BlobStreamingOperation {
+    input: BlobStreamingOperationInputOutput,
+    output: BlobStreamingOperationInputOutput,
 }
 
 structure ConstrainedShapesOperationInputOutput {
@@ -187,6 +195,14 @@ structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
     @httpQueryParams
     mapOfListOfEnumString: MapOfListOfEnumString
 }
+
+structure BlobStreamingOperationInputOutput {
+    @httpPayload
+    streamingBlob: StreamingBlob,
+}
+
+@streaming
+blob StreamingBlob
 
 structure ConA {
     @required

@@ -33,7 +33,8 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  */
 fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
     is StructureShape -> {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): The only reason why the functions in this file have
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
+        //  The only reason why the functions in this file have
         //  to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
         //  `required`, so we can't use `member.isOptional` here.
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }

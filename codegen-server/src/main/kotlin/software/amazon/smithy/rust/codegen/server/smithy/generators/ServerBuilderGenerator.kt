@@ -377,7 +377,14 @@ class ServerBuilderGenerator(
         member: MemberShape,
     ) {
         val builderMemberSymbol = builderMemberSymbol(member)
-        val inputType = builderMemberSymbol.rustType().stripOuter<RustType.Option>().implInto().letIf(member.isOptional) { "Option<$it>" }
+        val inputType = builderMemberSymbol.rustType().stripOuter<RustType.Option>().implInto()
+            .letIf(
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
+                //  The only reason why this condition can't simply be `member.isOptional`
+                //  is because non-`required` blob streaming members are interpreted as
+                //  `required`, so we can't use `member.isOptional` here.
+                symbolProvider.toSymbol(member).isOptional()
+            ) { "Option<$it>" }
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
@@ -386,7 +393,8 @@ class ServerBuilderGenerator(
             rust(
                 """
                 self.$memberName = ${
-                if (member.isOptional) {
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
+                if (symbolProvider.toSymbol(member).isOptional()) {
                     "input.map(|v| v.into())"
                 } else {
                     "Some(input.into())"
