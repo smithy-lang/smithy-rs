@@ -51,8 +51,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.generators.smithyHttp
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.traits.RetryPolicyTrait
-import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -68,6 +66,7 @@ class FluentClientGenerator(
         client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType(),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
+    private val retryPolicyType: RuntimeType? = null,
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -278,8 +277,6 @@ class FluentClientGenerator(
                     val inputType = symbolProvider.toSymbol(operation.inputShape(model))
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
-                    val retryType =
-                        operation.getTrait<RetryPolicyTrait>()?.let { it.getRetryPolicy(runtimeConfig).fullyQualifiedName() } ?: "()"
 
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
@@ -328,7 +325,7 @@ class FluentClientGenerator(
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),
-                            retryType,
+                            retryPolicyType ?: "()",
                             generics.toGenericsGenerator(),
                         ),
                     )

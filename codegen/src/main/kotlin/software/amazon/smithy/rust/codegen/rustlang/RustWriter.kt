@@ -201,7 +201,6 @@ fun RustWriter.rustTemplate(
     }
 }
 
-
 /*
  * Writes a Rust-style block, demarcated by curly braces
  */
