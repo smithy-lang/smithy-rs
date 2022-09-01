@@ -64,12 +64,30 @@ class ServerProtocolTestGenerator(
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
-    private val index = TopDownIndex.of(coreCodegenContext.model)
-    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
-
     private val model = coreCodegenContext.model
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val operationIndex = OperationIndex.of(coreCodegenContext.model)
+
+    private val index = TopDownIndex.of(coreCodegenContext.model)
+    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+
+    private val operationInputOutputTypes = operations.associate {
+        val inputSymbol = symbolProvider.toSymbol(it.inputShape(model))
+        val outputSymbol = symbolProvider.toSymbol(it.outputShape(model))
+        val operationSymbol = symbolProvider.toSymbol(it)
+        val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+
+        val inputT = inputSymbol.fullName
+        val t = outputSymbol.fullName
+        val outputT = if (it.errors.isEmpty()) {
+            t
+        } else {
+            val e = errorSymbol.fullyQualifiedName()
+            "Result<$t, $e>"
+        }
+
+        Pair(it, Pair(inputT, outputT))
+    }
 
     private val instantiator = with(coreCodegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
@@ -137,23 +155,6 @@ class ServerProtocolTestGenerator(
         val operationRegistryBuilderName = "${operationRegistryName}Builder"
 
         writer.withModule("protocol_test_helper") {
-            val operationInputOutputTypes = operations.map { operationShape ->
-                val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
-                val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
-                val operationSymbol = symbolProvider.toSymbol(operationShape)
-                val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
-
-                val inputT = inputSymbol.fullName
-                val t = outputSymbol.fullName
-                val outputT = if (operationShape.errors.isEmpty()) {
-                    t
-                } else {
-                    val e = errorSymbol.fullyQualifiedName()
-                    "Result<$t, $e>"
-                }
-
-                Pair(inputT, outputT)
-            }
             rustTemplate(
                 """
                 use #{Tower}::Service as _;
@@ -161,14 +162,17 @@ class ServerProtocolTestGenerator(
                 type F<Input, Output> = fn(Input) -> std::pin::Pin<Box<dyn std::future::Future<Output = Output> + Send>>;
 
                 type RegistryBuilder = crate::operation_registry::$operationRegistryBuilderName<#{Hyper}::Body, ${
-                operationInputOutputTypes.map { (inputT, outputT) -> "F<$inputT, $outputT>, ()" }.joinToString(", ")
+                operations.map {
+                    val (inputT, outputT) = operationInputOutputTypes[it]!!
+                    "F<$inputT, $outputT>, ()"
+                }.joinToString(", ")
                 }>;
 
                 fn create_operation_registry_builder() -> RegistryBuilder {
                     crate::operation_registry::$operationRegistryBuilderName::default()
-                        ${operationNames.mapIndexed { index, operationName ->
-                    val (inputT, outputT) = operationInputOutputTypes[index]
-                    ".$operationName((|_| Box::pin(async { todo!() })) as F<$inputT, $outputT> )"
+                        ${operations.mapIndexed { idx, operationShape ->
+                    val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
+                    ".${operationNames[idx]}((|_| Box::pin(async { todo!() })) as F<$inputT, $outputT> )"
                 }.joinToString("\n")}
                 }
 
@@ -327,7 +331,7 @@ class ServerProtocolTestGenerator(
             return
         }
         with(httpRequestTestCase) {
-            renderHttpRequest(uri, headers, body.orNull(), queryParams, host.orNull())
+            renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
             checkParams(operationShape, operationSymbol, httpRequestTestCase, this)
@@ -401,7 +405,7 @@ class ServerProtocolTestGenerator(
     private fun RustWriter.renderHttpMalformedRequestTestCase(testCase: HttpMalformedRequestTestCase, operationSymbol: Symbol) {
         with(testCase.request) {
             // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-            renderHttpRequest(uri.get(), headers, body.orNull(), queryParams, host.orNull())
+            renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
         }
 
         val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
@@ -418,6 +422,7 @@ class ServerProtocolTestGenerator(
 
     private fun RustWriter.renderHttpRequest(
         uri: String,
+        method: String,
         headers: Map<String, String>,
         body: String?,
         queryParams: List<String>,
@@ -428,6 +433,7 @@ class ServerProtocolTestGenerator(
             ##[allow(unused_mut)]
             let mut http_request = http::Request::builder()
                 .uri("$uri")
+                .method("$method")
             """,
             *codegenScope,
         )
