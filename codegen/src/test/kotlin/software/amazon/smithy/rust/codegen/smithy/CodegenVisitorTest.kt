@@ -15,6 +15,9 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizatio
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
+import java.nio.file.Files.createDirectory
+import java.nio.file.Files.write
+import java.nio.file.StandardOpenOption
 
 class CodegenVisitorTest {
     @Test
@@ -45,7 +48,10 @@ class CodegenVisitorTest {
                 greeting: String
             }
         """.asSmithyModel(smithyVersion = "2.0")
-        val (ctx, _) = generatePluginContext(model)
+        val (ctx, testDir) = generatePluginContext(model)
+        createDirectory(testDir.resolve("src"))
+        write(testDir.resolve("src/main.rs"), mutableListOf("fn main() {}"), StandardOpenOption.CREATE_NEW)
+
         val codegenDecorator =
             CombinedCodegenDecorator.fromClasspath(
                 ctx,
@@ -54,7 +60,7 @@ class CodegenVisitorTest {
                 FluentClientDecorator(),
                 NoOpEventStreamSigningDecorator(),
             )
-        val visitor = CodegenVisitor(ctx, codegenDecorator)
+        val visitor = CodegenVisitor(ctx, codegenDecorator).apply { execute() }
         val baselineModel = visitor.baselineTransform(model)
         baselineModel.getShapesWithTrait(ShapeId.from("smithy.api#mixin")).isEmpty() shouldBe true
     }

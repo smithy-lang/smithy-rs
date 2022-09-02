@@ -13,6 +13,9 @@ import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
+import java.nio.file.Files.createDirectory
+import java.nio.file.Files.write
+import java.nio.file.StandardOpenOption
 
 class ServerCodegenVisitorTest {
     @Test
@@ -43,7 +46,9 @@ class ServerCodegenVisitorTest {
                 greeting: String
             }
         """.asSmithyModel(smithyVersion = "2.0")
-        val (ctx, _) = generatePluginContext(model)
+        val (ctx, testDir) = generatePluginContext(model)
+        createDirectory(testDir.resolve("src"))
+        write(testDir.resolve("src/main.rs"), mutableListOf("fn main() {}"), StandardOpenOption.CREATE_NEW)
         val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, ServerRequiredCustomizations())
         val visitor = ServerCodegenVisitor(ctx, codegenDecorator)
