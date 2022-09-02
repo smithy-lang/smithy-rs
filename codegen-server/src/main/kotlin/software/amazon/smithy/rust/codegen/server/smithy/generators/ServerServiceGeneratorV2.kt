@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class ServerServiceGeneratorV2(
@@ -59,7 +61,7 @@ class ServerServiceGeneratorV2(
 
     private fun operationStructNames(): Sequence<String> = sequence {
         for (operation in operationShapes) {
-            yield(symbolProvider.toSymbol(operation).name)
+            yield(symbolProvider.toSymbol(operation).name.toPascalCase())
         }
     }
 
@@ -111,8 +113,8 @@ class ServerServiceGeneratorV2(
                 ///
                 /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from
                 /// [`$structName`](crate::operations::$structName) using either
-                /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationExt::from_handler) or
-                /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationExt::from_service).
+                /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
+                /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
                 pub fn $fieldName<NewOp>(self, value: NewOp) -> $builderName<${replacedGenerics.joinToString(",")}> {
                     $builderName {
                         #{SwitchedFields:W}
@@ -141,7 +143,7 @@ class ServerServiceGeneratorV2(
             // TODO(Relax): The `Error = Infallible` is an excess requirement to stay at parity with existing builder.
             rustTemplate(
                 """
-                $type: #{SmithyHttpServer}::operation::Upgradable<#{Marker}, crate::operations::${symbolProvider.toSymbol(operation).name}, $exts, B>,
+                $type: #{SmithyHttpServer}::operation::Upgradable<#{Marker}, crate::operations::${symbolProvider.toSymbol(operation).name.toPascalCase()}, $exts, B>,
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
 
@@ -182,12 +184,11 @@ class ServerServiceGeneratorV2(
     }
 
     private fun structDef(): Writable = writable {
-        val documentationLines = service.getTrait<DocumentationTrait>()?.value?.lines()
-        if (documentationLines != null) {
-            for (documentation in documentationLines) {
-                rust("/// $documentation")
-            }
+        val documentation = service.getTrait<DocumentationTrait>()?.value
+        if (documentation != null) {
+            docs(documentation.replace("#", "##"))
         }
+
         rustTemplate(
             """
             pub struct $serviceName<S> {

@@ -10,12 +10,14 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class ServerOperationGenerator(
     coreCodegenContext: CoreCodegenContext,
@@ -29,15 +31,13 @@ class ServerOperationGenerator(
         )
     private val symbolProvider = coreCodegenContext.symbolProvider
 
-    private val operationName = symbolProvider.toSymbol(operation).name
+    private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
     private val operationId = operation.id
 
     private fun renderStructDef(): Writable = writable {
-        val documentationLines = operation.getTrait<DocumentationTrait>()?.value?.lines()
-        if (documentationLines != null) {
-            for (documentation in documentationLines) {
-                rust("/// $documentation")
-            }
+        val documentation = operation.getTrait<DocumentationTrait>()?.value
+        if (documentation != null) {
+            docs(documentation.replace("#", "##"))
         }
 
         rust("pub struct $operationName;")
