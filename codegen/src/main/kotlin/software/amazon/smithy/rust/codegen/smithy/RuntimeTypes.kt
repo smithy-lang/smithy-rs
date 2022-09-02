@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.Version
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyLocation

@@ -6,12 +6,12 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import com.moandjiezana.toml.TomlWriter
+import software.amazon.smithy.rust.codegen.core.Version
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.smithy.Version
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
 
 /**

@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.smithy
+package software.amazon.smithy.rust.codegen.core
 
 import software.amazon.smithy.codegen.core.CodegenException
 
-// generated as part of the build, see codegen/build.gradle.kts
+// generated as part of the build, see codegen-core/build.gradle.kts
 private const val VERSION_FILENAME = "runtime-crate-version.txt"
 
 data class Version(val fullVersion: String, val crateVersion: String) {

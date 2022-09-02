@@ -4,7 +4,6 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import java.io.ByteArrayOutputStream
 
 plugins {
     kotlin("jvm")
@@ -41,46 +40,8 @@ tasks.compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-fun gitCommitHash(): String {
-    // Use commit hash from env if provided, it is helpful to override commit hash in some contexts.
-    // For example: while generating diff for generated SDKs we don't want to see version diff,
-    // so we are overriding commit hash to something fixed
-    val commitHashFromEnv = System.getenv("SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE")
-    if (commitHashFromEnv != null) {
-        return commitHashFromEnv
-    }
-
-    return try {
-        val output = ByteArrayOutputStream()
-        exec {
-            commandLine = listOf("git", "rev-parse", "HEAD")
-            standardOutput = output
-        }
-        output.toString().trim()
-    } catch (ex: Exception) {
-        "unknown"
-    }
-}
-
-val generateSmithyRuntimeCrateVersion by tasks.registering {
-    // generate the version of the runtime to use as a resource.
-    // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/smithy"
-    val versionFile = file("$resourcesDir/runtime-crate-version.txt")
-    outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
-    inputs.property("crateVersion", crateVersion)
-    // version format must be in sync with `software.amazon.smithy.rust.codegen.smithy.Version`
-    val version = "$crateVersion\n${gitCommitHash()}"
-    sourceSets.main.get().output.dir(resourcesDir)
-    doLast {
-        versionFile.writeText(version)
-    }
-}
-
 tasks.compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
-    dependsOn(generateSmithyRuntimeCrateVersion)
 }
 
 // Reusable license copySpec
