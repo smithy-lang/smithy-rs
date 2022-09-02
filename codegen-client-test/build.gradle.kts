@@ -34,59 +34,63 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-val allCodegenTests = listOf(
-    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
-    CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
-    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
-    CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras"),
-    CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
-    CodegenTest(
-        "aws.protocoltests.restxml#RestXml", "rest_xml",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
-    ),
+val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
+    listOf(
+        CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
+        CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
+        CodegenTest("com.amazonaws.ebs#Ebs", "ebs", imports = listOf("$commonModels/ebs.json")),
+        CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+        CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
+        CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+        CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras", imports = listOf("$commonModels/rest-json-extras.smithy")),
+        CodegenTest("aws.protocoltests.misc#MiscService", "misc", imports = listOf("$commonModels/misc.smithy")),
+        CodegenTest(
+            "aws.protocoltests.restxml#RestXml", "rest_xml",
+            extraConfig = """, "codegen": { "addMessageToErrors": false } """,
+        ),
 
-    CodegenTest(
-        "aws.protocoltests.query#AwsQuery", "aws_query",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
-    ),
-    CodegenTest(
-        "aws.protocoltests.ec2#AwsEc2", "ec2_query",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
-    ),
-    CodegenTest(
-        "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
-        "rest_xml_namespace",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
-    ),
-    CodegenTest(
-        "aws.protocoltests.restxml#RestXmlExtras",
-        "rest_xml_extras",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
-    ),
-    CodegenTest(
-        "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
-        "rest_xml_extras_unwrapped",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
-    ),
-    CodegenTest(
-        "crate#Config",
-        "naming_test_ops",
-        """
+        CodegenTest(
+            "aws.protocoltests.query#AwsQuery", "aws_query",
+            extraConfig = """, "codegen": { "addMessageToErrors": false } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.ec2#AwsEc2", "ec2_query",
+            extraConfig = """, "codegen": { "addMessageToErrors": false } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
+            "rest_xml_namespace",
+            extraConfig = """, "codegen": { "addMessageToErrors": false } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.restxml#RestXmlExtras",
+            "rest_xml_extras",
+            extraConfig = """, "codegen": { "addMessageToErrors": false } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
+            "rest_xml_extras_unwrapped",
+            extraConfig = """, "codegen": { "addMessageToErrors": false } """,
+        ),
+        CodegenTest(
+            "crate#Config",
+            "naming_test_ops",
+            """
             , "codegen": { "renameErrors": false }
-        """.trimIndent(),
-    ),
-    CodegenTest(
-        "naming_obs_structs#NamingObstacleCourseStructs",
-        "naming_test_structs",
-        """
+            """.trimIndent(),
+            imports = listOf("$commonModels/naming-obstacle-course-ops.smithy"),
+        ),
+        CodegenTest(
+            "naming_obs_structs#NamingObstacleCourseStructs",
+            "naming_test_structs",
+            """
             , "codegen": { "renameErrors": false }
-        """.trimIndent(),
-    ),
-    CodegenTest("com.aws.example#PokemonService", "pokemon-service-client"),
-)
+            """.trimIndent(),
+            imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
+        ),
+        CodegenTest("com.aws.example#PokemonService", "pokemon-service-client", imports = listOf("$commonModels/pokemon.smithy")),
+    )
+}
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
