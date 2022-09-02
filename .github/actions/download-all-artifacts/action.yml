@@ -10,4 +10,4 @@ runs:
     uses: actions/download-artifact@v3
   - name: Untar artifacts
     shell: bash
-    run: find . -maxdepth 2 -iname 'artifacts-*.tar.gz' -print -exec tar vxfz {} \;
+    run: find . -maxdepth 2 -iname 'artifacts-*.tar.gz' -print -exec tar xfz {} \;
