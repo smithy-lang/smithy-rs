@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.testutil.AddRustTestsDecorator
 
 // If any of these tests fail, and you want to understand why, run them with logging:
 // ```
-// ./gradlew codegen:test --tests software.amazon.smithy.rust.codegen.customizations.HttpVersionListGeneratorTest --info
+// ./gradlew codegen-client:test --tests software.amazon.smithy.rust.codegen.customizations.HttpVersionListGeneratorTest --info
 // ```
 
 internal class HttpVersionListGeneratorTest {

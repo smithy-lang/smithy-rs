@@ -84,7 +84,9 @@ To test the code generation, the following can be used:
 
 ```bash
 # Run Kotlin codegen unit tests
-./gradlew codegen:check
+./gradlew codegen-core:check
+./gradlew codegen-client:check
+./gradlew codegen-server:check
 # Run client codegen tests
 ./gradlew codegen-test:check
 # Run server codegen tests
