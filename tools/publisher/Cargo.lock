@@ -1007,7 +1007,6 @@ dependencies = [
  "dialoguer",
  "handlebars",
  "lazy_static",
- "num_cpus",
  "pretty_assertions",
  "regex",
  "semver",
