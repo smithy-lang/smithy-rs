@@ -6,6 +6,7 @@
 rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
 
 include(":codegen")
+include(":codegen-core")
 include(":codegen-test")
 include(":codegen-server")
 include(":codegen-server:python")

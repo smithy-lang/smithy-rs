@@ -13,17 +13,18 @@ plugins {
     `maven-publish`
 }
 
-description = "Generates Rust code from Smithy models"
-extra["displayName"] = "Smithy :: Rust :: Codegen"
-extra["moduleName"] = "software.amazon.software.amazon.smithy.rust.codegen.smithy.rust.codegen"
+description = "Generates Rust client code from Smithy models"
+extra["displayName"] = "Smithy :: Rust :: CodegenClient"
+extra["moduleName"] = "software.amazon.smithy.rust.codegen.client"
 
-group = "software.amazon.software.amazon.smithy.rust.codegen.smithy"
+group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
 val smithyVersion: String by project
 val kotestVersion: String by project
 
 dependencies {
+    implementation(project(":codegen-core"))
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jsoup:jsoup:1.14.3")
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")

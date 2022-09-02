@@ -7,33 +7,39 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     kotlin("jvm")
+    id("org.jetbrains.dokka")
+    jacoco
     `maven-publish`
 }
 
-description = "Generates Rust server-side code from Smithy models"
+description = "Common code generation logic for generating Rust code from Smithy models"
+extra["displayName"] = "Smithy :: Rust :: CodegenCore"
+extra["moduleName"] = "software.amazon.smithy.rust.codegen.core"
 
-extra["displayName"] = "Smithy :: Rust :: Codegen :: Server"
-
-extra["moduleName"] = "software.amazon.smithy.rust.codegen.server"
-
-group = "software.amazon.smithy.rust.codegen.server.smithy"
-
+group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
 val smithyVersion: String by project
 val kotestVersion: String by project
 
 dependencies {
-    implementation(project(":codegen-core"))
-    implementation(project(":codegen"))
+    implementation(kotlin("stdlib-jdk8"))
+    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
+    runtimeOnly(project(":rust-runtime"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }
-tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
+tasks.compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+tasks.compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
 
 // Reusable license copySpec
 val licenseSpec = copySpec {
@@ -45,7 +51,9 @@ val licenseSpec = copySpec {
 tasks.jar {
     metaInf.with(licenseSpec)
     inputs.property("moduleName", project.name)
-    manifest { attributes["Automatic-Module-Name"] = project.name }
+    manifest {
+        attributes["Automatic-Module-Name"] = project.name
+    }
 }
 
 val sourcesJar by tasks.creating(Jar::class) {
@@ -66,6 +74,26 @@ tasks.test {
         showStandardStreams = true
     }
 }
+
+tasks.dokka {
+    outputFormat = "html"
+    outputDirectory = "$buildDir/javadoc"
+}
+
+// Always build documentation
+tasks["build"].finalizedBy(tasks["dokka"])
+
+// Configure jacoco (code coverage) to generate an HTML report
+tasks.jacocoTestReport {
+    reports {
+        xml.isEnabled = false
+        csv.isEnabled = false
+        html.destination = file("$buildDir/reports/jacoco")
+    }
+}
+
+// Always run the jacoco test report after testing.
+tasks["test"].finalizedBy(tasks["jacocoTestReport"])
 
 publishing {
     publications {
