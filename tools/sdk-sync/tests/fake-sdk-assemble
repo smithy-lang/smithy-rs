@@ -64,6 +64,10 @@ else:
 
 examples_revision = get_examples_revision()
 smithy_rs_revision = get_cmd_output("git rev-parse HEAD")
+smithy_rs_version_commit_hash_override = os.getenv("SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE")
+if not smithy_rs_version_commit_hash_override:
+    print("Missing SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE env var")
+    sys.exit(1)
 
 # Emulate generating the versions.toml
 with open("aws/sdk/build/aws-sdk/versions.toml", "w") as versions:
