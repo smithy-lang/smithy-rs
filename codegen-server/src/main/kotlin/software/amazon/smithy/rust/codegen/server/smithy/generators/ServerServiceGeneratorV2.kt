@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -44,23 +45,31 @@ class ServerServiceGeneratorV2(
     private val serviceName = service.id.name
     private val builderName = "${serviceName}Builder"
 
+    private val resourceOperationShapes = service
+        .resources
+        .mapNotNull { model.getShape(it).orNull() }
+        .mapNotNull { it as? ResourceShape }
+        .flatMap { it.allOperations }
+        .mapNotNull { model.getShape(it).orNull() }
+        .mapNotNull { it as? OperationShape }
     private val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
+    private val allOperationShapes = resourceOperationShapes + operationShapes
 
     private fun builderGenerics(): Sequence<String> = sequence {
-        for (index in 1..service.operations.size) {
+        for (index in 1..allOperationShapes.size) {
             yield("Op$index")
         }
     }
 
     private fun builderFieldNames(): Sequence<String> = sequence {
-        for (operation in operationShapes) {
+        for (operation in allOperationShapes) {
             val field = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
             yield(field)
         }
     }
 
     private fun operationStructNames(): Sequence<String> = sequence {
-        for (operation in operationShapes) {
+        for (operation in allOperationShapes) {
             yield(symbolProvider.toSymbol(operation).name.toPascalCase())
         }
     }
@@ -131,13 +140,13 @@ class ServerServiceGeneratorV2(
     }
 
     private fun extensionTypes(): Sequence<String> = sequence {
-        for (index in 1..service.operations.size) {
+        for (index in 1..allOperationShapes.size) {
             yield("Exts$index")
         }
     }
 
     private fun buildConstraints(): Writable = writable {
-        for (tuple in operationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
+        for (tuple in allOperationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
             val (first, exts) = tuple
             val (operation, type) = first
             // TODO(Relax): The `Error = Infallible` is an excess requirement to stay at parity with existing builder.
@@ -202,7 +211,7 @@ class ServerServiceGeneratorV2(
     }
 
     private fun notSetGenerics(): Writable = writable {
-        for (index in 1..service.operations.size) {
+        for (index in 1..allOperationShapes.size) {
             rustTemplate("#{SmithyHttpServer}::operation::OperationNotSet,", *codegenScope)
         }
     }
