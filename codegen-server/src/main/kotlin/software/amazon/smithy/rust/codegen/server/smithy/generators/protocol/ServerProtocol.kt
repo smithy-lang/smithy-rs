@@ -19,6 +19,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.orNull
 
@@ -37,6 +39,7 @@ interface ServerProtocol {
             val serverProtocol = when (protocol) {
                 is AwsJson -> AwsJsonServerProtocol(coreCodegenContext, protocol)
                 is RestJson -> RestJsonServerProtocol(coreCodegenContext, protocol)
+                is RestXml -> RestXmlServerProtocol(coreCodegenContext, protocol)
                 else -> throw IllegalStateException("unsupported protocol")
             }
             return serverProtocol
@@ -88,8 +91,8 @@ class AwsJsonServerProtocol(
                     """
                     (
                         String::from($key),
-                        #{SmithyHttpServer}::routing::Route::from_box_clone_service($operationValue)
-                    )
+                        #{SmithyHttpServer}::routing::Route::new($operationValue)
+                    ),
                     """,
                     *codegenScope,
                 )
@@ -97,18 +100,18 @@ class AwsJsonServerProtocol(
         }
         rustTemplate(
             """
-            #{Router}::from_iter(#{Pairs:W})
+            #{Router}::from_iter([#{Pairs:W}])
             """,
             "Router" to routerType(), "Pairs" to pairs,
         )
     }
 }
 
-class RestJsonServerProtocol(
+open class RestProtocol(
     coreCodegenContext: CoreCodegenContext,
-    private val coreProtocol: RestJson,
+    private val coreProtocol: Protocol,
 ) : ServerProtocol {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
     )
@@ -119,7 +122,7 @@ class RestJsonServerProtocol(
     }
 
     override fun markerStruct(): RuntimeType {
-        return RuntimeType("AwsRestJson1", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+        PANIC("marker structure needs to specified")
     }
 
     override fun routerType(): RuntimeType {
@@ -158,5 +161,23 @@ class RestJsonServerProtocol(
             """,
             "Router" to routerType(), "Pairs" to pairs,
         )
+    }
+}
+
+class RestJsonServerProtocol(
+    coreCodegenContext: CoreCodegenContext,
+    coreProtocol: RestJson,
+) : RestProtocol(coreCodegenContext, coreProtocol) {
+    override fun markerStruct(): RuntimeType {
+        return RuntimeType("AwsRestJson1", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+    }
+}
+
+class RestXmlServerProtocol(
+    coreCodegenContext: CoreCodegenContext,
+    coreProtocol: RestXml,
+) : RestProtocol(coreCodegenContext, coreProtocol) {
+    override fun markerStruct(): RuntimeType {
+        return RuntimeType("AwsRestXml", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
     }
 }
