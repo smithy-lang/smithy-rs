@@ -88,13 +88,11 @@ data class FlexibleClientGenerics(
         )
     }
 
-    override fun toGenericsGenerator(): GenericsGenerator {
-        return GenericsGenerator(
-            GenericTypeArg("C", client.member("bounds::SmithyConnector")),
-            GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
-            GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
-        )
-    }
+    override fun toGenericsGenerator(): GenericsGenerator = GenericsGenerator(
+        GenericTypeArg("C", client.member("bounds::SmithyConnector")),
+        GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
+        GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
+    )
 
     private fun defaultType(default: RuntimeType?) = writable {
         default?.also { rust("= #T", default) }

@@ -12,8 +12,9 @@ import software.amazon.smithy.rust.codegen.util.PANIC
 
 typealias Writable = RustWriter.() -> Unit
 
-/** Helper to allow coercing the Writeable signature
- *  writable { rust("fn foo() { }")
+/**
+ * Helper to allow coercing the Writeable signature
+ * writable { rust("fn foo() { }")
  */
 fun writable(w: Writable): Writable = w
 
@@ -35,6 +36,7 @@ fun Writable.isEmpty(): Boolean {
  *     "some_fn::<#{type_params:W}>();",
  *     "type_params" to rustTypeParameters(
  *         symbolProvider.toSymbol(operation),
+ *         RustType.Unit,
  *         runtimeConfig.smithyHttp().member("body::SdkBody"),
  *         GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
  *     )
@@ -42,22 +44,21 @@ fun Writable.isEmpty(): Boolean {
  * ```
  * would write out something like:
  * ```rust
- * some_fn::<crate::operation::SomeOperation, aws_smithy_http::body::SdkBody, A, B>();
+ * some_fn::<crate::operation::SomeOperation, (), aws_smithy_http::body::SdkBody, A, B>();
  * ```
  */
 fun rustTypeParameters(
     vararg typeParameters: Any,
 ): Writable = writable {
     if (typeParameters.isNotEmpty()) {
-        rustInline("<")
+        rustInlineTemplate("<")
 
         val iterator: Iterator<Any> = typeParameters.iterator()
         while (iterator.hasNext()) {
             when (val typeParameter = iterator.next()) {
-                is Symbol, RustType.Unit -> rustTemplate("#{it}", "it" to typeParameter)
-                is RuntimeType -> rustTemplate("#{it:T}", "it" to typeParameter)
-                is String -> rust(typeParameter)
-                is GenericsGenerator -> rustTemplate(
+                is Symbol, is RustType.Unit, is RuntimeType -> rustInlineTemplate("#{it}", "it" to typeParameter)
+                is String -> rustInlineTemplate(typeParameter)
+                is GenericsGenerator -> rustInlineTemplate(
                     "#{gg:W}",
                     "gg" to typeParameter.declaration(withAngleBrackets = false),
                 )
@@ -65,10 +66,10 @@ fun rustTypeParameters(
             }
 
             if (iterator.hasNext()) {
-                rustInline(", ")
+                rustInlineTemplate(", ")
             }
         }
 
-        rustInline(">")
+        rustInlineTemplate(">")
     }
 }

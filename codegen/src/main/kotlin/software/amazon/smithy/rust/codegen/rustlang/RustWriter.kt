@@ -22,6 +22,7 @@ import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -86,9 +87,10 @@ fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
 private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
     template: String,
     scope: Array<out Pair<String, Any>>,
+    trim: Boolean = true,
     f: T.(String) -> U,
 ): U {
-    val contents = transformTemplate(template, scope)
+    val contents = transformTemplate(template, scope, trim)
     pushState()
     this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
     val out = f(contents)
@@ -136,17 +138,10 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     this.write(contents.trim(), *args)
 }
 
-fun <T : AbstractCodeWriter<T>> T.rustInline(
-    @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
-    vararg args: Any,
-) {
-    this.writeInline(contents.trim(), *args)
-}
-
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
-private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
+private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
-    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
+    val output = template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
         val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
         if (!scope.toMap().keys.contains(keyName)) {
@@ -157,7 +152,9 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
             )
         }
         "#{${keyName.lowercase()}$templateType}"
-    }.trim()
+    }
+
+    return output.letIf(trim) { output.trim() }
 }
 
 /**
@@ -198,6 +195,20 @@ fun RustWriter.rustTemplate(
 ) {
     withTemplate(contents, ctx) { template ->
         write(template)
+    }
+}
+
+/**
+ * An API for templating inline Rust code.
+ *
+ * Works just like [RustWriter.rustTemplate] but won't write a newline at the end and won't trim the input
+ */
+fun RustWriter.rustInlineTemplate(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    vararg ctx: Pair<String, Any>,
+) {
+    withTemplate(contents, ctx, trim = false) { template ->
+        writeInline(template)
     }
 }
 
@@ -368,8 +379,9 @@ class RustWriter private constructor(
 
     override fun write(content: Any?, vararg args: Any?): RustWriter {
         // TODO(https://github.com/rust-lang/rustfmt/issues/5425): The second condition introduced here is to prevent
-        // this rustfmt bug
-        if (debugMode && (content as? String?)?.let { it.trim() != "," } ?: false) {
+        //     this rustfmt bug
+        val contentIsNotJustAComma = (content as? String?)?.let { it.trim() != "," } ?: false
+        if (debugMode && contentIsNotJustAComma) {
             val location = Thread.currentThread().stackTrace
             location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
                 ?.also { super.writeInline(it) }
