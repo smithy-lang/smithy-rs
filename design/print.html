@@ -5122,7 +5122,7 @@ Implement codegen for building checksum-validated responses:</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-customizable-client-operations"><a class="header" href="#rfc-customizable-client-operations">RFC: Customizable Client Operations</a></h1>
 <blockquote>
-<p>Status: Accepted</p>
+<p>Status: Implemented</p>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0017_customizable_client_operations.html#changes-checklist">Changes Checklist</a> section.</p>
 <p>SDK customers occasionally need to add additional HTTP headers to requests, and currently,
@@ -5299,13 +5299,13 @@ customers won't realize that they can call <code>send</code> directly, and then 
 that would conflict with the new function, so adding it would not be a breaking change.</p>
 <h2 id="changes-checklist-11"><a class="header" href="#changes-checklist-11">Changes Checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Create <code>CustomizableOperation</code> as an inlinable, and code generate it into <code>client</code> so that it has access to <code>Handle</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Code generate the <code>customize</code> method on fluent builders</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Update the <code>RustReservedWords</code> class to include <code>customize</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Add ability to mutate the HTTP request on <code>Operation</code></li>
 <li><input disabled="" type="checkbox"/>
 Add examples for both approaches</li>
