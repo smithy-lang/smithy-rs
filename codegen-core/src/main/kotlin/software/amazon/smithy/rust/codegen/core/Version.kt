@@ -28,10 +28,9 @@ data class Version(val fullVersion: String, val crateVersion: String) {
         fun crateVersion(): String =
             fromDefaultResource().crateVersion
 
-        private fun fromDefaultResource(): Version =
-            parse(
-                object {}.javaClass.getResource(VERSION_FILENAME)?.readText()
-                    ?: throw CodegenException("$VERSION_FILENAME does not exist"),
-            )
+        private fun fromDefaultResource(): Version = parse(
+            Version::class.java.getResource(VERSION_FILENAME)?.readText()
+                ?: throw CodegenException("$VERSION_FILENAME does not exist"),
+        )
     }
 }
