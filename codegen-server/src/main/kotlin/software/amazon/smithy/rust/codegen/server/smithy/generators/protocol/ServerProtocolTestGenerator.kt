@@ -9,6 +9,8 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -46,8 +48,10 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -150,7 +154,7 @@ class ServerProtocolTestGenerator(
     private fun renderTestHelper(writer: RustWriter) {
         // Create a tower service to perform protocol test
         val crateName = coreCodegenContext.settings.moduleName
-        val operationNames = operations.map { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
+        val operationNames = operations.map { it.toName() }
         val operationRegistryName = "OperationRegistry"
         val operationRegistryBuilderName = "${operationRegistryName}Builder"
 
@@ -159,7 +163,7 @@ class ServerProtocolTestGenerator(
                 """
                 use #{Tower}::Service as _;
 
-                type F<Input, Output> = fn(Input) -> std::pin::Pin<Box<dyn std::future::Future<Output = Output> + Send>>;
+                pub(crate) type F<Input, Output> = fn(Input) -> std::pin::Pin<Box<dyn std::future::Future<Output = Output> + Send>>;
 
                 type RegistryBuilder = crate::operation_registry::$operationRegistryBuilderName<#{Hyper}::Body, ${
                 operations.map {
@@ -244,6 +248,8 @@ class ServerProtocolTestGenerator(
             }
         }
     }
+
+    private fun OperationShape.toName(): String = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(this).name.toSnakeCase())
 
     /**
      * Filter out test cases that are disabled or don't match the service protocol
@@ -334,7 +340,7 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
-            checkParams(operationShape, operationSymbol, httpRequestTestCase, this)
+            checkRequest(operationShape, operationSymbol, httpRequestTestCase, this)
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -468,24 +474,97 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun checkParams(operationShape: OperationShape, operationSymbol: Symbol, httpRequestTestCase: HttpRequestTestCase, rustWriter: RustWriter) {
+    private fun checkRequest(operationShape: OperationShape, operationSymbol: Symbol, httpRequestTestCase: HttpRequestTestCase, rustWriter: RustWriter) {
         val inputShape = operationShape.inputShape(coreCodegenContext.model)
 
-        rustWriter.writeInline("let expected = ")
-        instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
-        rustWriter.write(";")
-
         val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-        rustWriter.rustTemplate(
+        val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
+        val helperNamespace = "crate::operation::protocol_test_helper"
+        rustWriter.withBlock(
             """
-            crate::operation::protocol_test_helper::validate_request(
+            $helperNamespace::validate_request(
                 http_request,
-                // |builder| builder,
-                &std::convert::identity,
-            ).await
+                &|builder| {
+                    builder.${operationShape.toName()}((|input| Box::pin(async move {
             """,
-            *codegenScope,
-        )
+
+            "})) as $helperNamespace::F<$inputT, $outputT>)}).await",
+
+        ) {
+            // Construct expected request
+            rustWriter.writeInline("let expected = ")
+            instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
+            rustWriter.write(";")
+
+            checkRequestParams(inputShape, rustWriter)
+            // TODO(weihanglo): provide actual response object
+            rustWriter.rust("todo!()")
+        }
+    }
+
+    private fun checkRequestParams(inputShape: StructureShape, rustWriter: RustWriter) {
+        if (inputShape.hasStreamingMember(model)) {
+            // A streaming shape does not implement `PartialEq`, so we have to iterate over the input shape's members
+            // and handle the equality assertion separately.
+            for (member in inputShape.members()) {
+                val memberName = coreCodegenContext.symbolProvider.toMemberName(member)
+                if (member.isStreaming(coreCodegenContext.model)) {
+                    rustWriter.rustTemplate(
+                        """
+                        #{AssertEq}(
+                            input.$memberName.collect().await.unwrap().into_bytes(),
+                            expected.$memberName.collect().await.unwrap().into_bytes()
+                        );
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustWriter.rustTemplate(
+                        """
+                        #{AssertEq}(input.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        } else {
+            val hasFloatingPointMembers = inputShape.members().any {
+                val target = model.expectShape(it.target)
+                (target is DoubleShape) || (target is FloatShape)
+            }
+
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1147) Handle the case of nested floating point members.
+            if (hasFloatingPointMembers) {
+                for (member in inputShape.members()) {
+                    val memberName = coreCodegenContext.symbolProvider.toMemberName(member)
+                    when (coreCodegenContext.model.expectShape(member.target)) {
+                        is DoubleShape, is FloatShape -> {
+                            rustWriter.addUseImports(
+                                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "FloatEquals")
+                                    .toSymbol(),
+                            )
+                            rustWriter.rust(
+                                """
+                                assert!(input.$memberName.float_equals(&expected.$memberName),
+                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected.$memberName, input.$memberName);
+                                """,
+                            )
+                        }
+
+                        else -> {
+                            rustWriter.rustTemplate(
+                                """
+                                #{AssertEq}(input.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
+                                """,
+                                *codegenScope,
+                            )
+                        }
+                    }
+                }
+            } else {
+                rustWriter.rustTemplate("#{AssertEq}(input, expected);", *codegenScope)
+            }
+        }
     }
 
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpResponseTestCase) {
