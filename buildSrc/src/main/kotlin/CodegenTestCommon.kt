@@ -10,8 +10,8 @@ import org.gradle.kotlin.dsl.register
 import java.io.File
 
 /**
- * This file contains common functionality shared across the buildscripts for the `codegen-test` and `codegen-server-test`
- * modules.
+ * This file contains common functionality shared across the build scripts for the
+ * `codegen-client-test` and `codegen-server-test` modules.
  */
 
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)

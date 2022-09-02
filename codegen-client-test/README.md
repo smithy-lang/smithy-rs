@@ -13,14 +13,14 @@ These commands are all meant to be run from the repository root.
 To run all protocol tests of all the integration test services:
 
 ```sh
-./gradlew codegen-test:build
+./gradlew codegen-client-test:build
 ```
 
 To run only a _subset_ of the integration test services (refer to
 `./build.gradle.kts` for a full list):
 
 ```sh
-./gradlew codegen-test:build -P modules='simple,rest_json'
+./gradlew codegen-client-test:build -P modules='simple,rest_json'
 ```
 
 The Gradle task will run `cargo check`, `cargo test`, `cargo docs` and `cargo
@@ -29,7 +29,7 @@ subset of these commands. For instance, if you're working on documentation and
 want to check that the crates also compile, you can run:
 
 ```sh
-./gradlew codegen-test:build -P cargoCommands='check,docs'
+./gradlew codegen-client-test:build -P cargoCommands='check,docs'
 ```
 
 For fast development iteration cycles on protocol tests, we recommend you write
@@ -38,5 +38,5 @@ test.  Alternatively, you can write a minimal integration test service
 definition in `model/simple.smithy` and run:
 
 ```sh
-./gradlew codegen-test:build -P cargoCommands='test' -P modules='simple'
+./gradlew codegen-client-test:build -P cargoCommands='test' -P modules='simple'
 ```

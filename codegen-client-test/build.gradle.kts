@@ -18,7 +18,7 @@ val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-codegen"
-val workingDirUnderBuildDir = "smithyprojections/codegen-test/"
+val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
 
 buildscript {
     val smithyVersion: String by project
@@ -28,7 +28,7 @@ buildscript {
 }
 
 dependencies {
-    implementation(project(":codegen"))
+    implementation(project(":codegen-client"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
