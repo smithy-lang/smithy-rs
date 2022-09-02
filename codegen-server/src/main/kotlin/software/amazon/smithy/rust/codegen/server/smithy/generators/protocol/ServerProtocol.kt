@@ -37,9 +37,9 @@ interface ServerProtocol {
     companion object {
         fun fromCoreProtocol(coreCodegenContext: CoreCodegenContext, protocol: Protocol): ServerProtocol {
             val serverProtocol = when (protocol) {
-                is AwsJson -> AwsJsonServerProtocol(coreCodegenContext, protocol)
-                is RestJson -> RestJsonServerProtocol(coreCodegenContext, protocol)
-                is RestXml -> RestXmlServerProtocol(coreCodegenContext, protocol)
+                is AwsJson -> ServerAwsJsonProtocol(coreCodegenContext, protocol)
+                is RestJson -> ServerRestJsonProtocol(coreCodegenContext, protocol)
+                is RestXml -> ServerRestXmlProtocol(coreCodegenContext, protocol)
                 else -> throw IllegalStateException("unsupported protocol")
             }
             return serverProtocol
@@ -47,7 +47,7 @@ interface ServerProtocol {
     }
 }
 
-class AwsJsonServerProtocol(
+class ServerAwsJsonProtocol(
     coreCodegenContext: CoreCodegenContext,
     private val coreProtocol: AwsJson,
 ) : ServerProtocol {
@@ -164,7 +164,7 @@ open class RestProtocol(
     }
 }
 
-class RestJsonServerProtocol(
+class ServerRestJsonProtocol(
     coreCodegenContext: CoreCodegenContext,
     coreProtocol: RestJson,
 ) : RestProtocol(coreCodegenContext, coreProtocol) {
@@ -173,7 +173,7 @@ class RestJsonServerProtocol(
     }
 }
 
-class RestXmlServerProtocol(
+class ServerRestXmlProtocol(
     coreCodegenContext: CoreCodegenContext,
     coreProtocol: RestXml,
 ) : RestProtocol(coreCodegenContext, coreProtocol) {
