@@ -86,14 +86,15 @@ class ServerAwsJsonProtocol(
         val pairs = writable {
             for ((operation, operationValue) in operationShapes.zip(operationValues)) {
                 val operationName = symbolProvider.toSymbol(operation).name
-                val key = "String::from($serviceName.$operationName)".dq()
+                val key = "$serviceName.$operationName".dq()
                 rustTemplate(
                     """
                     (
                         String::from($key),
-                        #{SmithyHttpServer}::routing::Route::new($operationValue)
+                        #{SmithyHttpServer}::routing::Route::new(#{OperationValue:W})
                     ),
                     """,
+                    "OperationValue" to operationValue,
                     *codegenScope,
                 )
             }
