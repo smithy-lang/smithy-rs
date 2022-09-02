@@ -47,6 +47,7 @@ RUN set -eux; \
 FROM bare_base_image AS install_rust
 ARG rust_stable_version=1.61.0
 ARG rust_nightly_version=nightly-2022-07-25
+ARG cargo_deny_version=0.12.2
 ARG cargo_udeps_version=0.1.29
 ARG cargo_hack_version=0.5.14
 ARG cargo_minimal_versions_version=0.1.4
@@ -93,6 +94,7 @@ ARG smithy_rs_commit_hash=main
 # source code by checking out awslabs/smithy-rs/main rather than copying them from the local directory.
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
+    cargo install cargo-deny --locked --version ${cargo_deny_version}; \
     cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}; \
     cargo install cargo-hack --locked --version ${cargo_hack_version}; \
     cargo install cargo-minimal-versions --version ${cargo_minimal_versions_version}; \

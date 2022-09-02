@@ -202,7 +202,7 @@ data class CargoDependency(
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2.0.0"))
         val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1.0.0"), scope = DependencyScope.Dev)
-        val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.0.0"))
+        val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
         val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.16.0"))
         val TempFile: CargoDependency = CargoDependency("tempfile", CratesIo("3.2.0"), scope = DependencyScope.Dev)
         val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.7"))
