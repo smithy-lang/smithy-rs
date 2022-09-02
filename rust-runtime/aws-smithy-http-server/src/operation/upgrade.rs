@@ -12,14 +12,16 @@ use std::{
 
 use futures_util::ready;
 use pin_project_lite::pin_project;
-use tower::{Layer, Service};
+use tower::{layer::util::Stack, Layer, Service};
 
 use crate::{
+    body::BoxBody,
+    build_modifier::BuildModifier,
     request::{FromParts, FromRequest},
     response::IntoResponse,
 };
 
-use super::{OperationError, OperationShape};
+use super::{Operation, OperationError, OperationShape};
 
 /// A [`Layer`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -209,5 +211,54 @@ where
                 inner: <(Op::Input, Exts) as FromRequest<P, B>>::from_request(req),
             },
         }
+    }
+}
+
+/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
+/// canonical associated types.
+pub trait Upgradable<Protocol, Operation, Exts, B, Modify> {
+    type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
+
+    /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
+    fn upgrade(self, modify: &Modify) -> Self::Service;
+}
+
+impl<P, Op, Exts, B, S, L, PollError, Modify> Upgradable<P, Op, Exts, B, Modify> for Operation<S, L>
+where
+    // `Op` is used to specify the operation shape
+    Op: OperationShape,
+
+    // Smithy input must convert from a HTTP request
+    Op::Input: FromRequest<P, B>,
+    // Smithy output must convert into a HTTP response
+    Op::Output: IntoResponse<P>,
+    // Smithy error must convert into a HTTP response
+    Op::Error: IntoResponse<P>,
+
+    // Must be able to convert extensions
+    Exts: FromParts<P>,
+
+    // The signature of the inner service is correct
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
+
+    // Modifier applies correctly to `Operation<S, L>`
+    Modify: BuildModifier<P, Op, S, L>,
+    Modify::Layer: Layer<Upgrade<P, Op, Exts, B, Modify::Service>>,
+
+    // The signature of the output is correct
+    <Modify::Layer as Layer<Upgrade<P, Op, Exts, B, Modify::Service>>>::Service:
+        Service<http::Request<B>, Response = http::Response<BoxBody>>,
+{
+    type Service = <Modify::Layer as Layer<Upgrade<P, Op, Exts, B, Modify::Service>>>::Service;
+
+    /// Takes the [`Operation<S, L>`](Operation), applies [`ModifyBuild::modify`] to it, applies [`UpgradeLayer`] to
+    /// the modified `S`, then finally applies the modified `L`.
+    ///
+    /// The composition is made explicit in the method constraints and return type.
+    fn upgrade(self, modify: &Modify) -> Self::Service {
+        let Operation { inner, layer } = modify.modify(self);
+
+        let layer = Stack::new(UpgradeLayer::new(), layer);
+        layer.layer(inner)
     }
 }

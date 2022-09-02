@@ -87,11 +87,13 @@ class ServerServiceGeneratorV2(
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder`].
-            pub struct $builderName<${builderGenerics().joinToString(",")}> {
+            pub struct $builderName<${builderGenerics().joinToString(",")}, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
                 #{Fields:W}
+                modifier: Modifier
             }
             """,
             "Fields" to builderFields(),
+            *codegenScope,
         )
     }
 
@@ -127,6 +129,7 @@ class ServerServiceGeneratorV2(
                 pub fn $fieldName<NewOp>(self, value: NewOp) -> $builderName<${replacedGenerics.joinToString(",")}> {
                     $builderName {
                         #{SwitchedFields:W}
+                        modifier: self.modifier
                     }
                 }
                 """,
@@ -152,28 +155,43 @@ class ServerServiceGeneratorV2(
             // TODO(Relax): The `Error = Infallible` is an excess requirement to stay at parity with existing builder.
             rustTemplate(
                 """
-                $type: #{SmithyHttpServer}::operation::Upgradable<#{Marker}, crate::operations::${symbolProvider.toSymbol(operation).name.toPascalCase()}, $exts, B>,
+                $type: #{SmithyHttpServer}::operation::Upgradable<
+                    #{Marker},
+                    crate::operations::${symbolProvider.toSymbol(operation).name.toPascalCase()},
+                    $exts,
+                    B,
+                    Modifier
+                >,
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
 
                 $type::Service: #{Tower}::Service<#{Http}::Request<B>, Error = std::convert::Infallible>,
                 """,
-                "Marker" to protocol.markerStruct(), *codegenScope,
-
+                "Marker" to protocol.markerStruct(),
+                *codegenScope,
             )
         }
     }
 
     private fun builderImpl(): Writable = writable {
         val generics = builderGenerics().joinToString(",")
-        val router = protocol.routerConstruction(service, builderFieldNames().map { "self.$it.upgrade()" }.asIterable(), model)
+        val router = protocol
+            .routerConstruction(
+                service,
+                builderFieldNames()
+                    .map {
+                        writable { rustTemplate("self.$it.upgrade(&self.modifier)") }
+                    }
+                    .asIterable(),
+                model,
+            )
         rustTemplate(
             """
             impl<$generics> $builderName<$generics> {
                 #{Setters:W}
             }
 
-            impl<$generics> $builderName<$generics> {
+            impl<$generics, Modifier> $builderName<$generics, Modifier> {
                 pub fn build<B, ${extensionTypes().joinToString(",")}>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
                     #{BuildConstraints:W}
@@ -233,11 +251,14 @@ class ServerServiceGeneratorV2(
                 pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
                         #{NotSetFields:W}
+                        modifier: #{SmithyHttpServer}::build_modifier::Identity
                     }
                 }
             }
             """,
-            "NotSetGenerics" to notSetGenerics(), "NotSetFields" to notSetFields(),
+            "NotSetGenerics" to notSetGenerics(),
+            "NotSetFields" to notSetFields(),
+            *codegenScope,
         )
     }
 

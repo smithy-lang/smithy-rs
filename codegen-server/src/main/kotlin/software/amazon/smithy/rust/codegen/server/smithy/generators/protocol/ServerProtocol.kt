@@ -32,7 +32,7 @@ interface ServerProtocol {
     fun routerType(): RuntimeType
 
     // TODO(Decouple): Perhaps this should lean on a Rust interface.
-    fun routerConstruction(service: ServiceShape, operationValues: Iterable<String>, model: Model): Writable
+    fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable
 
     companion object {
         fun fromCoreProtocol(coreCodegenContext: CoreCodegenContext, protocol: Protocol): ServerProtocol {
@@ -78,7 +78,7 @@ class ServerAwsJsonProtocol(
         return RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
     }
 
-    override fun routerConstruction(service: ServiceShape, operationValues: Iterable<String>, model: Model): Writable = writable {
+    override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
         val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
         // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
@@ -129,7 +129,7 @@ open class RestProtocol(
         return RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::rest")
     }
 
-    override fun routerConstruction(service: ServiceShape, operationValues: Iterable<String>, model: Model): Writable = writable {
+    override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
         val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
         // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
@@ -147,10 +147,11 @@ open class RestProtocol(
                     """
                     (
                         #{Key:W},
-                        #{SmithyHttpServer}::routing::Route::new($operationValue)
+                        #{SmithyHttpServer}::routing::Route::new(#{OperationValue:W})
                     ),
                     """,
                     "Key" to key,
+                    "OperationValue" to operationValue,
                     *codegenScope,
                 )
             }
