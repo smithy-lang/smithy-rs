@@ -168,11 +168,12 @@
 //! - The intention of `PollError` is to signal that the underlying service is no longer able to take requests, so
 //! should be discarded. See [`Service::poll_ready`](tower::Service::poll_ready).
 //!
-//! The [`UpgradeLayer`] and it's [`Layer::Service`] [`Upgrade`] are both parameterized by a protocol. This allows
-//! for upgrading to `Service<http::Request, Response = http::Response, Error = PollError>` to be protocol dependent.
+//! The [`UpgradeLayer`] and it's [`Layer::Service`](tower::Layer::Service) [`Upgrade`] are both parameterized by a
+//! protocol. This allows for upgrading to `Service<http::Request, Response = http::Response, Error = PollError>` to be
+//! protocol dependent.
 //!
-//! The [`Operation::upgrade`] will apply [`UpgradeLayer`] to `S` then apply the [`Layer`] `L`. The service builder
-//! provided to the user will perform this composition on `build`.
+//! The [`Operation::upgrade`] will apply [`UpgradeLayer`] to `S` then apply the [`Layer`](tower::Layer) `L`. The
+//! service builder provided to the user will perform this composition on `build`.
 //!
 //! [Smithy operation]: https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation
 
@@ -188,7 +189,7 @@ pub use operation_service::*;
 pub use shape::*;
 pub use upgrade::*;
 
-/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`] `L`.
+/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`](tower::Layer) `L`.
 ///
 /// The `L` is held and applied lazily during [`Operation::upgrade`].
 pub struct Operation<S, L = Identity> {

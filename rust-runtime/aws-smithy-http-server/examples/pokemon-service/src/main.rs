@@ -8,13 +8,15 @@ use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{AddExtensionLayer, Router};
 use clap::Parser;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
+
 use pokemon_service::{
     capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
     setup_tracing, State,
 };
 use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
-use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
+use pokemon_service_server_sdk::services::PokemonService;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -31,6 +33,8 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
+
+    // Old builder
     let app: Router = OperationRegistryBuilder::default()
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
@@ -46,6 +50,16 @@ pub async fn main() {
         // Convert it into a router that will route requests to the matching operation
         // implementation.
         .into();
+
+    // New builder
+    let _app = PokemonService::builder()
+        .get_pokemon_species(get_pokemon_species)
+        .get_storage(get_storage)
+        .get_server_statistics(get_server_statistics)
+        .capture_pokemon_operation(capture_pokemon)
+        .empty_operation(empty_operation)
+        .health_check_operation(health_check_operation)
+        .build();
 
     // Setup shared state and middlewares.
     let shared_state = Arc::new(State::default());
