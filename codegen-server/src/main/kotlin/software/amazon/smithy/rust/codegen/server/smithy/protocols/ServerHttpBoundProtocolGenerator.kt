@@ -120,6 +120,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
+    private val serverProtocol = ServerProtocol.fromCoreProtocol(codegenContext, protocol)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
@@ -184,7 +185,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
 
         // Implement `from_request` trait for input types.
-        val serverProtocol = ServerProtocol.fromCoreProtocol(codegenContext, protocol)
         rustTemplate(
             """
             ##[derive(Debug)]
@@ -289,10 +289,23 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         $intoResponseImpl
                     }
                 }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName::Output(self).into_response()
+                    }
+                }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName::Error(self).into_response()
+                    }
+                }
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
+                "Marker" to serverProtocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
                 "serialize_error" to serverSerializeError(operationShape),
             )
@@ -321,9 +334,16 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         $intoResponseImpl
                     }
                 }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName(self).into_response()
+                    }
+                }
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
+                "Marker" to serverProtocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
             )
         }
