@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -183,6 +184,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
 
         // Implement `from_request` trait for input types.
+        val serverProtocol = ServerProtocol.fromCoreProtocol(codegenContext, protocol)
         rustTemplate(
             """
             ##[derive(Debug)]
@@ -207,9 +209,31 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         )
                 }
             }
+
+            impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+            where
+                B: #{SmithyHttpServer}::body::HttpBody + Send,
+                B: 'static,
+                ${streamingBodyTraitBounds(operationShape)}
+                B::Data: Send,
+                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+            {
+                type Rejection = #{RuntimeError};
+                type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send>>;
+
+                fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                    let fut = async move {
+                        let mut request_parts = #{SmithyHttpServer}::request::RequestParts::new(request);
+                        $inputName::from_request(&mut request_parts).await.map(|x| x.0)
+                    };
+                    Box::pin(fut)
+                }
+            }
+
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
+            "Marker" to serverProtocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verify_response_content_type" to verifyResponseContentType,
         )
