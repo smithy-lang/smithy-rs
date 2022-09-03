@@ -21,7 +21,10 @@
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
 //! [`RuntimeError::into_response`] method to render and send a response.
 
-use crate::{protocols::Protocol, response::Response};
+use crate::{
+    protocols::Protocol,
+    response::{IntoResponse, Response},
+};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
@@ -52,6 +55,12 @@ impl RuntimeErrorKind {
 pub struct RuntimeError {
     pub protocol: Protocol,
     pub kind: RuntimeErrorKind,
+}
+
+impl<P> IntoResponse<P> for RuntimeError {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        self.into_response()
+    }
 }
 
 impl RuntimeError {
