@@ -100,6 +100,22 @@ class ServerServiceGeneratorV2(
     private fun builderSetters(): Writable = writable {
         for ((index, pair) in builderFieldNames().zip(operationStructNames()).withIndex()) {
             val (fieldName, structName) = pair
+            val replacedGenericsService = writable {
+                for ((innerIndex, item) in builderGenerics().withIndex()) {
+                    if (innerIndex == index) {
+                        rustTemplate(
+                            """
+                            #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operations::$structName, H>>
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rust("$item")
+                    }
+                    rust(", ")
+                }
+            }
+
             val replacedGenerics = builderGenerics().withIndex().map { (innerIndex, item) ->
                 if (innerIndex == index) {
                     "NewOp"
@@ -126,7 +142,21 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operations::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn $fieldName<NewOp>(self, value: NewOp) -> $builderName<${replacedGenerics.joinToString(",")}> {
+                pub fn $fieldName<H, Exts>(self, value: H) -> $builderName<#{ReplacedGenericsService:W}>
+                where
+                    H: #{SmithyHttpServer}::operation::Handler<crate::operations::$structName, Exts>
+                {
+                    use #{SmithyHttpServer}::operation::OperationShapeExt;
+                    self.${fieldName}_operation(crate::operations::$structName::from_handler(value))
+                }
+
+                /// Sets the [`$structName`](crate::operations::$structName) operation.
+                ///
+                /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from
+                /// [`$structName`](crate::operations::$structName) using either
+                /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
+                /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
+                pub fn ${fieldName}_operation<NewOp>(self, value: NewOp) -> $builderName<${replacedGenerics.joinToString(",")}> {
                     $builderName {
                         #{SwitchedFields:W}
                         modifier: self.modifier
@@ -134,6 +164,7 @@ class ServerServiceGeneratorV2(
                 }
                 """,
                 "SwitchedFields" to switchedFields,
+                "ReplacedGenericsService" to replacedGenericsService,
                 *codegenScope,
             )
 
