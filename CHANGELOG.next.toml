@@ -72,3 +72,100 @@ wired up by default if none is provided.
 references = ["smithy-rs#1603", "aws-sdk-rust#586"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+
+[[aws-sdk-rust]]
+message = """
+Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).
+
+Before this change, modifying operations before sending them required using lower-level APIs:
+
+```rust
+let input = SomeOperationInput::builder().some_value(5).build()?;
+
+let operation = {
+    let op = input.make_operation(&service_config).await?;
+    let (request, response) = op.into_request_response();
+
+    let request = request.augment(|req, _props| {
+        req.headers_mut().insert(
+            HeaderName::from_static("x-some-header"),
+            HeaderValue::from_static("some-value")
+        );
+        Result::<_, Infallible>::Ok(req)
+    })?;
+
+    Operation::from_parts(request, response)
+};
+
+let response = smithy_client.call(operation).await?;
+```
+
+Now, users may easily modify operations before sending with the `customize` method:
+
+```rust
+let response = client.some_operation()
+    .some_value(5)
+    .customize()
+    .await?
+    .mutate_request(|mut req| {
+        req.headers_mut().insert(
+            HeaderName::from_static("x-some-header"),
+            HeaderValue::from_static("some-value")
+        );
+    })
+    .send()
+    .await?;
+```
+"""
+references = ["smithy-rs#1647", "smithy-rs#1112"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).
+
+Before this change, modifying operations before sending them required using lower-level APIs:
+
+```rust
+let input = SomeOperationInput::builder().some_value(5).build()?;
+
+let operation = {
+    let op = input.make_operation(&service_config).await?;
+    let (request, response) = op.into_request_response();
+
+    let request = request.augment(|req, _props| {
+        req.headers_mut().insert(
+            HeaderName::from_static("x-some-header"),
+            HeaderValue::from_static("some-value")
+        );
+        Result::<_, Infallible>::Ok(req)
+    })?;
+
+    Operation::from_parts(request, response)
+};
+
+let response = smithy_client.call(operation).await?;
+```
+
+Now, users may easily modify operations before sending with the `customize` method:
+
+```rust
+let response = client.some_operation()
+    .some_value(5)
+    .customize()
+    .await?
+    .mutate_request(|mut req| {
+        req.headers_mut().insert(
+            HeaderName::from_static("x-some-header"),
+            HeaderValue::from_static("some-value")
+        );
+    })
+    .send()
+    .await?;
+```
+"""
+references = ["smithy-rs#1647", "smithy-rs#1112"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+author = "Velfi"

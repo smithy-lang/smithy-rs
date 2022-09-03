@@ -45,3 +45,6 @@ gradle-app.setting
 
 # Rust build artifacts
 target/
+
+# IDEs
+.idea/
