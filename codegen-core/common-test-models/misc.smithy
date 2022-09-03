@@ -24,7 +24,7 @@ service MiscService {
 
 /// An operation whose shapes generate complex Rust types.
 /// See https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity.
-@http(uri: "/typeComplexityOperation", method: "GET")
+@http(uri: "/typeComplexityOperation", method: "POST")
 operation TypeComplexityOperation {
     input: TypeComplexityOperationInputOutput,
     output: TypeComplexityOperationInputOutput,
@@ -53,7 +53,7 @@ map MapA {
 
 /// This operation tests that (de)serializing required values from a nested
 /// shape works correctly.
-@http(uri: "/innerRequiredShapeOperation", method: "GET")
+@http(uri: "/innerRequiredShapeOperation", method: "POST")
 operation InnerRequiredShapeOperation {
     input: InnerRequiredShapeOperationInputOutput,
     output: InnerRequiredShapeOperationInputOutput,
@@ -161,13 +161,13 @@ operation ResponseCodeDefaultOperation {
     {
         id: "ResponseCodeHttpFallbackOperation",
         protocol: "aws.protocols#restJson1",
-        code: 418,
+        code: 201,
         headers: {
             "Content-Length": "2"
         }
     }
 ])
-@http(method: "GET", uri: "/responseCodeHttpFallbackOperation", code: 418)
+@http(method: "GET", uri: "/responseCodeHttpFallbackOperation", code: 201)
 operation ResponseCodeHttpFallbackOperation {
     input: EmptyStructure,
     output: EmptyStructure,
