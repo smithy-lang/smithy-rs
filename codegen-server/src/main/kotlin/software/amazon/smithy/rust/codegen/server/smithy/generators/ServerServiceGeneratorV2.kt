@@ -252,6 +252,7 @@ class ServerServiceGeneratorV2(
 
         rustTemplate(
             """
+            ##[derive(Clone)]
             pub struct $serviceName<S> {
                 router: #{SmithyHttpServer}::routing::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
@@ -288,6 +289,13 @@ class ServerServiceGeneratorV2(
                         modifier: #{SmithyHttpServer}::build_modifier::Identity,
                         _exts: std::marker::PhantomData
                     }
+                }
+            }
+
+            impl<S> $serviceName<S> {
+                /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService).
+                pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
+                    #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
             }
             """,
