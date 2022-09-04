@@ -35,7 +35,7 @@ pub async fn main() {
     setup_tracing();
 
     // Old builder
-    let app: Router = OperationRegistryBuilder::default()
+    let _app: Router = OperationRegistryBuilder::default()
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -52,7 +52,7 @@ pub async fn main() {
         .into();
 
     // New builder
-    let _app = PokemonService::builder()
+    let app = PokemonService::builder()
         .get_pokemon_species(get_pokemon_species)
         .get_storage(get_storage)
         .get_server_statistics(get_server_statistics)
@@ -64,7 +64,7 @@ pub async fn main() {
     // Setup shared state and middlewares.
     let shared_state = Arc::new(State::default());
     let app = app.layer(
-        ServiceBuilder::new()
+        &ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .layer(AddExtensionLayer::new(shared_state)),
     );
