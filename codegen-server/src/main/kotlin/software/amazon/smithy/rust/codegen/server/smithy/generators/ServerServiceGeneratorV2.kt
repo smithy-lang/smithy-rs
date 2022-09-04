@@ -93,6 +93,7 @@ class ServerServiceGeneratorV2(
             pub struct $builderName<$generics, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
                 #{Fields:W}
                 modifier: Modifier,
+                ##[allow(unused_parens)]
                 _exts: std::marker::PhantomData<(${extensionTypes().joinToString(",")})>
             }
             """,
