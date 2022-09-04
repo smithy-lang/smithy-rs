@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -79,12 +80,21 @@ class ServerAwsJsonProtocol(
     }
 
     override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
+        val resourceOperationShapes = service
+            .resources
+            .mapNotNull { model.getShape(it).orNull() }
+            .mapNotNull { it as? ResourceShape }
+            .flatMap { it.allOperations }
+            .mapNotNull { model.getShape(it).orNull() }
+            .mapNotNull { it as? OperationShape }
         val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
+        val allOperationShapes = resourceOperationShapes + operationShapes
+
         // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
         val serviceName = service.id.name
         val pairs = writable {
-            for ((operation, operationValue) in operationShapes.zip(operationValues)) {
+            for ((operation, operationValue) in allOperationShapes.zip(operationValues)) {
                 val operationName = symbolProvider.toSymbol(operation).name
                 val key = "$serviceName.$operationName".dq()
                 rustTemplate(
@@ -131,12 +141,21 @@ open class RestProtocol(
     }
 
     override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
+        val resourceOperationShapes = service
+            .resources
+            .mapNotNull { model.getShape(it).orNull() }
+            .mapNotNull { it as? ResourceShape }
+            .flatMap { it.allOperations }
+            .mapNotNull { model.getShape(it).orNull() }
+            .mapNotNull { it as? OperationShape }
         val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
+        val allOperationShapes = resourceOperationShapes + operationShapes
+
         // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
         val serviceName = service.id.name
         val pairs = writable {
-            for ((operationShape, operationValue) in operationShapes.zip(operationValues)) {
+            for ((operationShape, operationValue) in allOperationShapes.zip(operationValues)) {
                 val operationName = symbolProvider.toSymbol(operationShape).name
                 val key = coreProtocol.serverRouterRequestSpec(
                     operationShape,
