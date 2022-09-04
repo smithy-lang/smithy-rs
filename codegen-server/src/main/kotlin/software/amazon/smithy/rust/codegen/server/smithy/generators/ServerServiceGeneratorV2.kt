@@ -34,7 +34,9 @@ class ServerServiceGeneratorV2(
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
+            "Bytes" to CargoDependency.Bytes.asType(),
             "Http" to CargoDependency.Http.asType(),
+            "HttpBody" to CargoDependency.HttpBody.asType(),
             "SmithyHttpServer" to
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
             "Tower" to CargoDependency.Tower.asType(),
@@ -297,6 +299,16 @@ class ServerServiceGeneratorV2(
                 pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
+
+                /// Applies a layer uniformly to all routes.
+                pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
+                where
+                    L: #{Tower}::Layer<S>
+                {
+                    $serviceName {
+                        router: self.router.map(|s| s.layer(layer))
+                    }
+                }
             }
             """,
             "NotSetGenerics" to notSetGenerics(),
@@ -308,9 +320,11 @@ class ServerServiceGeneratorV2(
     private fun structServiceImpl(): Writable = writable {
         rustTemplate(
             """
-            impl<B, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
+            impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
             where
-                S: #{Tower}::Service<http::Request<B>, Response = http::Response<#{SmithyHttpServer}::body::BoxBody>> + Clone,
+                S: #{Tower}::Service<http::Request<B>, Response = http::Response<RespB>> + Clone,
+                RespB: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + Send + 'static,
+                RespB::Error: Into<#{Tower}::BoxError>
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
                 type Error = S::Error;
