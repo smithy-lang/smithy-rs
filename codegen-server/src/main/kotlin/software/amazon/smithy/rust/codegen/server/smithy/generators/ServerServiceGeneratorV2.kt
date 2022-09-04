@@ -82,14 +82,16 @@ class ServerServiceGeneratorV2(
     }
 
     private fun builderDef(): Writable = writable {
+        val generics = (builderGenerics() + extensionTypes().map { "$it" }).joinToString(",")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder`].
-            pub struct $builderName<${builderGenerics().joinToString(",")}, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
+            pub struct $builderName<$generics, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
                 #{Fields:W}
-                modifier: Modifier
+                modifier: Modifier,
+                _exts: std::marker::PhantomData<(${extensionTypes().joinToString(",")})>
             }
             """,
             "Fields" to builderFields(),
@@ -142,7 +144,7 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operations::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn $fieldName<H, Exts>(self, value: H) -> $builderName<#{ReplacedGenericsService:W}>
+                pub fn $fieldName<H, Exts>(self, value: H) -> $builderName<#{ReplacedGenericsService:W} ${extensionTypes().joinToString(",")}>
                 where
                     H: #{SmithyHttpServer}::operation::Handler<crate::operations::$structName, Exts>
                 {
@@ -156,10 +158,11 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operations::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<NewOp>(self, value: NewOp) -> $builderName<${replacedGenerics.joinToString(",")}> {
+                pub fn ${fieldName}_operation<NewOp>(self, value: NewOp) -> $builderName<${(replacedGenerics + extensionTypes()).joinToString(",")}> {
                     $builderName {
                         #{SwitchedFields:W}
-                        modifier: self.modifier
+                        modifier: self.modifier,
+                        _exts: std::marker::PhantomData
                     }
                 }
                 """,
@@ -205,7 +208,7 @@ class ServerServiceGeneratorV2(
     }
 
     private fun builderImpl(): Writable = writable {
-        val generics = builderGenerics().joinToString(",")
+        val generics = (builderGenerics() + extensionTypes()).joinToString(",")
         val router = protocol
             .routerConstruction(
                 service,
@@ -223,7 +226,7 @@ class ServerServiceGeneratorV2(
             }
 
             impl<$generics, Modifier> $builderName<$generics, Modifier> {
-                pub fn build<B, ${extensionTypes().joinToString(",")}>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
+                pub fn build<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
                     #{BuildConstraints:W}
                 {
@@ -279,10 +282,11 @@ class ServerServiceGeneratorV2(
             """
             impl $serviceName<()> {
                 /// Constructs a builder for [`$serviceName`].
-                pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
+                pub fn builder<${extensionTypes().joinToString(",")}>() -> $builderName<#{NotSetGenerics:W} ${extensionTypes().joinToString(",")}> {
                     $builderName {
                         #{NotSetFields:W}
-                        modifier: #{SmithyHttpServer}::build_modifier::Identity
+                        modifier: #{SmithyHttpServer}::build_modifier::Identity,
+                        _exts: std::marker::PhantomData
                     }
                 }
             }
