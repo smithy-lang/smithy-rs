@@ -18,6 +18,8 @@ import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import java.nio.file.Files.createDirectory
 import java.nio.file.Files.write
 import java.nio.file.StandardOpenOption
+import kotlin.io.path.createDirectory
+import kotlin.io.path.writeText
 
 class CodegenVisitorTest {
     @Test
@@ -49,9 +51,8 @@ class CodegenVisitorTest {
             }
         """.asSmithyModel(smithyVersion = "2.0")
         val (ctx, testDir) = generatePluginContext(model)
-        createDirectory(testDir.resolve("src"))
-        write(testDir.resolve("src/main.rs"), mutableListOf("fn main() {}"), StandardOpenOption.CREATE_NEW)
-
+        testDir.resolve("src").createDirectory()
+        testDir.resolve("src/main.rs").writeText("fn main() {}")
         val codegenDecorator =
             CombinedCodegenDecorator.fromClasspath(
                 ctx,
