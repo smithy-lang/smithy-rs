@@ -25,17 +25,35 @@ import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.orNull
 
+fun allOperationShapes(service: ServiceShape, model: Model): List<OperationShape> {
+    val resourceOperationShapes = service
+        .resources
+        .mapNotNull { model.getShape(it).orNull() }
+        .mapNotNull { it as? ResourceShape }
+        .flatMap { it.allOperations }
+        .mapNotNull { model.getShape(it).orNull() }
+        .mapNotNull { it as? OperationShape }
+    val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
+    return resourceOperationShapes + operationShapes
+}
+
 interface ServerProtocol {
+    // Returns the core `Protocol`.
     fun coreProtocol(): Protocol
 
+    // Returns the Rust marker struct enjoying `OperationShape`.
     fun markerStruct(): RuntimeType
 
+    // Returns the Rust router type.
     fun routerType(): RuntimeType
 
+    // Returns the construction of the `routerType` given a `ServiceShape`, a collection of operation values
+    // (`self.operation_name`, ...), and the `Model`.
     // TODO(Decouple): Perhaps this should lean on a Rust interface.
     fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable
 
     companion object {
+        // Upgrades the core protocol to a `ServerProtocol`.
         fun fromCoreProtocol(coreCodegenContext: CoreCodegenContext, protocol: Protocol): ServerProtocol {
             val serverProtocol = when (protocol) {
                 is AwsJson -> ServerAwsJsonProtocol(coreCodegenContext, protocol)
@@ -80,15 +98,7 @@ class ServerAwsJsonProtocol(
     }
 
     override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
-        val resourceOperationShapes = service
-            .resources
-            .mapNotNull { model.getShape(it).orNull() }
-            .mapNotNull { it as? ResourceShape }
-            .flatMap { it.allOperations }
-            .mapNotNull { model.getShape(it).orNull() }
-            .mapNotNull { it as? OperationShape }
-        val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
-        val allOperationShapes = resourceOperationShapes + operationShapes
+        val allOperationShapes = allOperationShapes(service, model)
 
         // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
@@ -141,15 +151,7 @@ open class RestProtocol(
     }
 
     override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
-        val resourceOperationShapes = service
-            .resources
-            .mapNotNull { model.getShape(it).orNull() }
-            .mapNotNull { it as? ResourceShape }
-            .flatMap { it.allOperations }
-            .mapNotNull { model.getShape(it).orNull() }
-            .mapNotNull { it as? OperationShape }
-        val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
-        val allOperationShapes = resourceOperationShapes + operationShapes
+        val allOperationShapes = allOperationShapes(service, model)
 
         // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
