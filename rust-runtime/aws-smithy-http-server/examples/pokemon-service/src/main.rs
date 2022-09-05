@@ -63,6 +63,9 @@ pub async fn main() {
         .health_check_operation(health_check_operation)
         .build();
 
+    // Unchecked build does not type check whether or not an operation is set but will panic at runtime.
+    let _ = PokemonService::unchecked_builder().build::<hyper::Body>();
+
     // Setup shared state and middlewares.
     let shared_state = Arc::new(State::default());
     let app = app.layer(

@@ -266,14 +266,21 @@ where
 }
 
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
+///
+/// This does _not_ implement [`Upgradable`] purposely.
 pub struct MissingOperation;
 
+/// A marker struct indicating an [`Operation`] has not been set in a builder.
+///
+/// This does implement [`Upgradable`] but the output [`Service`] of the upgrade is a [`PanicService`], which will
+/// [`panic`] on [`Service::call`].
 pub struct DummyOperation;
 
+/// A [`Service`] which panics on [`Service::call`].
 #[derive(Clone)]
-pub struct UnreachableService;
+pub struct PanicService;
 
-impl<B> Service<http::Request<B>> for UnreachableService {
+impl<B> Service<http::Request<B>> for PanicService {
     type Response = http::Response<BoxBody>;
     type Error = Infallible;
     type Future = Ready<Result<Self::Response, Self::Error>>;
@@ -283,14 +290,14 @@ impl<B> Service<http::Request<B>> for UnreachableService {
     }
 
     fn call(&mut self, _req: Request<B>) -> Self::Future {
-        unreachable!("this operation was not set")
+        panic!("this operation was not set")
     }
 }
 
 impl<P, Op, Exts, B, Modify> Upgradable<P, Op, Exts, B, Modify> for DummyOperation {
-    type Service = UnreachableService;
+    type Service = PanicService;
 
     fn upgrade(self, _modify: &Modify) -> Self::Service {
-        UnreachableService
+        PanicService
     }
 }

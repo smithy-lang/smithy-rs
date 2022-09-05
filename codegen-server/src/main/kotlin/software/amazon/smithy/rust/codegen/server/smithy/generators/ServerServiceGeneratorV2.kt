@@ -336,7 +336,8 @@ class ServerServiceGeneratorV2(
 
                 /// Constructs a unchecked builder for [`$serviceName`].
                 ///
-                /// This will not enforce that all operations are set, however if an unset operation is used at runtime it will cause a panic.
+                /// This will not enforce that all operations are set, however if an unset operation is used at runtime
+                /// it will cause a panic.
                 pub fn unchecked_builder() -> $builderName<#{DummyGenerics:W}> {
                     $builderName {
                         #{DummyFields:W}
