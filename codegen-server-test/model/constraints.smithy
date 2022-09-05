@@ -9,97 +9,104 @@ use aws.protocols#restJson1
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
-        ConstrainedShapesOperation,
-        ConstrainedHttpBoundShapesOperation,
-        ConstrainedRecursiveShapesOperation,
-        // `httpQueryParams` and `httpPrefixHeaders` are structurually
-        // exclusive, so we need one operation per target shape type
-        // combination.
-        QueryParamsTargetingLengthMapOperation,
-        QueryParamsTargetingMapOfLengthStringOperation,
-        QueryParamsTargetingMapOfEnumStringOperation,
-        QueryParamsTargetingMapOfListOfLengthStringOperation,
-        QueryParamsTargetingMapOfSetOfLengthStringOperation,
-        QueryParamsTargetingMapOfListOfEnumStringOperation,
-        HttpPrefixHeadersTargetingLengthMapOperation,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-        // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+//      ConstrainedShapesOperation,
+//      ConstrainedHttpBoundShapesOperation,
+//      ConstrainedRecursiveShapesOperation,
+//      // `httpQueryParams` and `httpPrefixHeaders` are structurually
+//      // exclusive, so we need one operation per target shape type
+//      // combination.
+//      QueryParamsTargetingLengthMapOperation,
+//      QueryParamsTargetingMapOfLengthStringOperation,
+//      QueryParamsTargetingMapOfEnumStringOperation,
+//      QueryParamsTargetingMapOfListOfLengthStringOperation,
+//      QueryParamsTargetingMapOfSetOfLengthStringOperation,
+//      QueryParamsTargetingMapOfListOfEnumStringOperation,
+//      HttpPrefixHeadersTargetingLengthMapOperation,
+//      // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+//      // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
-        BlobStreamingOperation,
+//      BlobStreamingOperation,
+        EventStreamsOperation,
     ],
 }
 
-@http(uri: "/constrained-shapes-operation", method: "GET")
+@http(uri: "/constrained-shapes-operation", method: "POST")
 operation ConstrainedShapesOperation {
     input: ConstrainedShapesOperationInputOutput,
     output: ConstrainedShapesOperationInputOutput,
     errors: [ErrorWithLengthStringMessage]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}/{enumStringLabel}", method: "GET")
+@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}/{enumStringLabel}", method: "POST")
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
 }
 
-@http(uri: "/constrained-recursive-shapes-operation", method: "GET")
+@http(uri: "/constrained-recursive-shapes-operation", method: "POST")
 operation ConstrainedRecursiveShapesOperation {
     input: ConstrainedRecursiveShapesOperationInputOutput,
     output: ConstrainedRecursiveShapesOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-length-map", method: "GET")
+@http(uri: "/query-params-targeting-length-map", method: "POST")
 operation QueryParamsTargetingLengthMapOperation {
     input: QueryParamsTargetingLengthMapOperationInputOutput,
     output: QueryParamsTargetingLengthMapOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-length-string-operation", method: "GET")
+@http(uri: "/query-params-targeting-map-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfLengthStringOperation {
     input: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-enum-string-operation", method: "GET")
+@http(uri: "/query-params-targeting-map-of-enum-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfEnumStringOperation {
     input: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
     output: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-list-of-length-string-operation", method: "GET")
+@http(uri: "/query-params-targeting-map-of-list-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfListOfLengthStringOperation {
     input: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-set-of-length-string-operation", method: "GET")
+@http(uri: "/query-params-targeting-map-of-set-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-list-of-enum-string-operation", method: "GET")
+@http(uri: "/query-params-targeting-map-of-list-of-enum-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfListOfEnumStringOperation {
     input: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
     output: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
 }
 
-@http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "GET")
+@http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "POST")
 operation HttpPrefixHeadersTargetingLengthMapOperation {
     input: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
     output: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
 }
 
-@http(uri: "/http-prefix-headers-targeting-map-of-enum-string-operation", method: "GET")
+@http(uri: "/http-prefix-headers-targeting-map-of-enum-string-operation", method: "POST")
 operation HttpPrefixHeadersTargetingMapOfEnumStringOperation {
     input: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
     output: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
 }
 
-@http(uri: "/blob-streaming-operation", method: "GET")
+@http(uri: "/blob-streaming-operation", method: "POST")
 operation BlobStreamingOperation {
     input: BlobStreamingOperationInputOutput,
     output: BlobStreamingOperationInputOutput,
+}
+
+@http(uri: "/event-streams-operation", method: "POST")
+operation EventStreamsOperation {
+    input: EventStreamsOperationInputOutput,
+    output: EventStreamsOperationInputOutput,
 }
 
 structure ConstrainedShapesOperationInputOutput {
@@ -199,6 +206,25 @@ structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
 structure BlobStreamingOperationInputOutput {
     @httpPayload
     streamingBlob: StreamingBlob,
+}
+
+structure EventStreamsOperationInputOutput {
+    events: Event,
+}
+
+@streaming
+union Event {
+    regularMessage: EventStreamRegularMessage,
+    errorMessage: EventStreamErrorMessage,
+}
+
+structure EventStreamRegularMessage {
+    messageContent: String
+}
+
+@error("server")
+structure EventStreamErrorMessage {
+    messageContent: String
 }
 
 @streaming
