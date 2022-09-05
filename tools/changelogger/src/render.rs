@@ -28,7 +28,7 @@ pub const EXAMPLE_ENTRY: &str = r#"
 # [[smithy-rs]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | all"}
+# meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 "#;
 
@@ -82,7 +82,7 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
         "smithy-rs",
         args.smithy_rs_location
             .as_deref()
-            .unwrap_or_else(|| current_dir.as_path()),
+            .unwrap_or(current_dir.as_path()),
     )
     .context("failed to find smithy-rs repo root")?;
     let smithy_rs = GitCLI::new(&repo_root)?;

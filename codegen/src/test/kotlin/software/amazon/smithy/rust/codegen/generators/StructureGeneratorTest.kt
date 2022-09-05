@@ -58,12 +58,13 @@ class StructureGeneratorTest {
             @sensitive
             string SecretKey
 
+            @sensitive
+            string Password
+
             structure Credentials {
                 username: String,
-                @sensitive
-                password: String,
+                password: Password,
 
-                // test that sensitive can be applied directly to a member or to the shape
                 secretKey: SecretKey
             }
 

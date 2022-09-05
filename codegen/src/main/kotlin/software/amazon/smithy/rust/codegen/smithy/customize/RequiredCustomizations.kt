@@ -16,8 +16,11 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixG
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyTokenGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.ResiliencyConfigCustomization
+import software.amazon.smithy.rust.codegen.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 
 /**
  * A set of customizations that are included in all protocols.
@@ -39,11 +42,20 @@ class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
             HttpChecksumRequiredGenerator(codegenContext, operation) +
             HttpVersionListCustomization(codegenContext, operation)
 
+    override fun configCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
+    ): List<ConfigCustomization> =
+        baseCustomizations + ResiliencyConfigCustomization(codegenContext)
+
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
+        baseCustomizations + CrateVersionGenerator() +
+            SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) +
+            AllowLintsGenerator() +
+            ResiliencyReExportCustomization(codegenContext.runtimeConfig)
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`

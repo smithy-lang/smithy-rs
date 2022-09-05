@@ -1,5 +1,5 @@
 [package]
-name = "inlineable-aws"
+name = "aws-inlineable"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = """
@@ -28,8 +28,8 @@ http = "0.2.4"
 http-body = "0.4.5"
 md-5 = "0.10.1"
 ring = "0.16"
-tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1.7"
+tokio = { version = "1.8.4", features = ["full"] }
+tokio-stream = "0.1.5"
 tower = { version = "0.4", default-features = false }
 tracing = "0.1"
 
@@ -37,7 +37,7 @@ tracing = "0.1"
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
 tempfile = "3.2.0"
-tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 
 [package.metadata.docs.rs]
 all-features = true

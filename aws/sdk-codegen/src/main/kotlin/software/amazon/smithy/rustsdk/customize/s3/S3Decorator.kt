@@ -6,8 +6,13 @@
 package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -23,17 +28,24 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.protocols.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestXmlFactory
 import software.amazon.smithy.rustsdk.AwsRuntimeType
+import java.util.logging.Logger
 
 /**
  * Top level decorator for S3
  */
 class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "S3ExtendedError"
+    override val name: String = "S3"
     override val order: Byte = 0
+    private val logger: Logger = Logger.getLogger(javaClass.name)
+    private val invalidXmlRootAllowList = setOf(
+        // API returns GetObjectAttributes_Response_ instead of Output
+        ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
+    )
 
     private fun applies(serviceId: ShapeId) =
         serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
@@ -50,6 +62,17 @@ class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
             )
         }
 
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return model.letIf(applies(service.id)) {
+            ModelTransformer.create().mapShapes(model) { shape ->
+                shape.letIf(isInInvalidXmlRootAllowList(shape)) {
+                    logger.info("Adding AllowInvalidXmlRoot trait to $shape")
+                    (shape as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+                }
+            }
+        }
+    }
+
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
@@ -59,6 +82,10 @@ class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
+    private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
+        return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
+    }
 }
 
 class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {

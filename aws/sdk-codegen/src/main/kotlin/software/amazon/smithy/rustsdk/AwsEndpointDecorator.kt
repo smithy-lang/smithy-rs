@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -46,7 +47,13 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     private fun endpoints(sdkSettings: SdkSettings): ObjectNode {
         if (endpointsCache == null) {
-            val endpointsJson = sdkSettings.endpointsConfigPath.readText()
+            val endpointsJson = when (val path = sdkSettings.endpointsConfigPath) {
+                null -> (
+                    javaClass.getResource("/default-sdk-endpoints.json")
+                        ?: throw IllegalStateException("Failed to find default-sdk-endpoints.json in the JAR")
+                    ).readText()
+                else -> path.readText()
+            }
             endpointsCache = Node.parse(endpointsJson).expectObjectNode()
         }
         return endpointsCache!!
@@ -56,7 +63,10 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + EndpointConfigCustomization(codegenContext, endpoints(SdkSettings.from(codegenContext.settings)))
+        return baseCustomizations + EndpointConfigCustomization(
+            codegenContext,
+            endpoints(SdkSettings.from(codegenContext.settings)),
+        )
     }
 
     override fun operationCustomizations(
@@ -78,20 +88,35 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class EndpointConfigCustomization(private val coreCodegenContext: CoreCodegenContext, private val endpointData: ObjectNode) :
+class EndpointConfigCustomization(
+    private val coreCodegenContext: CoreCodegenContext,
+    private val endpointData: ObjectNode,
+) :
     ConfigCustomization() {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().asType().copy(name = "ResolveAwsEndpoint")
+    private val smithyEndpointResolver =
+        CargoDependency.SmithyHttp(runtimeConfig).asType().member("endpoint::ResolveEndpoint")
+    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().asType().member("Params")
+    private val endpointShim = runtimeConfig.awsEndpoint().asType().member("EndpointShim")
     private val moduleUseName = coreCodegenContext.moduleUseName()
+    private val codegenScope = arrayOf(
+        "SmithyResolver" to smithyEndpointResolver,
+        "PlaceholderParams" to placeholderEndpointParams,
+        "ResolveAwsEndpoint" to resolveAwsEndpoint,
+        "EndpointShim" to endpointShim,
+        "aws_types" to awsTypes(runtimeConfig).asType(),
+    )
+
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rust(
-                "pub (crate) endpoint_resolver: ::std::sync::Arc<dyn #T>,",
-                resolveAwsEndpoint,
+            is ServiceConfig.ConfigStruct -> rustTemplate(
+                "pub (crate) endpoint_resolver: std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>,",
+                *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rust("endpoint_resolver: Option<::std::sync::Arc<dyn #T>>,", resolveAwsEndpoint)
+                rustTemplate("endpoint_resolver: Option<std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
@@ -112,30 +137,30 @@ class EndpointConfigCustomization(private val coreCodegenContext: CoreCodegenCon
                     ///     ).build();
                     /// ```
                     pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{ResolveAwsEndpoint} + 'static) -> Self {
-                        self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
+                        self.endpoint_resolver = Some(std::sync::Arc::new(#{EndpointShim}::from_resolver(endpoint_resolver)) as _);
                         self
                     }
 
                     /// Sets the endpoint resolver to use when making requests.
                     pub fn set_endpoint_resolver(&mut self, endpoint_resolver: Option<std::sync::Arc<dyn #{ResolveAwsEndpoint}>>) -> &mut Self {
-                        self.endpoint_resolver = endpoint_resolver;
+                        self.endpoint_resolver = endpoint_resolver.map(|res|std::sync::Arc::new(#{EndpointShim}::from_arc(res) ) as _);
                         self
                     }
                     """,
-                    "ResolveAwsEndpoint" to resolveAwsEndpoint,
-                    "aws_types" to awsTypes(runtimeConfig).asType(),
+                    *codegenScope,
                 )
             ServiceConfig.BuilderBuild -> {
                 val resolverGenerator = EndpointResolverGenerator(coreCodegenContext, endpointData)
-                rust(
+                rustTemplate(
                     """
                     endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
-                        ::std::sync::Arc::new(#T())
+                        std::sync::Arc::new(#{EndpointShim}::from_resolver(#{Resolver}()))
                     ),
                     """,
-                    resolverGenerator.resolver(),
+                    *codegenScope, "Resolver" to resolverGenerator.resolver(),
                 )
             }
+            else -> emptySection
         }
     }
 }
@@ -144,14 +169,24 @@ class EndpointConfigCustomization(private val coreCodegenContext: CoreCodegenCon
 
 class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) :
     OperationCustomization() {
+    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().asType().member("Params")
+    private val codegenScope = arrayOf(
+        "PlaceholderParams" to placeholderEndpointParams,
+        "BuildError" to runtimeConfig.operationBuildError(),
+    )
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateRequest -> writable {
-                rust(
+                // insert the endpoint resolution _result_ into the bag (note that this won't bail if endpoint resolution failed)
+                rustTemplate(
                     """
-                    #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
+                    let endpoint_params = #{PlaceholderParams}::new(${section.config}.region.clone());
+                    ${section.request}.properties_mut()
+                        .insert::<aws_smithy_http::endpoint::Result>(${section.config}
+                            .endpoint_resolver
+                            .resolve_endpoint(&endpoint_params));
                     """,
-                    runtimeConfig.awsEndpoint().asType(),
+                    *codegenScope,
                 )
             }
             else -> emptySection
@@ -316,7 +351,7 @@ class EndpointResolverGenerator(coreCodegenContext: CoreCodegenContext, private 
     /**
      * Represents a partition from endpoints.json
      */
-    private inner class PartitionNode(endpointPrefix: String, val config: ObjectNode) {
+    private inner class PartitionNode(endpointPrefix: String, config: ObjectNode) {
         // the partition id/name (e.g. "aws")
         val id: String = config.expectStringMember("partition").value
 

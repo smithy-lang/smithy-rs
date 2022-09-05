@@ -9,24 +9,24 @@ use aws.protocols#restJson1
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
-//      ConstrainedShapesOperation,
-//      ConstrainedHttpBoundShapesOperation,
-//      ConstrainedRecursiveShapesOperation,
-//      // `httpQueryParams` and `httpPrefixHeaders` are structurually
-//      // exclusive, so we need one operation per target shape type
-//      // combination.
-//      QueryParamsTargetingLengthMapOperation,
-//      QueryParamsTargetingMapOfLengthStringOperation,
-//      QueryParamsTargetingMapOfEnumStringOperation,
-//      QueryParamsTargetingMapOfListOfLengthStringOperation,
-//      QueryParamsTargetingMapOfSetOfLengthStringOperation,
-//      QueryParamsTargetingMapOfListOfEnumStringOperation,
-//      HttpPrefixHeadersTargetingLengthMapOperation,
-//      // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-//      // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+      ConstrainedShapesOperation,
+      ConstrainedHttpBoundShapesOperation,
+      ConstrainedRecursiveShapesOperation,
+      // `httpQueryParams` and `httpPrefixHeaders` are structurually
+      // exclusive, so we need one operation per target shape type
+      // combination.
+      QueryParamsTargetingLengthMapOperation,
+      QueryParamsTargetingMapOfLengthStringOperation,
+      QueryParamsTargetingMapOfEnumStringOperation,
+      QueryParamsTargetingMapOfListOfLengthStringOperation,
+      QueryParamsTargetingMapOfSetOfLengthStringOperation,
+      QueryParamsTargetingMapOfListOfEnumStringOperation,
+      HttpPrefixHeadersTargetingLengthMapOperation,
+      // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+      // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
 //      BlobStreamingOperation,
-        EventStreamsOperation,
+//      EventStreamsOperation,
     ],
 }
 
@@ -209,6 +209,7 @@ structure BlobStreamingOperationInputOutput {
 }
 
 structure EventStreamsOperationInputOutput {
+    @httpPayload
     events: Event,
 }
 
@@ -366,7 +367,6 @@ structure RecursiveShapesInputOutputNested1 {
 }
 
 structure RecursiveShapesInputOutputNested2 {
-    @required
     recursiveMember: RecursiveShapesInputOutputNested1,
 }
 

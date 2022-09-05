@@ -264,7 +264,7 @@ class HttpBindingGenerator(
             let body = std::mem::replace(body, #{SdkBody}::taken());
             Ok(#{ByteStream}::new(body))
             """,
-            "ByteStream" to RuntimeType.ByteStream(runtimeConfig), "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "ByteStream" to symbolProvider.toSymbol(member), "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         )
     }
 

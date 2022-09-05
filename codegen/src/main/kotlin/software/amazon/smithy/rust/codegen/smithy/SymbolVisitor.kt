@@ -209,7 +209,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  * This is composed with other symbol visitors to handle behavior like Streaming shapes and determining the correct
  * derives for a given shape.
  */
-class SymbolVisitor(
+open class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,
     private val config: SymbolVisitorConfig,

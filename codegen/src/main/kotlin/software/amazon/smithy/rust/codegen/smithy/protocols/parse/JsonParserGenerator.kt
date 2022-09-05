@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
@@ -73,7 +74,7 @@ class JsonParserGenerator(
     private val codegenTarget = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
-    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
+    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
@@ -312,8 +313,21 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeNumber(target: NumberShape) {
-        val symbol = symbolProvider.toSymbol(target)
-        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())", "T" to symbol, *codegenScope)
+        if (target.isFloatShape) {
+            rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_f32_lossy())", *codegenScope)
+        } else if (target.isDoubleShape) {
+            rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_f64_lossy())", *codegenScope)
+        } else {
+            rustTemplate(
+                """
+                #{expect_number_or_null}(tokens.next())?
+                    .map(|v| #{NumberType}::try_from(v))
+                    .transpose()?
+                """,
+                "NumberType" to symbolProvider.toSymbol(target),
+                *codegenScope,
+            )
+        }
     }
 
     private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {

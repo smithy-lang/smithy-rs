@@ -50,27 +50,48 @@
 
 use std::ops::Deref;
 
-use crate::request::RequestParts;
+use http::StatusCode;
+use thiserror::Error;
+
+use crate::{
+    body::{empty, BoxBody},
+    request::{FromParts, RequestParts},
+    response::IntoResponse,
+};
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
 /// This extension type is set when it has been correctly determined that the request should be
 /// routed to a particular operation. The operation handler might not even get invoked because the
 /// request fails to deserialize into the modeled operation input.
+///
+/// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
 pub struct OperationExtension {
-    /// Smithy model namespace.
+    absolute: &'static str,
+
     namespace: &'static str,
-    /// Smithy operation name.
-    operation_name: &'static str,
+    name: &'static str,
+}
+
+/// An error occurred when parsing an absolute operation shape ID.
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParseError {
+    #[error(". was not found - missing namespace")]
+    MissingNamespace,
 }
 
 impl OperationExtension {
-    /// Creates a new `OperationExtension`.
-    pub fn new(namespace: &'static str, operation_name: &'static str) -> Self {
-        Self {
+    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
+    pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
+        let (namespace, name) = absolute_operation_id
+            .rsplit_once('.')
+            .ok_or(ParseError::MissingNamespace)?;
+        Ok(Self {
+            absolute: absolute_operation_id,
             namespace,
-            operation_name,
-        }
+            name,
+        })
     }
 
     /// Returns the Smithy model namespace.
@@ -79,13 +100,13 @@ impl OperationExtension {
     }
 
     /// Returns the Smithy operation name.
-    pub fn operation_name(&self) -> &'static str {
-        self.operation_name
+    pub fn name(&self) -> &'static str {
+        self.name
     }
 
-    /// Returns the current operation formatted as `<namespace>#<operation_name>`.
-    pub fn operation(&self) -> String {
-        format!("{}#{}", self.namespace, self.operation_name)
+    /// Returns the absolute operation shape ID.
+    pub fn absolute(&self) -> &'static str {
+        self.absolute
     }
 }
 
@@ -149,6 +170,30 @@ impl<T> Deref for Extension<T> {
     }
 }
 
+/// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
+#[derive(Debug, Error)]
+#[error("the `Extension` is not present in the `http::Request`")]
+pub struct MissingExtension;
+
+impl<Protocol> IntoResponse<Protocol> for MissingExtension {
+    fn into_response(self) -> http::Response<BoxBody> {
+        let mut response = http::Response::new(empty());
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        response
+    }
+}
+
+impl<Protocol, T> FromParts<Protocol> for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    type Rejection = MissingExtension;
+
+    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        parts.extensions.remove::<T>().map(Extension).ok_or(MissingExtension)
+    }
+}
+
 /// Extract an [`Extension`] from a request.
 /// This is essentially the implementation of `FromRequest` for `Extension`, but with a
 /// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
@@ -173,4 +218,28 @@ where
         .map(|x| x.clone())?;
 
     Ok(Extension(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ext_accept() {
+        let value = "com.amazonaws.ebs.CompleteSnapshot";
+        let ext = OperationExtension::new(value).unwrap();
+
+        assert_eq!(ext.absolute(), value);
+        assert_eq!(ext.namespace(), "com.amazonaws.ebs");
+        assert_eq!(ext.name(), "CompleteSnapshot");
+    }
+
+    #[test]
+    fn ext_reject() {
+        let value = "CompleteSnapshot";
+        assert_eq!(
+            OperationExtension::new(value).unwrap_err(),
+            ParseError::MissingNamespace
+        )
+    }
 }

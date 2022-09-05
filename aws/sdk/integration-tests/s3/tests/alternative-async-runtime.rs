@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_config::RetryConfig;
 use aws_sdk_s3::model::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization,
@@ -14,10 +15,9 @@ use aws_smithy_client::never::NeverConnector;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_types::timeout;
 use aws_smithy_types::tristate::TriState;
-
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 struct SmolSleep;
@@ -89,7 +89,7 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
         .build();
     let client = Client::from_conf_conn(config, conn.clone());
 
-    let now = std::time::Instant::now();
+    let now = Instant::now();
 
     let err = client
         .select_object_content()
@@ -117,7 +117,8 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
         .unwrap_err();
 
     assert_eq!(format!("{:?}", err), "TimeoutError(RequestTimeoutError { kind: \"API call (all attempts including retries)\", duration: 500ms })");
-    assert_elapsed!(now, std::time::Duration::from_secs_f32(0.5));
+    // Assert 500ms have passed with a 10ms margin of error
+    assert_elapsed!(now, Duration::from_millis(500), Duration::from_millis(10));
 
     Ok(())
 }
@@ -130,6 +131,7 @@ async fn retry_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std::
         .credentials_provider(aws_types::credentials::SharedCredentialsProvider::new(
             credentials,
         ))
+        .retry_config(RetryConfig::standard())
         .timeout_config(
             timeout::Config::new().with_api_timeouts(
                 timeout::Api::new()
@@ -144,15 +146,15 @@ async fn retry_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std::
         .send()
         .await
         .expect_err("call should fail");
-    assert_eq!(
-        conn.num_calls(),
-        3,
-        "client level timeouts should be retried"
-    );
     assert!(
         matches!(resp, SdkError::TimeoutError { .. }),
         "expected a timeout error, got: {}",
         resp
+    );
+    assert_eq!(
+        conn.num_calls(),
+        3,
+        "client level timeouts should be retried"
     );
 
     Ok(())

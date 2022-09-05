@@ -7,9 +7,7 @@
 // These tests only have access to your crate's public API.
 // See: https://doc.rust-lang.org/book/ch11-03-test-organization.html#integration-tests
 
-use std::time::Duration;
-
-use crate::helpers::{client, PokemonService};
+use crate::helpers::{client, client_http2_only, PokemonService};
 
 use async_stream::stream;
 use pokemon_service_client::{
@@ -22,7 +20,6 @@ use pokemon_service_client::{
 };
 use rand::Rng;
 use serial_test::serial;
-use tokio::time;
 
 mod helpers;
 
@@ -48,19 +45,23 @@ fn get_pokemon_to_capture() -> String {
 #[tokio::test]
 #[serial]
 async fn test_health_check_operation() {
-    let _program = PokemonService::run();
-    // Give PokémonService some time to start up.
-    time::sleep(Duration::from_millis(500)).await;
+    let _program = PokemonService::run().await;
 
     let _health_check = client().health_check_operation().send().await.unwrap();
 }
 
 #[tokio::test]
 #[serial]
+async fn test_health_check_operation_http2() {
+    // Make sure our server can serve http2
+    let _program = PokemonService::run_https().await;
+    let _health_check = client_http2_only().health_check_operation().send().await.unwrap();
+}
+
+#[tokio::test]
+#[serial]
 async fn simple_integration_test() {
-    let _program = PokemonService::run();
-    // Give PokémonService some time to start up.
-    time::sleep(Duration::from_millis(500)).await;
+    let _program = PokemonService::run().await;
 
     let service_statistics_out = client().get_server_statistics().send().await.unwrap();
     assert_eq!(0, service_statistics_out.calls_count.unwrap());
@@ -112,9 +113,7 @@ async fn simple_integration_test() {
 #[tokio::test]
 #[serial]
 async fn event_stream_test() {
-    let _program = PokemonService::run();
-    // Give PokémonService some time to start up.
-    time::sleep(Duration::from_millis(500)).await;
+    let _program = PokemonService::run().await;
 
     let mut team = vec![];
     let input_stream = stream! {

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -80,22 +81,118 @@ class PythonApplicationGenerator(
             "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
             "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
             "hyper" to PythonServerCargoDependency.Hyper.asType(),
+            "HashMap" to RustType.HashMap.RuntimeType,
+            "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
         )
 
     fun render(writer: RustWriter) {
         renderPyApplicationRustDocs(writer)
+        renderAppStruct(writer)
+        renderAppClone(writer)
+        renderPyAppTrait(writer)
+        renderAppImpl(writer)
+        renderPyMethods(writer)
+    }
+
+    fun renderAppStruct(writer: RustWriter) {
         writer.rustTemplate(
             """
             ##[#{pyo3}::pyclass]
-            ##[derive(Debug, Clone)]
+            ##[derive(Debug, Default)]
             pub struct App {
-                inner: #{SmithyPython}::PyApp
+                handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
+                context: Option<#{pyo3}::PyObject>,
+                workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
             """,
             *codegenScope,
         )
+    }
 
-        renderPyMethods(writer)
+    private fun renderAppClone(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl Clone for App {
+                fn clone(&self) -> Self {
+                    Self {
+                        handlers: self.handlers.clone(),
+                        context: self.context.clone(),
+                        workers: #{parking_lot}::Mutex::new(vec![]),
+                    }
+                }
+            }
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun renderAppImpl(writer: RustWriter) {
+        writer.rustBlockTemplate(
+            """
+            impl App
+            """,
+            *codegenScope,
+        ) {
+            rustBlockTemplate(
+                """
+                /// Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::Router].
+                pub fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::Router>
+                """,
+                *codegenScope,
+            ) {
+                rustTemplate(
+                    """
+                    let router = crate::operation_registry::OperationRegistryBuilder::default();
+                    """,
+                    *codegenScope,
+                )
+                for (operation in operations) {
+                    val operationName = symbolProvider.toSymbol(operation).name
+                    val name = operationName.toSnakeCase()
+                    rustTemplate(
+                        """
+                        let ${name}_locals = pyo3_asyncio::TaskLocals::new(event_loop);
+                        let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
+                        let router = router.$name(move |input, state| {
+                            #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
+                        });
+                        """,
+                        *codegenScope,
+                    )
+                }
+                rustTemplate(
+                    """
+                    let router: #{SmithyServer}::Router = router
+                        .build()
+                        .expect("Unable to build operation registry")
+                        .into();
+                    Ok(router)
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+    }
+
+    private fun renderPyAppTrait(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl #{SmithyPython}::PyApp for App {
+                fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
+                    &self.workers
+                }
+
+                fn context(&self) -> &Option<#{pyo3}::PyObject> {
+                    &self.context
+                }
+
+                fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
+                    &mut self.handlers
+                }
+            }
+            """,
+            *codegenScope,
+        )
     }
 
     private fun renderPyMethods(writer: RustWriter) {
@@ -113,13 +210,15 @@ class PythonApplicationGenerator(
                 pub fn new(py: #{pyo3}::Python, log_level: Option<#{SmithyPython}::LogLevel>) -> #{pyo3}::PyResult<Self> {
                     let log_level = log_level.unwrap_or(#{SmithyPython}::LogLevel::Info);
                     #{SmithyPython}::logging::setup(py, log_level)?;
-                    Ok(Self { inner: aws_smithy_http_server_python::PyApp::default() })
+                    Ok(Self::default())
                 }
                 /// Register a context object that will be shared between handlers.
-                pub fn context(&mut self, py: #{pyo3}::Python, context: #{pyo3}::PyObject) {
-                    self.inner.context(py, context)
+                ##[pyo3(text_signature = "(${'$'}self, context)")]
+                pub fn context(&mut self, context: #{pyo3}::PyObject) {
+                   self.context = Some(context);
                 }
-                /// Run the Python application.
+                /// Main entrypoint: start the server on multiple workers.
+                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]
                 pub fn run(
                     &mut self,
                     py: #{pyo3}::Python,
@@ -128,50 +227,25 @@ class PythonApplicationGenerator(
                     backlog: Option<i32>,
                     workers: Option<usize>,
                 ) -> #{pyo3}::PyResult<()> {
-                    self.build_router(py)?;
-                    self.inner.run(py, address, port, backlog, workers)
+                    use #{SmithyPython}::PyApp;
+                    self.run_server(py, address, port, backlog, workers)
+                }
+                /// Build the router and start a single worker.
+                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number)")]
+                pub fn start_worker(
+                    &mut self,
+                    py: pyo3::Python,
+                    socket: &pyo3::PyCell<aws_smithy_http_server_python::PySocket>,
+                    worker_number: isize,
+                ) -> pyo3::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    let event_loop = self.configure_python_event_loop(py)?;
+                    let router = self.build_router(event_loop)?;
+                    self.start_hyper_worker(py, socket, event_loop, router, worker_number)
                 }
                 """,
                 *codegenScope,
             )
-            rustBlockTemplate(
-                """
-                /// Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::Router].
-                pub fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
-                """,
-                *codegenScope,
-            ) {
-                rustTemplate(
-                    """
-                    let asyncio = py.import("asyncio")?;
-                    let event_loop = asyncio.call_method0("get_event_loop")?;
-                    let router = crate::operation_registry::OperationRegistryBuilder::default();
-                    """,
-                    *codegenScope,
-                )
-                for (operation in operations) {
-                    val operationName = symbolProvider.toSymbol(operation).name
-                    val name = operationName.toSnakeCase()
-                    rustTemplate(
-                        """
-                        let ${name}_locals = pyo3_asyncio::TaskLocals::new(event_loop);
-                        let handler = self.inner.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
-                        let router = router.$name(move |input, state| {
-                            #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
-                        });
-                        """,
-                        *codegenScope,
-                    )
-                }
-                rustTemplate(
-                    """
-                    let router: #{SmithyServer}::Router = router.build().expect("Unable to build operation registry").into();
-                    self.inner.router = Some(#{SmithyPython}::PyRouter(router));
-                    Ok(())
-                    """,
-                    *codegenScope,
-                )
-            }
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 val name = operationName.toSnakeCase()
@@ -179,8 +253,10 @@ class PythonApplicationGenerator(
                     """
                     /// Method to register `$name` Python implementation inside the handlers map.
                     /// It can be used as a function decorator in Python.
+                    ##[pyo3(text_signature = "(${'$'}self, func)")]
                     pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                        self.inner.register_operation(py, "$name", func)
+                        use #{SmithyPython}::PyApp;
+                        self.register_operation(py, "$name", func)
                     }
                     """,
                     *codegenScope,

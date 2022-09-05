@@ -17,7 +17,8 @@ service Config {
        ErrCollisions,
        Result,
        Option,
-       Match
+       Match,
+       RPCEcho
     ]
 }
 
@@ -32,7 +33,8 @@ service Config {
         method: "POST",
         uri: "/",
         body: "{\"as\": 5, \"async\": true}",
-        bodyMediaType: "application/json"
+        bodyMediaType: "application/json",
+        headers: {"Content-Type": "application/x-amz-json-1.1"}
     }
 ])
 operation ReservedWordsAsMembers {
@@ -44,6 +46,10 @@ operation Match {
     input: ReservedWords
 }
 
+// Should generate a PascalCased `RpcEchoInput` struct.
+operation RPCEcho {
+    input: ReservedWords
+}
 
 structure ReservedWords {
     as: Integer,
@@ -71,7 +77,8 @@ structure Type {
         method: "POST",
         uri: "/",
         body: "{\"regular_string\": \"hello!\"}",
-        bodyMediaType: "application/json"
+        bodyMediaType: "application/json",
+        headers: {"Content-Type": "application/x-amz-json-1.1"}
     }
 ])
 operation StructureNamePunning {

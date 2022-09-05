@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
@@ -39,6 +40,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -63,6 +65,7 @@ data class OperationWrapperContext(
     val shape: OperationShape,
     val outputShapeName: String,
     val xmlErrorType: RuntimeType,
+    val model: Model,
 )
 
 class XmlBindingTraitParserGenerator(
@@ -193,11 +196,12 @@ class XmlBindingTraitParserGenerator(
 
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
+                    ##[allow(unused_variables)]
                     let start_el = decoder.start_el();
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
                 if (operationShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
                     unwrappedResponseParser("builder", "decoder", "start_el", outputShape.members())
                 } else {
@@ -263,7 +267,7 @@ class XmlBindingTraitParserGenerator(
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
                 writeOperationWrapper(context) { tagName ->
                     parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
                 }
@@ -654,18 +658,27 @@ class XmlBindingTraitParserGenerator(
 
     private fun RustWriter.parseStringInner(shape: StringShape, provider: RustWriter.() -> Unit) {
         withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlError) {
-            if (!shape.hasTrait<EnumTrait>()) {
-                provider()
-                // if it's already `Cow::Owned` then `.into()` is free (vs. to_string())
-                rust(".into()")
-            } else {
+            if (shape.hasTrait<EnumTrait>()) {
                 val enumSymbol = symbolProvider.toSymbol(shape)
-                withBlock("#T::from(", ")", enumSymbol) {
-                    provider()
+                if (convertsToEnumInServer(shape)) {
+                    withBlock("#T::try_from(", ")", enumSymbol) {
+                        provider()
+                    }
+                    rustTemplate(""".map_err(|e| #{XmlError}::custom(format!("unknown variant {}", e)))?""", *codegenScope)
+                } else {
+                    withBlock("#T::from(", ")", enumSymbol) {
+                        provider()
+                    }
                 }
+            } else {
+                provider()
+                // If it's already `Cow::Owned` then `.into()` is free (as opposed to using `to_string()`).
+                rust(".into()")
             }
         }
     }
+
+    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun MemberShape.xmlName(): XmlName {
         return XmlName(xmlIndex.memberName(this))

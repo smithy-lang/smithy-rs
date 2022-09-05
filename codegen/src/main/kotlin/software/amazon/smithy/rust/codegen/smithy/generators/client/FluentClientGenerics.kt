@@ -11,6 +11,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.GenericTypeArg
+import software.amazon.smithy.rust.codegen.smithy.generators.GenericsGenerator
 
 interface FluentClientGenerics {
     /** Declaration with defaults set */
@@ -27,6 +29,9 @@ interface FluentClientGenerics {
 
     /** Bounds for generated `send()` functions */
     fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType): Writable
+
+    /** Convert this `FluentClientGenerics` into the more general `GenericsGenerator` */
+    fun toGenericsGenerator(): GenericsGenerator
 }
 
 data class FlexibleClientGenerics(
@@ -38,7 +43,7 @@ data class FlexibleClientGenerics(
     /** Declaration with defaults set */
     override val decl = writable {
         rustTemplate(
-            "<C #{c:W}, M#{m:W}, R#{r:W}>",
+            "<C#{c:W}, M#{m:W}, R#{r:W}>",
             "c" to defaultType(connectorDefault),
             "m" to defaultType(middlewareDefault),
             "r" to defaultType(retryDefault),
@@ -82,6 +87,12 @@ data class FlexibleClientGenerics(
             "Error" to error,
         )
     }
+
+    override fun toGenericsGenerator(): GenericsGenerator = GenericsGenerator(
+        GenericTypeArg("C", client.member("bounds::SmithyConnector")),
+        GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
+        GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
+    )
 
     private fun defaultType(default: RuntimeType?) = writable {
         default?.also { rust("= #T", default) }

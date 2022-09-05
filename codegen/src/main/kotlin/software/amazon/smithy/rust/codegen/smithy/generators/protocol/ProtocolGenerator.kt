@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -197,5 +198,5 @@ open class ProtocolGenerator(
         writer.format(symbolProvider.toSymbol(shape))
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        customizations.firstNotNullOfOrNull { it.retryType() }?.let { writer.format(it) } ?: "()"
+        (customizations.firstNotNullOfOrNull { it.retryType() } ?: RustType.Unit).let { writer.format(it) }
 }

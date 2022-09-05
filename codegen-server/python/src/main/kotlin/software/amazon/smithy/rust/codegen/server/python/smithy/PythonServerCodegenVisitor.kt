@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -84,9 +83,6 @@ class PythonServerCodegenVisitor(
      * This function _does not_ generate any serializers.
      */
     override fun structureShape(shape: StructureShape) {
-        if (shape.hasStreamingMember(model)) {
-            throw CodegenException("Streaming members are not supported in Python yet")
-        }
         logger.info("[python-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             // Use Python specific structure generator that adds the #[pyclass] attribute
