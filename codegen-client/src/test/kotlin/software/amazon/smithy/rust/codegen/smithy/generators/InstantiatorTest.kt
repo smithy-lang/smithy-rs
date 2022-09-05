@@ -66,6 +66,22 @@ class InstantiatorTest {
             member: WithBox,
             value: Integer
         }
+
+        structure MyStructRequired {
+            @required
+            foo: String,
+            @required
+            bar: PrimitiveInteger,
+            @required
+            baz: Integer,
+            @required
+            ts: Timestamp,
+            @required
+            byteValue: Byte
+            @required
+            union: MyUnion,
+        }
+
     """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
 
     private val symbolProvider = testSymbolProvider(model)
@@ -233,6 +249,29 @@ class InstantiatorTest {
                 )
             }
             write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
+        }
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate struct with missing required members`() {
+        val structure = model.lookup<StructureShape>("com.test#MyStructRequired")
+        val union = model.lookup<UnionShape>("com.test#MyUnion")
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
+        val data = Node.parse("{}")
+        val writer = RustWriter.forModule("model")
+        structure.renderWithModelBuilder(model, symbolProvider, writer)
+        UnionGenerator(model, symbolProvider, writer, union).render()
+        writer.test {
+            writer.withBlock("let result = ", ";") {
+                sut.render(this, structure, data, Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
+            }
+            writer.write("assert_eq!(result.foo.unwrap(), \"\");")
+            writer.write("assert_eq!(result.bar, 0);")
+            writer.write("assert_eq!(result.baz.unwrap(), 0);")
+            writer.write("assert_eq!(result.ts.unwrap(), aws_smithy_types::DateTime::from_secs(0));")
+            writer.write("assert_eq!(result.byte_value.unwrap(), 0);")
+            writer.write("assert_eq!(result.union.unwrap(), MyUnion::StringVariant(String::new()));")
         }
         writer.compileAndTest()
     }
