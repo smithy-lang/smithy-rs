@@ -65,14 +65,14 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    // / Returns the sequence of extension types: `Ext1`, ..., `ExtN`.
+    // Returns the sequence of extension types: `Ext1`, ..., `ExtN`.
     private fun extensionTypes(): Sequence<String> = sequence {
         for (index in 1..allOperationShapes.size) {
             yield("Exts$index")
         }
     }
 
-    // / Returns the sequence of field names for the builder.
+    // Returns the sequence of field names for the builder.
     private fun builderFieldNames(): Sequence<String> = sequence {
         for (operation in allOperationShapes) {
             val field = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
@@ -80,14 +80,14 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    // / Returns the sequence of operation struct names.
+    // Returns the sequence of operation struct names.
     private fun operationStructNames(): Sequence<String> = sequence {
         for (operation in allOperationShapes) {
             yield(symbolProvider.toSymbol(operation).name.toPascalCase())
         }
     }
 
-    // / Returns a `Writable` block of "field: Type" for the builder.
+    // Returns a `Writable` block of "field: Type" for the builder.
     private fun builderFields(): Writable = writable {
         val zipped = builderFieldNames().zip(builderGenerics())
         for ((name, type) in zipped) {
@@ -95,7 +95,7 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    // / Returns a `Writable` block containing all the `Handler` and `Operation` setters for the builder.
+    // Returns a `Writable` block containing all the `Handler` and `Operation` setters for the builder.
     private fun builderSetters(): Writable = writable {
         for ((index, pair) in builderFieldNames().zip(operationStructNames()).withIndex()) {
             val (fieldName, structName) = pair
@@ -177,7 +177,7 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    // / Retrurns the constraints required for the `build` method.
+    // / Returns the constraints required for the `build` method.
     private fun buildConstraints(): Writable = writable {
         for (tuple in allOperationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
             val (first, exts) = tuple
@@ -203,7 +203,7 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    // / Returns a `Writable` containing the builder struct definition and its implementations.
+    // Returns a `Writable` containing the builder struct definition and its implementations.
     private fun builder(): Writable = writable {
         val generics = (builderGenerics() + extensionTypes()).joinToString(",")
 
@@ -255,14 +255,14 @@ class ServerServiceGeneratorV2(
         )
     }
 
-    // / Returns a `Writable` comma delimited sequence of `OperationNotSet`.
+    // Returns a `Writable` comma delimited sequence of `OperationNotSet`.
     private fun notSetGenerics(): Writable = writable {
         for (index in 1..allOperationShapes.size) {
             rustTemplate("#{SmithyHttpServer}::operation::OperationNotSet,", *codegenScope)
         }
     }
 
-    // / Returns a `Writable` comma delimited sequence of `builder_field: OperationNotSet`.
+    // Returns a `Writable` comma delimited sequence of `builder_field: OperationNotSet`.
     private fun notSetFields(): Writable = writable {
         for (fieldName in builderFieldNames()) {
             rustTemplate(
@@ -272,7 +272,7 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    // / Returns a `Writable` containing the service struct definition and its implementations.
+    // Returns a `Writable` containing the service struct definition and its implementations.
     private fun struct(): Writable = writable {
         // Generate struct documentation.
         val documentation = service.getTrait<DocumentationTrait>()?.value
