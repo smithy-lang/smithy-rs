@@ -255,18 +255,18 @@ class ServerServiceGeneratorV2(
         )
     }
 
-    // Returns a `Writable` comma delimited sequence of `OperationNotSet`.
+    // Returns a `Writable` comma delimited sequence of `MissingOperation`.
     private fun notSetGenerics(): Writable = writable {
         for (index in 1..allOperationShapes.size) {
-            rustTemplate("#{SmithyHttpServer}::operation::OperationNotSet,", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::operation::MissingOperation,", *codegenScope)
         }
     }
 
-    // Returns a `Writable` comma delimited sequence of `builder_field: OperationNotSet`.
+    // Returns a `Writable` comma delimited sequence of `builder_field: MissingOperation`.
     private fun notSetFields(): Writable = writable {
         for (fieldName in builderFieldNames()) {
             rustTemplate(
-                "$fieldName: #{SmithyHttpServer}::operation::OperationNotSet,",
+                "$fieldName: #{SmithyHttpServer}::operation::MissingOperation,",
                 *codegenScope,
             )
         }
