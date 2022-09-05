@@ -106,7 +106,7 @@ class ServerServiceGeneratorV2(
                     if (innerIndex == index) {
                         rustTemplate(
                             """
-                            #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operations::$structName, H>>
+                            #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, H>>
                             """,
                             *codegenScope,
                         )
@@ -139,24 +139,24 @@ class ServerServiceGeneratorV2(
 
             rustTemplate(
                 """
-                /// Sets the [`$structName`](crate::operations::$structName) operation.
+                /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
                 /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from
-                /// [`$structName`](crate::operations::$structName) using either
+                /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
                 pub fn $fieldName<H, Exts>(self, value: H) -> $builderName<#{ReplacedGenericsService:W} ${extensionTypes().joinToString(",")}>
                 where
-                    H: #{SmithyHttpServer}::operation::Handler<crate::operations::$structName, Exts>
+                    H: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, Exts>
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
-                    self.${fieldName}_operation(crate::operations::$structName::from_handler(value))
+                    self.${fieldName}_operation(crate::operation_shape::$structName::from_handler(value))
                 }
 
-                /// Sets the [`$structName`](crate::operations::$structName) operation.
+                /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
                 /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from
-                /// [`$structName`](crate::operations::$structName) using either
+                /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
                 pub fn ${fieldName}_operation<NewOp>(self, value: NewOp) -> $builderName<${(replacedGenerics + extensionTypes()).joinToString(",")}> {
@@ -187,7 +187,7 @@ class ServerServiceGeneratorV2(
                 """
                 $type: #{SmithyHttpServer}::operation::Upgradable<
                     #{Marker},
-                    crate::operations::${symbolProvider.toSymbol(operation).name.toPascalCase()},
+                    crate::operation_shape::${symbolProvider.toSymbol(operation).name.toPascalCase()},
                     $exts,
                     B,
                     Modifier

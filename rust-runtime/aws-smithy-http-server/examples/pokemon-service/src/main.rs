@@ -16,8 +16,8 @@ use pokemon_service::{
     setup_tracing, State,
 };
 use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
-use pokemon_service_server_sdk::operations::GetPokemonSpecies;
-use pokemon_service_server_sdk::services::PokemonService;
+use pokemon_service_server_sdk::operation_shape::GetPokemonSpecies;
+use pokemon_service_server_sdk::service::PokemonService;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
