@@ -47,6 +47,7 @@ class ServerServiceGeneratorV2(
     private val serviceName = service.id.name
     private val builderName = "${serviceName}Builder"
 
+    // Calculate all `operationShape`s contained within the `ServiceShape`.
     private val resourceOperationShapes = service
         .resources
         .mapNotNull { model.getShape(it).orNull() }
@@ -57,12 +58,21 @@ class ServerServiceGeneratorV2(
     private val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
     private val allOperationShapes = resourceOperationShapes + operationShapes
 
+    // Returns the sequence of builder generics: `Op1`, ..., `OpN`.
     private fun builderGenerics(): Sequence<String> = sequence {
         for (index in 1..allOperationShapes.size) {
             yield("Op$index")
         }
     }
 
+    // / Returns the sequence of extension types: `Ext1`, ..., `ExtN`.
+    private fun extensionTypes(): Sequence<String> = sequence {
+        for (index in 1..allOperationShapes.size) {
+            yield("Exts$index")
+        }
+    }
+
+    // / Returns the sequence of field names for the builder.
     private fun builderFieldNames(): Sequence<String> = sequence {
         for (operation in allOperationShapes) {
             val field = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
@@ -70,12 +80,14 @@ class ServerServiceGeneratorV2(
         }
     }
 
+    // / Returns the sequence of operation struct names.
     private fun operationStructNames(): Sequence<String> = sequence {
         for (operation in allOperationShapes) {
             yield(symbolProvider.toSymbol(operation).name.toPascalCase())
         }
     }
 
+    // / Returns a `Writable` block of "field: Type" for the builder.
     private fun builderFields(): Writable = writable {
         val zipped = builderFieldNames().zip(builderGenerics())
         for ((name, type) in zipped) {
@@ -83,28 +95,12 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    private fun builderDef(): Writable = writable {
-        val generics = (builderGenerics() + extensionTypes().map { "$it" }).joinToString(",")
-        rustTemplate(
-            """
-            /// The service builder for [`$serviceName`].
-            ///
-            /// Constructed via [`$serviceName::builder`].
-            pub struct $builderName<$generics, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
-                #{Fields:W}
-                modifier: Modifier,
-                ##[allow(unused_parens)]
-                _exts: std::marker::PhantomData<(${extensionTypes().joinToString(",")})>
-            }
-            """,
-            "Fields" to builderFields(),
-            *codegenScope,
-        )
-    }
-
+    // / Returns a `Writable` block containing all the `Handler` and `Operation` setters for the builder.
     private fun builderSetters(): Writable = writable {
         for ((index, pair) in builderFieldNames().zip(operationStructNames()).withIndex()) {
             val (fieldName, structName) = pair
+
+            // The new generics for the handler setter, using `NewOp` where appropriate.
             val replacedGenericsService = writable {
                 for ((innerIndex, item) in builderGenerics().withIndex()) {
                     if (innerIndex == index) {
@@ -121,6 +117,7 @@ class ServerServiceGeneratorV2(
                 }
             }
 
+            // The new generics for the operation setter, using `NewOp` where appropriate.
             val replacedGenerics = builderGenerics().withIndex().map { (innerIndex, item) ->
                 if (innerIndex == index) {
                     "NewOp"
@@ -129,6 +126,7 @@ class ServerServiceGeneratorV2(
                 }
             }
 
+            // The assignment of fields, using value where appropriate.
             val switchedFields = writable {
                 for ((innerIndex, innerFieldName) in builderFieldNames().withIndex()) {
                     if (index == innerIndex) {
@@ -179,12 +177,7 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    private fun extensionTypes(): Sequence<String> = sequence {
-        for (index in 1..allOperationShapes.size) {
-            yield("Exts$index")
-        }
-    }
-
+    // / Retrurns the constraints required for the `build` method.
     private fun buildConstraints(): Writable = writable {
         for (tuple in allOperationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
             val (first, exts) = tuple
@@ -210,8 +203,11 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    private fun builderImpl(): Writable = writable {
+    // / Returns a `Writable` containing the builder struct definition and its implementations.
+    private fun builder(): Writable = writable {
         val generics = (builderGenerics() + extensionTypes()).joinToString(",")
+
+        // Generate router construction block.
         val router = protocol
             .routerConstruction(
                 service,
@@ -224,11 +220,22 @@ class ServerServiceGeneratorV2(
             )
         rustTemplate(
             """
+            /// The service builder for [`$serviceName`].
+            ///
+            /// Constructed via [`$serviceName::builder`].
+            pub struct $builderName<$generics, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
+                #{Fields:W}
+                modifier: Modifier,
+                ##[allow(unused_parens)]
+                _exts: std::marker::PhantomData<(${extensionTypes().joinToString(",")})>
+            }
+
             impl<$generics> $builderName<$generics> {
                 #{Setters:W}
             }
 
             impl<$generics, Modifier> $builderName<$generics, Modifier> {
+                /// Constructs a [`$serviceName`] from the arguments provided to the builder.
                 pub fn build<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
                     #{BuildConstraints:W}
@@ -240,6 +247,7 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
+            "Fields" to builderFields(),
             "Setters" to builderSetters(),
             "BuildConstraints" to buildConstraints(),
             "Router" to router,
@@ -247,7 +255,26 @@ class ServerServiceGeneratorV2(
         )
     }
 
-    private fun structDef(): Writable = writable {
+    // / Returns a `Writable` comma delimited sequence of `OperationNotSet`.
+    private fun notSetGenerics(): Writable = writable {
+        for (index in 1..allOperationShapes.size) {
+            rustTemplate("#{SmithyHttpServer}::operation::OperationNotSet,", *codegenScope)
+        }
+    }
+
+    // / Returns a `Writable` comma delimited sequence of `builder_field: OperationNotSet`.
+    private fun notSetFields(): Writable = writable {
+        for (fieldName in builderFieldNames()) {
+            rustTemplate(
+                "$fieldName: #{SmithyHttpServer}::operation::OperationNotSet,",
+                *codegenScope,
+            )
+        }
+    }
+
+    // / Returns a `Writable` containing the service struct definition and its implementations.
+    private fun struct(): Writable = writable {
+        // Generate struct documentation.
         val documentation = service.getTrait<DocumentationTrait>()?.value
         if (documentation != null) {
             docs(documentation.replace("#", "##"))
@@ -259,31 +286,7 @@ class ServerServiceGeneratorV2(
             pub struct $serviceName<S> {
                 router: #{SmithyHttpServer}::routing::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
-            """,
-            "Router" to protocol.routerType(),
-            "Protocol" to protocol.markerStruct(),
-            *codegenScope,
-        )
-    }
 
-    private fun notSetGenerics(): Writable = writable {
-        for (index in 1..allOperationShapes.size) {
-            rustTemplate("#{SmithyHttpServer}::operation::OperationNotSet,", *codegenScope)
-        }
-    }
-
-    private fun notSetFields(): Writable = writable {
-        for (fieldName in builderFieldNames()) {
-            rustTemplate(
-                "$fieldName: #{SmithyHttpServer}::operation::OperationNotSet,",
-                *codegenScope,
-            )
-        }
-    }
-
-    private fun structImpl(): Writable = writable {
-        rustTemplate(
-            """
             impl $serviceName<()> {
                 /// Constructs a builder for [`$serviceName`].
                 pub fn builder<${extensionTypes().joinToString(",")}>() -> $builderName<#{NotSetGenerics:W} ${extensionTypes().joinToString(",")}> {
@@ -311,19 +314,10 @@ class ServerServiceGeneratorV2(
                     }
                 }
             }
-            """,
-            "NotSetGenerics" to notSetGenerics(),
-            "NotSetFields" to notSetFields(),
-            *codegenScope,
-        )
-    }
 
-    private fun structServiceImpl(): Writable = writable {
-        rustTemplate(
-            """
             impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
             where
-                S: #{Tower}::Service<http::Request<B>, Response = http::Response<RespB>> + Clone,
+                S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
                 RespB: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + Send + 'static,
                 RespB::Error: Into<#{Tower}::BoxError>
             {
@@ -340,6 +334,10 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
+            "NotSetGenerics" to notSetGenerics(),
+            "NotSetFields" to notSetFields(),
+            "Router" to protocol.routerType(),
+            "Protocol" to protocol.markerStruct(),
             *codegenScope,
         )
     }
@@ -349,19 +347,10 @@ class ServerServiceGeneratorV2(
             """
             #{Builder:W}
 
-            #{BuilderImpl:W}
-
             #{Struct:W}
-
-            #{StructImpl:W}
-
-            #{StructServiceImpl:W}
             """,
-            "Builder" to builderDef(),
-            "BuilderImpl" to builderImpl(),
-            "Struct" to structDef(),
-            "StructImpl" to structImpl(),
-            "StructServiceImpl" to structServiceImpl(),
+            "Builder" to builder(),
+            "Struct" to struct(),
         )
     }
 }

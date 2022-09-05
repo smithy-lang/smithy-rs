@@ -34,15 +34,7 @@ class ServerOperationGenerator(
     private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
     private val operationId = operation.id
 
-    private fun renderStructDef(): Writable = writable {
-        val documentation = operation.getTrait<DocumentationTrait>()?.value
-        if (documentation != null) {
-            docs(documentation.replace("#", "##"))
-        }
-
-        rust("pub struct $operationName;")
-    }
-
+    // / Returns `std::convert::Infallible` if the model provides no errors.
     private fun operationError(): Writable = writable {
         if (operation.errors.isEmpty()) {
             rust("std::convert::Infallible")
@@ -51,7 +43,15 @@ class ServerOperationGenerator(
         }
     }
 
-    private fun renderImpl(): Writable = writable {
+    // / Returns a `Writable` containing the operation struct definition and its `OperationShape` implementation.
+    private fun operation(): Writable = writable {
+        val documentation = operation.getTrait<DocumentationTrait>()?.value
+        if (documentation != null) {
+            docs(documentation.replace("#", "##"))
+        }
+
+        rust("pub struct $operationName;")
+
         rustTemplate(
             """
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
@@ -70,12 +70,9 @@ class ServerOperationGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
-            #{Struct:W}
-
-            #{Impl:W}
+            #{Operation:W}
             """,
-            "Struct" to renderStructDef(),
-            "Impl" to renderImpl(),
+            "Operation" to operation(),
         )
         // Adds newline to end of render
         writer.rust("")
