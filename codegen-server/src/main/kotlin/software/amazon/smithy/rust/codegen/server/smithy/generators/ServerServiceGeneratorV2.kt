@@ -177,7 +177,7 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    // / Returns the constraints required for the `build` method.
+    // Returns the constraints required for the `build` method.
     private fun buildConstraints(): Writable = writable {
         for (tuple in allOperationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
             val (first, exts) = tuple
