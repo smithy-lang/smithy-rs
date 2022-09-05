@@ -205,23 +205,6 @@ impl<S, L> Operation<S, L> {
             layer: Stack::new(self.layer, layer),
         }
     }
-
-    // /// Takes the [`Operation`], containing the inner [`Service`](tower::Service) `S`, the HTTP [`Layer`] `L` and
-    // /// composes them together using [`UpgradeLayer`] for a specific protocol and [`OperationShape`].
-    // ///
-    // /// Prior to upgrade [`Operation`] is also
-    // ///
-    // /// The composition is made explicit in the method constraints and return type.
-    // pub fn upgrade<P, Op, Modify, Exts, B>(
-    //     self,
-    //     modify: Modify,
-    // ) -> <Modify::Layer as Layer<Upgrade<P, Op, Exts, B, Modify::Service>>>::Service
-    // where
-    //     Modify: ModifyBuild<P, Op, S, L>,
-    //     Layer<Upgrade<P, Op, Exts, B, S>>
-    // {
-
-    // }
 }
 
 impl<Op, S, PollError> Operation<Normalize<Op, S, PollError>> {
