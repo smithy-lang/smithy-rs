@@ -153,12 +153,19 @@ class ServerProtocolTestGenerator(
      */
     private fun renderTestHelper(writer: RustWriter) {
         // Create a tower service to perform protocol test
-        val crateName = coreCodegenContext.settings.moduleName
         val operationNames = operations.map { it.toName() }
         val operationRegistryName = "OperationRegistry"
         val operationRegistryBuilderName = "${operationRegistryName}Builder"
 
-        writer.withModule("protocol_test_helper") {
+        val moduleMeta = RustMetadata(
+            additionalAttributes = listOf(
+                Attribute.Cfg("test"),
+                Attribute.Custom("allow(dead_code)"),
+            ),
+
+            visibility = Visibility.PUBCRATE,
+        )
+        writer.withModule("protocol_test_helper", moduleMeta) {
             rustTemplate(
                 """
                 use #{Tower}::Service as _;

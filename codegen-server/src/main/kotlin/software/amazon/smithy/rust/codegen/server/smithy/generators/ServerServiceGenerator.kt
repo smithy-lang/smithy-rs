@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
@@ -38,8 +39,7 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        rustCrate.withModule(RustModule.public("operation")) { writer ->
-            writer.rust("##![allow(dead_code)]")
+        rustCrate.withModule(DefaultPublicModules["operation"]!!) { writer ->
             ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, protocolGenerator).render(writer)
         }
 
