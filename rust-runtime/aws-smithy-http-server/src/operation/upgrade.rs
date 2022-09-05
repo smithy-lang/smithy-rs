@@ -4,13 +4,15 @@
  */
 
 use std::{
-    future::Future,
+    convert::Infallible,
+    future::{Future, Ready},
     marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
 
 use futures_util::ready;
+use http::Request;
 use pin_project_lite::pin_project;
 use tower::{layer::util::Stack, Layer, Service};
 
@@ -265,3 +267,30 @@ where
 
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
 pub struct MissingOperation;
+
+pub struct DummyOperation;
+
+#[derive(Clone)]
+pub struct UnreachableService;
+
+impl<B> Service<http::Request<B>> for UnreachableService {
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _req: Request<B>) -> Self::Future {
+        unreachable!("this operation was not set")
+    }
+}
+
+impl<P, Op, Exts, B, Modify> Upgradable<P, Op, Exts, B, Modify> for DummyOperation {
+    type Service = UnreachableService;
+
+    fn upgrade(self, _modify: &Modify) -> Self::Service {
+        UnreachableService
+    }
+}

@@ -292,6 +292,23 @@ class ServerServiceGeneratorV2(
         }
     }
 
+    // Returns a `Writable` comma delimited sequence of `DummyOperation`.
+    private fun dummyGenerics(): Writable = writable {
+        for (index in 1..allOperationShapes.size) {
+            rustTemplate("#{SmithyHttpServer}::operation::DummyOperation,", *codegenScope)
+        }
+    }
+
+    // Returns a `Writable` comma delimited sequence of `builder_field: DummyOperation`.
+    private fun dummyFields(): Writable = writable {
+        for (fieldName in builderFieldNames()) {
+            rustTemplate(
+                "$fieldName: #{SmithyHttpServer}::operation::DummyOperation,",
+                *codegenScope,
+            )
+        }
+    }
+
     // Returns a `Writable` containing the service struct definition and its implementations.
     private fun struct(): Writable = writable {
         // Generate struct documentation.
@@ -312,6 +329,17 @@ class ServerServiceGeneratorV2(
                 pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
                         #{NotSetFields:W}
+                        modifier: #{SmithyHttpServer}::build_modifier::Identity,
+                        _exts: std::marker::PhantomData
+                    }
+                }
+
+                /// Constructs a unchecked builder for [`$serviceName`].
+                ///
+                /// This will not enforce that all operations are set, however if an unset operation is used at runtime it will cause a panic.
+                pub fn unchecked_builder() -> $builderName<#{DummyGenerics:W}> {
+                    $builderName {
+                        #{DummyFields:W}
                         modifier: #{SmithyHttpServer}::build_modifier::Identity,
                         _exts: std::marker::PhantomData
                     }
@@ -354,6 +382,8 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
+            "DummyGenerics" to dummyGenerics(),
+            "DummyFields" to dummyFields(),
             "NotSetGenerics" to notSetGenerics(),
             "NotSetFields" to notSetFields(),
             "Router" to protocol.routerType(),
