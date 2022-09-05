@@ -79,13 +79,13 @@ class ServerProtocolTestGenerator(
         val inputSymbol = symbolProvider.toSymbol(it.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(it.outputShape(model))
         val operationSymbol = symbolProvider.toSymbol(it)
-        val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
 
         val inputT = inputSymbol.fullName
         val t = outputSymbol.fullName
         val outputT = if (it.errors.isEmpty()) {
             t
         } else {
+            val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
             val e = errorSymbol.fullyQualifiedName()
             "Result<$t, $e>"
         }
@@ -476,6 +476,7 @@ class ServerProtocolTestGenerator(
 
     private fun checkRequest(operationShape: OperationShape, operationSymbol: Symbol, httpRequestTestCase: HttpRequestTestCase, rustWriter: RustWriter) {
         val inputShape = operationShape.inputShape(coreCodegenContext.model)
+        val outputShape = operationShape.outputShape(coreCodegenContext.model)
 
         val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
@@ -497,8 +498,17 @@ class ServerProtocolTestGenerator(
             rustWriter.write(";")
 
             checkRequestParams(inputShape, rustWriter)
-            // TODO(weihanglo): provide actual response object
-            rustWriter.rust("todo!()")
+
+            // Construct dummy output.
+            rustWriter.writeInline("let response = ")
+            instantiator.render(rustWriter, outputShape, Node.objectNode(), Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
+            rustWriter.write(";")
+
+            if (operationShape.errors.isEmpty()) {
+                rustWriter.rust("response")
+            } else {
+                rustWriter.rust("Ok(response)")
+            }
         }
     }
 

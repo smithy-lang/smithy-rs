@@ -39,7 +39,6 @@ open class ServerServiceGenerator(
      */
     fun render() {
         rustCrate.withModule(RustModule.public("operation")) { writer ->
-            // TODO(weihanglo): remove #![allow(dead_code)]
             writer.rust("##![allow(dead_code)]")
             ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, protocolGenerator).render(writer)
         }
