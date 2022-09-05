@@ -50,10 +50,10 @@ class ServerOperationGenerator(
             docs(documentation.replace("#", "##"))
         }
 
-        rust("pub struct $operationName;")
-
         rustTemplate(
             """
+            pub struct $operationName;
+
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
                 const NAME: &'static str = "${operationId.toString().replace("#", "##")}";
 
