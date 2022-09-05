@@ -6,7 +6,7 @@
 // This program is exported as a binary named `pokemon-service`.
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::{AddExtensionLayer, Router};
+use aws_smithy_http_server::{operation::OperationShapeExt, AddExtensionLayer, Router};
 use clap::Parser;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -16,6 +16,7 @@ use pokemon_service::{
     setup_tracing, State,
 };
 use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
+use pokemon_service_server_sdk::operations::GetPokemonSpecies;
 use pokemon_service_server_sdk::services::PokemonService;
 
 #[derive(Parser, Debug)]
@@ -52,8 +53,9 @@ pub async fn main() {
         .into();
 
     // New builder
+    let get_pokemon_species = GetPokemonSpecies::from_handler(get_pokemon_species);
     let app = PokemonService::builder()
-        .get_pokemon_species(get_pokemon_species)
+        .get_pokemon_species_operation(get_pokemon_species)
         .get_storage(get_storage)
         .get_server_statistics(get_server_statistics)
         .capture_pokemon_operation(capture_pokemon)
