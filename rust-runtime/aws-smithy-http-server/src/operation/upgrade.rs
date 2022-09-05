@@ -262,3 +262,6 @@ where
         layer.layer(inner)
     }
 }
+
+/// A marker struct indicating an [`Operation`] has not been set in a builder.
+pub struct MissingOperation;

@@ -100,8 +100,32 @@ class ServerServiceGeneratorV2(
         for ((index, pair) in builderFieldNames().zip(operationStructNames()).withIndex()) {
             val (fieldName, structName) = pair
 
+            // The new generics for the operation setter, using `NewOp` where appropriate.
+            val replacedOpGenerics = writable {
+                for ((innerIndex, item) in builderGenerics().withIndex()) {
+                    if (innerIndex == index) {
+                        rust("NewOp")
+                    } else {
+                        rust("$item")
+                    }
+                    rust(", ")
+                }
+            }
+
+            // The new generics for the operation setter, using `NewOp` where appropriate.
+            val replacedExtGenerics = writable {
+                for ((innerIndex, item) in extensionTypes().withIndex()) {
+                    if (innerIndex == index) {
+                        rust("NewExts")
+                    } else {
+                        rust("$item")
+                    }
+                    rust(", ")
+                }
+            }
+
             // The new generics for the handler setter, using `NewOp` where appropriate.
-            val replacedGenericsService = writable {
+            val replacedOpServiceGenerics = writable {
                 for ((innerIndex, item) in builderGenerics().withIndex()) {
                     if (innerIndex == index) {
                         rustTemplate(
@@ -114,15 +138,6 @@ class ServerServiceGeneratorV2(
                         rust("$item")
                     }
                     rust(", ")
-                }
-            }
-
-            // The new generics for the operation setter, using `NewOp` where appropriate.
-            val replacedGenerics = builderGenerics().withIndex().map { (innerIndex, item) ->
-                if (innerIndex == index) {
-                    "NewOp"
-                } else {
-                    item
                 }
             }
 
@@ -145,9 +160,9 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn $fieldName<H, Exts>(self, value: H) -> $builderName<#{ReplacedGenericsService:W} ${extensionTypes().joinToString(",")}>
+                pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{ReplacedOpServiceGenerics:W} #{ReplacedExtGenerics:W}>
                 where
-                    H: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, Exts>
+                    H: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, NewExts>
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
                     self.${fieldName}_operation(crate::operation_shape::$structName::from_handler(value))
@@ -159,7 +174,8 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<NewOp>(self, value: NewOp) -> $builderName<${(replacedGenerics + extensionTypes()).joinToString(",")}> {
+                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<#{ReplacedOpGenerics:W} #{ReplacedExtGenerics:W}>
+                {
                     $builderName {
                         #{SwitchedFields:W}
                         modifier: self.modifier,
@@ -167,8 +183,11 @@ class ServerServiceGeneratorV2(
                     }
                 }
                 """,
+                "Protocol" to protocol.markerStruct(),
                 "SwitchedFields" to switchedFields,
-                "ReplacedGenericsService" to replacedGenericsService,
+                "ReplacedOpGenerics" to replacedOpGenerics,
+                "ReplacedOpServiceGenerics" to replacedOpServiceGenerics,
+                "ReplacedExtGenerics" to replacedExtGenerics,
                 *codegenScope,
             )
 
@@ -205,6 +224,7 @@ class ServerServiceGeneratorV2(
 
     // Returns a `Writable` containing the builder struct definition and its implementations.
     private fun builder(): Writable = writable {
+        val structGenerics = (builderGenerics() + extensionTypes().map { "$it = ()" }).joinToString(",")
         val generics = (builderGenerics() + extensionTypes()).joinToString(",")
 
         // Generate router construction block.
@@ -223,7 +243,7 @@ class ServerServiceGeneratorV2(
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder`].
-            pub struct $builderName<$generics, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
+            pub struct $builderName<$structGenerics, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
                 #{Fields:W}
                 modifier: Modifier,
                 ##[allow(unused_parens)]
@@ -289,7 +309,7 @@ class ServerServiceGeneratorV2(
 
             impl $serviceName<()> {
                 /// Constructs a builder for [`$serviceName`].
-                pub fn builder<${extensionTypes().joinToString(",")}>() -> $builderName<#{NotSetGenerics:W} ${extensionTypes().joinToString(",")}> {
+                pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
                         #{NotSetFields:W}
                         modifier: #{SmithyHttpServer}::build_modifier::Identity,

@@ -235,9 +235,6 @@ impl<Op, H> Operation<IntoService<Op, H>> {
     }
 }
 
-/// A marker struct indicating an [`Operation`] has not been set in a builder.
-pub struct MissingOperation;
-
 /// The operation [`Service`](tower::Service) has two classes of failure modes - those specified by the Smithy model
 /// and those associated with [`Service::poll_ready`](tower::Service::poll_ready).
 pub enum OperationError<ModelError, PollError> {
