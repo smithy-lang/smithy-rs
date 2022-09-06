@@ -61,7 +61,7 @@ class CodegenVisitorTest {
                 FluentClientDecorator(),
                 NoOpEventStreamSigningDecorator(),
             )
-        val visitor = CodegenVisitor(ctx, codegenDecorator).apply { execute() }
+        val visitor = CodegenVisitor(ctx, codegenDecorator)
         val baselineModel = visitor.baselineTransform(model)
         baselineModel.getShapesWithTrait(ShapeId.from("smithy.api#mixin")).isEmpty() shouldBe true
     }
