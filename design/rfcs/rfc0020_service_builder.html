@@ -1,0 +1,1016 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0020: Service Builder Improvements - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">6.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">6.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">6.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">6.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">6.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">6.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">6.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">6.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">6.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">6.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html" class="active"><strong aria-hidden="true">6.20.</strong> RFC-0020: Service Builder Improvements</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">7.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-service-builder-improvements"><a class="header" href="#rfc-service-builder-improvements">RFC: Service Builder Improvements</a></h1>
+<blockquote>
+<p>Status: Accepted</p>
+</blockquote>
+<p>One might characterize <code>smithy-rs</code> as a tool for transforming a <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#service">Smithy service</a> into a <a href="https://docs.rs/tower-service/latest/tower_service/trait.Service.html">tower::Service</a> builder. A Smithy model defines behavior of the generated service partially - handlers must be passed to the builder before the <code>tower::Service</code> is fully specified. This builder structure is the primary API surface we provide to the customer, as a result, it is important that it meets their needs.</p>
+<p>This RFC proposes a new builder, deprecating the existing one, which addresses API deficiencies and takes steps to improve performance.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>Model</strong>: A <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html">Smithy Model</a>, usually pertaining to the one in use by the customer.</li>
+<li><strong>Smithy Service</strong>: The entry point of an API that aggregates <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#resource">resources</a> and <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation">operations</a> together within a Smithy model. Described in detail <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#service">here</a>.</li>
+<li><strong>Service</strong>: The <code>tower::Service</code> trait is an interface for writing network applications in a modular and reusable way. <code>Service</code>s act on requests to produce responses.</li>
+<li><strong>Service Builder</strong>: A <code>tower::Service</code> builder, generated from a Smithy service, by <code>smithy-rs</code>.</li>
+<li><strong>Middleware</strong>: Broadly speaking, middleware modify requests and responses. Concretely, these are exist as implementations of <a href="https://docs.rs/tower/latest/tower/layer/trait.Layer.html">Layer</a>/a <code>Service</code> wrapping an inner <code>Service</code>.</li>
+<li><strong>Handler</strong>: A closure defining the behavior of a particular request after routing. These are provided to the service builder to complete the description of the service.</li>
+</ul>
+<h2 id="background"><a class="header" href="#background">Background</a></h2>
+<p>To provide context for the proposal we perform a survey of the current state of affairs.</p>
+<p>The following is a reference model we will use throughout the RFC:</p>
+<pre><code class="language-smithy">operation Operation0 {
+    input: Input0,
+    output: Output0
+}
+
+operation Operation1 {
+    input: Input1,
+    output: Output1
+}
+
+@restJson1
+service Service0 {
+    operations: [
+        Operation0,
+        Operation1,
+    ]
+}
+</code></pre>
+<p>We have purposely omitted details from the model that are unimportant to describing the proposal. We also omit distracting details from the Rust snippets. Code generation is linear in the sense that, code snippets can be assumed to extend to multiple operations in a predictable way. In the case where we do want to speak generally about an operation and its associated types, we use <code>{Operation}</code>, for example <code>{Operation}Input</code> is the input type of an unspecified operation.</p>
+<p>Here is a quick example of what a customer might write when using the service builder:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn handler0(input: Operation0Input) -&gt; Operation0Output {
+    todo!()
+}
+
+async fn handler1(input: Operation1Input) -&gt; Operation1Output {
+    todo!()
+}
+
+let app: Router = OperationRegistryBuilder::default()
+    // Use the setters
+    .operation0(handler0)
+    .operation1(handler1)
+    // Convert to `OperationRegistry`
+    .build()
+    .unwrap()
+    // Convert to `Router`
+    .into();
+<span class="boring">}
+</span></code></pre></pre>
+<p>During the survey we touch on the major mechanisms used to achieve this API.</p>
+<h3 id="handlers"><a class="header" href="#handlers">Handlers</a></h3>
+<p>A core concept in the service builder is the <code>Handler</code> trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait Handler&lt;T, Input&gt; {
+    async fn call(self, req: http::Request) -&gt; http::Response;
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Its purpose is to provide an even interface over closures of the form <code>FnOnce({Operation}Input) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code> and <code>FnOnce({Operation}Input, State) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code>. It's this abstraction which allows the customers to supply both <code>async fn handler(input: {Operation}Input) -&gt; {Operation}Output</code> and <code>async fn handler(input: {Operation}Input, state: Extension&lt;S&gt;) -&gt; {Operation}Output</code> to the service builder.</p>
+<p>We generate <code>Handler</code> implementations for said closures in <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt">ServerOperationHandlerGenerator.kt</a>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;Fun, Fut&gt; Handler&lt;(), Operation0Input&gt; for Fun
+where
+    Fun: FnOnce(Operation0Input) -&gt; Fut,
+    Fut: Future&lt;Output = Operation0Output&gt;,
+{
+    async fn call(self, request: http::Request) -&gt; http::Response {
+        let input = /* Create `Operation0Input` from `request: http::Request` */;
+
+        // Use closure on the input
+        let output = self(input).await;
+
+        let response = /* Create `http::Response` from `output: Operation0Output` */
+        response
+    }
+}
+
+impl&lt;Fun, Fut&gt; Handler&lt;Extension&lt;S&gt;, Operation0Input&gt; for Fun
+where
+    Fun: FnOnce(Operation0Input, Extension&lt;S&gt;) -&gt; Fut,
+    Fut: Future&lt;Output = Operation0Output&gt;,
+{
+    async fn call(self, request: http::Request) -&gt; http::Response {
+        let input = /* Create `Operation0Input` from `request: http::Request` */;
+
+        // Use closure on the input and fetched extension data
+        let extension = Extension(request.extensions().get::&lt;T&gt;().clone());
+        let output = self(input, extension).await;
+
+        let response = /* Create `http::Response` from `output: Operation0Output` */
+        response
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Creating <code>{Operation}Input</code> from a <code>http::Request</code> and <code>http::Response</code> from a <code>{Operation}Output</code> involves protocol aware serialization/deserialization, for example, it can involve the <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html">HTTP binding traits</a>. The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5">RuntimeError</a> enumerates error cases such as serialization/deserialization failures, <code>extensions().get::&lt;T&gt;()</code> failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the <code>RuntimeError</code> to <code>http::Response</code>. The reader should make note of the influence of the model on the different sections of this procedure.</p>
+<p>The <code>request.extensions().get::&lt;T&gt;()</code> present in the <code>Fun: FnOnce(Operation0Input, Extension&lt;S&gt;) -&gt; Fut</code> implementation is the current approach to injecting state into handlers. The customer is required to apply a <a href="https://docs.rs/tower-http/latest/tower_http/add_extension/struct.AddExtensionLayer.html">AddExtensionLayer</a> to the output of the service builder so that, when the request reaches the handler, the <code>extensions().get::&lt;T&gt;()</code> will succeed.</p>
+<p>To convert the closures described above into a <code>Service</code> an <code>OperationHandler</code> is used:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct OperationHandler&lt;H, T, Input&gt; {
+    handler: H,
+}
+
+impl&lt;H, T, Input&gt; Service&lt;Request&lt;B&gt;&gt; for OperationHandler&lt;H, T, Input&gt;
+where
+    H: Handler&lt;T, I&gt;,
+{
+    type Response = http::Response;
+    type Error = Infallible;
+
+    #[inline]
+    fn poll_ready(&amp;mut self, _cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        Poll::Ready(Ok(()))
+    }
+
+    async fn call(&amp;mut self, req: Request&lt;B&gt;) -&gt; Result&lt;Self::Response, Self::Error&gt; {
+        self.handler.call(req).await.map(Ok)
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="builder"><a class="header" href="#builder">Builder</a></h3>
+<p>The service builder we provide to the customer is the <code>OperationRegistryBuilder</code>, generated from <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt">ServerOperationRegistryGenerator.kt</a>.</p>
+<p>Currently, the reference model would generate the following <code>OperationRegistryBuilder</code> and <code>OperationRegistry</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt; {
+    operation1: Option&lt;Op0&gt;,
+    operation2: Option&lt;Op1&gt;,
+}
+
+pub struct OperationRegistry&lt;Op0, In0, Op1, In1&gt; {
+    operation1: Op0,
+    operation2: Op1,
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The <code>OperationRegistryBuilder</code> includes a setter per operation, and a fallible <code>build</code> method:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;Op0, In0, Op1, In1&gt; OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt; {
+    pub fn operation0(mut self, value: Op0) -&gt; Self {
+        self.operation0 = Some(value);
+        self
+    }
+    pub fn operation1(mut self, value: Op1) -&gt; Self {
+        self.operation1 = Some(value);
+        self
+    }
+    pub fn build(
+        self,
+    ) -&gt; Result&lt;OperationRegistry&lt;Op0, In0, Op1, In1&gt;, OperationRegistryBuilderError&gt; {
+        Ok(OperationRegistry {
+            operation0: self.operation0.ok_or(/* OperationRegistryBuilderError */)?,
+            operation1: self.operation1.ok_or(/* OperationRegistryBuilderError */)?,
+        })
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The <code>OperationRegistry</code> does not include any methods of its own, however it does enjoy a <code>From&lt;OperationRegistry&gt; for Router&lt;B&gt;</code> implementation:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;B, Op0, In0, Op1, In1&gt; From&lt;OperationRegistry&lt;B, Op0, In0, Op1, In1&gt;&gt; for Router&lt;B&gt;
+where
+    Op0: Handler&lt;B, In0, Operation0Input&gt;,
+    Op1: Handler&lt;B, In1, Operation1Input&gt;,
+{
+    fn from(registry: OperationRegistry&lt;B, Op0, In0, Op1, In1&gt;) -&gt; Self {
+        let operation0_request_spec = /* Construct Operation0 routing information */;
+        let operation1_request_spec = /* Construct Operation1 routing information */;
+
+        // Convert handlers into boxed services
+        let operation0_svc = Box::new(OperationHandler::new(registry.operation0));
+        let operation1_svc = Box::new(OperationHandler::new(registry.operation1));
+
+        // Initialize the protocol specific router
+        // We demonstrate it here with `new_rest_json_router`, but note that there is a different router constructor
+        // for each protocol.
+        aws_smithy_http_server::routing::Router::new_rest_json_router(vec![
+            (
+                operation0_request_spec,
+                operation0_svc
+            ),
+            (
+                operation1_request_spec,
+                operation1_svc
+            )
+        ])
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="router"><a class="header" href="#router">Router</a></h3>
+<p>The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60">aws_smithy_http::routing::Router</a> provides the protocol aware routing of requests to their target , it exists as</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct Route {
+    service: Box&lt;dyn Service&lt;http::Request, Response = http::Response&gt;&gt;,
+}
+
+enum Routes {
+    RestXml(Vec&lt;(Route, RequestSpec)&gt;),
+    RestJson1(Vec&lt;(Route, RequestSpec)&gt;),
+    AwsJson10(TinyMap&lt;String, Route&gt;),
+    AwsJson11(TinyMap&lt;String, Route&gt;),
+}
+
+pub struct Router {
+    routes: Routes,
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>and enjoys the following <code>Service&lt;http::Request&gt;</code> implementation:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl Service&lt;http::Request&gt; for Router
+{
+    type Response = http::Response;
+    type Error = Infallible;
+
+    fn poll_ready(&amp;mut self, _: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        Poll::Ready(Ok(()))
+    }
+
+    async fn call(&amp;mut self, request: http::Request) -&gt; Result&lt;Self::Response, Self::Error&gt; {
+        match &amp;self.routes {
+            Routes::/* protocol */(routes) =&gt; {
+                let route: Result&lt;Route, _&gt; = /* perform route matching logic */;
+                match route {
+                    Ok(ok) =&gt; ok.oneshot().await,
+                    Err(err) =&gt; /* Convert routing error into http::Response */
+                }
+            }
+        }
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Along side the protocol specific constructors, <code>Router</code> includes a <code>layer</code> method. This provides a way for the customer to apply a <code>tower::Layer</code> to all routes. For every protocol, <code>Router::layer</code> has the approximately the same behavior:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let new_routes = old_routes
+    .into_iter()
+    // Apply the layer
+    .map(|route| layer.layer(route))
+    // Re-box the service, to restore `Route` type
+    .map(|svc| Box::new(svc))
+    // Collect the iterator back into a collection (`Vec` or `TinyMap`)
+    .collect();
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="comparison-to-axum"><a class="header" href="#comparison-to-axum">Comparison to Axum</a></h3>
+<p>Historically, <code>smithy-rs</code> has borrowed from <a href="https://github.com/tokio-rs/axum">axum</a>. Despite various divergences the code bases still have much in common:</p>
+<ul>
+<li>Reliance on <code>Handler</code> trait to abstract over different closure signatures:
+<ul>
+<li><a href="https://docs.rs/axum/latest/axum/handler/trait.Handler.html">axum::handler::Handler</a></li>
+<li><a href="#handlers">Handlers</a></li>
+</ul>
+</li>
+<li>A mechanism for turning <code>H: Handler</code> into a <code>tower::Service</code>:
+<ul>
+<li><a href="https://docs.rs/axum/latest/axum/handler/struct.IntoService.html">axum::handler::IntoService</a></li>
+<li><a href="#handlers">OperationHandler</a></li>
+</ul>
+</li>
+<li>A <code>Router</code> to route requests to various handlers:
+<ul>
+<li><a href="https://docs.rs/axum/latest/axum/struct.Router.html">axum::Router</a></li>
+<li><a href="#router">aws_smithy_http_server::routing::Router</a></li>
+</ul>
+</li>
+</ul>
+<p>To identify where the implementations should differ we should classify in what ways the use cases differ. There are two primary areas which we describe below.</p>
+<h4 id="extractors-and-responses"><a class="header" href="#extractors-and-responses">Extractors and Responses</a></h4>
+<p>In <code>axum</code> there is a notion of <a href="https://docs.rs/axum/latest/axum/extract/index.html">Extractor</a>, which allows the customer to easily define a decomposition of an incoming <code>http::Request</code> by specifying the arguments to the handlers. For example,</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn request(Json(payload): Json&lt;Value&gt;, Query(params): Query&lt;HashMap&lt;String, String&gt;&gt;, headers: HeaderMap) {
+    todo!()
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>is a valid handler - each argument satisfies the <a href="https://docs.rs/axum/latest/axum/extract/trait.FromRequest.html">axum::extract::FromRequest</a> trait, therefore satisfies one of <code>axum</code>s blanket <code>Handler</code> implementations:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>macro_rules! impl_handler {
+    ( $($ty:ident),* $(,)? ) =&gt; {
+        impl&lt;F, Fut, Res, $($ty,)*&gt; Handler&lt;($($ty,)*)&gt; for F
+        where
+            F: FnOnce($($ty,)*) -&gt; Fut + Clone + Send + 'static,
+            Fut: Future&lt;Output = Res&gt; + Send,
+            Res: IntoResponse,
+            $( $ty: FromRequest + Send,)*
+        {
+            fn call(self, req: http::Request) -&gt; Self::Future {
+                async {
+                    let mut req = RequestParts::new(req);
+
+                    $(
+                        let $ty = match $ty::from_request(&amp;mut req).await {
+                            Ok(value) =&gt; value,
+                            Err(rejection) =&gt; return rejection.into_response(),
+                        };
+                    )*
+
+                    let res = self($($ty,)*).await;
+
+                    res.into_response()
+                }
+            }
+        }
+    };
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The implementations of <code>Handler</code> in <code>axum</code> and <code>smithy-rs</code> follow a similar pattern - convert <code>http::Request</code> into the closure's input, run the closure, convert the output of the closure to <code>http::Response</code>.</p>
+<p>In <code>smithy-rs</code> we do not need a general notion of &quot;extractor&quot; - the <code>http::Request</code> decomposition is specified by the Smithy model, whereas in <code>axum</code> it's defined by the handlers signature. Despite the Smithy specification the customer may still want an &quot;escape hatch&quot; to allow them access to data outside of the Smithy service inputs, for this reason we should continue to support a restricted notion of extractor. This will help support use cases such as passing <a href="https://docs.rs/lambda_http/latest/lambda_http/struct.Context.html">lambda_http::Context</a> through to the handler despite it not being modeled in the Smithy model.</p>
+<p>Dual to <code>FromRequest</code> is the <a href="https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html">axum::response::IntoResponse</a> trait. This plays the role of converting the output of the handler to <code>http::Response</code>. Again, the difference between <code>axum</code> and <code>smithy-rs</code> is that <code>smithy-rs</code> has the conversion from <code>{Operation}Output</code> to <code>http::Response</code> specified by the Smithy model, whereas in <code>axum</code> the customer is free to specify a return type which implements <code>axum::response::IntoResponse</code>.</p>
+<h4 id="routing"><a class="header" href="#routing">Routing</a></h4>
+<p>The Smithy model not only specifies the <code>http::Request</code> decomposition and <code>http::Response</code> composition for a given service, it also determines the routing. The <code>From&lt;OperationRegistry&gt;</code> implementation, described in <a href="#builder">Builder</a>, yields a fully formed router based on the protocol and <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#http-trait">http traits</a> specified.</p>
+<p>This is in contrast to <code>axum</code>, where the user specifies the routing by use of various combinators included on the <code>axum::Router</code>, applied to other <code>tower::Service</code>s. In an <code>axum</code> application one might encounter the following code:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let user_routes = Router::new().route(&quot;/:id&quot;, /* service */);
+
+let team_routes = Router::new().route(&quot;/&quot;, /* service */);
+
+let api_routes = Router::new()
+    .nest(&quot;/users&quot;, user_routes)
+    .nest(&quot;/teams&quot;, team_routes);
+
+let app = Router::new().nest(&quot;/api&quot;, api_routes);
+<span class="boring">}
+</span></code></pre></pre>
+<p>Note that, in <code>axum</code> handlers are eagerly converted to a <code>tower::Service</code> (via <code>IntoService</code>) before they are passed into the <code>Router</code>. In contrast, in <code>smithy-rs</code>, handlers are passed into a builder and then the conversion to <code>tower::Service</code> is performed (via <code>OperationHandler</code>).</p>
+<p>Introducing state to handlers in <code>axum</code> is done in the same way as <code>smithy-rs</code>, described briefly in <a href="#handlers">Handlers</a> - a layer is used to insert state into incoming <code>http::Request</code>s and the <code>Handler</code> implementation pops it out of the type map layer. In <code>axum</code>, if a customer wanted to scope state to all routes within <code>/users/</code> they are able to do the following:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn handler(Extension(state): Extension&lt;/* State */&gt;) -&gt; /* Return Type */ {}
+
+let api_routes = Router::new()
+    .nest(&quot;/users&quot;, user_routes.layer(Extension(/* state */)))
+    .nest(&quot;/teams&quot;, team_routes);
+<span class="boring">}
+</span></code></pre></pre>
+<p>In <code>smithy-rs</code> a customer is only able to apply a layer around the <code>aws_smithy_http::routing::Router</code> or around every route via the <a href="#router">layer method</a> described above.</p>
+<h2 id="proposal"><a class="header" href="#proposal">Proposal</a></h2>
+<p>The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, and it is stated in the cases where an interdependency exists.</p>
+<p>Although presented as a mutation to the existing service builder, the actual implementation should exist as an entirely separate builder, living in a separate namespace, reusing code generation from the old builder, while exposing a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.</p>
+<h3 id="remove-two-step-build-procedure"><a class="header" href="#remove-two-step-build-procedure">Remove two-step build procedure</a></h3>
+<p>As described in <a href="#builder">Builder</a>, the customer is required to perform two conversions. One from <code>OperationRegistryBuilder</code> via <code>OperationRegistryBuilder::build</code>, the second from <code>OperationRegistryBuilder</code> to <code>Router</code> via the <code>From&lt;OperationRegistry&gt; for Router</code> implementation. The intermediary stop at <code>OperationRegistry</code> is not required and can be removed.</p>
+<h3 id="statically-check-for-missing-handlers"><a class="header" href="#statically-check-for-missing-handlers">Statically check for missing Handlers</a></h3>
+<p>As described in <a href="#builder">Builder</a>, the <code>OperationRegistryBuilder::build</code> method is fallible - it yields a runtime error when one of the handlers has not been set.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>    pub fn build(
+        self,
+    ) -&gt; Result&lt;OperationRegistry&lt;Op0, In0, Op1, In1&gt;, OperationRegistryBuilderError&gt; {
+        Ok(OperationRegistry {
+            operation0: self.operation0.ok_or(/* OperationRegistryBuilderError */)?,
+            operation1: self.operation1.ok_or(/* OperationRegistryBuilderError */)?,
+        })
+    }
+<span class="boring">}
+</span></code></pre></pre>
+<p>We can do away with fallibility if we allow for on <code>Op0</code>, <code>Op1</code> to switch types during build and remove the <code>Option</code> from around the fields. The <code>OperationRegistryBuilder</code> then becomes</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct OperationRegistryBuilder&lt;Op0, Op1&gt; {
+    operation_0: Op0,
+    operation_1: Op1
+}
+
+impl OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt; {
+    pub fn operation0&lt;NewOp0&gt;(mut self, value: NewOp0) -&gt; OperationRegistryBuilder&lt;NewOp0, In0, Op1, In1&gt; {
+        OperationRegistryBuilder {
+            operation0: value,
+            operation1: self.operation1
+        }
+    }
+    pub fn operation1&lt;NewOp1&gt;(mut self, value: NewOp1) -&gt; OperationRegistryBuilder&lt;Op0, In0, NewOp1, In1&gt; {
+        OperationRegistryBuilder {
+            operation0: self.operation0,
+            operation1: value
+        }
+    }
+}
+
+impl OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt;
+where
+    Op0: Handler&lt;B, In0, Operation0Input&gt;,
+    Op1: Handler&lt;B, In1, Operation1Input&gt;,
+{
+    pub fn build(self) -&gt; OperationRegistry&lt;Op0, In0, Op1, In1&gt; {
+        OperationRegistry {
+            operation0: self.operation0,
+            operation1: self.operation1,
+        }
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The customer will now get a compile time error rather than a runtime error when they fail to specify a handler.</p>
+<h3 id="switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method"><a class="header" href="#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method">Switch <code>From&lt;OperationRegistry&gt; for Router</code> to an <code>OperationRegistry::build</code> method</a></h3>
+<p>To construct a <code>Router</code>, the customer must either give a type ascription</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let app: Router = /* Service builder */.into();
+<span class="boring">}
+</span></code></pre></pre>
+<p>or be explicit about the <code>Router</code> namespace</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let app = Router::from(/* Service builder */);
+<span class="boring">}
+</span></code></pre></pre>
+<p>If we switch from a <code>From&lt;OperationRegistry&gt; for Router</code> to a <code>build</code> method on <code>OperationRegistry</code> the customer may simply</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let app = /* Service builder */.build();
+<span class="boring">}
+</span></code></pre></pre>
+<p>There already exists a <code>build</code> method taking <code>OperationRegistryBuilder</code> to <code>OperationRegistry</code>, this is removed in <a href="#remove-two-step-build-procedure">Remove two-step build procedure</a>. These two transforms pair well together for this reason.</p>
+<h3 id="operations-as-middleware-constructors"><a class="header" href="#operations-as-middleware-constructors">Operations as Middleware Constructors</a></h3>
+<p>As mentioned in <a href="#routing">Comparison to Axum: Routing</a> and <a href="#handlers">Handlers</a>, the <code>smithy-rs</code> service builder accepts handlers and only converts them into a <code>tower::Service</code> during the final conversion into a <code>Router</code>. There are downsides to this:</p>
+<ol>
+<li>The customer has no opportunity to apply middleware to a specific operation before they are all collected into <code>Router</code>. The <code>Router</code> does have a <code>layer</code> method, described in <a href="#router">Router</a>, but this applies the middleware uniformly across all operations.</li>
+<li>The builder has no way to apply middleware around customer applied middleware. A concrete example of where this would be useful is described in the <a href="rfc0018_logging_sensitive.html#middleware-position">Middleware Position</a> section of <a href="rfc0018_logging_sensitive.html">RFC: Logging in the Presence of Sensitive Data</a>.</li>
+<li>The customer has no way of expressing readiness of the underlying operation - all handlers are converted to services with <a href="https://docs.rs/tower/latest/tower/trait.Service.html#tymethod.poll_ready">Service::poll_ready</a> returning <code>Poll::Ready(Ok(()))</code>.</li>
+</ol>
+<p>The three use cases described above are supported by <code>axum</code> by virtue of the <a href="https://docs.rs/axum/latest/axum/routing/struct.Router.html#method.route">Router::route</a> method accepting a <code>tower::Service</code>. The reader should consider a similar approach where the service builder setters accept a <code>tower::Service&lt;http::Request, Response = http::Response&gt;</code> rather than the <code>Handler</code>.</p>
+<p>Throughout this section we purposely ignore the existence of handlers accepting state alongside the <code>{Operation}Input</code>, this class of handlers serve as a distraction and can be accommodated with small perturbations from each approach.</p>
+<h4 id="approach-a-customer-uses-operationhandlernew"><a class="header" href="#approach-a-customer-uses-operationhandlernew">Approach A: Customer uses <code>OperationHandler::new</code></a></h4>
+<p>It's possible to make progress with a small changeset, by requiring the customer eagerly uses <code>OperationHandler::new</code> rather than it being applied internally within <code>From&lt;OperationRegistry&gt; for Router</code> (see <a href="#handlers">Handlers</a>). The setter would then become:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct OperationRegistryBuilder&lt;Op0, Op1&gt; {
+    operation1: Option&lt;Op0&gt;,
+    operation2: Option&lt;Op1&gt;
+}
+
+impl&lt;Op0, Op1&gt; OperationRegistryBuilder&lt;Op0, Op1&gt; {
+    pub fn operation0(self, value: Op0) -&gt; Self {
+        self.operation1 = Some(value);
+        self
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The API usage would then become</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn handler0(input: Operation0Input) -&gt; Operation0Output {
+    todo!()
+}
+
+// Create a `Service&lt;http::Request, Response = http::Response, Error = Infallible&gt;` eagerly
+let svc = OperationHandler::new(handler0);
+
+// Middleware can be applied at this point
+let operation0 = /* A HTTP `tower::Layer` */.layer(op1_svc);
+
+OperationRegistryBuilder::default()
+    .operation0(operation0)
+    /* ... */
+<span class="boring">}
+</span></code></pre></pre>
+<p>Note that this requires that the <code>OperationRegistryBuilder</code> stores services, rather than <code>Handler</code>s. An unintended and superficial benefit of this is that we are able to drop <code>In{n}</code> from the <code>OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt;</code> - only <code>Op{n}</code> remains and it parametrizes each operation's <code>tower::Service</code>.</p>
+<p>It is still possible to retain the original API which accepts <code>Handler</code> by introducing the following setters:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;Op1, Op2&gt; OperationRegistryBuilder&lt;Op1, Op2&gt; {
+    fn operation0_handler&lt;H: Handler&gt;(self, handler: H) -&gt; OperationRegistryBuilder&lt;OperationHandler&lt;H&gt;, Op2&gt; {
+        OperationRegistryBuilder {
+            operation0: OperationHandler::new(handler),
+            operation1: self.operation1
+        }
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>There are two points at which the customer might want to apply middleware: around <code>tower::Service&lt;{Operation}Input, Response = {Operation}Output&gt;</code> and <code>tower::Service&lt;http::Request, Response = http::Response&gt;</code>, that is, before and after the serialization/deserialization is performed. The change described only succeeds in the latter, and therefore is only a partial solution to (1).</p>
+<p>This solves (2), the service builder may apply additional middleware around the service.</p>
+<p>This does not solve (3), as the customer is not able to provide a <code>tower::Service&lt;{Operation}Input, Response = {Operation}Output&gt;</code>.</p>
+<h4 id="approach-b-operations-as-middleware"><a class="header" href="#approach-b-operations-as-middleware">Approach B: Operations as Middleware</a></h4>
+<p>In order to achieve all three we model operations as middleware:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct Operation0&lt;S&gt; {
+    inner: S,
+}
+
+impl&lt;S&gt; Service&lt;http::Request&gt; for Operation0&lt;S&gt;
+where
+    S: Service&lt;Operation0Input, Response = Operation0Output, Error = Infallible&gt;
+{
+    type Response = http::Response;
+    type Error = Infallible;
+
+    fn poll_ready(&amp;mut self, cx: &amp;mut Context) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        // We defer to the inner service for readiness
+        self.inner.poll_ready(cx)
+    }
+
+    async fn call(&amp;mut self, request: http::Request) -&gt; Result&lt;Self::Response, Self::Error&gt; {
+        let input = /* Create `Operation0Input` from `request: http::Request` */;
+
+        self.inner.call(input).await;
+
+        let response = /* Create `http::Response` from `output: Operation0Output` */
+        response
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Notice the similarity between this and the <code>OperationHandler</code>, the only real difference being that we hold an inner service rather than a closure. In this way we have separated all model aware serialization/deserialization, we noted in <a href="#handlers">Handlers</a>, into this middleware.</p>
+<p>A consequence of this is that the user <code>Operation0</code> must have two constructors:</p>
+<ul>
+<li><code>from_service</code>, which takes a <code>tower::Service&lt;Operation0Input, Response = Operation0Output&gt;</code>.</li>
+<li><code>from_handler</code>, which takes an async <code>Operation0Input -&gt; Operation0Output</code>.</li>
+</ul>
+<p>A brief example of how this might look:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tower::util::{ServiceFn, service_fn};
+
+impl&lt;S&gt; Operation0&lt;S&gt; {
+    pub fn from_service(inner: S) -&gt; Self {
+        Self {
+            inner,
+        }
+    }
+}
+
+impl&lt;F&gt; Operation0&lt;ServiceFn&lt;F&gt;&gt; {
+    pub fn from_handler(inner: F) -&gt; Self {
+        // Using `service_fn` here isn't strictly correct - there is slight misalignment of closure signatures. This
+        // still serves to illustrate the proposal.
+        Operation0::from_service(service_fn(inner))
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The API usage then becomes:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn handler(input: Operation0Input) -&gt; Operation0Output {
+    todo!()
+}
+
+// These are both `tower::Service` and hence can have middleware applied to them
+let operation_0 = Operation0::from_handler(handler);
+let operation_1 = Operation1::from_service(/* some service */);
+
+OperationRegistryBuilder::default()
+    .operation0(operation_0)
+    .operation1(operation_1)
+    /* ... */
+<span class="boring">}
+</span></code></pre></pre>
+<h4 id="approach-c-operations-as-middleware-constructors"><a class="header" href="#approach-c-operations-as-middleware-constructors">Approach C: Operations as Middleware Constructors</a></h4>
+<p>While <a href="#approach-b-operations-as-middleware">Attempt B</a> solves all three problems, it fails to adequately model the Smithy semantics. An operation cannot uniquely define a <code>tower::Service</code> without reference to a parent Smithy service - information concerning the serialization/deserialization, error modes are all inherited from the Smithy service an operation is used within. In this way, <code>Operation0</code> should not be a standalone middleware, but become middleware once accepted by the service builder.</p>
+<p>Any solution which provides an <code>{Operation}</code> structure and wishes it to be accepted by multiple service builders must deal with this problem. We currently build one library per service and hence have duplicate structures when <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#service-closure">service closures</a> overlap. This means we wouldn't run into this problem today, but it would be a future obstruction if we wanted to reduce the amount of generated code.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tower::layer::util::{Stack, Identity};
+use tower::util::{ServiceFn, service_fn};
+
+// This takes the same form as `Operation0` defined in the previous attempt. The difference being that this is now
+// private.
+struct Service0Operation0&lt;S&gt; {
+    inner: S
+}
+
+impl&lt;S&gt; Service&lt;http::Request&gt; for ServiceOperation0&lt;S&gt;
+where
+    S: Service&lt;Operation0Input, Response = Operation0Output, Error = Infallible&gt;
+{
+    /* Same as above */
+}
+
+pub struct Operation0&lt;S, L&gt; {
+    inner: S,
+    layer: L
+}
+
+impl&lt;S&gt; Operation0&lt;S, Identity&gt; {
+    pub fn from_service(inner: S) -&gt; Self {
+        Self {
+            inner,
+            layer: Identity
+        }
+    }
+}
+
+impl&lt;F&gt; Operation0&lt;ServiceFn&lt;F&gt;, Identity&gt; {
+    pub fn from_handler(inner: F) -&gt; Self {
+        Operation0::from_service(service_fn(inner))
+    }
+}
+
+impl&lt;S, L&gt; Operation0&lt;S, L&gt; {
+    pub fn layer&lt;NewL&gt;(self, layer: L) -&gt; Operation0&lt;S, Stack&lt;L, NewL&gt;&gt; {
+        Operation0 {
+            inner: self.inner,
+            layer: Stack::new(self.layer, layer)
+        }
+    }
+
+    pub fn logging(self, /* args */) -&gt; Operation0&lt;S, Stack&lt;L, LoggingLayer&gt;&gt; {
+        Operation0 {
+            inner: self.inner,
+            layer: Stack::new(self.layer, LoggingLayer::new(/* args */))
+        }
+    }
+
+    pub fn auth(self, /* args */) -&gt; Operation0&lt;S, Stack&lt;L, AuthLayer&gt;&gt; {
+        Operation0 {
+            inner: self.inner,
+            layer: Stack::new(self.layer, /* Construct auth middleware */)
+        }
+
+    }
+}
+
+impl&lt;Op1, Op2&gt; OperationRegistryBuilder&lt;Op1, Op2&gt; {
+    pub fn operation0&lt;S, L&gt;(self, operation: Operation0&lt;S, L&gt;) -&gt; OperationRegistryBuilder&lt;&lt;L as Layer&lt;Service0Operation0&lt;S&gt;&gt;::Service, Op2&gt;
+    where
+        L: Layer&lt;Service0Operation0&lt;S&gt;&gt;
+    {
+        // Convert `Operation0` to a `tower::Service`.
+        let http_svc = Service0Operation0 { inner: operation.inner };
+        // Apply the layers
+        operation.layer(http_svc)
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Notice that we get some additional type safety here when compared to <a href="#approach-a-customer-uses-operationhandlernew">Approach A</a> and <a href="#approach-b-operations-as-middleware">Approach B</a> - <code>operation0</code> accepts a <code>Operation0</code> rather than a general <code>tower::Service</code>. We also get a namespace to include utility methods - notice the <code>logging</code> and <code>auth</code> methods.</p>
+<p>The RFC favours this approach out of all those presented.</p>
+<h4 id="approach-d-add-more-methods-to-the-service-builder"><a class="header" href="#approach-d-add-more-methods-to-the-service-builder">Approach D: Add more methods to the Service Builder</a></h4>
+<p>An alternative to <a href="#approach-c-operations-as-middleware-constructors">Approach C</a> is to simply add more methods to the service builder while internally storing a <code>tower::Service</code>:</p>
+<ul>
+<li><code>operation0_from_service</code>, accepts a <code>tower::Service&lt;Operation0Input, Response = Operation0Output&gt;</code>.</li>
+<li><code>operation0_from_handler</code>, accepts an async <code>Fn(Operation0Input) -&gt; Operation0Output</code>.</li>
+<li><code>operation0_layer</code>, accepts a <code>tower::Layer&lt;Op0&gt;</code>.</li>
+</ul>
+<p>This is functionally similar to <a href="#approach-c-operations-as-middleware-constructors">Attempt C</a> except that all composition is done internal to the service builder and the namespace exists in the method name, rather than the <code>{Operation}</code> struct.</p>
+<h3 id="service-parameterized-routers"><a class="header" href="#service-parameterized-routers">Service parameterized Routers</a></h3>
+<p>Currently the <code>Router</code> stores <code>Box&lt;dyn tower::Service&lt;http::Request, Response = http::Response&gt;</code>. As a result the <code>Router::layer</code> method, seen in <a href="#router">Router</a>, must re-box a service after every <code>tower::Layer</code> applied. The heap allocation <code>Box::new</code> itself is not cause for concern because <code>Router</code>s are typically constructed once at startup, however one might expect the indirection to regress performance when the server is running.</p>
+<p>Having the service type parameterized as <code>Router&lt;S&gt;</code>, allows us to write:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;S&gt; Router&lt;S&gt; {
+    fn layer&lt;L&gt;(self, layer: &amp;L) -&gt; Router&lt;L::Service&gt;
+    where
+        L: Layer&lt;S&gt;
+    {
+        /* Same internal implementation without boxing */
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="protocol-specific-routers"><a class="header" href="#protocol-specific-routers">Protocol specific Routers</a></h3>
+<p>Currently there is a single <code>Router</code> structure, described in <a href="#router">Router</a>, situated in the <code>rust-runtime/aws-smithy-http-server</code> crate, which is output by the service builder. This, roughly, takes the form of an <code>enum</code> listing the different protocols.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Debug)]
+enum Routes {
+    RestXml(/* Container */),
+    RestJson1(/* Container */),
+    AwsJson10(/* Container */),
+    AwsJson11(/* Container */),
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Recall the form of the <code>Service::call</code> method, given in <a href="#router">Router</a>, which involved matching on the protocol and then performing protocol specific logic.</p>
+<p>Two downsides of modelling <code>Router</code> in this way are:</p>
+<ul>
+<li><code>Router</code> is larger and has more branches than a protocol specific implementation.</li>
+<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols <code>Routes</code> would have to be extended. A synopsis of this obstruction is presented in <a href="https://github.com/awslabs/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
+</ul>
+<p>After taking the <a href="#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method">Switch <code>From&lt;OperationRegistry&gt; for Router</code> to an <code>OperationRegistry::build</code> method</a> transform, code generation is free to switch between return types based on the model. This allows for a scenario where a <code>@restJson1</code> causes the service builder to output a specific <code>RestJson1Router</code>.</p>
+<h3 id="protocol-specific-errors"><a class="header" href="#protocol-specific-errors">Protocol specific Errors</a></h3>
+<p>Currently, protocol specific routing errors are either:</p>
+<ul>
+<li>Converted to <code>RuntimeError</code>s and then <code>http::Response</code> (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118">unknown_operation</a>).</li>
+<li>Converted directly to a <code>http::Response</code> (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127">method_not_allowed</a>). This is an outlier to the common pattern.</li>
+</ul>
+<p>The <code>from_request</code> functions yield protocol specific errors which are converted to <code>RequestRejection</code>s then <code>RuntimeError</code>s (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210">ServerHttpBoundProtocolGenerator.kt</a>).</p>
+<p>In these scenarios protocol specific errors are converted into <code>RuntimeError</code> before being converted to a <code>http::Response</code> via <code>into_response</code> method.</p>
+<p>Two downsides of this are:</p>
+<ul>
+<li><code>RuntimeError</code> enumerates all possible errors across all existing protocols, so is larger than modelling the errors for a specific protocol.</li>
+<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols with differing failure modes <code>RuntimeError</code> would have to be extended. As in <a href="#protocol-specific-errors">Protocol specific Errors</a>, a synopsis of this obstruction is presented in <a href="https://github.com/awslabs/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
+</ul>
+<p>Switching from using <code>RuntimeError</code> to protocol specific errors which satisfy a common interface, <code>IntoResponse</code>, would resolve these problem.</p>
+<h3 id="type-erasure-with-the-name-of-the-smithy-service"><a class="header" href="#type-erasure-with-the-name-of-the-smithy-service">Type erasure with the name of the Smithy service</a></h3>
+<p>Currently the service builder is named <code>OperationRegistryBuilder</code>. Despite the name being model agnostic, the <code>OperationRegistryBuilder</code> mutates when the associated service mutates. Renaming <code>OperationRegistryBuilder</code> to <code>{Service}Builder</code> would reflect the relationship between the builder and the Smithy service and prevent naming conflicts if multiple service builders are to exist in the same namespace.</p>
+<p>Similarly, the output of the service builder is <code>Router</code>. This ties the output of the service builder to a structure in <code>rust-runtime</code>. Introducing a type erasure here around <code>Router</code> using a newtype named <code>{Service}</code> would:</p>
+<ul>
+<li>Ensure we are free to change the implementation of <code>{Service}</code> without changing the <code>Router</code> implementation.</li>
+<li>Hide the router type, which is determined by the protocol specified in the model.</li>
+<li>Allow us to put a <code>builder</code> method on <code>{Service}</code> which returns <code>{Service}Builder</code>.</li>
+</ul>
+<p>This is compatible with <a href="#protocol-specific-routers">Protocol specific Routers</a>, we simply newtype the protocol specific router rather than <code>Router</code>.</p>
+<p>With both of these changes the API would take the form:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let service_0: Service0 = Service0::builder()
+    /* use the setters */
+    .build()
+    .unwrap()
+    .into();
+<span class="boring">}
+</span></code></pre></pre>
+<p>With <a href="#remove-two-step-build-procedure">Remove two-step build procedure</a>, <a href="#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method">Switch <code>From&lt;OperationRegistry&gt; for Router</code> to a <code>OperationRegistry::build</code> method</a>, and <a href="#statically-check-for-missing-handlers">Statically check for missing Handlers</a> we obtain the following API:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let service_0: Service0 = Service0::builder()
+    /* use the setters */
+    .build();
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="combined-proposal"><a class="header" href="#combined-proposal">Combined Proposal</a></h3>
+<p>A combination of all the proposed transformations results in the following API:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct Context {
+    /* fields */
+}
+
+async fn handler(input: Operation0Input) -&gt; Operation0Output {
+    todo!()
+}
+
+async fn handler_with_ext(input: Operation0Input, extension: Extension&lt;Context&gt;) -&gt; Operation0Output {
+    todo!()
+}
+
+struct Operation1Service {
+    /* fields */
+}
+
+impl Service&lt;Operation1Input&gt; for Operation1Service {
+    type Response = Operation1Output;
+
+    /* implementation */
+}
+
+struct Operation1ServiceWithExt {
+    /* fields */
+}
+
+impl Service&lt;(Operation1Input, Extension&lt;Context&gt;)&gt; for Operation1Service {
+    type Response = Operation1Output;
+
+    /* implementation */
+}
+
+// Create an operation from a handler
+let operation_0 = Operation0::from_handler(handler);
+
+// Create an operation from a handler with extension
+let operation_0 = Operation::from_handler(handler_with_ext);
+
+// Create an operation from a `tower::Service`
+let operation_1_svc = Operation1Service { /* initialize */ };
+let operation_1 = Operation::from_service(operation_1_svc);
+
+// Create an operation from a `tower::Service` with extension
+let operation_1_svc = Operation1ServiceWithExtension { /* initialize */ };
+let operation_1 = Operation::from_service(operation_1_svc);
+
+// Apply a layer
+let operation_0 = operation_0.layer(/* layer */);
+
+// Use the service builder
+let service_0 = Service0::builder()
+    .operation_0(operation_0)
+    .operation_1(operation_1)
+    .build();
+<span class="boring">}
+</span></code></pre></pre>
+<p>A toy implementation of the combined proposal is presented in <a href="https://github.com/hlbarber/service-builder/pull/1">this PR</a>.</p>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Add protocol specific routers to <code>rust-runtime/aws-smithy-http-server</code>.
+<ul>
+<li><a href="https://github.com/awslabs/smithy-rs/pull/1666">https://github.com/awslabs/smithy-rs/pull/1666</a></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add middleware primitives and error types to <code>rust-runtime/aws-smithy-http-server</code>.
+<ul>
+<li><a href="https://github.com/awslabs/smithy-rs/pull/1679">https://github.com/awslabs/smithy-rs/pull/1679</a></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+Add code generation which outputs new service builder.</li>
+<li><input disabled="" type="checkbox"/>
+Deprecate <code>OperationRegistryBuilder</code>, <code>OperationRegistry</code> and <code>Router</code>.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0019_event_streams_errors.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../contributing/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0019_event_streams_errors.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../contributing/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript" src="../static/mermaid.min.js"></script>
+        <script type="text/javascript" src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
