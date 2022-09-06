@@ -34,7 +34,7 @@ class ServerOperationGenerator(
     private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
     private val operationId = operation.id
 
-    // Returns `std::convert::Infallible` if the model provides no errors.
+    /** Returns `std::convert::Infallible` if the model provides no errors. */
     private fun operationError(): Writable = writable {
         if (operation.errors.isEmpty()) {
             rust("std::convert::Infallible")
@@ -43,7 +43,7 @@ class ServerOperationGenerator(
         }
     }
 
-    // Returns a `Writable` containing the operation struct definition and its `OperationShape` implementation.
+    /** Returns a `Writable` containing the operation struct definition and its `OperationShape` implementation. */
     private fun operation(): Writable = writable {
         val documentation = operation.getTrait<DocumentationTrait>()?.value
         if (documentation != null) {
