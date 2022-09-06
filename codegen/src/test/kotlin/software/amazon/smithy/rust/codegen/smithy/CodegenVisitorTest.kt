@@ -15,9 +15,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizatio
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
-import java.nio.file.Files.createDirectory
-import java.nio.file.Files.write
-import java.nio.file.StandardOpenOption
 import kotlin.io.path.createDirectory
 import kotlin.io.path.writeText
 
