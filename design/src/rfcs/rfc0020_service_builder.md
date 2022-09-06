@@ -1,6 +1,6 @@
 # RFC: Service Builder Improvements
 
-> Status: RFC
+> Status: Accepted
 
 One might characterize `smithy-rs` as a tool for transforming a [Smithy service](https://awslabs.github.io/smithy/1.0/spec/core/model.html#service) into a [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) builder. A Smithy model defines behavior of the generated service partially - handlers must be passed to the builder before the `tower::Service` is fully specified. This builder structure is the primary API surface we provide to the customer, as a result, it is important that it meets their needs.
 

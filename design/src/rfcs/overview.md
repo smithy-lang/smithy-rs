@@ -29,3 +29,4 @@
 - [RFC-0017: Customizable Client Operations](./rfc0017_customizable_client_operations.md)
 - [RFC-0018: Logging in the Presence of Sensitive Data](./rfc0018_logging_sensitive.md)
 - [RFC-0019: Event Streams Errors](./rfc0019_event_streams_errors.md)
+- [RFC-0020: Service Builder Improvements](./rfc0020_service_builder.md)
