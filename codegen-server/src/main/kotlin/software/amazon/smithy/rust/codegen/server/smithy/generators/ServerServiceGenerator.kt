@@ -7,8 +7,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
@@ -70,7 +73,16 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule.public("operation_shape", hidden = true),
+            RustModule(
+                "operation_shape",
+                RustMetadata(
+                    visibility = Visibility.PUBLIC,
+                    additionalAttributes = listOf(
+                        Attribute.DocHidden,
+                    ),
+                ),
+                null,
+            ),
         ) { writer ->
             for (operation in operations) {
                 ServerOperationGenerator(coreCodegenContext, operation).render(writer)
@@ -79,7 +91,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule.public("service", hidden = true),
+            RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) { writer ->
             val serverProtocol = ServerProtocol.fromCoreProtocol(coreCodegenContext, protocol)
             ServerServiceGeneratorV2(

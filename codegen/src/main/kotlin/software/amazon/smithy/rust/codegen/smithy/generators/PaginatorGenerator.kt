@@ -79,7 +79,6 @@ class PaginatorGenerator private constructor(
         "paginator",
         RustMetadata(visibility = Visibility.PUBLIC),
         documentation = "Paginators for the service",
-        false,
     )
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
