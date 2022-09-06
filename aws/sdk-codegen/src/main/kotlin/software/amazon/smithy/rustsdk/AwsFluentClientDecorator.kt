@@ -74,7 +74,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override val bounds = writable { }
 
     /** Bounds for generated `send()` functions */
-    override fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType): Writable = writable { }
+    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryPolicy: Any): Writable = writable { }
 
     override fun toGenericsGenerator(): GenericsGenerator {
         return GenericsGenerator()

@@ -66,7 +66,7 @@ class FluentClientGenerator(
         client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType(),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryPolicyType: RuntimeType? = null,
+    private val retryPolicyType: Any = RustType.Unit,
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -274,7 +274,6 @@ class FluentClientGenerator(
                     "client" to clientDep.asType(),
                     "bounds" to generics.bounds,
                 ) {
-                    val inputType = symbolProvider.toSymbol(operation.inputShape(model))
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
 
@@ -322,14 +321,14 @@ class FluentClientGenerator(
                         "OperationOutput" to outputType,
                         "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
                         "SdkSuccess" to runtimeConfig.smithyHttp().member("result::SdkSuccess"),
-                        "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
+                        "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryPolicyType),
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),
-                            retryPolicyType ?: RustType.Unit,
+                            retryPolicyType,
                             generics.toGenericsGenerator(),
                         ),
                     )
-                    PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
+                    PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryPolicyType)?.also { paginatorType ->
                         rustTemplate(
                             """
                             /// Create a paginator for this request
