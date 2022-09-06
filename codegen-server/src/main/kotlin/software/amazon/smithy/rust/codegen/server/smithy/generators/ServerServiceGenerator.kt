@@ -84,7 +84,6 @@ open class ServerServiceGenerator(
             val serverProtocol = ServerProtocol.fromCoreProtocol(coreCodegenContext, protocol)
             ServerServiceGeneratorV2(
                 coreCodegenContext,
-                coreCodegenContext.serviceShape,
                 serverProtocol,
             ).render(writer)
         }

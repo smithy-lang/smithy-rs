@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ResourceShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -26,7 +25,6 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class ServerServiceGeneratorV2(
     coreCodegenContext: CoreCodegenContext,
-    private val service: ServiceShape,
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
@@ -42,6 +40,7 @@ class ServerServiceGeneratorV2(
     private val model = coreCodegenContext.model
     private val symbolProvider = coreCodegenContext.symbolProvider
 
+    private val service = coreCodegenContext.serviceShape
     private val serviceName = service.id.name
     private val builderName = "${serviceName}Builder"
 
