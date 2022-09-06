@@ -1,7 +1,7 @@
 RFC: Customizable Client Operations
 ===================================
 
-> Status: Accepted
+> Status: Implemented
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
@@ -190,9 +190,9 @@ that would conflict with the new function, so adding it would not be a breaking 
 Changes Checklist
 -----------------
 
-- [ ] Create `CustomizableOperation` as an inlinable, and code generate it into `client` so that it has access to `Handle`
-- [ ] Code generate the `customize` method on fluent builders
-- [ ] Update the `RustReservedWords` class to include `customize`
-- [ ] Add ability to mutate the HTTP request on `Operation`
+- [x] Create `CustomizableOperation` as an inlinable, and code generate it into `client` so that it has access to `Handle`
+- [x] Code generate the `customize` method on fluent builders
+- [x] Update the `RustReservedWords` class to include `customize`
+- [x] Add ability to mutate the HTTP request on `Operation`
 - [ ] Add examples for both approaches
 - [ ] Comment on older discussions asking about how to do this with this improved approach

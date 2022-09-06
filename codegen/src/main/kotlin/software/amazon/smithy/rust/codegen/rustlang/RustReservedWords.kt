@@ -150,6 +150,7 @@ object RustReservedWords : ReservedWords {
         "abstract",
         "become",
         "box",
+        "customize",
         "do",
         "final",
         "macro",
