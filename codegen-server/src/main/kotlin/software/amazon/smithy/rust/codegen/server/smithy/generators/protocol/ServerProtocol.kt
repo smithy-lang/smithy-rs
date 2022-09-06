@@ -125,7 +125,8 @@ class ServerAwsJsonProtocol(
             """
             #{Router}::from_iter([#{Pairs:W}])
             """,
-            "Router" to routerType(), "Pairs" to pairs,
+            "Router" to routerType(),
+            "Pairs" to pairs,
         )
     }
 }
@@ -184,7 +185,8 @@ open class RestProtocol(
             """
             #{Router}::from_iter([#{Pairs:W}])
             """,
-            "Router" to routerType(), "Pairs" to pairs,
+            "Router" to routerType(),
+            "Pairs" to pairs,
         )
     }
 }
