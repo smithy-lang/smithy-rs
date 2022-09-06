@@ -38,22 +38,24 @@ fun allOperationShapes(service: ServiceShape, model: Model): List<OperationShape
 }
 
 interface ServerProtocol {
-    // Returns the core `Protocol`.
+    /** Returns the core `Protocol`. */
     fun coreProtocol(): Protocol
 
-    // Returns the Rust marker struct enjoying `OperationShape`.
+    /** Returns the Rust marker struct enjoying `OperationShape`. */
     fun markerStruct(): RuntimeType
 
-    // Returns the Rust router type.
+    /** Returns the Rust router type. */
     fun routerType(): RuntimeType
 
-    // Returns the construction of the `routerType` given a `ServiceShape`, a collection of operation values
-    // (`self.operation_name`, ...), and the `Model`.
     // TODO(Decouple): Perhaps this should lean on a Rust interface.
+    /**
+     * Returns the construction of the `routerType` given a `ServiceShape`, a collection of operation values
+     * (`self.operation_name`, ...), and the `Model`.
+     */
     fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable
 
     companion object {
-        // Upgrades the core protocol to a `ServerProtocol`.
+        /** Upgrades the core protocol to a `ServerProtocol`. */
         fun fromCoreProtocol(coreCodegenContext: CoreCodegenContext, protocol: Protocol): ServerProtocol {
             val serverProtocol = when (protocol) {
                 is AwsJson -> ServerAwsJsonProtocol(coreCodegenContext, protocol)

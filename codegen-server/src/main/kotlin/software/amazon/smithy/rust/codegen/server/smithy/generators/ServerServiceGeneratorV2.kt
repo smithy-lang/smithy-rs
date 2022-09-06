@@ -153,10 +153,8 @@ class ServerServiceGeneratorV2(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
-                /// This should be an [`Operation`](#{SmithyHttpServer}::operation::Operation) created from
-                /// [`$structName`](crate::operation_shape::$structName) using either
-                /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
-                /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
+                /// This should be a closure satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
+                /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
                 pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{ReplacedOpServiceGenerics:W} #{ReplacedExtGenerics:W}>
                 where
                     H: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, NewExts>
@@ -188,7 +186,7 @@ class ServerServiceGeneratorV2(
                 *codegenScope,
             )
 
-            // Adds newline to between setters
+            // Adds newline between setters.
             rust("")
         }
     }

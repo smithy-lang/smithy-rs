@@ -68,7 +68,7 @@ open class ServerServiceGenerator(
             renderOperationRegistry(writer, operations)
         }
 
-        // TODO(Temporary): Remove, this is temporary.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
             RustModule.public("operation_shape", hidden = true),
         ) { writer ->
@@ -77,7 +77,7 @@ open class ServerServiceGenerator(
             }
         }
 
-        // TODO(Temporary): Remove, this is temporary.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
             RustModule.public("service", hidden = true),
         ) { writer ->
