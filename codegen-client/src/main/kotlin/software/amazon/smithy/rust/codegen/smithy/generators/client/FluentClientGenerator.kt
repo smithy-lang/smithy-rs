@@ -67,7 +67,8 @@ class FluentClientGenerator(
         client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType(),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryPolicy: Writable = RustType.Unit.writable,
+    private val retryPolicy: Writable = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
+        .member("retry::DefaultResponseClassifier").writable,
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =

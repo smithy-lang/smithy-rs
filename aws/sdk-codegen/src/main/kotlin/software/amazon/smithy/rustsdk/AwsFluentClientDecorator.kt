@@ -98,7 +98,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
-            retryPolicy = runtimeConfig.awsHttp().asType().member("retry::AwsErrorRetryPolicy").writable,
+            retryPolicy = runtimeConfig.awsHttp().asType().member("retry::AwsResponseClassifier").writable,
         ).render(rustCrate)
         rustCrate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
             renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)

@@ -5,7 +5,7 @@
 
 use aws_sdk_dynamodb as dynamodb;
 
-use aws_http::retry::AwsErrorRetryPolicy;
+use aws_http::retry::AwsResponseClassifier;
 use aws_sdk_dynamodb::input::CreateTableInput;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
@@ -155,7 +155,7 @@ where
 async fn wait_for_ready_table(
     table_name: &str,
     conf: &Config,
-) -> Operation<DescribeTable, WaitForReadyTable<AwsErrorRetryPolicy>> {
+) -> Operation<DescribeTable, WaitForReadyTable<AwsResponseClassifier>> {
     let operation = DescribeTableInput::builder()
         .table_name(table_name)
         .build()

@@ -5,6 +5,7 @@
 
 use crate::body::SdkBody;
 use crate::property_bag::{PropertyBag, SharedPropertyBag};
+use crate::retry::DefaultResponseClassifier;
 use aws_smithy_types::date_time::DateTimeFormatError;
 use http::uri::InvalidUri;
 use std::borrow::Cow;
@@ -232,12 +233,12 @@ impl<H, R> Operation<H, R> {
 }
 
 impl<H> Operation<H, ()> {
-    pub fn new(request: Request, response_handler: H) -> Self {
+    pub fn new(request: Request, response_handler: H) -> Operation<H, DefaultResponseClassifier> {
         Operation {
             request,
             parts: Parts {
                 response_handler,
-                retry_policy: (),
+                retry_policy: DefaultResponseClassifier::new(),
                 metadata: None,
             },
         }
