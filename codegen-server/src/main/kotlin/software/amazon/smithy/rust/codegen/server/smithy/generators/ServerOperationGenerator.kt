@@ -42,8 +42,7 @@ class ServerOperationGenerator(
         }
     }
 
-    /** Returns a `Writable` containing the operation struct definition and its `OperationShape` implementation. */
-    private fun operation(): Writable = writable {
+    fun render(writer: RustWriter) {
         documentShape(operation, model)
 
         rustTemplate(
@@ -60,15 +59,6 @@ class ServerOperationGenerator(
             """,
             "Error" to operationError(),
             *codegenScope,
-        )
-    }
-
-    fun render(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            #{Operation:W}
-            """,
-            "Operation" to operation(),
         )
         // Adds newline to end of render
         writer.rust("")
