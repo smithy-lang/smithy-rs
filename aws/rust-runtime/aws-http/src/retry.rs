@@ -97,9 +97,17 @@ mod test {
     use aws_smithy_http::result::{SdkError, SdkSuccess};
     use aws_smithy_http::retry::ClassifyResponse;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
+    use std::fmt;
     use std::time::Duration;
 
+    #[derive(Debug)]
     struct UnmodeledError;
+    impl fmt::Display for UnmodeledError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "UnmodeledError")
+        }
+    }
+    impl std::error::Error for UnmodeledError {}
 
     struct CodedError {
         code: &'static str,
@@ -241,6 +249,23 @@ mod test {
         assert_eq!(
             policy.classify(make_err(UnmodeledError, test_response).as_ref()),
             RetryKind::Explicit(Duration::from_millis(5000))
+        );
+    }
+
+    #[test]
+    fn classify_response_error() {
+        let policy = AwsResponseClassifier::new();
+        assert_eq!(
+            policy.classify(
+                Result::<SdkSuccess<()>, SdkError<UnmodeledError>>::Err(SdkError::ResponseError {
+                    err: Box::new(UnmodeledError),
+                    raw: operation::Response::new(
+                        http::Response::new("OK").map(|b| SdkBody::from(b))
+                    ),
+                })
+                .as_ref()
+            ),
+            RetryKind::Error(ErrorKind::TransientError)
         );
     }
 

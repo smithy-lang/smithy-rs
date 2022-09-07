@@ -31,6 +31,8 @@ impl DefaultResponseClassifier {
     /// Matches on the given `result` and, if possible, returns the underlying cause and the operation response
     /// that can be used for further classification logic. Otherwise, it returns a `RetryKind` that should be used
     /// for the result.
+    //
+    // IMPORTANT: This function is used by the AWS SDK in `aws-http` for the SDK's own response classification logic
     #[doc(hidden)]
     pub fn try_extract_err_response<'a, T, E>(
         result: Result<&T, &'a SdkError<E>>,
@@ -48,7 +50,8 @@ impl DefaultResponseClassifier {
                     Err(RetryKind::UnretryableFailure)
                 }
             }
-            Err(_) => Err(RetryKind::UnretryableFailure),
+            Err(SdkError::ResponseError { .. }) => Err(RetryKind::Error(ErrorKind::TransientError)),
+            Err(SdkError::ConstructionFailure(_)) => Err(RetryKind::UnretryableFailure),
         }
     }
 }
@@ -80,8 +83,16 @@ mod test {
     use crate::result::{SdkError, SdkSuccess};
     use crate::retry::ClassifyResponse;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
+    use std::fmt;
 
+    #[derive(Debug)]
     struct UnmodeledError;
+    impl fmt::Display for UnmodeledError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "UnmodeledError")
+        }
+    }
+    impl std::error::Error for UnmodeledError {}
 
     struct CodedError {
         code: &'static str,
@@ -173,6 +184,23 @@ mod test {
         assert_eq!(
             policy.classify(make_err(ModeledRetries, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ClientError)
+        );
+    }
+
+    #[test]
+    fn classify_response_error() {
+        let policy = DefaultResponseClassifier::new();
+        assert_eq!(
+            policy.classify(
+                Result::<SdkSuccess<()>, SdkError<UnmodeledError>>::Err(SdkError::ResponseError {
+                    err: Box::new(UnmodeledError),
+                    raw: operation::Response::new(
+                        http::Response::new("OK").map(|b| SdkBody::from(b))
+                    ),
+                })
+                .as_ref()
+            ),
+            RetryKind::Error(ErrorKind::TransientError)
         );
     }
 
