@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.util.PANIC
-import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.orNull
 
 fun allOperationShapes(service: ServiceShape, model: Model): List<OperationShape> {
@@ -101,11 +100,10 @@ class ServerAwsJsonProtocol(
         val pairs = writable {
             for ((operation, operationValue) in allOperationShapes.zip(operationValues)) {
                 val operationName = symbolProvider.toSymbol(operation).name
-                val key = "$serviceName.$operationName".dq()
                 rustTemplate(
                     """
                     (
-                        String::from($key),
+                        String::from(""$serviceName.$operationName""),
                         #{SmithyHttpServer}::routing::Route::new(#{OperationValue:W})
                     ),
                     """,
