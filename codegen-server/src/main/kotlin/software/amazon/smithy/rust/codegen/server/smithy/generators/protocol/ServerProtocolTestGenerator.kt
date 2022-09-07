@@ -58,6 +58,8 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
 
+private const val PROTOCOL_TEST_HELPER_MODULE_NAME = "protocol_test_helper"
+
 /**
  * Generate protocol tests for an operation
  */
@@ -72,10 +74,9 @@ class ServerProtocolTestGenerator(
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val operationIndex = OperationIndex.of(coreCodegenContext.model)
 
-    private val index = TopDownIndex.of(coreCodegenContext.model)
-    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+    private val operations = TopDownIndex.of(coreCodegenContext.model).getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
 
-    private val operationInputOutputTypes = operations.associate {
+    private val operationInputOutputTypes = operations.associateWith {
         val inputSymbol = symbolProvider.toSymbol(it.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(it.outputShape(model))
         val operationSymbol = symbolProvider.toSymbol(it)
@@ -85,12 +86,12 @@ class ServerProtocolTestGenerator(
         val outputT = if (it.errors.isEmpty()) {
             t
         } else {
-            val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
-            val e = errorSymbol.fullyQualifiedName()
+            val errorType = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+            val e = errorType.fullyQualifiedName()
             "Result<$t, $e>"
         }
 
-        Pair(it, Pair(inputT, outputT))
+        inputT to outputT
     }
 
     private val instantiator = with(coreCodegenContext) {
@@ -164,17 +165,17 @@ class ServerProtocolTestGenerator(
 
             visibility = Visibility.PUBCRATE,
         )
-        writer.withModule("protocol_test_helper", moduleMeta) {
+        writer.withModule(PROTOCOL_TEST_HELPER_MODULE_NAME, moduleMeta) {
             rustTemplate(
                 """
                 use #{Tower}::Service as _;
 
-                pub(crate) type F<Input, Output> = fn(Input) -> std::pin::Pin<Box<dyn std::future::Future<Output = Output> + Send>>;
+                pub(crate) type Fun<Input, Output> = fn(Input) -> std::pin::Pin<Box<dyn std::future::Future<Output = Output> + Send>>;
 
                 type RegistryBuilder = crate::operation_registry::$operationRegistryBuilderName<#{Hyper}::Body, ${
                 operations.map {
                     val (inputT, outputT) = operationInputOutputTypes[it]!!
-                    "F<$inputT, $outputT>, ()"
+                    "Fun<$inputT, $outputT>, ()"
                 }.joinToString(", ")
                 }>;
 
@@ -182,22 +183,19 @@ class ServerProtocolTestGenerator(
                     crate::operation_registry::$operationRegistryBuilderName::default()
                         ${operations.mapIndexed { idx, operationShape ->
                     val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
-                    ".${operationNames[idx]}((|_| Box::pin(async { todo!() })) as F<$inputT, $outputT> )"
+                    ".${operationNames[idx]}((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )"
                 }.joinToString("\n")}
                 }
 
-                pub(crate) async fn validate_request(
+                pub(crate) async fn build_router_and_make_request(
                     http_request: #{Http}::request::Request<#{SmithyHttpServer}::body::Body>,
                     f: &dyn Fn(RegistryBuilder) -> RegistryBuilder,
                 ) {
-                    let router: #{Router} = f(create_operation_registry_builder())
+                    let mut router: #{Router} = f(create_operation_registry_builder())
                         .build()
                         .expect("unable to build operation registry")
                         .into();
-                    _ = router.into_make_service()
-                        .call(())
-                        .await
-                        .expect("unable to get a router")
+                    _ = router
                         .call(http_request)
                         .await
                         .expect("unable to make an HTTP request");
@@ -238,13 +236,14 @@ class ServerProtocolTestGenerator(
                 visibility = Visibility.PRIVATE,
             )
             writer.withModule(testModuleName, moduleMeta) {
-                renderAllTestCases(operationShape, operationSymbol, allTests)
+                renderAllTestCases(operationShape, allTests)
             }
         }
     }
 
-    private fun RustWriter.renderAllTestCases(operationShape: OperationShape, operationSymbol: Symbol, allTests: List<TestCase>) {
+    private fun RustWriter.renderAllTestCases(operationShape: OperationShape, allTests: List<TestCase>) {
         allTests.forEach {
+            val operationSymbol = symbolProvider.toSymbol(operationShape)
             renderTestCaseBlock(it, this) {
                 when (it) {
                     is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase, operationShape, operationSymbol)
@@ -484,36 +483,34 @@ class ServerProtocolTestGenerator(
         val inputShape = operationShape.inputShape(coreCodegenContext.model)
         val outputShape = operationShape.outputShape(coreCodegenContext.model)
 
-        val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
-        val helperNamespace = "crate::operation::protocol_test_helper"
         rustWriter.withBlock(
             """
-            $helperNamespace::validate_request(
+            super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
                 http_request,
                 &|builder| {
                     builder.${operationShape.toName()}((|input| Box::pin(async move {
             """,
 
-            "})) as $helperNamespace::F<$inputT, $outputT>)}).await",
+            "})) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)}).await",
 
         ) {
             // Construct expected request.
-            rustWriter.writeInline("let expected = ")
-            instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
-            rustWriter.write(";")
+            rustWriter.withBlock("let expected = ", ";") {
+                instantiator.render(this, inputShape, httpRequestTestCase.params)
+            }
 
             checkRequestParams(inputShape, rustWriter)
 
             // Construct a dummy response.
-            rustWriter.writeInline("let response = ")
-            instantiator.render(rustWriter, outputShape, Node.objectNode(), Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
-            rustWriter.write(";")
+            rustWriter.withBlock("let response = ", ";") {
+                instantiator.render(this, outputShape, Node.objectNode(), Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
+            }
 
             if (operationShape.errors.isEmpty()) {
-                rustWriter.rust("response")
+                rustWriter.write("response")
             } else {
-                rustWriter.rust("Ok(response)")
+                rustWriter.write("Ok(response)")
             }
         }
     }

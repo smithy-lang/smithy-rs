@@ -232,8 +232,8 @@ class Instantiator(
 
         val variant = if (ctx.defaultsForRequiredFields && data.members.isEmpty()) {
             val (name, memberShape) = shape.allMembers.entries.first()
-            val shape = model.expectShape(memberShape.target)
-            Node.from(name) to fillDefaultValue(shape)
+            val targetShape = model.expectShape(memberShape.target)
+            Node.from(name) to fillDefaultValue(targetShape)
         } else {
             check(data.members.size == 1)
             val entry = data.members.iterator().next()
@@ -296,8 +296,8 @@ class Instantiator(
                     memberShape.isRequired && !data.members.containsKey(Node.from(name))
                 }
                 .forEach { (_, memberShape) ->
-                    val shape = model.expectShape(memberShape.target)
-                    renderMemberHelper(memberShape, fillDefaultValue(shape))
+                    val targetShape = model.expectShape(memberShape.target)
+                    renderMemberHelper(memberShape, fillDefaultValue(targetShape))
                 }
         }
 
@@ -317,27 +317,21 @@ class Instantiator(
      * Warning: this method does not take into account any constraint traits attached to the shape.
      */
     private fun fillDefaultValue(shape: Shape): Node = when (shape) {
-        // Compound Shapes
+        // Aggregate shapes.
         is StructureShape -> Node.objectNode()
         is UnionShape -> Node.objectNode()
-
-        // Collections
-        is ListShape -> Node.arrayNode()
+        is CollectionShape -> Node.arrayNode()
         is MapShape -> Node.objectNode()
-        is SetShape -> Node.arrayNode()
 
         is MemberShape -> throw CodegenException("Unable to handle member shape `$shape`. Please provide target shape instead")
 
-        // Wrapped Shapes
+        // Simple Shapes
         is TimestampShape -> Node.from(0) // Number node for timestamp
 
         is BlobShape -> Node.from("") // String node for bytes
-
-        // Simple Shapes
         is StringShape -> Node.from("")
         is NumberShape -> Node.from(0)
         is BooleanShape -> Node.from(false)
-        // TODO(weihanglo): how to handle document shape properly?
         is DocumentShape -> Node.objectNode()
         else -> throw CodegenException("Unrecognized shape `$shape`")
     }
