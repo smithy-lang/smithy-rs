@@ -186,3 +186,21 @@ message = "Smithy IDL v2 mixins are now supported"
 references = ["smithy-rs#1680"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
 author = "ogudavid"
+
+[[smithy-rs]]
+message = "Generated clients now retry transient errors without replacing the retry policy."
+references = ["smithy-rs#1715", "smithy-rs#1717"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`ClassifyResponse` is no longer implemented for the unit type."
+references = ["smithy-rs#1715", "smithy-rs#1717"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `SdkError::ResponseError`, typically caused by a connection terminating before the full response is received, is now treated as a transient failure and retried."
+references = ["aws-sdk-rust#303", "smithy-rs#1717"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
