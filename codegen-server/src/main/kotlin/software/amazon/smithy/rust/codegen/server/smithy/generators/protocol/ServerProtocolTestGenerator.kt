@@ -160,7 +160,7 @@ class ServerProtocolTestGenerator(
         val moduleMeta = RustMetadata(
             additionalAttributes = listOf(
                 Attribute.Cfg("test"),
-                Attribute.Custom("allow(dead_code)"),
+                Attribute.AllowDeadCode,
             ),
 
             visibility = Visibility.PUBCRATE,
