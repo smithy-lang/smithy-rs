@@ -75,4 +75,36 @@ internal class RustTypeParametersTest {
 
         writer.toString() shouldContain "'<()>'"
     }
+
+    @Test
+    fun `join iterable`() {
+        val writer = RustWriter.forModule("model")
+        listOf(writable("A"), writable("B"), writable("C")).join("-")(writer)
+        listOf(writable("D"), writable("E"), writable("F")).join(writable("+"))(writer)
+        writer.toString() shouldContain "A-B-CD+E+F"
+    }
+
+    @Test
+    fun `join array`() {
+        val writer = RustWriter.forModule("model")
+        arrayOf(writable("A"), writable("B"), writable("C")).join("-")(writer)
+        arrayOf(writable("D"), writable("E"), writable("F")).join(writable("+"))(writer)
+        writer.toString() shouldContain "A-B-CD+E+F"
+    }
+
+    @Test
+    fun `join sequence`() {
+        val writer = RustWriter.forModule("model")
+        sequence {
+            yield(writable("A"))
+            yield(writable("B"))
+            yield(writable("C"))
+        }.join("-")(writer)
+        sequence {
+            yield(writable("D"))
+            yield(writable("E"))
+            yield(writable("F"))
+        }.join(writable("+"))(writer)
+        writer.toString() shouldContain "A-B-CD+E+F"
+    }
 }
