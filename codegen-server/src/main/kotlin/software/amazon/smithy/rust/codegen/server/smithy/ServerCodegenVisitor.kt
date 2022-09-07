@@ -158,6 +158,11 @@ open class ServerCodegenVisitor(
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+
+        // TODO Traverse the model and error out if:
+        //  * constraint traits on event streams are used.
+        //  * constraint traits on streaming blob are used.
+        //  * constraint trait precedence is used.
     }
 
     /**

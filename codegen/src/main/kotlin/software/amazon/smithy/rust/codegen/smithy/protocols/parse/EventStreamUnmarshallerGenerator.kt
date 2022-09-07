@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -35,6 +36,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -225,18 +227,19 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallEventHeader(member: MemberShape) {
-        val memberName = symbolProvider.toMemberName(member)
-        withBlock("builder = builder.$memberName(", ");") {
-            when (val target = model.expectShape(member.target)) {
-                is BooleanShape -> rustTemplate("#{expect_fns}::expect_bool(header)?", *codegenScope)
-                is ByteShape -> rustTemplate("#{expect_fns}::expect_byte(header)?", *codegenScope)
-                is ShortShape -> rustTemplate("#{expect_fns}::expect_int16(header)?", *codegenScope)
-                is IntegerShape -> rustTemplate("#{expect_fns}::expect_int32(header)?", *codegenScope)
-                is LongShape -> rustTemplate("#{expect_fns}::expect_int64(header)?", *codegenScope)
-                is BlobShape -> rustTemplate("#{expect_fns}::expect_byte_array(header)?", *codegenScope)
-                is StringShape -> rustTemplate("#{expect_fns}::expect_string(header)?", *codegenScope)
-                is TimestampShape -> rustTemplate("#{expect_fns}::expect_timestamp(header)?", *codegenScope)
-                else -> throw IllegalStateException("unsupported event stream header shape type: $target")
+        withBlock("builder = builder.${member.deserializerBuilderSetterName(codegenTarget)}(", ");") {
+            conditionalBlock("Some(", ")", member.isOptional) {
+                when (val target = model.expectShape(member.target)) {
+                    is BooleanShape -> rustTemplate("#{expect_fns}::expect_bool(header)?", *codegenScope)
+                    is ByteShape -> rustTemplate("#{expect_fns}::expect_byte(header)?", *codegenScope)
+                    is ShortShape -> rustTemplate("#{expect_fns}::expect_int16(header)?", *codegenScope)
+                    is IntegerShape -> rustTemplate("#{expect_fns}::expect_int32(header)?", *codegenScope)
+                    is LongShape -> rustTemplate("#{expect_fns}::expect_int64(header)?", *codegenScope)
+                    is BlobShape -> rustTemplate("#{expect_fns}::expect_byte_array(header)?", *codegenScope)
+                    is StringShape -> rustTemplate("#{expect_fns}::expect_string(header)?", *codegenScope)
+                    is TimestampShape -> rustTemplate("#{expect_fns}::expect_timestamp(header)?", *codegenScope)
+                    else -> throw IllegalStateException("unsupported event stream header shape type: $target")
+                }
             }
         }
     }
@@ -259,23 +262,24 @@ class EventStreamUnmarshallerGenerator(
                 *codegenScope,
             )
         }
-        val memberName = symbolProvider.toMemberName(member)
-        withBlock("builder = builder.$memberName(", ");") {
-            when (target) {
-                is BlobShape -> {
-                    rustTemplate("#{Blob}::new(message.payload().as_ref())", *codegenScope)
-                }
-                is StringShape -> {
-                    rustTemplate(
-                        """
-                        std::str::from_utf8(message.payload())
-                            .map_err(|_| #{Error}::Unmarshalling("message payload is not valid UTF-8".into()))?
-                        """,
-                        *codegenScope,
-                    )
-                }
-                is UnionShape, is StructureShape -> {
-                    renderParseProtocolPayload(member)
+        withBlock("builder = builder.${member.deserializerBuilderSetterName(codegenTarget)}(", ");") {
+            conditionalBlock("Some(", ")", member.isOptional) {
+                when (target) {
+                    is BlobShape -> {
+                        rustTemplate("#{Blob}::new(message.payload().as_ref())", *codegenScope)
+                    }
+                    is StringShape -> {
+                        rustTemplate(
+                            """
+                            std::str::from_utf8(message.payload())
+                                .map_err(|_| #{Error}::Unmarshalling("message payload is not valid UTF-8".into()))?
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                    is UnionShape, is StructureShape -> {
+                        renderParseProtocolPayload(member)
+                    }
                 }
             }
         }
@@ -283,12 +287,11 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
         val parser = protocol.structuredDataParser(operationShape).payloadParser(member)
-        val memberName = symbolProvider.toMemberName(member)
         rustTemplate(
             """
             #{parser}(&message.payload()[..])
                 .map_err(|err| {
-                    #{Error}::Unmarshalling(format!("failed to unmarshall $memberName: {}", err))
+                    #{Error}::Unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
                 })?
             """,
             "parser" to parser,

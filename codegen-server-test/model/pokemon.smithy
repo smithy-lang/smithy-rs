@@ -100,7 +100,6 @@ structure InvalidPokeballError {
 }
 @error("server")
 structure MasterBallUnsuccessful {
-    @required
     message: String,
 }
 @error("client")
