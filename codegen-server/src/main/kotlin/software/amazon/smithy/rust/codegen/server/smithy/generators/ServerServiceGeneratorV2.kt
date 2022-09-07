@@ -173,7 +173,6 @@ class ServerServiceGeneratorV2(
                 {
                     $builderName {
                         #{SwitchedFields:W}
-                        modifier: self.modifier,
                         _exts: std::marker::PhantomData
                     }
                 }
@@ -205,7 +204,6 @@ class ServerServiceGeneratorV2(
                     crate::operation_shape::${symbolProvider.toSymbol(operation).name.toPascalCase()},
                     $exts,
                     B,
-                    Modifier
                 >,
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
@@ -229,7 +227,7 @@ class ServerServiceGeneratorV2(
                 service,
                 builderFieldNames()
                     .map {
-                        writable { rustTemplate("self.$it.upgrade(&self.modifier)") }
+                        writable { rustTemplate("self.$it.upgrade()") }
                     }
                     .asIterable(),
                 model,
@@ -239,9 +237,8 @@ class ServerServiceGeneratorV2(
             /// The service builder for [`$serviceName`].
             ///
             /// Constructed via [`$serviceName::builder`].
-            pub struct $builderName<$structGenerics, Modifier = #{SmithyHttpServer}::build_modifier::Identity> {
+            pub struct $builderName<$structGenerics> {
                 #{Fields:W}
-                modifier: Modifier,
                 ##[allow(unused_parens)]
                 _exts: std::marker::PhantomData<(${extensionTypes().joinToString(",")})>
             }
@@ -250,7 +247,7 @@ class ServerServiceGeneratorV2(
                 #{Setters:W}
             }
 
-            impl<$generics, Modifier> $builderName<$generics, Modifier> {
+            impl<$generics> $builderName<$generics> {
                 /// Constructs a [`$serviceName`] from the arguments provided to the builder.
                 pub fn build<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
@@ -304,7 +301,6 @@ class ServerServiceGeneratorV2(
                 pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
                         #{NotSetFields:W}
-                        modifier: #{SmithyHttpServer}::build_modifier::Identity,
                         _exts: std::marker::PhantomData
                     }
                 }

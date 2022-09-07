@@ -11,8 +11,6 @@
 pub(crate) mod macros;
 
 pub mod body;
-#[doc(hidden)]
-pub mod build_modifier;
 pub(crate) mod error;
 pub mod extension;
 #[doc(hidden)]
