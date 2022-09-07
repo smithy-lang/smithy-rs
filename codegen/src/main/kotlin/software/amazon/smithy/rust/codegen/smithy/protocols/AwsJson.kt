@@ -129,7 +129,7 @@ class AwsJsonSerializerGenerator(
 }
 
 open class AwsJson(
-    private val coreCodegenContext: CoreCodegenContext,
+    val coreCodegenContext: CoreCodegenContext,
     private val awsJsonVersion: AwsJsonVersion,
 ) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig

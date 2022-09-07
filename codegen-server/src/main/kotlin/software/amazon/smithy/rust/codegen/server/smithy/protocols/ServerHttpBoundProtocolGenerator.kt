@@ -120,7 +120,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
-    private val serverProtocol = ServerProtocol.fromCoreProtocol(codegenContext, protocol)
+    private val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),

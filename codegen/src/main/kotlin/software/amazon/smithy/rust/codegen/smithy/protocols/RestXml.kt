@@ -53,7 +53,7 @@ class RestXmlFactory(
     }
 }
 
-open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protocol {
+open class RestXml(val coreCodegenContext: CoreCodegenContext) : Protocol {
     private val restXml = coreCodegenContext.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(

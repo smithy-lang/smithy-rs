@@ -95,7 +95,7 @@ class ServerAwsJsonSerializerGenerator(
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 
 class ServerAwsJson(
-    private val coreCodegenContext: CoreCodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val awsJsonVersion: AwsJsonVersion,
 ) : AwsJson(coreCodegenContext, awsJsonVersion) {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
