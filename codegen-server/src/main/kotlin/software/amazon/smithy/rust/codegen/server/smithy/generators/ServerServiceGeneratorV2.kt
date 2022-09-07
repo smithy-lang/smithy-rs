@@ -330,7 +330,7 @@ class ServerServiceGeneratorV2(
             where
                 S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
                 RespB: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + Send + 'static,
-                RespB::Error: Into<#{Tower}::BoxError>
+                RespB::Error: Into<Box<dyn std::error::Error + Send + Sync>>
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
                 type Error = S::Error;
