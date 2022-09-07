@@ -146,13 +146,12 @@ class ServerProtocolTestGenerator(
     }
 
     /**
-     * Render a test helper module that help
+     * Render a test helper module to:
      *
-     * - generate dynamic builder for each handler, and
-     * - construct a tower service to exercise each test case.
+     * - generate a dynamic builder for each handler, and
+     * - construct a Tower service to exercise each test case.
      */
     private fun renderTestHelper(writer: RustWriter) {
-        // Create a tower service to perform protocol test
         val operationNames = operations.map { it.toName() }
         val operationRegistryName = "OperationRegistry"
         val operationRegistryBuilderName = "${operationRegistryName}Builder"
@@ -499,14 +498,14 @@ class ServerProtocolTestGenerator(
             "})) as $helperNamespace::F<$inputT, $outputT>)}).await",
 
         ) {
-            // Construct expected request
+            // Construct expected request.
             rustWriter.writeInline("let expected = ")
             instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
             rustWriter.write(";")
 
             checkRequestParams(inputShape, rustWriter)
 
-            // Construct dummy output.
+            // Construct a dummy response.
             rustWriter.writeInline("let response = ")
             instantiator.render(rustWriter, outputShape, Node.objectNode(), Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
             rustWriter.write(";")

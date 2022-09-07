@@ -69,7 +69,7 @@ class Instantiator(
         val streaming: Boolean,
         // Whether we are instantiating with a Builder, in which case all setters take Option
         val builder: Boolean,
-        // If a given required field is missing, try to provide a default value.
+        // Fill out `required` fields with a default value.
         val defaultsForRequiredFields: Boolean,
     )
 
@@ -312,7 +312,9 @@ class Instantiator(
     }
 
     /**
-     * Fill default values for missing required value of a shape.
+     * Returns a default value for a shape.
+     *
+     * Warning: this method does not take into account any constraint traits attached to the shape.
      */
     private fun fillDefaultValue(shape: Shape): Node = when (shape) {
         // Compound Shapes
