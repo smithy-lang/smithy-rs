@@ -5,11 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
 
 /*
  * RestXml server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]

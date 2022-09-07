@@ -7,10 +7,10 @@ package software.amazon.smithy.rustsdk.customize.glacier
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 
 val Glacier: ShapeId = ShapeId.from("com.amazonaws.glacier#Glacier")
 

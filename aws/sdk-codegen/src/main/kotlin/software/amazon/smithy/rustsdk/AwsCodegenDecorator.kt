@@ -5,10 +5,10 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataDecorator
-import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataSettings
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.auth.DisabledAuthDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
