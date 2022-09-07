@@ -235,12 +235,9 @@ class HttpBindingGenerator(
     private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, targetShape: UnionShape) {
         val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
             protocol,
-            model,
-            runtimeConfig,
-            symbolProvider,
+            coreCodegenContext,
             operationShape,
             targetShape,
-            codegenTarget
         ).render()
         rustTemplate(
             """

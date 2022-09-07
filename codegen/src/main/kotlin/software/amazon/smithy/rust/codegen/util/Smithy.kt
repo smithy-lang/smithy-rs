@@ -8,16 +8,21 @@ package software.amazon.smithy.rust.codegen.util
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticAggregateShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 
@@ -64,6 +69,17 @@ fun MemberShape.isOutputEventStream(model: Model): Boolean {
 fun Shape.hasEventStreamMember(model: Model): Boolean {
     return members().any { it.isEventStream(model) }
 }
+
+private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
+    is StructureShape, is UnionShape, is ListShape, is SetShape, is MapShape -> {
+        shape.hasTrait<SyntheticAggregateShapeReachableFromOperationInputTagTrait>()
+    } else -> PANIC("this method does not support shape type ${shape.type}")
+}
+
+fun StructureShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+fun CollectionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+fun UnionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+fun MapShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 
 fun OperationShape.isInputEventStream(model: Model): Boolean {
     return input.map { id -> model.expectShape(id).hasEventStreamMember(model) }.orElse(false)

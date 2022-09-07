@@ -25,8 +25,10 @@ service ConstraintsService {
       // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
       // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
-//      BlobStreamingOperation,
-//      EventStreamsOperation,
+      NonStreamingBlobOperation,
+
+      StreamingBlobOperation,
+      EventStreamsOperation,
     ],
 }
 
@@ -97,10 +99,16 @@ operation HttpPrefixHeadersTargetingMapOfEnumStringOperation {
     output: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
 }
 
-@http(uri: "/blob-streaming-operation", method: "POST")
-operation BlobStreamingOperation {
-    input: BlobStreamingOperationInputOutput,
-    output: BlobStreamingOperationInputOutput,
+@http(uri: "/non-streaming-blob-operation", method: "POST")
+operation NonStreamingBlobOperation {
+    input: NonStreamingBlobOperationInputOutput,
+    output: NonStreamingBlobOperationInputOutput,
+}
+
+@http(uri: "/streaming-blob-operation", method: "POST")
+operation StreamingBlobOperation {
+    input: StreamingBlobOperationInputOutput,
+    output: StreamingBlobOperationInputOutput,
 }
 
 @http(uri: "/event-streams-operation", method: "POST")
@@ -203,7 +211,12 @@ structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
     mapOfListOfEnumString: MapOfListOfEnumString
 }
 
-structure BlobStreamingOperationInputOutput {
+structure NonStreamingBlobOperationInputOutput {
+    @httpPayload
+    nonStreamingBlob: NonStreamingBlob,
+}
+
+structure StreamingBlobOperationInputOutput {
     @httpPayload
     streamingBlob: StreamingBlob,
 }
@@ -221,15 +234,22 @@ union Event {
 
 structure EventStreamRegularMessage {
     messageContent: String
+    // TODO(https://github.com/awslabs/smithy/issues/1388): Can't add a constraint trait here until the semantics are clarified.
+    // messageContent: LengthString
 }
 
 @error("server")
 structure EventStreamErrorMessage {
     messageContent: String
+    // TODO(https://github.com/awslabs/smithy/issues/1388): Can't add a constraint trait here until the semantics are clarified.
+    // messageContent: LengthString
 }
 
+// TODO(https://github.com/awslabs/smithy/issues/1389): Can't add a constraint trait here until the semantics are clarified.
 @streaming
 blob StreamingBlob
+
+blob NonStreamingBlob
 
 structure ConA {
     @required
@@ -257,6 +277,8 @@ structure ConA {
     listOfLengthString: ListOfLengthString,
     setOfLengthString: SetOfLengthString,
     mapOfLengthString: MapOfLengthString,
+
+    nonStreamingBlob: NonStreamingBlob
 }
 
 map MapOfLengthString {

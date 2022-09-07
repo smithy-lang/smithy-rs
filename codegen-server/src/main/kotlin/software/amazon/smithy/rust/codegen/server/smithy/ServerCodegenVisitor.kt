@@ -57,6 +57,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.smithy.transformers.AggregateShapesReachableFromOperationInputTagger
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
@@ -64,6 +65,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStream
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
@@ -94,7 +96,6 @@ open class ServerCodegenVisitor(
         RustModule.private(Unconstrained.namespace, "Unconstrained types for constrained shapes.")
     private val constrainedModule =
         RustModule.private(Constrained.namespace, "Constrained types for constrained shapes.")
-    private val shapesReachableFromOperationInputs: Set<Shape>
 
     init {
         val symbolVisitorConfig =
@@ -104,6 +105,7 @@ open class ServerCodegenVisitor(
                 handleRequired = true,
                 handleRustBoxing = true,
             )
+
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) =
@@ -115,6 +117,7 @@ open class ServerCodegenVisitor(
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
+
         model = codegenDecorator.transformModel(service, baseModel)
         // TODO Can we make it work setting `publicConstrainedTypes` to `false`?
         symbolProvider = RustCodegenServerPlugin.baseSymbolProvider(
@@ -155,10 +158,6 @@ open class ServerCodegenVisitor(
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
-
-        val inputShapes = model.operationShapes.map { model.expectShape(it.inputShape, StructureShape::class.java) }
-        val walker = Walker(model)
-        shapesReachableFromOperationInputs = inputShapes.flatMap { walker.walkShapes(it) }.toSet()
     }
 
     /**
@@ -173,6 +172,8 @@ open class ServerCodegenVisitor(
             .let(RecursiveShapeBoxer::transform)
             // Normalize operations by adding synthetic input and output shapes to every operation
             .let(OperationNormalizer::transform)
+            // Tag aggregate shapes reachable from operation input.
+            .let(AggregateShapesReachableFromOperationInputTagger::transform)
             // Drop unsupported event stream operations from the model
             .let { RemoveEventStreamOperations.transform(it, settings) }
             // Normalize event stream operations
@@ -234,11 +235,11 @@ open class ServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
 
-            if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shapesReachableFromOperationInputs.contains(shape)) {
+            if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
                 val serverBuilderGenerator = ServerBuilderGenerator(
                     codegenContext,
                     shape,
-                    if (shapesReachableFromOperationInputs.contains(shape)) pubCrateConstrainedShapeSymbolProvider else null
+                    if (shape.isReachableFromOperationInput()) pubCrateConstrainedShapeSymbolProvider else null
                 )
                 serverBuilderGenerator.render(writer)
 
@@ -249,7 +250,7 @@ open class ServerCodegenVisitor(
                 }
             }
 
-            if (shapesReachableFromOperationInputs.contains(shape)) {
+            if (shape.isReachableFromOperationInput()) {
                 ServerStructureConstrainedTraitImpl(
                     symbolProvider,
                     codegenContext.settings.codegenConfig.publicConstrainedTypes,
@@ -274,7 +275,7 @@ open class ServerCodegenVisitor(
     override fun setShape(shape: SetShape) = collectionShape(shape)
 
     private fun collectionShape(shape: CollectionShape) {
-        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
                 symbolProvider
             )
@@ -306,7 +307,7 @@ open class ServerCodegenVisitor(
 
     override fun mapShape(shape: MapShape) {
         val renderUnconstrainedMap =
-            shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+            shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
                 symbolProvider
             )
@@ -398,7 +399,7 @@ open class ServerCodegenVisitor(
             UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = false).render()
         }
 
-        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
                 symbolProvider
             )

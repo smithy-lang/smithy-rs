@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -31,11 +30,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -48,19 +47,20 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class EventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
-    private val model: Model,
-    runtimeConfig: RuntimeConfig,
-    private val symbolProvider: RustSymbolProvider,
+    private val coreCodegenContext: CoreCodegenContext,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
-    private val target: CodegenTarget,
 ) {
+    private val model = coreCodegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val codegenTarget = coreCodegenContext.target
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
-    private val errorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
+    private val errorSymbol = if (codegenTarget == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType("MessageStreamError", smithyEventStream, "aws_smithy_http::event_stream").toSymbol()
     } else {
-        unionShape.eventStreamErrorSymbol(model, symbolProvider, target).toSymbol()
+        unionShape.eventStreamErrorSymbol(model, symbolProvider, codegenTarget).toSymbol()
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
@@ -149,7 +149,7 @@ class EventStreamUnmarshallerGenerator(
                 }
             }
             rustBlock("_unknown_variant => ") {
-                when (target.renderUnknownVariant()) {
+                when (codegenTarget.renderUnknownVariant()) {
                     true -> rustTemplate(
                         "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
                         "Output" to unionSymbol,
@@ -191,7 +191,7 @@ class EventStreamUnmarshallerGenerator(
                 )
             }
             else -> {
-                rust("let mut builder = #T::builder();", symbolProvider.toSymbol(unionStruct))
+                rust("let mut builder = #T::default();", unionStruct.builderSymbol(coreCodegenContext, symbolProvider))
                 val payloadMember = unionStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
                 if (payloadMember != null) {
                     renderUnmarshallEventPayload(payloadMember)
@@ -297,7 +297,7 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallError() {
-        when (target) {
+        when (codegenTarget) {
             CodegenTarget.CLIENT -> {
                 rustTemplate(
                     """
@@ -326,12 +326,12 @@ class EventStreamUnmarshallerGenerator(
                 rustBlock("${member.memberName.dq()} $matchOperator ") {
                     // TODO(EventStream): Errors on the operation can be disjoint with errors in the union,
                     //  so we need to generate a new top-level Error type for each event stream union.
-                    when (target) {
+                    when (codegenTarget) {
                         CodegenTarget.CLIENT -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser(operationShape).errorParser(target)
                             if (parser != null) {
-                                rust("let mut builder = #T::builder();", symbolProvider.toSymbol(target))
+                                rust("let mut builder = #T::default();", target.builderSymbol(coreCodegenContext, symbolProvider))
                                 rustTemplate(
                                     """
                                     builder = #{parser}(&message.payload()[..], builder)
@@ -354,7 +354,7 @@ class EventStreamUnmarshallerGenerator(
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser(operationShape).errorParser(target)
                             val mut = if (parser != null) { " mut" } else { "" }
-                            rust("let$mut builder = #T::builder();", symbolProvider.toSymbol(target))
+                            rust("let$mut builder = #T::default();", target.builderSymbol(coreCodegenContext, symbolProvider))
                             if (parser != null) {
                                 rustTemplate(
                                     """
@@ -387,7 +387,7 @@ class EventStreamUnmarshallerGenerator(
                 rust("}")
             }
         }
-        when (target) {
+        when (codegenTarget) {
             CodegenTarget.CLIENT -> {
                 rustTemplate("Ok(#{UnmarshalledMessage}::Error(#{OpError}::generic(generic)))", *codegenScope)
             }
