@@ -56,7 +56,7 @@ class PaginatorGenerator private constructor(
             generics: FluentClientGenerics,
             operationShape: OperationShape,
             retryPolicy: Writable = RustType.Unit.writable,
-            ): RuntimeType? {
+        ): RuntimeType? {
             return if (operationShape.isPaginated(coreCodegenContext.model)) {
                 PaginatorGenerator(
                     coreCodegenContext.model,

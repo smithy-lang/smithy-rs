@@ -51,7 +51,7 @@ internal class RustTypesTest {
     fun `RustType_Vec_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Vec(RustType.String).writable,
-            "'std::vec::Vec<std::string::String>'"
+            "'std::vec::Vec<std::string::String>'",
         )
     }
 
@@ -59,7 +59,7 @@ internal class RustTypesTest {
     fun `RustType_Slice_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Slice(RustType.String).writable,
-            "'[std::string::String]'"
+            "'[std::string::String]'",
         )
     }
 
@@ -67,7 +67,7 @@ internal class RustTypesTest {
     fun `RustType_HashMap_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.HashMap(RustType.String, RustType.String).writable,
-            "'std::collections::HashMap<std::string::String, std::string::String>'"
+            "'std::collections::HashMap<std::string::String, std::string::String>'",
         )
     }
 
@@ -77,7 +77,7 @@ internal class RustTypesTest {
             RustType.HashSet(RustType.String).writable,
             // Rust doesn't guarantee that `HashSet`s are insertion ordered, so we use a `Vec` instead.
             // This is called out in a comment in the RustType.HashSet declaration
-            "'std::vec::Vec<std::string::String>'"
+            "'std::vec::Vec<std::string::String>'",
         )
     }
 
@@ -85,15 +85,15 @@ internal class RustTypesTest {
     fun `RustType_Reference_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Reference("&", RustType.String).writable,
-            "'&std::string::String'"
+            "'&std::string::String'",
         )
         forInputExpectOutput(
             RustType.Reference("&mut", RustType.String).writable,
-            "'&mut std::string::String'"
+            "'&mut std::string::String'",
         )
         forInputExpectOutput(
             RustType.Reference("&'static", RustType.String).writable,
-            "&'static std::string::String'"
+            "&'static std::string::String'",
         )
     }
 
@@ -101,7 +101,7 @@ internal class RustTypesTest {
     fun `RustType_Option_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Option(RustType.String).writable,
-            "'std::option::Option<std::string::String>'"
+            "'std::option::Option<std::string::String>'",
         )
     }
 
@@ -109,7 +109,7 @@ internal class RustTypesTest {
     fun `RustType_Box_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Box(RustType.String).writable,
-            "'std::boxed::Box<std::string::String>'"
+            "'std::boxed::Box<std::string::String>'",
         )
     }
 
@@ -117,11 +117,11 @@ internal class RustTypesTest {
     fun `RustType_Opaque_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Opaque("SoCool", "zelda_is").writable,
-            "'zelda_is::SoCool'"
+            "'zelda_is::SoCool'",
         )
         forInputExpectOutput(
             RustType.Opaque("SoCool").writable,
-            "'SoCool'"
+            "'SoCool'",
         )
     }
 
@@ -129,7 +129,7 @@ internal class RustTypesTest {
     fun `RustType_Dyn_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Dyn(RustType.Opaque("Foo", "foo")).writable,
-            "'dyn foo::Foo'"
+            "'dyn foo::Foo'",
         )
     }
 }
