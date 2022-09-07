@@ -48,16 +48,15 @@ class PaginatorGenerator private constructor(
     service: ServiceShape,
     operation: OperationShape,
     private val generics: FluentClientGenerics,
-    retryPolicyType: Any = RustType.Unit,
+    retryPolicy: Writable = RustType.Unit.writable,
 ) {
-
     companion object {
         fun paginatorType(
             coreCodegenContext: CoreCodegenContext,
             generics: FluentClientGenerics,
             operationShape: OperationShape,
-            retryPolicyType: Any,
-        ): RuntimeType? {
+            retryPolicy: Writable = RustType.Unit.writable,
+            ): RuntimeType? {
             return if (operationShape.isPaginated(coreCodegenContext.model)) {
                 PaginatorGenerator(
                     coreCodegenContext.model,
@@ -65,7 +64,7 @@ class PaginatorGenerator private constructor(
                     coreCodegenContext.serviceShape,
                     operationShape,
                     generics,
-                    retryPolicyType,
+                    retryPolicy,
                 ).paginatorType()
             } else {
                 null
@@ -99,7 +98,7 @@ class PaginatorGenerator private constructor(
         "generics" to generics.decl,
         "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
-        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryPolicyType),
+        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryPolicy),
 
         // Operation Types
         "operation" to symbolProvider.toSymbol(operation),

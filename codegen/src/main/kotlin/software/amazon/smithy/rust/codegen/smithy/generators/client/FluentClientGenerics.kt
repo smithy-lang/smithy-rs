@@ -28,7 +28,7 @@ interface FluentClientGenerics {
     val bounds: Writable
 
     /** Bounds for generated `send()` functions */
-    fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType, retryPolicy: Any): Writable
+    fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType, retryPolicy: Writable): Writable
 
     /** Convert this `FluentClientGenerics` into the more general `GenericsGenerator` */
     fun toGenericsGenerator(): GenericsGenerator
@@ -70,7 +70,7 @@ data class FlexibleClientGenerics(
     }
 
     /** Bounds for generated `send()` functions */
-    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryPolicy: Any): Writable = writable {
+    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryPolicy: Writable): Writable = writable {
         rustTemplate(
             """
             where
@@ -78,7 +78,7 @@ data class FlexibleClientGenerics(
                 #{Operation},
                 #{OperationOutput},
                 #{OperationError},
-                #{RetryPolicy}
+                #{RetryPolicy:W}
             >
             """,
             "client" to client,

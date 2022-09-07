@@ -544,9 +544,8 @@ class RustWriter private constructor(
      * Formatter to enable formatting any [writable] with the #W formatter.
      */
     inner class RustWriteableInjector : BiFunction<Any, String, String> {
-        @Suppress("UNCHECKED_CAST")
         override fun apply(t: Any, u: String): String {
-            val func = t as RustWriter.() -> Unit
+            val func = t as? RustWriter.() -> Unit ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
             val innerWriter = RustWriter(filename, namespace, printWarning = false)
             func(innerWriter)
             innerWriter.dependencies.forEach { addDependency(it) }
