@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
@@ -84,9 +85,8 @@ class ServerAwsJsonProtocol(
             is AwsJsonVersion.Json11 -> {
                 "AwsJson11"
             }
-            else -> throw IllegalStateException()
         }
-        return RuntimeType(name, ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+        return ServerRuntimeType.Protocol(name, runtimeConfig)
     }
 
     override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
@@ -184,12 +184,12 @@ class ServerRestJsonProtocol(
     coreCodegenContext: CoreCodegenContext,
     coreProtocol: RestJson,
 ) : RestProtocol(coreCodegenContext, coreProtocol) {
-    override fun markerStruct() = RuntimeType("AwsRestJson1", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", runtimeConfig)
 }
 
 class ServerRestXmlProtocol(
     coreCodegenContext: CoreCodegenContext,
     coreProtocol: RestXml,
 ) : RestProtocol(coreCodegenContext, coreProtocol) {
-    override fun markerStruct() = RuntimeType("AwsRestXml", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestXml", runtimeConfig)
 }
