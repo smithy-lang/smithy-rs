@@ -103,7 +103,7 @@ class ServerServiceGeneratorV2(
                     if (innerIndex == index) {
                         rust("NewOp")
                     } else {
-                        rust("$item")
+                        rust(item)
                     }
                     rust(", ")
                 }
@@ -115,7 +115,7 @@ class ServerServiceGeneratorV2(
                     if (innerIndex == index) {
                         rust("NewExts")
                     } else {
-                        rust("$item")
+                        rust(item)
                     }
                     rust(", ")
                 }
@@ -132,7 +132,7 @@ class ServerServiceGeneratorV2(
                             *codegenScope,
                         )
                     } else {
-                        rust("$item")
+                        rust(item)
                     }
                     rust(", ")
                 }
