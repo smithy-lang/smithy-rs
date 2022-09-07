@@ -78,9 +78,7 @@ class ServerAwsJsonProtocol(
     )
     private val symbolProvider = coreCodegenContext.symbolProvider
 
-    override fun coreProtocol(): Protocol {
-        return coreProtocol
-    }
+    override fun coreProtocol() = coreProtocol
 
     override fun markerStruct(): RuntimeType {
         val name = when (coreProtocol.version) {
@@ -95,9 +93,7 @@ class ServerAwsJsonProtocol(
         return RuntimeType(name, ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
     }
 
-    override fun routerType(): RuntimeType {
-        return RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
-    }
+    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
 
     override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
         val allOperationShapes = allOperationShapes(service, model)
@@ -149,9 +145,7 @@ open class RestProtocol(
         PANIC("marker structure needs to specified")
     }
 
-    override fun routerType(): RuntimeType {
-        return RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::rest")
-    }
+    override fun routerType() = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::rest")
 
     override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
         val allOperationShapes = allOperationShapes(service, model)
@@ -195,16 +189,12 @@ class ServerRestJsonProtocol(
     coreCodegenContext: CoreCodegenContext,
     coreProtocol: RestJson,
 ) : RestProtocol(coreCodegenContext, coreProtocol) {
-    override fun markerStruct(): RuntimeType {
-        return RuntimeType("AwsRestJson1", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
-    }
+    override fun markerStruct() = RuntimeType("AwsRestJson1", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
 }
 
 class ServerRestXmlProtocol(
     coreCodegenContext: CoreCodegenContext,
     coreProtocol: RestXml,
 ) : RestProtocol(coreCodegenContext, coreProtocol) {
-    override fun markerStruct(): RuntimeType {
-        return RuntimeType("AwsRestXml", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
-    }
+    override fun markerStruct() = RuntimeType("AwsRestXml", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
 }
