@@ -56,14 +56,11 @@ interface ServerProtocol {
 
     companion object {
         /** Upgrades the core protocol to a `ServerProtocol`. */
-        fun fromCoreProtocol(coreCodegenContext: CoreCodegenContext, protocol: Protocol): ServerProtocol {
-            val serverProtocol = when (protocol) {
-                is AwsJson -> ServerAwsJsonProtocol(coreCodegenContext, protocol)
-                is RestJson -> ServerRestJsonProtocol(coreCodegenContext, protocol)
-                is RestXml -> ServerRestXmlProtocol(coreCodegenContext, protocol)
-                else -> throw IllegalStateException("unsupported protocol")
-            }
-            return serverProtocol
+        fun fromCoreProtocol(coreCodegenContext: CoreCodegenContext, protocol: Protocol) = when (protocol) {
+            is AwsJson -> ServerAwsJsonProtocol(coreCodegenContext, protocol)
+            is RestJson -> ServerRestJsonProtocol(coreCodegenContext, protocol)
+            is RestXml -> ServerRestXmlProtocol(coreCodegenContext, protocol)
+            else -> throw IllegalStateException("unsupported protocol")
         }
     }
 }
