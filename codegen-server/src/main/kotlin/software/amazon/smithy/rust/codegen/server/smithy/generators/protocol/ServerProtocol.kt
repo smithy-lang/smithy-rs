@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -83,9 +84,8 @@ class ServerAwsJsonProtocol(
             is AwsJsonVersion.Json11 -> {
                 "AwsJson11"
             }
-            else -> throw IllegalStateException()
         }
-        return RuntimeType(name, ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+        return ServerRuntimeType.Protocol(name, runtimeConfig)
     }
 
     override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
@@ -102,7 +102,7 @@ class ServerAwsJsonProtocol(
                 rustTemplate(
                     """
                     (
-                        String::from(""$serviceName.$operationName""),
+                        String::from("$serviceName.$operationName"),
                         #{SmithyHttpServer}::routing::Route::new(#{OperationValue:W})
                     ),
                     """,
@@ -175,7 +175,7 @@ class ServerRestJsonProtocol(
         fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.coreCodegenContext)
     }
 
-    override fun markerStruct() = RuntimeType("AwsRestJson1", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -193,7 +193,7 @@ class ServerRestXmlProtocol(
         }
     }
 
-    override fun markerStruct() = RuntimeType("AwsRestXml", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestXml", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
