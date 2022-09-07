@@ -72,9 +72,7 @@ class ServerAwsJsonProtocol(
     private val symbolProvider = coreCodegenContext.symbolProvider
 
     companion object {
-        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol {
-            return ServerAwsJsonProtocol(awsJson.coreCodegenContext, awsJson.version)
-        }
+        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.coreCodegenContext, awsJson.version)
     }
 
     override fun markerStruct(): RuntimeType {
@@ -174,9 +172,7 @@ class ServerRestJsonProtocol(
     val runtimeConfig = coreCodegenContext.runtimeConfig
 
     companion object {
-        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol {
-            return ServerRestJsonProtocol(restJson.coreCodegenContext)
-        }
+        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.coreCodegenContext)
     }
 
     override fun markerStruct() = RuntimeType("AwsRestJson1", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
