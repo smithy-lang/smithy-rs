@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
@@ -157,6 +158,21 @@ class ServerProtocolTestGenerator(
         val operationRegistryName = "OperationRegistry"
         val operationRegistryBuilderName = "${operationRegistryName}Builder"
 
+        fun renderRegistryBuilderTypeParams() = writable {
+            operations.forEach {
+                val (inputT, outputT) = operationInputOutputTypes[it]!!
+                writeInline("Fun<$inputT, $outputT>, (), ")
+            }
+        }
+
+        fun renderRegistryBuilderMethods() = writable {
+            operations.withIndex().forEach {
+                val (inputT, outputT) = operationInputOutputTypes[it.value]!!
+                val operationName = operationNames[it.index]
+                write(".$operationName((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )")
+            }
+        }
+
         val moduleMeta = RustMetadata(
             additionalAttributes = listOf(
                 Attribute.Cfg("test"),
@@ -172,19 +188,11 @@ class ServerProtocolTestGenerator(
 
                 pub(crate) type Fun<Input, Output> = fn(Input) -> std::pin::Pin<Box<dyn std::future::Future<Output = Output> + Send>>;
 
-                type RegistryBuilder = crate::operation_registry::$operationRegistryBuilderName<#{Hyper}::Body, ${
-                operations.map {
-                    val (inputT, outputT) = operationInputOutputTypes[it]!!
-                    "Fun<$inputT, $outputT>, ()"
-                }.joinToString(", ")
-                }>;
+                type RegistryBuilder = crate::operation_registry::$operationRegistryBuilderName<#{Hyper}::Body, #{RegistryBuilderTypeParams:W}>;
 
                 fn create_operation_registry_builder() -> RegistryBuilder {
                     crate::operation_registry::$operationRegistryBuilderName::default()
-                        ${operations.mapIndexed { idx, operationShape ->
-                    val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
-                    ".${operationNames[idx]}((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )"
-                }.joinToString("\n")}
+                        #{RegistryBuilderMethods:W}
                 }
 
                 pub(crate) async fn build_router_and_make_request(
@@ -201,6 +209,8 @@ class ServerProtocolTestGenerator(
                         .expect("unable to make an HTTP request");
                 }
                 """,
+                "RegistryBuilderTypeParams" to renderRegistryBuilderTypeParams(),
+                "RegistryBuilderMethods" to renderRegistryBuilderMethods(),
                 *codegenScope,
             )
         }
