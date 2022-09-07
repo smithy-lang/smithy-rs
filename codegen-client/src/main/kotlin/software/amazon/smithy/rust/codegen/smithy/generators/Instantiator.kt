@@ -296,8 +296,7 @@ class Instantiator(
                     memberShape.isRequired && !data.members.containsKey(Node.from(name))
                 }
                 .forEach { (_, memberShape) ->
-                    val targetShape = model.expectShape(memberShape.target)
-                    renderMemberHelper(memberShape, fillDefaultValue(targetShape))
+                    renderMemberHelper(memberShape, fillDefaultValue(memberShape))
                 }
         }
 
@@ -317,17 +316,16 @@ class Instantiator(
      * Warning: this method does not take into account any constraint traits attached to the shape.
      */
     private fun fillDefaultValue(shape: Shape): Node = when (shape) {
+        is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
+
         // Aggregate shapes.
         is StructureShape -> Node.objectNode()
         is UnionShape -> Node.objectNode()
         is CollectionShape -> Node.arrayNode()
         is MapShape -> Node.objectNode()
 
-        is MemberShape -> throw CodegenException("Unable to handle member shape `$shape`. Please provide target shape instead")
-
         // Simple Shapes
         is TimestampShape -> Node.from(0) // Number node for timestamp
-
         is BlobShape -> Node.from("") // String node for bytes
         is StringShape -> Node.from("")
         is NumberShape -> Node.from(0)

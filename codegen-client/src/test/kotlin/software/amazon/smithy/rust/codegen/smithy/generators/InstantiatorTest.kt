@@ -69,19 +69,38 @@ class InstantiatorTest {
 
         structure MyStructRequired {
             @required
-            foo: String,
+            str: String,
             @required
-            bar: PrimitiveInteger,
+            primitiveInt: PrimitiveInteger,
             @required
-            baz: Integer,
+            int: Integer,
             @required
             ts: Timestamp,
             @required
-            byteValue: Byte
+            byte: Byte
             @required
-            union: MyUnion,
+            union: NestedUnion,
+            @required
+            structure: NestedStruct,
+            @required
+            list: MyList,
+            @required
+            map: NestedMap,
+            @required
+            doc: Document
         }
 
+        union NestedUnion {
+            struct: NestedStruct,
+            int: Integer
+        }
+
+        structure NestedStruct {
+            @required
+            str: String,
+            @required
+            num: Integer
+        }
     """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
 
     private val symbolProvider = testSymbolProvider(model)
@@ -256,22 +275,46 @@ class InstantiatorTest {
     @Test
     fun `generate struct with missing required members`() {
         val structure = model.lookup<StructureShape>("com.test#MyStructRequired")
-        val union = model.lookup<UnionShape>("com.test#MyUnion")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
+        val inner = model.lookup<StructureShape>("com.test#Inner")
+        val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
+        val union = model.lookup<UnionShape>("com.test#NestedUnion")
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
         val data = Node.parse("{}")
         val writer = RustWriter.forModule("model")
         structure.renderWithModelBuilder(model, symbolProvider, writer)
+        inner.renderWithModelBuilder(model, symbolProvider, writer)
+        nestedStruct.renderWithModelBuilder(model, symbolProvider, writer)
         UnionGenerator(model, symbolProvider, writer, union).render()
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(this, structure, data, Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
             }
-            writer.write("assert_eq!(result.foo.unwrap(), \"\");")
-            writer.write("assert_eq!(result.bar, 0);")
-            writer.write("assert_eq!(result.baz.unwrap(), 0);")
-            writer.write("assert_eq!(result.ts.unwrap(), aws_smithy_types::DateTime::from_secs(0));")
-            writer.write("assert_eq!(result.byte_value.unwrap(), 0);")
-            writer.write("assert_eq!(result.union.unwrap(), MyUnion::StringVariant(String::new()));")
+            writer.write(
+                """
+                use std::collections::HashMap;
+                use aws_smithy_types::{DateTime, Document};
+
+                let expected = MyStructRequired {
+                    str: Some("".into()),
+                    primitive_int: 0,
+                    int: Some(0),
+                    ts: Some(DateTime::from_secs(0)),
+                    byte: Some(0),
+                    union: Some(NestedUnion::Struct(NestedStruct {
+                        str: Some("".into()),
+                        num: Some(0),
+                    })),
+                    structure: Some(NestedStruct {
+                        str: Some("".into()),
+                        num: Some(0),
+                    }),
+                    list: Some(vec![]),
+                    map: Some(HashMap::new()),
+                    doc: Some(Document::Object(HashMap::new())),
+                };
+                assert_eq!(result, expected);
+                """,
+            )
         }
         writer.compileAndTest()
     }
