@@ -1,6 +1,6 @@
 $version: "1.0"
 
-namespace com.amazonaws.simple
+namespace com.amazonaws.constraints
 
 use aws.protocols#restJson1
 

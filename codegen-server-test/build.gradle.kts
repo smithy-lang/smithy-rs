@@ -40,10 +40,10 @@ val allCodegenTests = listOf(
     CodegenTest("naming_obs_structs#NamingObstacleCourseStructs", "naming_test_structs"),
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
     CodegenTest(
-        "com.amazonaws.simple#ConstraintsService", "constraints_without_public_constrained_types",
+        "com.amazonaws.constraints#ConstraintsService", "constraints_without_public_constrained_types",
         extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
     ),
-    CodegenTest("com.amazonaws.simple#ConstraintsService", "constraints"),
+    CodegenTest("com.amazonaws.constraints#ConstraintsService", "constraints"),
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras"),
     CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
