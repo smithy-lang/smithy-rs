@@ -43,9 +43,9 @@ class ServerOperationGenerator(
     }
 
     fun render(writer: RustWriter) {
-        documentShape(operation, model)
+        writer.documentShape(operation, model)
 
-        rustTemplate(
+        writer.rustTemplate(
             """
             pub struct $operationName;
 
