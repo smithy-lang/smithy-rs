@@ -103,7 +103,7 @@ class ServerAwsJsonProtocol(
                 rustTemplate(
                     """
                     (
-                        String::from(""$serviceName.$operationName""),
+                        String::from("$serviceName.$operationName"),
                         #{SmithyHttpServer}::routing::Route::new(#{OperationValue:W})
                     ),
                     """,
