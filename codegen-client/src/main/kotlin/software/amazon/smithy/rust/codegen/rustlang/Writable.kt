@@ -27,6 +27,26 @@ fun Writable.isEmpty(): Boolean {
 }
 
 /**
+ * Helper allowing a `Iterable<Writable>` to be joined together using a separator.
+ */
+fun Iterable<Writable>.join(separator: String = ", ") = join(writable(separator))
+fun Iterable<Writable>.join(separator: Writable = writable { }): Writable {
+    val iter = this.iterator()
+    return writable {
+        iter.forEach { value ->
+            value()
+            if (iter.hasNext()) {
+                separator()
+            }
+        }
+    }
+}
+fun Sequence<Writable>.join(separator: String = ", ") = asIterable().join(separator)
+fun Sequence<Writable>.join(separator: Writable = writable { }) = asIterable().join(separator)
+fun Array<Writable>.join(separator: String = ", ") = asIterable().join(separator)
+fun Array<Writable>.join(separator: Writable = writable { }) = asIterable().join(separator)
+
+/**
  * Combine multiple writable types into a Rust generic type parameter list
  *
  * e.g.
