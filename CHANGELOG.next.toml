@@ -73,7 +73,6 @@ references = ["smithy-rs#1603", "aws-sdk-rust#586"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
-
 [[aws-sdk-rust]]
 message = """
 Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).
@@ -169,3 +168,9 @@ let response = client.some_operation()
 references = ["smithy-rs#1647", "smithy-rs#1112"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Smithy IDL v2 mixins are now supported"
+references = ["smithy-rs#1680"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
+author = "ogudavid"
