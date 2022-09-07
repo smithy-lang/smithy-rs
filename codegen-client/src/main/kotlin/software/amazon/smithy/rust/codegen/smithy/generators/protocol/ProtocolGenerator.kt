@@ -6,9 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -30,7 +28,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
  * Used to generate payloads that will go into HTTP bodies for HTTP requests (used by clients)
  * and responses (used by servers).
  *
- * **Note:** There is only one real implementation of this interface. The other implementation is test only.
+ * **Note:** There is only one real implementation of this interface. The other implementation is test-only.
  * All protocols use the same class.
  *
  * Different protocols (e.g. JSON vs. XML) need to use different functionality to generate payload bodies.
@@ -39,7 +37,7 @@ interface ProtocolPayloadGenerator {
     data class PayloadMetadata(val takesOwnership: Boolean)
 
     /**
-     * Code generation needs to handle whether or not [generatePayload] takes ownership of the input or output
+     * Code generation needs to handle whether [generatePayload] takes ownership of the input or output
      * for a given operation shape.
      *
      * Most operations will use the HTTP payload as a reference, but for operations that will consume the entire stream
@@ -62,7 +60,7 @@ interface ProtocolPayloadGenerator {
 /**
  * Protocol Trait implementation generator
  *
- * **Note:** There is only one real implementation of this interface. The other implementation is test only.
+ * **Note:** There is only one real implementation of this interface. The other implementation is test-only.
  * All protocols use the same class.
  *
  * Protocols implement one of two traits to enable parsing HTTP responses:
@@ -82,7 +80,7 @@ open class ProtocolGenerator(
     /**
      * `Protocol` contains all protocol specific information. Each smithy protocol, e.g. RestJson, RestXml, etc. will
      * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
-     * and an output shape is build from an http::Response.
+     * and an output shape is build from an `http::Response`.
      */
     private val protocol: Protocol,
     /**
@@ -116,9 +114,6 @@ open class ProtocolGenerator(
         val inputShape = operationShape.inputShape(model)
         val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
         builderGenerator.render(inputWriter)
-
-        // generate type aliases for the fluent builders
-        renderTypeAliases(inputWriter, operationShape, customizations, inputShape)
 
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -172,31 +167,4 @@ open class ProtocolGenerator(
     ) {
         traitGenerator.generateTraitImpls(operationWriter, operationShape, emptyList())
     }
-
-    private fun renderTypeAliases(
-        inputWriter: RustWriter,
-        operationShape: OperationShape,
-        customizations: List<OperationCustomization>,
-        inputShape: StructureShape,
-    ) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/976): Callers should be able to invoke
-        //     buildOperationType* directly to get the type rather than depending on these aliases.
-        //     These are used in fluent clients.
-        val operationTypeOutput = buildOperationTypeOutput(inputWriter, operationShape)
-        val operationTypeRetry = buildOperationTypeRetry(inputWriter, customizations)
-        val inputPrefix = symbolProvider.toSymbol(inputShape).name
-
-        inputWriter.rust(
-            """
-            ##[doc(hidden)] pub type ${inputPrefix}OperationOutputAlias = $operationTypeOutput;
-            ##[doc(hidden)] pub type ${inputPrefix}OperationRetryAlias = $operationTypeRetry;
-            """,
-        )
-    }
-
-    private fun buildOperationTypeOutput(writer: RustWriter, shape: OperationShape): String =
-        writer.format(symbolProvider.toSymbol(shape))
-
-    private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        (customizations.firstNotNullOfOrNull { it.retryType() } ?: RustType.Unit).let { writer.format(it) }
 }
