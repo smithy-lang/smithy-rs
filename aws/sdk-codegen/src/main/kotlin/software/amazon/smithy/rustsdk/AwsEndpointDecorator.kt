@@ -173,6 +173,7 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
     private val codegenScope = arrayOf(
         "PlaceholderParams" to placeholderEndpointParams,
         "BuildError" to runtimeConfig.operationBuildError(),
+        "EndpointError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("endpoint::Error"),
     )
     override fun section(section: OperationSection): Writable {
         return when (section) {
@@ -180,11 +181,15 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                 // insert the endpoint resolution _result_ into the bag (note that this won't bail if endpoint resolution failed)
                 rustTemplate(
                     """
-                    let endpoint_params = #{PlaceholderParams}::new(${section.config}.region.clone());
-                    ${section.request}.properties_mut()
-                        .insert::<aws_smithy_http::endpoint::Result>(${section.config}
-                            .endpoint_resolver
-                            .resolve_endpoint(&endpoint_params));
+                    let endpoint_result: aws_smithy_http::endpoint::Result = _endpoint_params.map_err(
+                        |err|#{EndpointError}::message("failed to construct endpoint parameters").with_cause(err)
+                    )
+                    .map(|params| #{PlaceholderParams}::from(params.region))
+                    .and_then(|params| ${section.config}
+                        .endpoint_resolver
+                        .resolve_endpoint(&params)
+                    );
+                    ${section.request}.properties_mut().insert::<aws_smithy_http::endpoint::Result>(endpoint_result);
                     """,
                     *codegenScope,
                 )

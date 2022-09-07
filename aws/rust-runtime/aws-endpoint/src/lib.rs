@@ -35,6 +35,12 @@ pub struct Params {
     region: Option<Region>,
 }
 
+impl From<Option<String>> for Params {
+    fn from(region: Option<String>) -> Self {
+        Params::new(region.map(Region::new))
+    }
+}
+
 impl Params {
     pub fn new(region: Option<Region>) -> Self {
         Self { region }

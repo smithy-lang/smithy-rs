@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.endpoints.RulesEngineBuiltInResolver
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -70,6 +71,8 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
     fun transformModel(service: ServiceShape, model: Model): Model = model
 
     fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean
+
+    fun builtInResolvers(codegenContext: C): List<RulesEngineBuiltInResolver> = listOf()
 }
 
 /**
@@ -143,6 +146,10 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
     override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         // `CombinedCodegenDecorator` can work with all types of codegen context.
         CoreCodegenContext::class.java.isAssignableFrom(clazz)
+
+    override fun builtInResolvers(codegenContext: C): List<RulesEngineBuiltInResolver> {
+        return orderedDecorators.flatMap { it.builtInResolvers(codegenContext) }
+    }
 
     companion object {
         inline fun <reified T : CoreCodegenContext> fromClasspath(

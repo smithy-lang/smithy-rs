@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.endpoints
 
 import software.amazon.smithy.rulesengine.language.EndpointRuleset
 import software.amazon.smithy.rulesengine.language.eval.Value
+import software.amazon.smithy.rulesengine.language.lang.parameters.Parameters
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
@@ -91,7 +92,12 @@ val EndpointsModule = RustModule.public("endpoint_resolver", "Endpoint resolutio
  *  ```
  */
 
-class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
+class EndpointParamsGenerator(private val parameters: Parameters) {
+
+    companion object {
+        fun memberName(parameterName: String) = parameterName.stringToRustName()
+        fun setterName(parameterName: String) = "set_${memberName(parameterName)}"
+    }
 
     fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", EndpointsModule) { writer ->
         generateEndpointsStruct(writer)
@@ -124,6 +130,7 @@ class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
             }
 
             impl Error {
+                ##[allow(dead_code)]
                 fn missing(field: &'static str) -> Self {
                     Self::MissingRequiredField { field: field.into() }
                 }
@@ -160,7 +167,7 @@ class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
          */
         writer.docs("Configuration parameters for resolving the correct endpoint")
         writer.rustBlock("pub struct Params") {
-            endpointRules.parameters.toList().forEach { parameter ->
+            parameters.toList().forEach { parameter ->
                 // Render documentation for each parameter
                 parameter.documentation.orNull()?.also { docs(it) }
                 rust("pub(crate) ${parameter.memberName()}: #T,", parameter.symbol())
@@ -178,11 +185,11 @@ class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
                 """,
                 "Builder" to endpointsBuilder(),
             )
-            endpointRules.parameters.toList().forEach { parameter ->
+            parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
                 val type = parameter.symbol()
 
-                parameter.documentation.orNull() ?: "Gets the value for $name".also { docs(it) }
+                (parameter.documentation.orNull() ?: "Gets the value for $name").also { docs(it) }
                 rustTemplate(
                     """
                     pub fn ${parameter.memberName()}(&self) -> #{paramType} {
@@ -216,7 +223,7 @@ class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
         rustWriter.docs("Builder for [`Params`]")
         Attribute.Derives(setOf(Debug, Default, PartialEq, Clone)).render(rustWriter)
         rustWriter.rustBlock("pub struct Builder") {
-            endpointRules.parameters.toList().forEach { parameter ->
+            parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
                 val type = parameter.symbol().makeOptional()
                 rust("$name: #T,", type)
@@ -232,7 +239,7 @@ class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
             ) {
                 val params = writable {
                     rustBlockTemplate("#{Params}", "Params" to paramsStruct()) {
-                        endpointRules.parameters.toList().forEach { parameter ->
+                        parameters.toList().forEach { parameter ->
                             rust("${parameter.memberName()}: self.${parameter.memberName()}")
                             parameter.default.orNull()?.also { default -> rust(".or(Some(${value(default)}))") }
                             if (parameter.isRequired) {
@@ -247,8 +254,10 @@ class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
                 }
                 rust("Ok(#W)", params)
             }
-            endpointRules.parameters.toList().forEach { parameter ->
+            parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
+                check(name == memberName(parameter.name.toString()))
+                check("set_$name" == setterName(parameter.name.toString()))
                 val type = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
                 rustTemplate(
                     """
@@ -268,7 +277,7 @@ class EndpointParamsGenerator(private val endpointRules: EndpointRuleset) {
                     "type" to type,
                     "extraDocs" to writable {
                         if (parameter.default.isPresent || parameter.documentation.isPresent) {
-                            rust("\n///")
+                            docs("")
                         }
                         parameter.default.orNull()?.also {
                             docs("When unset, this parameter has a default value of `$it`.")

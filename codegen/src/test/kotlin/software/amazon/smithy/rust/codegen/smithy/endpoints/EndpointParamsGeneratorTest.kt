@@ -31,7 +31,7 @@ internal class EndpointParamsGeneratorTest {
                     // this might fail if there are required fields
                     let _ = #{Params}::builder().build();
                     """,
-                    "Params" to EndpointParamsGenerator(testSuite.ruleset()).paramsStruct(),
+                    "Params" to EndpointParamsGenerator(testSuite.ruleset().parameters).paramsStruct(),
                 )
             }
         }

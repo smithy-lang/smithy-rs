@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomiza
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.smithy.endpoints.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import java.util.logging.Level
@@ -44,6 +45,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 context,
                 ClientCustomizations(),
                 RequiredCustomizations(),
+                EndpointsDecorator(),
                 FluentClientDecorator(),
                 NoOpEventStreamSigningDecorator(),
             )
