@@ -1,7 +1,7 @@
 RFC: Dependency Versions
 ========================
 
-> Status: RFC
+> Status: Accepted
 >
 > Applies to: Client and Server
 
