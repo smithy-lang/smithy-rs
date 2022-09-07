@@ -18,7 +18,7 @@ typealias Writable = RustWriter.() -> Unit
  */
 fun writable(w: Writable): Writable = w
 
-fun writable(w: String): Writable = writable { rust(w) }
+fun writable(w: String): Writable = writable { writeInline(w) }
 
 fun Writable.isEmpty(): Boolean {
     val writer = RustWriter.root()
