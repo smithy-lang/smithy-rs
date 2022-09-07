@@ -7,15 +7,16 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     kotlin("jvm")
+    id("org.jetbrains.dokka")
     jacoco
     `maven-publish`
 }
 
-description = "AWS Specific Customizations for Smithy code generation"
-extra["displayName"] = "Smithy :: Rust :: AWS Codegen"
-extra["moduleName"] = "software.amazon.smithy.rustsdk"
+description = "Generates Rust client code from Smithy models"
+extra["displayName"] = "Smithy :: Rust :: CodegenClient"
+extra["moduleName"] = "software.amazon.smithy.rust.codegen.client"
 
-group = "software.amazon.software.amazon.smithy.rust.codegen.smithy"
+group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
 val smithyVersion: String by project
@@ -23,35 +24,23 @@ val kotestVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))
-    implementation(project(":codegen-client"))
-    runtimeOnly(project(":aws:rust-runtime"))
+    implementation(kotlin("stdlib-jdk8"))
     implementation("org.jsoup:jsoup:1.14.3")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
+    api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
+    runtimeOnly(project(":rust-runtime"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-val generateAwsRuntimeCrateVersion by tasks.registering {
-    // generate the version of the runtime to use as a resource.
-    // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rustsdk"
-    val versionFile = file("$resourcesDir/sdk-crate-version.txt")
-    outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"]?.toString()!!
-    inputs.property("crateVersion", crateVersion)
-    sourceSets.main.get().output.dir(resourcesDir)
-    doLast {
-        versionFile.writeText(crateVersion)
-    }
+tasks.compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
 }
 
 tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-    dependsOn(generateAwsRuntimeCrateVersion)
-}
-
-tasks.compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
@@ -88,6 +77,14 @@ tasks.test {
         showStandardStreams = true
     }
 }
+
+tasks.dokka {
+    outputFormat = "html"
+    outputDirectory = "$buildDir/javadoc"
+}
+
+// Always build documentation
+tasks["build"].finalizedBy(tasks["dokka"])
 
 // Configure jacoco (code coverage) to generate an HTML report
 tasks.jacocoTestReport {

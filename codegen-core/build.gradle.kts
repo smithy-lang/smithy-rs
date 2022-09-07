@@ -4,51 +4,76 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.io.ByteArrayOutputStream
 
 plugins {
     kotlin("jvm")
+    id("org.jetbrains.dokka")
     jacoco
     `maven-publish`
 }
 
-description = "AWS Specific Customizations for Smithy code generation"
-extra["displayName"] = "Smithy :: Rust :: AWS Codegen"
-extra["moduleName"] = "software.amazon.smithy.rustsdk"
+description = "Common code generation logic for generating Rust code from Smithy models"
+extra["displayName"] = "Smithy :: Rust :: CodegenCore"
+extra["moduleName"] = "software.amazon.smithy.rust.codegen.core"
 
-group = "software.amazon.software.amazon.smithy.rust.codegen.smithy"
+group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
 val smithyVersion: String by project
 val kotestVersion: String by project
 
 dependencies {
-    implementation(project(":codegen-core"))
-    implementation(project(":codegen-client"))
-    runtimeOnly(project(":aws:rust-runtime"))
-    implementation("org.jsoup:jsoup:1.14.3")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    implementation(kotlin("stdlib-jdk8"))
+    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
+    runtimeOnly(project(":rust-runtime"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-val generateAwsRuntimeCrateVersion by tasks.registering {
+fun gitCommitHash(): String {
+    // Use commit hash from env if provided, it is helpful to override commit hash in some contexts.
+    // For example: while generating diff for generated SDKs we don't want to see version diff,
+    // so we are overriding commit hash to something fixed
+    val commitHashFromEnv = System.getenv("SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE")
+    if (commitHashFromEnv != null) {
+        return commitHashFromEnv
+    }
+
+    return try {
+        val output = ByteArrayOutputStream()
+        exec {
+            commandLine = listOf("git", "rev-parse", "HEAD")
+            standardOutput = output
+        }
+        output.toString().trim()
+    } catch (ex: Exception) {
+        "unknown"
+    }
+}
+
+val generateSmithyRuntimeCrateVersion by tasks.registering {
     // generate the version of the runtime to use as a resource.
     // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rustsdk"
-    val versionFile = file("$resourcesDir/sdk-crate-version.txt")
+    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/core"
+    val versionFile = file("$resourcesDir/runtime-crate-version.txt")
     outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"]?.toString()!!
+    val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
     inputs.property("crateVersion", crateVersion)
+    // version format must be in sync with `software.amazon.smithy.rust.codegen.core.Version`
+    val version = "$crateVersion\n${gitCommitHash()}"
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
-        versionFile.writeText(crateVersion)
+        versionFile.writeText(version)
     }
 }
 
 tasks.compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
-    dependsOn(generateAwsRuntimeCrateVersion)
+    dependsOn(generateSmithyRuntimeCrateVersion)
 }
 
 tasks.compileTestKotlin {
@@ -88,6 +113,14 @@ tasks.test {
         showStandardStreams = true
     }
 }
+
+tasks.dokka {
+    outputFormat = "html"
+    outputDirectory = "$buildDir/javadoc"
+}
+
+// Always build documentation
+tasks["build"].finalizedBy(tasks["dokka"])
 
 // Configure jacoco (code coverage) to generate an HTML report
 tasks.jacocoTestReport {
