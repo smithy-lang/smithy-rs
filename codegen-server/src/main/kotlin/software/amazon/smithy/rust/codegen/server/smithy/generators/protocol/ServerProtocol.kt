@@ -44,7 +44,6 @@ interface ServerProtocol : Protocol {
     /** Returns the Rust router type. */
     fun routerType(): RuntimeType
 
-    // TODO(Decouple): Perhaps this should lean on a Rust interface.
     /**
      * Returns the construction of the `routerType` given a `ServiceShape`, a collection of operation values
      * (`self.operation_name`, ...), and the `Model`.

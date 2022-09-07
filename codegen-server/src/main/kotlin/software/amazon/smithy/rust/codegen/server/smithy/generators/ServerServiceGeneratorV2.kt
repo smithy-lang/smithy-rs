@@ -196,7 +196,8 @@ class ServerServiceGeneratorV2(
         for (tuple in allOperationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
             val (first, exts) = tuple
             val (operation, type) = first
-            // TODO(Relax): The `Error = Infallible` is an excess requirement to stay at parity with existing builder.
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1713#issue-1365169734): The `Error = Infallible` is an
+            // excess requirement to stay at parity with existing builder.
             rustTemplate(
                 """
                 $type: #{SmithyHttpServer}::operation::Upgradable<
