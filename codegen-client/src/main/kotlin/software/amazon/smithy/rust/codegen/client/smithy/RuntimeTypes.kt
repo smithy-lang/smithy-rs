@@ -21,6 +21,8 @@ import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.client.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.rustInlineTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.util.orNull
 import software.amazon.smithy.rust.codegen.core.Version
 import java.util.Optional
@@ -123,6 +125,11 @@ data class RuntimeConfig(
  *  name, but also ensure that we automatically add any dependencies **as they are used**.
  */
 data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {
+    /**
+     * Get a writable for this `RuntimeType`
+     */
+    val writable = writable { rustInlineTemplate("#{this:T}", "this" to this@RuntimeType) }
+
     /**
      * Convert this [RuntimeType] into a [Symbol].
      *

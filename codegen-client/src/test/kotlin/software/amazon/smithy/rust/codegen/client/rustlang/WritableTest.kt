@@ -14,7 +14,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGene
 internal class RustTypeParametersTest {
     private fun forInputExpectOutput(input: Any, expectedOutput: String) {
         val writer = RustWriter.forModule("model")
-        writer.rustTemplate("#{typeParameters:W}", "typeParameters" to rustTypeParameters(input))
+        writer.rustInlineTemplate("'")
+        writer.rustInlineTemplate("#{typeParameters:W}", "typeParameters" to rustTypeParameters(input))
+        writer.rustInlineTemplate("'")
 
         writer.toString() shouldContain expectedOutput
     }
@@ -27,23 +29,23 @@ internal class RustTypeParametersTest {
     @Test
     fun `rustTypeParameters accepts Symbol`() {
         val symbol = RuntimeType("Operation", namespace = "crate::operation", dependency = null).toSymbol()
-        forInputExpectOutput(symbol, "<crate::operation::Operation>")
+        forInputExpectOutput(symbol, "'<crate::operation::Operation>'")
     }
 
     @Test
     fun `rustTypeParameters accepts RuntimeType`() {
         val runtimeType = RuntimeType("String", namespace = "std::string", dependency = null)
-        forInputExpectOutput(runtimeType, "<std::string::String>")
+        forInputExpectOutput(runtimeType, "'<std::string::String>'")
     }
 
     @Test
     fun `rustTypeParameters accepts String`() {
-        forInputExpectOutput("Option<Vec<String>>", "<Option<Vec<String>>>")
+        forInputExpectOutput("Option<Vec<String>>", "'<Option<Vec<String>>>'")
     }
 
     @Test
     fun `rustTypeParameters accepts GenericsGenerator`() {
-        forInputExpectOutput(GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")), "<A, B>")
+        forInputExpectOutput(GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")), "'<A, B>'")
     }
 
     @Test
@@ -56,8 +58,21 @@ internal class RustTypeParametersTest {
             "T",
             GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
         )
-        writer.rustTemplate("#{typeParameters:W}", "typeParameters" to tps)
+        writer.rustInlineTemplate("'")
+        writer.rustInlineTemplate("#{tps:W}", "tps" to tps)
+        writer.rustInlineTemplate("'")
 
-        writer.toString() shouldContain "<crate::operation::Operation, (), std::string::String, T, A, B>"
+        writer.toString() shouldContain "'<crate::operation::Operation, (), std::string::String, T, A, B>'"
+    }
+
+    @Test
+    fun `rustTypeParameters accepts writables`() {
+        val writer = RustWriter.forModule("model")
+        val tp = rustTypeParameters(RustType.Unit.writable)
+        writer.rustInlineTemplate("'")
+        writer.rustInlineTemplate("#{tp:W}", "tp" to tp)
+        writer.rustInlineTemplate("'")
+
+        writer.toString() shouldContain "'<()>'"
     }
 }

@@ -42,6 +42,46 @@ sealed class RustType {
 
     open val namespace: kotlin.String? = null
 
+    /**
+     * Get a writable for this `RustType`
+     *
+     * ```kotlin
+     * // Declare a RustType
+     * val t = RustType.Unit.writable
+     * // Then, invoke the writable directly
+     * t.invoke(writer)
+     * // OR template it out
+     * writer.rustInlineTemplate("#{t:W}", "t" to t)
+     * ```
+     *
+     * When formatted, the converted type will appear as such:
+     *
+     * | Type                                               | Formatted                                                           |
+     * | -------------------------------------------------- | ------------------------------------------------------------------- |
+     * | RustType.Unit                                      | ()                                                                  |
+     * | RustType.Bool                                      | bool                                                                |
+     * | RustType.Float(32)                                 | f32                                                                 |
+     * | RustType.Float(64)                                 | f64                                                                 |
+     * | RustType.Integer(8)                                | i8                                                                  |
+     * | RustType.Integer(16)                               | i16                                                                 |
+     * | RustType.Integer(32)                               | i32                                                                 |
+     * | RustType.Integer(64)                               | i64                                                                 |
+     * | RustType.String                                    | std::string::String                                                 |
+     * | RustType.Vec(RustType.String)                      | std::vec::Vec<std::string::String>                                  |
+     * | RustType.Slice(RustType.String)                    | [std::string::String]                                               |
+     * | RustType.HashMap(RustType.String, RustType.String) | std::collections::HashMap<std::string::String, std::string::String> |
+     * | RustType.HashSet(RustType.String)                  | std::vec::Vec<std::string::String>                                  |
+     * | RustType.Reference("&", RustType.String)           | &std::string::String                                                |
+     * | RustType.Reference("&mut", RustType.String)        | &mut std::string::String                                            |
+     * | RustType.Reference("&'static", RustType.String)    | &'static std::string::String                                        |
+     * | RustType.Option(RustType.String)                   | std::option::Option<std::string::String>                            |
+     * | RustType.Box(RustType.String)                      | std::boxed::Box<std::string::String>                                |
+     * | RustType.Opaque("SoCool", "zelda_is")              | zelda_is::SoCool                                                    |
+     * | RustType.Opaque("SoCool")                          | SoCool                                                              |
+     * | RustType.Dyn(RustType.Opaque("Foo", "foo"))        | dyn foo::Foo                                                        |
+     */
+    val writable = writable { rustInlineTemplate("#{this}", "this" to this@RustType) }
+
     object Unit : RustType() {
         override val name: kotlin.String = "()"
     }
@@ -186,7 +226,13 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
         is RustType.HashMap -> "${this.name}<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
         is RustType.HashSet -> "${this.name}<${this.member.render(fullyQualified)}>"
-        is RustType.Reference -> "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
+        is RustType.Reference -> {
+            if (this.lifetime == "&") {
+                "&${this.member.render(fullyQualified)}"
+            } else {
+                "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
+            }
+        }
         is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"

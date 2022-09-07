@@ -48,13 +48,14 @@ class PaginatorGenerator private constructor(
     service: ServiceShape,
     operation: OperationShape,
     private val generics: FluentClientGenerics,
+    retryPolicy: Writable = RustType.Unit.writable,
 ) {
-
     companion object {
         fun paginatorType(
             coreCodegenContext: CoreCodegenContext,
             generics: FluentClientGenerics,
             operationShape: OperationShape,
+            retryPolicy: Writable = RustType.Unit.writable,
         ): RuntimeType? {
             return if (operationShape.isPaginated(coreCodegenContext.model)) {
                 PaginatorGenerator(
@@ -63,6 +64,7 @@ class PaginatorGenerator private constructor(
                     coreCodegenContext.serviceShape,
                     operationShape,
                     generics,
+                    retryPolicy,
                 ).paginatorType()
             } else {
                 null
@@ -82,7 +84,8 @@ class PaginatorGenerator private constructor(
     )
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
-    private val outputType = operation.outputShape(model)
+    private val outputShape = operation.outputShape(model)
+    private val outputType = symbolProvider.toSymbol(outputShape)
     private val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
 
     private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
@@ -95,12 +98,12 @@ class PaginatorGenerator private constructor(
         "generics" to generics.decl,
         "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
-        "send_bounds" to generics.sendBounds(inputType, symbolProvider.toSymbol(outputType), errorType),
+        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryPolicy),
 
         // Operation Types
         "operation" to symbolProvider.toSymbol(operation),
         "Input" to inputType,
-        "Output" to symbolProvider.toSymbol(outputType),
+        "Output" to outputType,
         "Error" to errorType,
         "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
 
@@ -118,7 +121,7 @@ class PaginatorGenerator private constructor(
     /** Generate the paginator struct & impl **/
     private fun generate() = writable {
         val outputTokenLens = NestedAccessorGenerator(symbolProvider).generateBorrowingAccessor(
-            outputType,
+            outputShape,
             paginationInfo.outputTokenMemberPath,
         )
         val inputTokenMember = symbolProvider.toMemberName(paginationInfo.inputTokenMember)
@@ -173,7 +176,7 @@ class PaginatorGenerator private constructor(
                             let done = match resp {
                                 Ok(ref resp) => {
                                     let new_token = #{output_token}(resp);
-                                    let is_empty = ${nextTokenEmpty("new_token")};
+                                    let is_empty = new_token.map(|token| token.is_empty()).unwrap_or(true);
                                     if !is_empty && new_token == input.$inputTokenMember.as_ref() {
                                         let _ = tx.send(Err(#{SdkError}::ConstructionFailure("next token did not change, aborting paginator. This indicates an SDK or AWS service bug.".into()))).await;
                                         return;
@@ -259,16 +262,12 @@ class PaginatorGenerator private constructor(
 
                 """,
                 "extract_items" to NestedAccessorGenerator(symbolProvider).generateOwnedAccessor(
-                    outputType,
+                    outputShape,
                     paginationInfo.itemsMemberPath,
                 ),
                 *codegenScope,
             )
         }
-    }
-
-    private fun nextTokenEmpty(token: String): String {
-        return "$token.map(|token|token.is_empty()).unwrap_or(true)"
     }
 
     private fun pageSizeSetter() = writable {

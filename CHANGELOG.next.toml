@@ -170,6 +170,18 @@ meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "Velfi"
 
 [[smithy-rs]]
+message = "Removed the need to generate operation output and retry aliases in codegen."
+references = ["smithy-rs#976", "smithy-rs#1710"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Added `writable` property to `RustType` and `RuntimeType` that returns them in `Writable` form"
+references = ["smithy-rs#1710"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "Velfi"
+
+[[smithy-rs]]
 message = "Smithy IDL v2 mixins are now supported"
 references = ["smithy-rs#1680"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}

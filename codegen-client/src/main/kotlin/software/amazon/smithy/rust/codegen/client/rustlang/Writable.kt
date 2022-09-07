@@ -5,10 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.client.rustlang
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
-import software.amazon.smithy.rust.codegen.client.util.PANIC
 
 typealias Writable = RustWriter.() -> Unit
 
@@ -56,13 +56,21 @@ fun rustTypeParameters(
         val iterator: Iterator<Any> = typeParameters.iterator()
         while (iterator.hasNext()) {
             when (val typeParameter = iterator.next()) {
-                is Symbol, is RustType.Unit, is RuntimeType -> rustInlineTemplate("#{it}", "it" to typeParameter)
+                is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
                 is String -> rustInlineTemplate(typeParameter)
                 is GenericsGenerator -> rustInlineTemplate(
                     "#{gg:W}",
                     "gg" to typeParameter.declaration(withAngleBrackets = false),
                 )
-                else -> PANIC("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+                else -> {
+                    // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
+                    val func = typeParameter as? RustWriter.() -> Unit
+                    if (func != null) {
+                        func.invoke(this)
+                    } else {
+                        throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+                    }
+                }
             }
 
             if (iterator.hasNext()) {
