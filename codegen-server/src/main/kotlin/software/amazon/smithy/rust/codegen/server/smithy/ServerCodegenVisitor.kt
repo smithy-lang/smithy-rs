@@ -103,6 +103,8 @@ open class ServerCodegenVisitor(
      */
     protected fun baselineTransform(model: Model) =
         model
+            // Flattens mixins out of the model and removes them from the model
+            .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
@@ -113,6 +115,12 @@ open class ServerCodegenVisitor(
             .let { RemoveEventStreamOperations.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
+
+    /**
+     * Exposure purely for unit test purposes.
+     */
+    internal fun baselineTransformInternalTest(model: Model) =
+        baselineTransform(model)
 
     /**
      * Execute code generation
