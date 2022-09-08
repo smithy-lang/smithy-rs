@@ -29,12 +29,12 @@ fun Writable.isEmpty(): Boolean {
 /**
  * Helper allowing a `Iterable<Writable>` to be joined together using a `String` separator.
  */
-fun Iterable<Writable>.join(separator: String = ", ") = join(writable(separator))
+fun Iterable<Writable>.join(separator: String) = join(writable(separator))
 
 /**
  * Helper allowing a `Iterable<Writable>` to be joined together using a `Writable` separator.
  */
-fun Iterable<Writable>.join(separator: Writable = writable { }): Writable {
+fun Iterable<Writable>.join(separator: Writable): Writable {
     val iter = this.iterator()
     return writable {
         iter.forEach { value ->
@@ -49,22 +49,22 @@ fun Iterable<Writable>.join(separator: Writable = writable { }): Writable {
 /**
  * Helper allowing a `Sequence<Writable>` to be joined together using a `String` separator.
  */
-fun Sequence<Writable>.join(separator: String = ", ") = asIterable().join(separator)
+fun Sequence<Writable>.join(separator: String) = asIterable().join(separator)
 
 /**
  * Helper allowing a `Sequence<Writable>` to be joined together using a `Writable` separator.
  */
-fun Sequence<Writable>.join(separator: Writable = writable { }) = asIterable().join(separator)
+fun Sequence<Writable>.join(separator: Writable) = asIterable().join(separator)
 
 /**
  * Helper allowing a `Array<Writable>` to be joined together using a `String` separator.
  */
-fun Array<Writable>.join(separator: String = ", ") = asIterable().join(separator)
+fun Array<Writable>.join(separator: String) = asIterable().join(separator)
 
 /**
  * Helper allowing a `Array<Writable>` to be joined together using a `Writable` separator.
  */
-fun Array<Writable>.join(separator: Writable = writable { }) = asIterable().join(separator)
+fun Array<Writable>.join(separator: Writable) = asIterable().join(separator)
 
 /**
  * Combine multiple writable types into a Rust generic type parameter list

@@ -79,9 +79,10 @@ internal class RustTypeParametersTest {
     @Test
     fun `join iterable`() {
         val writer = RustWriter.forModule("model")
-        listOf(writable("A"), writable("B"), writable("C")).join("-")(writer)
-        listOf(writable("D"), writable("E"), writable("F")).join(writable("+"))(writer)
-        writer.toString() shouldContain "A-B-CD+E+F"
+        val itemsA = listOf(writable("a"), writable("b"), writable("c")).join(", ")
+        val itemsB = listOf(writable("d"), writable("e"), writable("f")).join(writable(", "))
+        writer.rustTemplate("vec![#{ItemsA:W}, #{ItemsB:W}]", "ItemsA" to itemsA, "ItemsB" to itemsB)
+        writer.toString() shouldContain "vec![a, b, c, d, e, f]"
     }
 
     @Test
