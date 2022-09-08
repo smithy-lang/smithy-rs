@@ -122,6 +122,7 @@ structure StringPayloadInput {
     documentation: "Primitive ints should not be serialized when they are unset",
     uri: "/primitive-document",
     method: "POST",
+    appliesTo: "client",
     body: "{}",
     headers: { "Content-Type": "application/json" },
     params: {},

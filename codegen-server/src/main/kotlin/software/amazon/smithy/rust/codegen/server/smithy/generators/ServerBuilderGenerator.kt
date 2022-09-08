@@ -389,7 +389,7 @@ class ServerBuilderGenerator(
 
         writer.documentShape(member, model)
         // Setter names will never hit a reserved word and therefore never need escaping.
-        writer.rustBlock("pub(crate) fn set_${memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
+        writer.rustBlock("pub(crate) fn set_${member.memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
             rust(
                 """
                 self.$memberName = ${
