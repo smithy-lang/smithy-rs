@@ -9,9 +9,9 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use serde::Deserialize;
-use smithy_rs_tool_common::git::GetLastCommit;
+use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::package::PackageCategory;
-use smithy_rs_tool_common::shell::{self, ShellOperation};
+use smithy_rs_tool_common::shell;
 use smithy_rs_tool_common::versions_manifest::{CrateVersion, Release, VersionsManifest};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -29,11 +29,8 @@ pub struct GenerateVersionManifestArgs {
     /// Path containing the generated SDK to generate a version manifest for
     #[clap(long)]
     location: PathBuf,
-    /// Optional tag for the release the newly generated `versions.toml` will be for
-    #[clap(long, requires("previous-release-versions"))]
-    release_tag: Option<String>,
     /// Optional path to the `versions.toml` manifest from the previous SDK release
-    #[clap(long, requires("release-tag"))]
+    #[clap(long)]
     previous_release_versions: Option<PathBuf>,
 }
 
@@ -42,15 +39,15 @@ pub async fn subcommand_generate_version_manifest(
         smithy_build,
         examples_revision,
         location,
-        release_tag,
         previous_release_versions,
+        ..
     }: &GenerateVersionManifestArgs,
 ) -> Result<()> {
     verify_crate_hasher_available()?;
 
-    let smithy_rs_revision = GetLastCommit::new(std::env::current_dir()?)
-        .spawn()
-        .await
+    let repo_root = find_git_repository_root("smithy-rs", &std::env::current_dir()?)?;
+    let smithy_rs_revision = GitCLI::new(&repo_root)?
+        .get_head_revision()
         .context("get smithy-rs revision")?;
     info!("Resolved smithy-rs revision to {}", smithy_rs_revision);
 
@@ -75,7 +72,7 @@ pub async fn subcommand_generate_version_manifest(
                 .projections
                 .get(&package.handle.name["aws-sdk-".len()..])
             {
-                model_hash = Some(hash_model(projection)?);
+                model_hash = Some(hash_models(projection)?);
             }
         }
         assert!(
@@ -94,13 +91,14 @@ pub async fn subcommand_generate_version_manifest(
     }
     info!("Discovered and hashed {} crates", crates.len());
     let mut versions_manifest = VersionsManifest {
-        smithy_rs_revision,
+        smithy_rs_revision: smithy_rs_revision.to_string(),
         aws_doc_sdk_examples_revision: examples_revision.to_string(),
+        manual_interventions: Default::default(),
         crates,
         release: None,
     };
     versions_manifest.release =
-        generate_release_metadata(&versions_manifest, release_tag, previous_release_versions)?;
+        generate_release_metadata(&versions_manifest, previous_release_versions)?;
     let manifest_file_name = location.join("versions.toml");
     info!("Writing {:?}...", manifest_file_name);
     versions_manifest.write_to_file(&manifest_file_name)?;
@@ -109,18 +107,16 @@ pub async fn subcommand_generate_version_manifest(
 
 fn generate_release_metadata(
     versions_manifest: &VersionsManifest,
-    maybe_release_tag: &Option<String>,
     maybe_previous_release_versions: &Option<PathBuf>,
 ) -> Result<Option<Release>> {
-    match (maybe_release_tag, maybe_previous_release_versions) {
-        (Some(release_tag), Some(previous_release_versions)) => {
-            let old_versions = VersionsManifest::from_file(previous_release_versions)?;
-            Ok(Some(Release {
-                tag: release_tag.into(),
-                crates: find_released_versions(&old_versions, versions_manifest)?,
-            }))
-        }
-        _ => Ok(None),
+    if let Some(previous_release_versions) = maybe_previous_release_versions {
+        let old_versions = VersionsManifest::from_file(previous_release_versions)?;
+        Ok(Some(Release {
+            tag: None,
+            crates: find_released_versions(&old_versions, versions_manifest)?,
+        }))
+    } else {
+        Ok(None)
     }
 }
 
@@ -166,8 +162,11 @@ fn find_released_versions(
         }
     }
     // Sanity check: If a crate was previously included, but no longer is, we probably want to know about it
+    let crates_to_remove = &unrecent_versions.manual_interventions.crates_to_remove;
     for unrecent_crate_name in unrecent_versions.crates.keys() {
-        if !recent_versions.crates.contains_key(unrecent_crate_name) {
+        if !recent_versions.crates.contains_key(unrecent_crate_name)
+            && !crates_to_remove.contains(unrecent_crate_name)
+        {
             bail!(
                 "Crate `{}` was included in the previous release's `versions.toml`, \
                  but is not included in the upcoming release. If this is expected, update the \
@@ -204,7 +203,8 @@ fn hash_crate(path: &Path) -> Result<String> {
     Ok(stdout.trim().into())
 }
 
-fn hash_model(projection: &SmithyBuildProjection) -> Result<String> {
+fn hash_models(projection: &SmithyBuildProjection) -> Result<String> {
+    // Must match `hashModels` in `CrateVersioner.kt`
     let mut hashes = String::new();
     for import in &projection.imports {
         hashes.push_str(&sha256::digest_file(import).context("hash model")?);
@@ -232,13 +232,20 @@ struct SmithyBuildProjection {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_released_versions, CrateVersion, VersionsManifest};
+    use super::*;
     use smithy_rs_tool_common::package::PackageCategory;
+    use smithy_rs_tool_common::versions_manifest::ManualInterventions;
+    use std::fs;
+    use tempfile::TempDir;
 
-    fn fake_manifest(crates: &[(&str, &str)]) -> VersionsManifest {
+    fn fake_manifest(
+        crates: &[(&str, &str)],
+        manual_interventions: Option<ManualInterventions>,
+    ) -> VersionsManifest {
         VersionsManifest {
             smithy_rs_revision: "dontcare".into(),
             aws_doc_sdk_examples_revision: "dontcare".into(),
+            manual_interventions: manual_interventions.unwrap_or_default(),
             crates: crates
                 .iter()
                 .map(|(name, version)| (name.to_string(), fake_version(version)))
@@ -258,16 +265,22 @@ mod tests {
     #[test]
     fn test_find_released_versions_dropped_crate_sanity_check() {
         let result = find_released_versions(
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
-            &fake_manifest(&[
-                // oops, we lost aws-config
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+            &fake_manifest(
+                &[
+                    // oops, we lost aws-config
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
         );
         assert!(result.is_err());
         let error = format!("{}", result.err().unwrap());
@@ -279,18 +292,51 @@ mod tests {
     }
 
     #[test]
+    fn test_find_released_versions_dropped_crate_sanity_check_manual_intervention() {
+        let result = find_released_versions(
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-redshiftserverless", "0.13.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                Some(ManualInterventions {
+                    crates_to_remove: vec!["aws-sdk-redshiftserverless".to_string()],
+                }),
+            ),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    // we intentionally dropped aws-sdk-redshiftserverless
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_find_released_versions_decreased_version_number_sanity_check() {
         let result = find_released_versions(
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.12.0"), // oops, S3 went backwards
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.12.0"), // oops, S3 went backwards
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
         );
         assert!(result.is_err());
         let error = format!("{}", result.err().unwrap());
@@ -304,17 +350,23 @@ mod tests {
     #[test]
     fn test_find_released_versions() {
         let result = find_released_versions(
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
-            &fake_manifest(&[
-                ("aws-config", "0.12.0"),          // updated
-                ("aws-sdk-s3", "0.14.0"),          // updated
-                ("aws-sdk-dynamodb", "0.12.0"),    // same
-                ("aws-sdk-somethingnew", "0.1.0"), // new
-            ]),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.12.0"),          // updated
+                    ("aws-sdk-s3", "0.14.0"),          // updated
+                    ("aws-sdk-dynamodb", "0.12.0"),    // same
+                    ("aws-sdk-somethingnew", "0.1.0"), // new
+                ],
+                None,
+            ),
         )
         .unwrap();
 
@@ -323,5 +375,28 @@ mod tests {
         assert_eq!("0.1.0", result.get("aws-sdk-somethingnew").unwrap());
         assert!(result.get("aws-sdk-dynamodb").is_none());
         assert_eq!(3, result.len());
+    }
+
+    #[test]
+    fn test_hash_models() {
+        let tmp = TempDir::new().unwrap();
+        let model1a = tmp.path().join("model1a");
+        let model1b = tmp.path().join("model1b");
+
+        fs::write(&model1a, "foo").unwrap();
+        fs::write(&model1b, "bar").unwrap();
+
+        let hash = hash_models(&SmithyBuildProjection {
+            imports: vec![
+                model1a.to_str().unwrap().to_string(),
+                model1b.to_str().unwrap().to_string(),
+            ],
+        })
+        .unwrap();
+
+        assert_eq!(
+            "964021077fb6c3d42ae162ab2e2255be64c6d96a6d77bca089569774d54ef69b",
+            hash
+        );
     }
 }

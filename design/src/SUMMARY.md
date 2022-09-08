@@ -30,6 +30,11 @@
   - [RFC-0014: Fine-grained timeout configuration](./rfcs/rfc0014_timeout_config.md)
   - [RFC-0015: How Cargo "features" should be used in the SDK and runtime crates](./rfcs/rfc0015_using_features_responsibly.md)
   - [RFC-0016: Supporting Flexible Checksums](./rfcs/rfc0016_flexible_checksum_support.md)
+  - [RFC-0017: Customizable Client Operations](./rfcs/rfc0017_customizable_client_operations.md)
+  - [RFC-0018: Logging in the Presence of Sensitive Data](./rfcs/rfc0018_logging_sensitive.md)
+  - [RFC-0019: Event Streams Errors](./rfcs/rfc0019_event_streams_errors.md)
+  - [RFC-0020: Service Builder Improvements](./rfcs/rfc0020_service_builder.md)
+  - [RFC-0021: Dependency Versions](./rfcs/rfc0021_dependency_versions.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)

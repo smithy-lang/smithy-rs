@@ -32,23 +32,15 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-use async_trait::async_trait;
-use http::{Extensions, HeaderMap, Request, Uri};
+use std::future::{ready, Future, Ready};
 
-use crate::response::IntoResponse;
+use futures_util::{
+    future::{try_join, MapErr, MapOk, TryJoin},
+    TryFutureExt,
+};
+use http::{request::Parts, Extensions, HeaderMap, Request, Uri};
 
-/// Trait for extracting information from requests.
-///
-/// A type implementing the `FromRequest` trait is used to handle and extract information from an async handler taking in a `RequestParts` as input.
-#[async_trait]
-pub trait FromRequest<B>: Sized {
-    /// If the extractor fails it'll use this "rejection" type. A rejection is
-    /// a kind of error that can be converted into a response.
-    type Rejection: IntoResponse;
-
-    /// Perform the extraction.
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection>;
-}
+use crate::{rejection::EitherRejection, response::IntoResponse};
 
 #[doc(hidden)]
 #[derive(Debug)]
@@ -70,7 +62,7 @@ impl<B> RequestParts<B> {
     #[doc(hidden)]
     pub fn new(req: Request<B>) -> Self {
         let (
-            http::request::Parts {
+            Parts {
                 uri,
                 headers,
                 extensions,
@@ -113,5 +105,68 @@ impl<B> RequestParts<B> {
     #[doc(hidden)]
     pub fn extensions(&self) -> Option<&Extensions> {
         self.extensions.as_ref()
+    }
+}
+
+/// Provides a protocol aware extraction from a [`Request`]. This borrows the
+/// [`Parts`], in contrast to [`FromRequest`].
+pub trait FromParts<Protocol>: Sized {
+    type Rejection: IntoResponse<Protocol>;
+
+    /// Extracts `self` from a [`Parts`] synchronously.
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;
+}
+
+impl<P, T1, T2> FromParts<P> for (T1, T2)
+where
+    T1: FromParts<P>,
+    T2: FromParts<P>,
+{
+    type Rejection = EitherRejection<T1::Rejection, T2::Rejection>;
+
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        let t1 = T1::from_parts(parts).map_err(EitherRejection::Left)?;
+        let t2 = T2::from_parts(parts).map_err(EitherRejection::Right)?;
+        Ok((t1, t2))
+    }
+}
+
+/// Provides a protocol aware extraction from a [`Request`]. This consumes the
+/// [`Request`], in contrast to [`FromParts`].
+pub trait FromRequest<Protocol, B>: Sized {
+    type Rejection: IntoResponse<Protocol>;
+    type Future: Future<Output = Result<Self, Self::Rejection>>;
+
+    /// Extracts `self` from a [`Request`] asynchronously.
+    fn from_request(request: Request<B>) -> Self::Future;
+}
+
+impl<P, B, T1> FromRequest<P, B> for (T1,)
+where
+    T1: FromRequest<P, B>,
+{
+    type Rejection = T1::Rejection;
+    type Future = MapOk<T1::Future, fn(T1) -> (T1,)>;
+
+    fn from_request(request: Request<B>) -> Self::Future {
+        T1::from_request(request).map_ok(|t1| (t1,))
+    }
+}
+
+impl<P, B, T1, T2> FromRequest<P, B> for (T1, T2)
+where
+    T1: FromRequest<P, B>,
+    T2: FromParts<P>,
+{
+    type Rejection = EitherRejection<T1::Rejection, T2::Rejection>;
+    type Future = TryJoin<MapErr<T1::Future, fn(T1::Rejection) -> Self::Rejection>, Ready<Result<T2, Self::Rejection>>>;
+
+    fn from_request(request: Request<B>) -> Self::Future {
+        let (mut parts, body) = request.into_parts();
+        let t2_result = T2::from_parts(&mut parts).map_err(EitherRejection::Right);
+        try_join(
+            T1::from_request(Request::from_parts(parts, body)).map_err(EitherRejection::Left),
+            ready(t2_result),
+        )
     }
 }

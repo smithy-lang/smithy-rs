@@ -188,6 +188,16 @@ impl<H, R> Operation<H, R> {
         self.request.properties()
     }
 
+    /// Gives mutable access to the underlying HTTP request.
+    pub fn request_mut(&mut self) -> &mut http::Request<SdkBody> {
+        self.request.http_mut()
+    }
+
+    /// Gives readonly access to the underlying HTTP request.
+    pub fn request(&self) -> &http::Request<SdkBody> {
+        self.request.http()
+    }
+
     pub fn with_metadata(mut self, metadata: Metadata) -> Self {
         self.parts.metadata = Some(metadata);
         self
@@ -369,6 +379,16 @@ impl Response {
     /// Consumes the operation `Request` and returns the underlying HTTP response and properties.
     pub fn into_parts(self) -> (http::Response<SdkBody>, SharedPropertyBag) {
         (self.inner, self.properties)
+    }
+
+    /// Return mutable references to the response and property bag contained within this `operation::Response`
+    pub fn parts_mut(
+        &mut self,
+    ) -> (
+        &mut http::Response<SdkBody>,
+        impl DerefMut<Target = PropertyBag> + '_,
+    ) {
+        (&mut self.inner, self.properties.acquire_mut())
     }
 
     /// Creates a new operation `Response` from an HTTP response and property bag.

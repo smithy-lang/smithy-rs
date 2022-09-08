@@ -16,16 +16,24 @@ CI_ACTION=$(CI_BUILD)/ci-action
 acquire-build-image:
 	$(CI_BUILD)/acquire-build-image
 
+.PHONY: check-aws-config
+check-aws-config: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-aws-sdk-canary
+check-aws-sdk-canary: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-aws-sdk-adhoc-tests
+check-aws-sdk-adhoc-tests:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-aws-sdk-examples
 check-aws-sdk-examples: generate-aws-sdk
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: check-aws-sdk-services
 check-aws-sdk-services: generate-aws-sdk
-	$(CI_ACTION) $@ $(ARGS)
-
-.PHONY: check-aws-sdk-smoketest-additional-checks
-check-aws-sdk-smoketest-additional-checks: generate-aws-sdk-smoketest
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: check-aws-sdk-smoketest-docs-clippy-udeps
@@ -36,6 +44,10 @@ check-aws-sdk-smoketest-docs-clippy-udeps: generate-aws-sdk-smoketest
 check-aws-sdk-smoketest-unit-tests: generate-aws-sdk-smoketest
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-aws-sdk-standalone-integration-tests
+check-aws-sdk-standalone-integration-tests: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-client-codegen-integration-tests
 check-client-codegen-integration-tests:
 	$(CI_ACTION) $@ $(ARGS)
@@ -44,8 +56,12 @@ check-client-codegen-integration-tests:
 check-client-codegen-unit-tests:
 	$(CI_ACTION) $@ $(ARGS)
 
-.PHONY: check-rust-runtimes-and-tools
-check-rust-runtimes-and-tools: generate-aws-sdk-smoketest
+.PHONY: check-rust-runtimes
+check-rust-runtimes:
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-tools
+check-tools:
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: check-sdk-codegen-unit-tests
@@ -72,6 +88,10 @@ check-server-codegen-unit-tests-python:
 check-server-e2e-test:
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-server-python-e2e-test
+check-server-python-e2e-test:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-style-and-lints
 check-style-and-lints:
 	$(CI_ACTION) $@ $(ARGS)
@@ -88,8 +108,8 @@ generate-aws-sdk:
 generate-codegen-diff:
 	$(CI_ACTION) $@ $(ARGS)
 
-.PHONY: generate-smithy-rs-runtime-bundle
-generate-smithy-rs-runtime-bundle:
+.PHONY: generate-smithy-rs-release
+generate-smithy-rs-release:
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: sanity-test

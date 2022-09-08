@@ -9,7 +9,7 @@
 //!
 //! As opposed to rejection types (see [`crate::rejection`]), which are an internal detail about
 //! the framework, `RuntimeError` is surfaced to clients in HTTP responses: indeed, it implements
-//! [`crate::response::IntoResponse`]. Rejections can be "grouped" and converted into a
+//! [`RuntimeError::into_response`]. Rejections can be "grouped" and converted into a
 //! specific `RuntimeError` kind: for example, all request rejections due to serialization issues
 //! can be conflated under the [`RuntimeErrorKind::Serialization`] enum variant.
 //!
@@ -19,22 +19,18 @@
 //! Generated code works always works with [`crate::rejection`] types when deserializing requests
 //! and serializing response. Just before a response needs to be sent, the generated code looks up
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
-//! [`crate::response::IntoResponse`] implementation to render and send a response.
+//! [`RuntimeError::into_response`] method to render and send a response.
 
-use crate::{
-    protocols::Protocol,
-    response::{IntoResponse, Response},
-};
+use crate::{protocols::Protocol, response::Response};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
-    /// The requested operation does not exist.
-    UnknownOperation,
     /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),
     /// As of writing, this variant can only occur upon failure to extract an
     /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1663)
     // UnsupportedMediaType,
     NotAcceptable,
 }
@@ -47,7 +43,6 @@ impl RuntimeErrorKind {
         match self {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
-            RuntimeErrorKind::UnknownOperation => "UnknownOperationException",
             RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
         }
     }
@@ -59,12 +54,11 @@ pub struct RuntimeError {
     pub kind: RuntimeErrorKind,
 }
 
-impl IntoResponse for RuntimeError {
-    fn into_response(self) -> Response {
+impl RuntimeError {
+    pub fn into_response(self) -> Response {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
-            RuntimeErrorKind::UnknownOperation => http::StatusCode::NOT_FOUND,
             RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
         };
 

@@ -1,0 +1,75 @@
+# This file will be used by automation when cutting a release of the SDK
+# to include code generator change log entries into the release notes.
+# This is an auto-generated file. Do not edit.
+
+{
+  "smithy-rs": [],
+  "aws-sdk-rust": [
+    {
+      "message": "Refactor endpoint resolution internals to use `aws_smithy_types::Endpoint` internally. The public internal\nfunctions `aws_endpoint::set_endpoint_resolver` and `aws_endpoint::get_endpoint_resolver were removed.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#1641"
+      ],
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+    },
+    {
+      "message": "Service configs are now generated with new accessors for:\n- `Config::retry_config()` - Returns a reference to the inner retry configuration.\n- `Config::timeout_config()` - Returns a reference to the inner timeout configuration.\n- `Config::sleep_impl()` - Returns a clone of the inner async sleep implementation.\n\nPreviously, these were only accessible through `SdkConfig`.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1598"
+      ],
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+    },
+    {
+      "message": "Lossy converters into integer types for `aws_smithy_types::Number` have been\nremoved. Lossy converters into floating point types for\n`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were\ndirectly using the integer lossy converters, we recommend you use the safe\nconverters.\n_Before:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    let foo: f32 = n.to_f32(); // Lossy conversion!\n    let bar: u32 = n.to_u32(); // Lossy conversion!\n}\n```\n_After:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.\n    let foo: f32 = n.try_into().expect(\"lossy conversion detected\"); // Or handle the error instead of panicking.\n    // You can still do lossy conversions, but only into floating point types.\n    let foo: f32 = n.to_f32_lossy();\n    // To lossily convert into integer types, use an `as` cast directly.\n    let bar: u32 = n as u32; // Lossy conversion!\n}\n```\n",
+      "meta": {
+        "bug": true,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "david-perez",
+      "references": [
+        "smithy-rs#1274"
+      ],
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+    },
+    {
+      "message": "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1699"
+      ],
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+    },
+    {
+      "message": "The AWS S3 `GetObjectAttributes` operation will no longer fail with an XML error.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "aws-sdk-rust#609"
+      ],
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+    }
+  ],
+  "aws-sdk-model": []
+}

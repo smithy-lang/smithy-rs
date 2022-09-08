@@ -43,6 +43,8 @@
 
 use strum_macros::Display;
 
+use crate::response::IntoResponse;
+
 /// Rejection used for when failing to extract an [`crate::Extension`] from an incoming [request's
 /// extensions]. Contains one variant for each way the extractor can fail.
 ///
@@ -133,12 +135,8 @@ pub enum RequestRejection {
     /// `hyper::body::to_bytes`.
     HttpBody(crate::Error),
 
-    // These are used when checking the `Content-Type` header.
-    MissingRestJson1ContentType,
-    MissingAwsJson10ContentType,
-    MissingAwsJson11ContentType,
-    MissingRestXmlContentType,
-    MimeParse,
+    /// Used when checking the `Content-Type` header.
+    MissingContentType(MissingContentTypeReason),
 
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
     /// the modeled input it should represent.
@@ -192,6 +190,18 @@ pub enum RequestRejection {
     EnumVariantNotFound(Box<dyn std::error::Error + Send + Sync>),
 }
 
+#[derive(Debug, Display)]
+pub enum MissingContentTypeReason {
+    HeadersTakenByAnotherExtractor,
+    NoContentTypeHeader,
+    ToStrError(http::header::ToStrError),
+    MimeParseError(mime::FromStrError),
+    UnexpectedMimeType {
+        expected_mime: &'static mime::Mime,
+        found_mime: mime::Mime,
+    },
+}
+
 impl std::error::Error for RequestRejection {}
 
 // Consider a conversion between `T` and `U` followed by a bubbling up of the conversion error
@@ -210,6 +220,12 @@ impl From<std::convert::Infallible> for RequestRejection {
         // We opt for this `match` here rather than [`unreachable`] to assure the reader that this
         // code path is dead.
         match _err {}
+    }
+}
+
+impl From<MissingContentTypeReason> for RequestRejection {
+    fn from(e: MissingContentTypeReason) -> Self {
+        Self::MissingContentType(e)
     }
 }
 
@@ -248,3 +264,25 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 // tests use `[crate::body::Body]` as their body type when constructing requests (and almost
 // everyone will run a Hyper-based server in their services).
 convert_to_request_rejection!(hyper::Error, HttpBody);
+
+// Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
+convert_to_request_rejection!(lambda_http::Error, HttpBody);
+
+/// A sum type rejection, implementing [`IntoResponse`] when both variants do.
+pub enum EitherRejection<Left, Right> {
+    Left(Left),
+    Right(Right),
+}
+
+impl<P, L, R> IntoResponse<P> for EitherRejection<L, R>
+where
+    L: IntoResponse<P>,
+    R: IntoResponse<P>,
+{
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        match self {
+            EitherRejection::Left(left) => left.into_response(),
+            EitherRejection::Right(right) => right.into_response(),
+        }
+    }
+}

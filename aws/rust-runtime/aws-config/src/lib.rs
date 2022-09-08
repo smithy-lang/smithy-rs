@@ -139,7 +139,10 @@ pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout;
 
 // Re-export types from aws-types
-pub use aws_types::app_name::{AppName, InvalidAppName};
+pub use aws_types::{
+    app_name::{AppName, InvalidAppName},
+    SdkConfig,
+};
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -224,7 +227,7 @@ mod loader {
         /// # use aws_smithy_types::retry::RetryConfig;
         /// # async fn create_config() {
         ///     let config = aws_config::from_env()
-        ///         .retry_config(RetryConfig::new().with_max_attempts(2))
+        ///         .retry_config(RetryConfig::standard().with_max_attempts(2))
         ///         .load().await;
         /// # }
         /// ```
@@ -327,6 +330,7 @@ mod loader {
         ///
         /// # Examples
         /// ```no_run
+        /// # #[cfg(feature = "hyper-client")]
         /// # async fn docs() {
         /// use aws_config::provider_config::ProviderConfig;
         /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new().
@@ -445,6 +449,7 @@ mod loader {
     mod test {
         use crate::from_env;
         use crate::provider_config::ProviderConfig;
+        use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::DynConnector;
         use aws_smithy_client::never::NeverConnector;
         use aws_types::credentials::ProvideCredentials;
@@ -461,6 +466,7 @@ mod loader {
             let loader = from_env()
                 .configure(
                     ProviderConfig::empty()
+                        .with_sleep(TokioSleep::new())
                         .with_env(env)
                         .with_http_connector(DynConnector::new(NeverConnector::new())),
                 )

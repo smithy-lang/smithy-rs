@@ -73,6 +73,8 @@ pub fn many_dates(
     Ok(out)
 }
 
+/// Returns an iterator over pairs where the first element is the unprefixed header name that
+/// starts with the input `key` prefix, and the second element is the full header name.
 pub fn headers_for_prefix<'a>(
     headers: &'a http::HeaderMap,
     key: &'a str,
@@ -296,7 +298,7 @@ pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 
 /// Given two [`HeaderMap`][HeaderMap]s, merge them together and return the merged `HeaderMap`. If the
 /// two `HeaderMap`s share any keys, values from the right `HeaderMap` be appended to the left `HeaderMap`.
-pub(crate) fn append_merge_header_maps(
+pub fn append_merge_header_maps(
     mut lhs: HeaderMap<HeaderValue>,
     rhs: HeaderMap<HeaderValue>,
 ) -> HeaderMap<HeaderValue> {

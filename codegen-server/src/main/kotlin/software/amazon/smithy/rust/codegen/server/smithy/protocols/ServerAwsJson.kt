@@ -5,14 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
@@ -26,17 +26,16 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerial
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
-/*
+/**
  * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGenerator]
  * with AwsJson specific configurations.
  */
-class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = ServerAwsJson(codegenContext, version)
+class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
+    ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
+    override fun protocol(codegenContext: ServerCodegenContext): Protocol = ServerAwsJson(codegenContext, version)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
+    override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
         ServerHttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
@@ -49,13 +48,13 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
             requestDeserialization = true,
             requestBodyDeserialization = true,
             responseSerialization = true,
-            errorSerialization = true
+            errorSerialization = true,
         )
     }
 }
 
 /**
- * AwsJson requires errors to be serialized with an additional "__type" field. This
+ * AwsJson requires errors to be serialized in server responses with an additional `__type` field. This
  * customization writes the right field depending on the version of the AwsJson protocol.
  */
 class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCustomization() {
@@ -77,21 +76,28 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
 }
 
 /**
- * AwsJson requires errors to be serialized with an additional "__type" field. This class
+ * AwsJson requires operation errors to be serialized in server response with an additional `__type` field. This class
  * customizes [JsonSerializerGenerator] to add this functionality.
+ *
+ * https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
  */
 class ServerAwsJsonSerializerGenerator(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     private val awsJsonVersion: AwsJsonVersion,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, customizations = listOf(ServerAwsJsonError(awsJsonVersion)))
+        JsonSerializerGenerator(
+            coreCodegenContext,
+            httpBindingResolver,
+            ::awsJsonFieldName,
+            customizations = listOf(ServerAwsJsonError(awsJsonVersion)),
+        ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 
 class ServerAwsJson(
-    private val codegenContext: CodegenContext,
-    private val awsJsonVersion: AwsJsonVersion
-) : AwsJson(codegenContext, awsJsonVersion) {
+    private val coreCodegenContext: CoreCodegenContext,
+    private val awsJsonVersion: AwsJsonVersion,
+) : AwsJson(coreCodegenContext, awsJsonVersion) {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver, awsJsonVersion)
+        ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)
 }
