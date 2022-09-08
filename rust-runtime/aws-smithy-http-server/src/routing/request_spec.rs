@@ -469,4 +469,22 @@ mod tests {
             assert_eq!(Match::Yes, label_spec.matches(&req(method, uri, None)));
         }
     }
+
+    #[test]
+    fn unsanitary_path() {
+        let spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![
+                PathSegment::Literal(String::from("ReDosLiteral")),
+                PathSegment::Label,
+                PathSegment::Literal(String::from("(a+)+")),
+            ],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            Match::Yes,
+            spec.matches(&req(&Method::GET, "/ReDosLiteral/abc/(a+)+", None))
+        );
+    }
 }
