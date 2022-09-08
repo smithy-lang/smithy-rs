@@ -195,18 +195,24 @@ class ServerProtocolTestGenerator(
                         #{RegistryBuilderMethods:W}
                 }
 
+                /// The operation full name is a concatenation of `<operation namespace>.<operation name>`.
                 pub(crate) async fn build_router_and_make_request(
                     http_request: #{Http}::request::Request<#{SmithyHttpServer}::body::Body>,
+                    operation_full_name: &str,
                     f: &dyn Fn(RegistryBuilder) -> RegistryBuilder,
                 ) {
                     let mut router: #{Router} = f(create_operation_registry_builder())
                         .build()
                         .expect("unable to build operation registry")
                         .into();
-                    _ = router
+                    let http_response = router
                         .call(http_request)
                         .await
                         .expect("unable to make an HTTP request");
+                    let operation_extension = http_response.extensions()
+                        .get::<#{SmithyHttpServer}::extension::OperationExtension>()
+                        .expect("extension `OperationExtension` not found");
+                    #{AssertEq}(operation_extension.absolute(), operation_full_name);
                 }
                 """,
                 "RegistryBuilderTypeParams" to renderRegistryBuilderTypeParams(),
@@ -498,6 +504,7 @@ class ServerProtocolTestGenerator(
             """
             super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
                 http_request,
+                "${operationShape.id.namespace}.${operationSymbol.name}",
                 &|builder| {
                     builder.${operationShape.toName()}((|input| Box::pin(async move {
             """,
@@ -599,7 +606,8 @@ class ServerProtocolTestGenerator(
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
         // invoke it with (like in the case of an `httpResponseTest` test case).
-        // checkHttpOperationExtension(rustWriter)
+        // In https://github.com/awslabs/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
+        // the operation handler trait implementation instead of directly calling `from_request()`.
 
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isPresent) {
@@ -612,11 +620,10 @@ class ServerProtocolTestGenerator(
         checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
-        // of the operation `Handler` trait, a code path that does not get exercised by `httpRequestTest` test cases.
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1212): We could change test case generation so as to `call()`
-        // the operation handler trait implementation instead of directly calling `from_request()`, or we could run an
-        // actual service.
-        // checkHttpOperationExtension(rustWriter)
+        // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
+        // invoke it with (like in the case of an `httpResponseTest` test case).
+        // In https://github.com/awslabs/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
+        // the operation handler trait implementation instead of directly calling `from_request()`.
 
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isEmpty) return
@@ -663,25 +670,6 @@ class ServerProtocolTestGenerator(
             }
         }
     }
-
-    // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
-    // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
-    // invoke it with (like in the case of an `httpResponseTest` test case).
-    // private fun checkHttpOperationExtension(rustWriter: RustWriter) {
-    //     rustWriter.rustTemplate(
-    //         """
-    //         let operation_extension = http_response.extensions()
-    //             .get::<#{SmithyHttpServer}::extension::OperationExtension>()
-    //             .expect("extension `OperationExtension` not found");
-    //         """.trimIndent(),
-    //         *codegenScope,
-    //     )
-    //     rustWriter.writeWithNoFormatting(
-    //         """
-    //         assert_eq!(operation_extension.absolute(), format!("{}.{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
-    //         """.trimIndent(),
-    //     )
-    // }
 
     private fun checkStatusCode(rustWriter: RustWriter, statusCode: Int) {
         rustWriter.rustTemplate(
