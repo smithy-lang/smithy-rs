@@ -5,8 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ResourceShape
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -19,7 +18,6 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -45,33 +43,26 @@ class ServerServiceGeneratorV2(
     private val builderName = "${serviceName}Builder"
 
     // Calculate all `operationShape`s contained within the `ServiceShape`.
-    private val resourceOperationShapes = service
-        .resources
-        .mapNotNull { model.getShape(it).orNull() }
-        .mapNotNull { it as? ResourceShape }
-        .flatMap { it.allOperations }
-        .mapNotNull { model.getShape(it).orNull() }
-        .mapNotNull { it as? OperationShape }
-    private val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
-    private val allOperationShapes = resourceOperationShapes + operationShapes
+    private val index = TopDownIndex.of(coreCodegenContext.model)
+    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
 
     /** Returns the sequence of builder generics: `Op1`, ..., `OpN`. */
     private fun builderGenerics(): Sequence<String> = sequence {
-        for (index in 1..allOperationShapes.size) {
+        for (index in 1..operations.size) {
             yield("Op$index")
         }
     }
 
     /** Returns the sequence of extension types: `Ext1`, ..., `ExtN`. */
     private fun extensionTypes(): Sequence<String> = sequence {
-        for (index in 1..allOperationShapes.size) {
+        for (index in 1..operations.size) {
             yield("Exts$index")
         }
     }
 
     /** Returns the sequence of field names for the builder. */
     private fun builderFieldNames(): Sequence<String> = sequence {
-        for (operation in allOperationShapes) {
+        for (operation in operations) {
             val field = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
             yield(field)
         }
@@ -79,7 +70,7 @@ class ServerServiceGeneratorV2(
 
     /** Returns the sequence of operation struct names. */
     private fun operationStructNames(): Sequence<String> = sequence {
-        for (operation in allOperationShapes) {
+        for (operation in operations) {
             yield(symbolProvider.toSymbol(operation).name.toPascalCase())
         }
     }
@@ -192,7 +183,7 @@ class ServerServiceGeneratorV2(
 
     /** Returns the constraints required for the `build` method. */
     private fun buildConstraints(): Writable = writable {
-        for (tuple in allOperationShapes.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
+        for (tuple in operations.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
             val (first, exts) = tuple
             val (operation, type) = first
             // TODO(https://github.com/awslabs/smithy-rs/issues/1713#issue-1365169734): The `Error = Infallible` is an
@@ -224,13 +215,11 @@ class ServerServiceGeneratorV2(
         // Generate router construction block.
         val router = protocol
             .routerConstruction(
-                service,
                 builderFieldNames()
                     .map {
                         writable { rustTemplate("self.$it.upgrade()") }
                     }
                     .asIterable(),
-                model,
             )
         rustTemplate(
             """
@@ -270,7 +259,7 @@ class ServerServiceGeneratorV2(
 
     /** Returns a `Writable` comma delimited sequence of `MissingOperation`. */
     private fun notSetGenerics(): Writable = writable {
-        for (index in 1..allOperationShapes.size) {
+        for (index in 1..operations.size) {
             rustTemplate("#{SmithyHttpServer}::operation::MissingOperation,", *codegenScope)
         }
     }

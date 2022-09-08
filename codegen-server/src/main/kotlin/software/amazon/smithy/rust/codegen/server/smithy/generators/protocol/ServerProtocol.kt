@@ -5,10 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
-import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ResourceShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -23,18 +21,10 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.util.orNull
 
-fun allOperationShapes(service: ServiceShape, model: Model): List<OperationShape> {
-    val resourceOperationShapes = service
-        .resources
-        .mapNotNull { model.getShape(it).orNull() }
-        .mapNotNull { it as? ResourceShape }
-        .flatMap { it.allOperations }
-        .mapNotNull { model.getShape(it).orNull() }
-        .mapNotNull { it as? OperationShape }
-    val operationShapes = service.operations.mapNotNull { model.getShape(it).orNull() }.mapNotNull { it as? OperationShape }
-    return resourceOperationShapes + operationShapes
+private fun allOperations(coreCodegenContext: CoreCodegenContext): List<OperationShape> {
+    val index = TopDownIndex.of(coreCodegenContext.model)
+    return index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
 }
 
 interface ServerProtocol : Protocol {
@@ -48,7 +38,7 @@ interface ServerProtocol : Protocol {
      * Returns the construction of the `routerType` given a `ServiceShape`, a collection of operation values
      * (`self.operation_name`, ...), and the `Model`.
      */
-    fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable
+    fun routerConstruction(operationValues: Iterable<Writable>): Writable
 
     companion object {
         /** Upgrades the core protocol to a `ServerProtocol`. */
@@ -70,6 +60,7 @@ class ServerAwsJsonProtocol(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
     )
     private val symbolProvider = coreCodegenContext.symbolProvider
+    private val service = coreCodegenContext.serviceShape
 
     companion object {
         fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.coreCodegenContext, awsJson.version)
@@ -89,8 +80,8 @@ class ServerAwsJsonProtocol(
 
     override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
 
-    override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = writable {
-        val allOperationShapes = allOperationShapes(service, model)
+    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
+        val allOperationShapes = allOperations(coreCodegenContext)
 
         // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
@@ -124,18 +115,16 @@ private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRout
 
 private fun restRouterConstruction(
     protocol: ServerProtocol,
-    service: ServiceShape,
     operationValues: Iterable<Writable>,
-    model: Model,
     coreCodegenContext: CoreCodegenContext,
 ): Writable = writable {
-    val allOperationShapes = allOperationShapes(service, model)
+    val operations = allOperations(coreCodegenContext)
 
     // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
     // val serviceName = symbolProvider.toSymbol(service).name
-    val serviceName = service.id.name
+    val serviceName = coreCodegenContext.serviceShape.id.name
     val pairs = writable {
-        for ((operationShape, operationValue) in allOperationShapes.zip(operationValues)) {
+        for ((operationShape, operationValue) in operations.zip(operationValues)) {
             val operationName = coreCodegenContext.symbolProvider.toSymbol(operationShape).name
             val key = protocol.serverRouterRequestSpec(
                 operationShape,
@@ -178,7 +167,7 @@ class ServerRestJsonProtocol(
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = restRouterConstruction(this, service, operationValues, model, coreCodegenContext)
+    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
 }
 
 class ServerRestXmlProtocol(
@@ -196,5 +185,5 @@ class ServerRestXmlProtocol(
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(service: ServiceShape, operationValues: Iterable<Writable>, model: Model): Writable = restRouterConstruction(this, service, operationValues, model, coreCodegenContext)
+    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
 }
