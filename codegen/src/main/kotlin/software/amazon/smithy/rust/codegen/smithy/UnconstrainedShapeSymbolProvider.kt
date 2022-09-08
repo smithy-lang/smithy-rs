@@ -142,7 +142,7 @@ class UnconstrainedShapeSymbolProvider(
             }
             is StringShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
-                    symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
+                    symbolBuilder(shape, RustType.String).setDefault(Default.RustDefault).build()
                 } else {
                     base.toSymbol(shape)
                 }
