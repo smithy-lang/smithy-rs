@@ -116,7 +116,7 @@ class ServerProtocolTestGenerator(
         abstract val protocol: ShapeId
         abstract val testType: TestType
 
-        data class RequestTest(val testCase: HttpRequestTestCase) : TestCase() {
+        data class RequestTest(val testCase: HttpRequestTestCase, val operationShape: OperationShape) : TestCase() {
             override val id: String = testCase.id
             override val documentation: String? = testCase.documentation.orNull()
             override val protocol: ShapeId = testCase.protocol
@@ -227,7 +227,7 @@ class ServerProtocolTestGenerator(
         val operationSymbol = symbolProvider.toSymbol(operationShape)
 
         val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
-            ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.RequestTest(it) }
+            ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.RequestTest(it, operationShape) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
             ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
@@ -296,8 +296,8 @@ class ServerProtocolTestGenerator(
                 if (howToFixIt == null) {
                     it
                 } else {
-                    val fixed = howToFixIt(it.testCase)
-                    TestCase.RequestTest(fixed)
+                    val fixed = howToFixIt(it.testCase, it.operationShape)
+                    TestCase.RequestTest(fixed, it.operationShape)
                 }
             }
             is TestCase.ResponseTest -> {
@@ -915,7 +915,7 @@ class ServerProtocolTestGenerator(
         // or because they are flaky
         private val DisableTests = setOf<String>()
 
-        private fun fixRestJsonSupportsNaNFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase {
+        private fun fixRestJsonSupportsNaNFloatQueryValues(testCase: HttpRequestTestCase, operationShape: OperationShape): HttpRequestTestCase {
             val params = Node.parse(
                 """
                 {
@@ -931,7 +931,7 @@ class ServerProtocolTestGenerator(
 
             return testCase.toBuilder().params(params).build()
         }
-        private fun fixRestJsonSupportsInfinityFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase =
+        private fun fixRestJsonSupportsInfinityFloatQueryValues(testCase: HttpRequestTestCase, operationShape: OperationShape): HttpRequestTestCase =
             testCase.toBuilder().params(
                 Node.parse(
                     """
@@ -946,7 +946,7 @@ class ServerProtocolTestGenerator(
                     """.trimMargin(),
                 ).asObjectNode().get(),
             ).build()
-        private fun fixRestJsonSupportsNegativeInfinityFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase =
+        private fun fixRestJsonSupportsNegativeInfinityFloatQueryValues(testCase: HttpRequestTestCase, operationShape: OperationShape): HttpRequestTestCase =
             testCase.toBuilder().params(
                 Node.parse(
                     """
@@ -961,7 +961,7 @@ class ServerProtocolTestGenerator(
                     """.trimMargin(),
                 ).asObjectNode().get(),
             ).build()
-        private fun fixRestJsonAllQueryStringTypes(testCase: HttpRequestTestCase): HttpRequestTestCase =
+        private fun fixRestJsonAllQueryStringTypes(testCase: HttpRequestTestCase, operationShape: OperationShape): HttpRequestTestCase =
             testCase.toBuilder().params(
                 Node.parse(
                     """
@@ -1008,7 +1008,7 @@ class ServerProtocolTestGenerator(
                     """.trimMargin(),
                 ).asObjectNode().get(),
             ).build()
-        private fun fixRestJsonQueryStringEscaping(testCase: HttpRequestTestCase): HttpRequestTestCase =
+        private fun fixRestJsonQueryStringEscaping(testCase: HttpRequestTestCase, operationShape: OperationShape): HttpRequestTestCase =
             testCase.toBuilder().params(
                 Node.parse(
                     """
@@ -1022,6 +1022,9 @@ class ServerProtocolTestGenerator(
                 ).asObjectNode().get(),
             ).build()
 
+        private fun fixAwsJson11MissingHeaderXAmzTarget(testCase: HttpRequestTestCase, operationShape: OperationShape): HttpRequestTestCase =
+            testCase.toBuilder().putHeader("x-amz-target", "JsonProtocol.${operationShape.id.name}").build()
+
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
         // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
         // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Contribute a PR to fix them upstream.
@@ -1032,6 +1035,45 @@ class ServerProtocolTestGenerator(
             Pair(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues") to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues,
             Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
             Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
+
+            // https://github.com/awslabs/smithy/pull/1392
+            // Missing `X-Amz-Target` in response header
+            Pair(AwsJson11, "AwsJson11Enums") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "AwsJson11ListsSerializeNull") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "AwsJson11MapsSerializeNullValues") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "AwsJson11ServersDontDeserializeNullStructureValues") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "PutAndGetInlineDocumentsInput") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "json_1_1_client_sends_empty_payload_for_no_input_shape") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "json_1_1_service_supports_empty_payload_for_no_input_shape") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "sends_requests_to_slash") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_blob_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_boolean_shapes_false") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_boolean_shapes_true") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_double_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_empty_list_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_empty_map_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_empty_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_float_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_integer_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_list_of_map_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_list_of_recursive_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_list_of_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_list_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_long_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_map_of_list_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_map_of_recursive_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_map_of_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_map_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_recursive_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_string_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_string_shapes_with_jsonvalue_trait") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_structure_members_with_locationname_traits") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_structure_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_structure_which_have_no_members") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_timestamp_shapes") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_timestamp_shapes_with_httpdate_timestampformat") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_timestamp_shapes_with_iso8601_timestampformat") to ::fixAwsJson11MissingHeaderXAmzTarget,
+            Pair(AwsJson11, "serializes_timestamp_shapes_with_unixtimestamp_timestampformat") to ::fixAwsJson11MissingHeaderXAmzTarget,
         )
 
         private val BrokenResponseTests: Map<Pair<String, String>, KFunction1<HttpResponseTestCase, HttpResponseTestCase>> = mapOf()
