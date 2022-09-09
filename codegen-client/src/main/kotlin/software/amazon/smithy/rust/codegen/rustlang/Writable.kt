@@ -18,13 +18,53 @@ typealias Writable = RustWriter.() -> Unit
  */
 fun writable(w: Writable): Writable = w
 
-fun writable(w: String): Writable = writable { rust(w) }
+fun writable(w: String): Writable = writable { writeInline(w) }
 
 fun Writable.isEmpty(): Boolean {
     val writer = RustWriter.root()
     this(writer)
     return writer.toString() == RustWriter.root().toString()
 }
+
+/**
+ * Helper allowing a `Iterable<Writable>` to be joined together using a `String` separator.
+ */
+fun Iterable<Writable>.join(separator: String) = join(writable(separator))
+
+/**
+ * Helper allowing a `Iterable<Writable>` to be joined together using a `Writable` separator.
+ */
+fun Iterable<Writable>.join(separator: Writable): Writable {
+    val iter = this.iterator()
+    return writable {
+        iter.forEach { value ->
+            value()
+            if (iter.hasNext()) {
+                separator()
+            }
+        }
+    }
+}
+
+/**
+ * Helper allowing a `Sequence<Writable>` to be joined together using a `String` separator.
+ */
+fun Sequence<Writable>.join(separator: String) = asIterable().join(separator)
+
+/**
+ * Helper allowing a `Sequence<Writable>` to be joined together using a `Writable` separator.
+ */
+fun Sequence<Writable>.join(separator: Writable) = asIterable().join(separator)
+
+/**
+ * Helper allowing a `Array<Writable>` to be joined together using a `String` separator.
+ */
+fun Array<Writable>.join(separator: String) = asIterable().join(separator)
+
+/**
+ * Helper allowing a `Array<Writable>` to be joined together using a `Writable` separator.
+ */
+fun Array<Writable>.join(separator: Writable) = asIterable().join(separator)
 
 /**
  * Combine multiple writable types into a Rust generic type parameter list
@@ -51,33 +91,28 @@ fun rustTypeParameters(
     vararg typeParameters: Any,
 ): Writable = writable {
     if (typeParameters.isNotEmpty()) {
-        rustInlineTemplate("<")
-
-        val iterator: Iterator<Any> = typeParameters.iterator()
-        while (iterator.hasNext()) {
-            when (val typeParameter = iterator.next()) {
-                is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
-                is String -> rustInlineTemplate(typeParameter)
-                is GenericsGenerator -> rustInlineTemplate(
-                    "#{gg:W}",
-                    "gg" to typeParameter.declaration(withAngleBrackets = false),
-                )
-                else -> {
-                    // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
-                    val func = typeParameter as? RustWriter.() -> Unit
-                    if (func != null) {
-                        func.invoke(this)
-                    } else {
-                        throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+        val items = typeParameters.map { typeParameter ->
+            writable {
+                when (typeParameter) {
+                    is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
+                    is String -> rustInlineTemplate(typeParameter)
+                    is GenericsGenerator -> rustInlineTemplate(
+                        "#{gg:W}",
+                        "gg" to typeParameter.declaration(withAngleBrackets = false),
+                    )
+                    else -> {
+                        // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
+                        val func = typeParameter as? RustWriter.() -> Unit
+                        if (func != null) {
+                            func.invoke(this)
+                        } else {
+                            throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+                        }
                     }
                 }
             }
-
-            if (iterator.hasNext()) {
-                rustInlineTemplate(", ")
-            }
         }
 
-        rustInlineTemplate(">")
+        rustInlineTemplate("<#{Items:W}>", "Items" to items.join(", "))
     }
 }
