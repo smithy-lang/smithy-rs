@@ -253,7 +253,7 @@ where
 {
     type Service = L::Service;
 
-    /// Takes the [`Operation<S, L>`](Operation), applies [`ModifyBuild::modify`] to it, applies [`UpgradeLayer`] to
+    /// Takes the [`Operation<S, L>`](Operation), applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
@@ -271,31 +271,31 @@ pub struct MissingOperation;
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
 ///
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
-pub struct InternalFailureOperation;
+pub struct FailOnMissingOperation;
 
-impl<P, Op, Exts, B> Upgradable<P, Op, Exts, B> for InternalFailureOperation
+impl<P, Op, Exts, B> Upgradable<P, Op, Exts, B> for FailOnMissingOperation
 where
     InternalFailureException: IntoResponse<P>,
 {
-    type Service = InternalFailureService<P>;
+    type Service = MissingFailure<P>;
 
     fn upgrade(self) -> Self::Service {
-        InternalFailureService { _protocol: PhantomData }
+        MissingFailure { _protocol: PhantomData }
     }
 }
 
-/// A [`Service`] which always returns an internal failure message.
-pub struct InternalFailureService<P> {
+/// A [`Service`] which always returns an internal failure message and logs an error.
+pub struct MissingFailure<P> {
     _protocol: PhantomData<P>,
 }
 
-impl<P> Clone for InternalFailureService<P> {
+impl<P> Clone for MissingFailure<P> {
     fn clone(&self) -> Self {
-        InternalFailureService { _protocol: PhantomData }
+        MissingFailure { _protocol: PhantomData }
     }
 }
 
-impl<R, P> Service<R> for InternalFailureService<P>
+impl<R, P> Service<R> for MissingFailure<P>
 where
     InternalFailureException: IntoResponse<P>,
 {
@@ -308,7 +308,7 @@ where
     }
 
     fn call(&mut self, _request: R) -> Self::Future {
-        error!("internal failure occurred");
+        error!("the operation has not been set");
         std::future::ready(Ok(InternalFailureException.into_response()))
     }
 }

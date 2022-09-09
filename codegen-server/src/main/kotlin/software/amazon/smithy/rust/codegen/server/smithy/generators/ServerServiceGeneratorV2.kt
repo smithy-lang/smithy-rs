@@ -277,7 +277,7 @@ class ServerServiceGeneratorV2(
     // Returns a `Writable` comma delimited sequence of `DummyOperation`.
     private fun internalFailureGenerics(): Writable = writable {
         for (index in 1..operations.size) {
-            rustTemplate("#{SmithyHttpServer}::operation::InternalFailureOperation,", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::operation::FailOnMissingOperation,", *codegenScope)
         }
     }
 
@@ -285,7 +285,7 @@ class ServerServiceGeneratorV2(
     private fun internalFailureFields(): Writable = writable {
         for (fieldName in builderFieldNames()) {
             rustTemplate(
-                "$fieldName: #{SmithyHttpServer}::operation::InternalFailureOperation,",
+                "$fieldName: #{SmithyHttpServer}::operation::FailOnMissingOperation,",
                 *codegenScope,
             )
         }
