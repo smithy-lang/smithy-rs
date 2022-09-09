@@ -163,10 +163,10 @@ async fn wait_for_ready_table(
         .make_operation(&conf)
         .await
         .expect("valid operation");
-    let waiting_policy = WaitForReadyTable {
+    let waiting_classifier = WaitForReadyTable {
         inner: operation.retry_policy().clone(),
     };
-    operation.with_retry_policy(waiting_policy)
+    operation.with_retry_classifier(waiting_classifier)
 }
 
 /// Validate that time has passed with a 5ms tolerance

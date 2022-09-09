@@ -43,7 +43,7 @@ impl Metadata {
 #[derive(Clone, Debug)]
 pub struct Parts<H, R> {
     pub response_handler: H,
-    pub retry_policy: R,
+    pub retry_classifier: R,
     pub metadata: Option<Metadata>,
 }
 
@@ -167,6 +167,9 @@ impl From<DateTimeFormatError> for SerializationError {
     }
 }
 
+// Generics:
+// - H: Response handler
+// - R: Implementation of `ClassifyRetry`
 #[derive(Debug)]
 pub struct Operation<H, R> {
     request: Request,
@@ -204,19 +207,19 @@ impl<H, R> Operation<H, R> {
         self
     }
 
-    pub fn with_retry_policy<R2>(self, retry_policy: R2) -> Operation<H, R2> {
+    pub fn with_retry_classifier<R2>(self, retry_classifier: R2) -> Operation<H, R2> {
         Operation {
             request: self.request,
             parts: Parts {
                 response_handler: self.parts.response_handler,
-                retry_policy,
+                retry_classifier,
                 metadata: self.parts.metadata,
             },
         }
     }
 
-    pub fn retry_policy(&self) -> &R {
-        &self.parts.retry_policy
+    pub fn retry_classifier(&self) -> &R {
+        &self.parts.retry_classifier
     }
 
     pub fn try_clone(&self) -> Option<Self>
@@ -241,7 +244,7 @@ impl<H> Operation<H, ()> {
             request,
             parts: Parts {
                 response_handler,
-                retry_policy: DefaultResponseRetryClassifier::new(),
+                retry_classifier: DefaultResponseRetryClassifier::new(),
                 metadata: None,
             },
         }

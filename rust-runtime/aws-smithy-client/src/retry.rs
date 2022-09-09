@@ -373,8 +373,8 @@ where
         req: &Operation<Handler, R>,
         result: Result<&SdkSuccess<T>, &SdkError<E>>,
     ) -> Option<Self::Future> {
-        let policy = req.retry_policy();
-        let retry_kind = policy.classify_retry(result);
+        let classifier = req.retry_classifier();
+        let retry_kind = classifier.classify_retry(result);
         self.retry_for(retry_kind)
     }
 

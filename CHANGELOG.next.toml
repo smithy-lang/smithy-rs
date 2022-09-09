@@ -199,8 +199,34 @@ references = ["smithy-rs#1715", "smithy-rs#1717"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = """
+The `with_retry_policy` and `retry_policy` functions on `aws_smithy_http::operation::Operation` have been
+renamed to `with_retry_classifier` and `retry_classifier` respectively. Public member `retry_policy` on
+`aws_smithy_http::operation::Parts` has been renamed to `retry_classifier`.
+"""
+references = ["smithy-rs#1715", "smithy-rs#1717"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
 [[aws-sdk-rust]]
 message = "The `SdkError::ResponseError`, typically caused by a connection terminating before the full response is received, is now treated as a transient failure and retried."
 references = ["aws-sdk-rust#303", "smithy-rs#1717"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`ClassifyResponse` was renamed to `ClassifyRetry` and is no longer implemented for the unit type."
+references = ["smithy-rs#1715", "smithy-rs#1717"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+The `with_retry_policy` and `retry_policy` functions on `aws_smithy_http::operation::Operation` have been
+renamed to `with_retry_classifier` and `retry_classifier` respectively. Public member `retry_policy` on
+`aws_smithy_http::operation::Parts` has been renamed to `retry_classifier`.
+"""
+references = ["smithy-rs#1715", "smithy-rs#1717"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"

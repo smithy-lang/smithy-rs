@@ -25,7 +25,7 @@ val DECORATORS = listOf(
     SigV4SigningDecorator(),
     HttpRequestChecksumDecorator(),
     HttpResponseChecksumDecorator(),
-    RetryPolicyDecorator(),
+    RetryClassifierDecorator(),
     IntegrationTestDecorator(),
     AwsFluentClientDecorator(),
     CrateLicenseDecorator(),

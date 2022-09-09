@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomizati
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
-class RetryPolicyDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class RetryClassifierDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "RetryPolicy"
     override val order: Byte = 0
 
@@ -26,19 +26,19 @@ class RetryPolicyDecorator : RustCodegenDecorator<ClientCodegenContext> {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + RetryPolicyFeature(codegenContext.runtimeConfig)
+        return baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig)
     }
 
     override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class RetryPolicyFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
+class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun retryType(): RuntimeType = runtimeConfig.awsHttp().asType().member("retry::AwsResponseClassifier")
     override fun section(section: OperationSection) = when (section) {
         is OperationSection.FinalizeOperation -> writable {
             rust(
-                "let ${section.operation} = ${section.operation}.with_retry_policy(#T::new());",
+                "let ${section.operation} = ${section.operation}.with_retry_classifier(#T::new());",
                 retryType(),
             )
         }

@@ -110,7 +110,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseClassifier> {
         Result::<_, Infallible>::Ok(req)
     })
     .unwrap();
-    Operation::new(req, TestOperationParser).with_retry_policy(AwsResponseClassifier::new())
+    Operation::new(req, TestOperationParser).with_retry_classifier(AwsResponseClassifier::new())
 }
 
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
