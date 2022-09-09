@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -54,7 +55,7 @@ class ServerServiceGeneratorV2(
     private val extensionTypes = (1..operations.size).map { "Exts$it" }
 
     /** The sequence of field names for the builder. */
-    private val builderFieldNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
+    private val builderFieldNames = operations.map { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
 
     /** The sequence of operation struct names. */
     private val operationStructNames = operations.map { symbolProvider.toSymbol(it).name.toPascalCase() }
