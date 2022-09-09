@@ -7,11 +7,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.join
+import software.amazon.smithy.rust.codegen.rustlang.plus
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -42,101 +43,68 @@ class ServerServiceGeneratorV2(
     private val serviceName = service.id.name
     private val builderName = "${serviceName}Builder"
 
-    // Calculate all `operationShape`s contained within the `ServiceShape`.
+    /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(coreCodegenContext.model)
     private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
 
-    /** Returns the sequence of builder generics: `Op1`, ..., `OpN`. */
-    private fun builderGenerics(): Sequence<String> = sequence {
-        for (index in 1..operations.size) {
-            yield("Op$index")
-        }
-    }
+    /** The sequence of builder generics: `Op1`, ..., `OpN`. */
+    private val builderOps = (1..operations.size).map { "Op$it" }
 
-    /** Returns the sequence of extension types: `Ext1`, ..., `ExtN`. */
-    private fun extensionTypes(): Sequence<String> = sequence {
-        for (index in 1..operations.size) {
-            yield("Exts$index")
-        }
-    }
+    /** The sequence of extension types: `Ext1`, ..., `ExtN`. */
+    private val extensionTypes = (1..operations.size).map { "Exts$it" }
 
-    /** Returns the sequence of field names for the builder. */
-    private fun builderFieldNames(): Sequence<String> = sequence {
-        for (operation in operations) {
-            val field = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
-            yield(field)
-        }
-    }
+    /** The sequence of field names for the builder. */
+    private val builderFieldNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
 
-    /** Returns the sequence of operation struct names. */
-    private fun operationStructNames(): Sequence<String> = sequence {
-        for (operation in operations) {
-            yield(symbolProvider.toSymbol(operation).name.toPascalCase())
-        }
-    }
+    /** The sequence of operation struct names. */
+    private val operationStructNames = operations.map { symbolProvider.toSymbol(it).name.toPascalCase() }
 
-    /** Returns a `Writable` block of "field: Type" for the builder. */
-    private fun builderFields(): Writable = writable {
-        val zipped = builderFieldNames().zip(builderGenerics())
-        for ((name, type) in zipped) {
-            rust("$name: $type,")
-        }
-    }
+    /** A `Writable` block of "field: Type" for the builder. */
+    private val builderFields = builderFieldNames.zip(builderOps).map { (name, type) -> "$name: $type" }
 
-    /** Returns a `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
+    /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
-        for ((index, pair) in builderFieldNames().zip(operationStructNames()).withIndex()) {
+        for ((index, pair) in builderFieldNames.zip(operationStructNames).withIndex()) {
             val (fieldName, structName) = pair
 
             // The new generics for the operation setter, using `NewOp` where appropriate.
-            val replacedOpGenerics = writable {
-                for ((innerIndex, item) in builderGenerics().withIndex()) {
-                    if (innerIndex == index) {
-                        rust("NewOp")
-                    } else {
-                        rust(item)
-                    }
-                    rust(", ")
+            val replacedOpGenerics = builderOps.withIndex().map { (innerIndex, item) ->
+                if (innerIndex == index) {
+                    "NewOp"
+                } else {
+                    item
                 }
             }
 
             // The new generics for the operation setter, using `NewOp` where appropriate.
-            val replacedExtGenerics = writable {
-                for ((innerIndex, item) in extensionTypes().withIndex()) {
-                    if (innerIndex == index) {
-                        rust("NewExts")
-                    } else {
-                        rust(item)
-                    }
-                    rust(", ")
+            val replacedExtGenerics = extensionTypes.withIndex().map { (innerIndex, item) ->
+                if (innerIndex == index) {
+                    "NewExts"
+                } else {
+                    item
                 }
             }
 
             // The new generics for the handler setter, using `NewOp` where appropriate.
-            val replacedOpServiceGenerics = writable {
-                for ((innerIndex, item) in builderGenerics().withIndex()) {
-                    if (innerIndex == index) {
-                        rustTemplate(
-                            """
-                            #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, H>>
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rust(item)
-                    }
-                    rust(", ")
+            val replacedOpServiceGenerics = builderOps.withIndex().map { (innerIndex, item) ->
+                if (innerIndex == index) writable {
+                    rustTemplate(
+                        """
+                        #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, H>>
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    writable(item)
                 }
             }
 
             // The assignment of fields, using value where appropriate.
-            val switchedFields = writable {
-                for ((innerIndex, innerFieldName) in builderFieldNames().withIndex()) {
-                    if (index == innerIndex) {
-                        rust("$innerFieldName: value,")
-                    } else {
-                        rust("$innerFieldName: self.$innerFieldName,")
-                    }
+            val switchedFields = builderFieldNames.withIndex().map { (innerIndex, item) ->
+                if (index == innerIndex) {
+                    "$item: value"
+                } else {
+                    "$item: self.$item"
                 }
             }
 
@@ -146,7 +114,7 @@ class ServerServiceGeneratorV2(
                 ///
                 /// This should be a closure satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
                 /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
-                pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{ReplacedOpServiceGenerics:W} #{ReplacedExtGenerics:W}>
+                pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{HandlerSetterGenerics:W}>
                 where
                     H: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, NewExts>
                 {
@@ -160,19 +128,16 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<#{ReplacedOpGenerics:W} #{ReplacedExtGenerics:W}>
+                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics).joinToString(", ")}>
                 {
                     $builderName {
-                        #{SwitchedFields:W}
+                        ${switchedFields.joinToString(", ")},
                         _exts: std::marker::PhantomData
                     }
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "SwitchedFields" to switchedFields,
-                "ReplacedOpGenerics" to replacedOpGenerics,
-                "ReplacedOpServiceGenerics" to replacedOpServiceGenerics,
-                "ReplacedExtGenerics" to replacedExtGenerics,
+                "HandlerSetterGenerics" to (replacedOpServiceGenerics + (replacedExtGenerics.map { writable(it) })).join(", "),
                 *codegenScope,
             )
 
@@ -182,12 +147,11 @@ class ServerServiceGeneratorV2(
     }
 
     /** Returns the constraints required for the `build` method. */
-    private fun buildConstraints(): Writable = writable {
-        for (tuple in operations.asSequence().zip(builderGenerics()).zip(extensionTypes())) {
-            val (first, exts) = tuple
-            val (operation, type) = first
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1713#issue-1365169734): The `Error = Infallible` is an
-            // excess requirement to stay at parity with existing builder.
+    private val buildConstraints = operations.zip(builderOps).zip(extensionTypes).map { (first, exts) ->
+        val (operation, type) = first
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1713#issue-1365169734): The `Error = Infallible` is an
+        // excess requirement to stay at parity with existing builder.
+        writable {
             rustTemplate(
                 """
                 $type: #{SmithyHttpServer}::operation::Upgradable<
@@ -199,7 +163,7 @@ class ServerServiceGeneratorV2(
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
 
-                $type::Service: #{Tower}::Service<#{Http}::Request<B>, Error = std::convert::Infallible>,
+                $type::Service: #{Tower}::Service<#{Http}::Request<B>, Error = std::convert::Infallible>
                 """,
                 "Marker" to protocol.markerStruct(),
                 *codegenScope,
@@ -209,13 +173,14 @@ class ServerServiceGeneratorV2(
 
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
-        val structGenerics = (builderGenerics() + extensionTypes().map { "$it = ()" }).joinToString(",")
-        val generics = (builderGenerics() + extensionTypes()).joinToString(",")
+        val extensionTypesDefault = extensionTypes.map { "$it = ()" }
+        val structGenerics = (builderOps + extensionTypesDefault).joinToString(", ")
+        val builderGenerics = (builderOps + extensionTypes).joinToString(", ")
 
         // Generate router construction block.
         val router = protocol
             .routerConstruction(
-                builderFieldNames()
+                builderFieldNames
                     .map {
                         writable { rustTemplate("self.$it.upgrade()") }
                     }
@@ -227,16 +192,16 @@ class ServerServiceGeneratorV2(
             ///
             /// Constructed via [`$serviceName::builder`].
             pub struct $builderName<$structGenerics> {
-                #{Fields:W}
+                ${builderFields.joinToString(", ")},
                 ##[allow(unused_parens)]
-                _exts: std::marker::PhantomData<(${extensionTypes().joinToString(",")})>
+                _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>
             }
 
-            impl<$generics> $builderName<$generics> {
+            impl<$builderGenerics> $builderName<$builderGenerics> {
                 #{Setters:W}
             }
 
-            impl<$generics> $builderName<$generics> {
+            impl<$builderGenerics> $builderName<$builderGenerics> {
                 /// Constructs a [`$serviceName`] from the arguments provided to the builder.
                 pub fn build<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
@@ -249,43 +214,36 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
-            "Fields" to builderFields(),
             "Setters" to builderSetters(),
-            "BuildConstraints" to buildConstraints(),
+            "BuildConstraints" to buildConstraints.join(", "),
             "Router" to router,
             *codegenScope,
         )
     }
 
-    /** Returns a `Writable` comma delimited sequence of `MissingOperation`. */
-    private fun notSetGenerics(): Writable = writable {
-        for (index in 1..operations.size) {
-            rustTemplate("#{SmithyHttpServer}::operation::MissingOperation,", *codegenScope)
-        }
+    /** A `Writable` comma delimited sequence of `MissingOperation`. */
+    private val notSetGenerics = (1..operations.size).map {
+        writable { rustTemplate("#{SmithyHttpServer}::operation::MissingOperation", *codegenScope) }
     }
 
     /** Returns a `Writable` comma delimited sequence of `builder_field: MissingOperation`. */
-    private fun notSetFields(): Writable = writable {
-        for (fieldName in builderFieldNames()) {
+    private val notSetFields = builderFieldNames.map {
+        writable {
             rustTemplate(
-                "$fieldName: #{SmithyHttpServer}::operation::MissingOperation,",
+                "$it: #{SmithyHttpServer}::operation::MissingOperation",
                 *codegenScope,
             )
         }
     }
 
-    // Returns a `Writable` comma delimited sequence of `DummyOperation`.
-    private fun internalFailureGenerics(): Writable = writable {
-        for (index in 1..operations.size) {
-            rustTemplate("#{SmithyHttpServer}::operation::FailOnMissingOperation,", *codegenScope)
-        }
-    }
+    /** A `Writable` comma delimited sequence of `DummyOperation`. */
+    private val internalFailureGenerics = (1..operations.size).map { writable { rustTemplate("#{SmithyHttpServer}::operation::FailOnMissingOperation", *codegenScope) } }
 
-    // Returns a `Writable` comma delimited sequence of `builder_field: DummyOperation`.
-    private fun internalFailureFields(): Writable = writable {
-        for (fieldName in builderFieldNames()) {
+    /** A `Writable` comma delimited sequence of `builder_field: DummyOperation`. */
+    private val internalFailureFields = builderFieldNames.map {
+        writable {
             rustTemplate(
-                "$fieldName: #{SmithyHttpServer}::operation::FailOnMissingOperation,",
+                "$it: #{SmithyHttpServer}::operation::FailOnMissingOperation",
                 *codegenScope,
             )
         }
@@ -306,7 +264,7 @@ class ServerServiceGeneratorV2(
                 /// Constructs a builder for [`$serviceName`].
                 pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
-                        #{NotSetFields:W}
+                        #{NotSetFields:W},
                         _exts: std::marker::PhantomData
                     }
                 }
@@ -317,7 +275,7 @@ class ServerServiceGeneratorV2(
                 /// it will return status code 500 and log an error.
                 pub fn unchecked_builder() -> $builderName<#{InternalFailureGenerics:W}> {
                     $builderName {
-                        #{InternalFailureFields:W}
+                        #{InternalFailureFields:W},
                         _exts: std::marker::PhantomData
                     }
                 }
@@ -359,10 +317,10 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
-            "InternalFailureGenerics" to internalFailureGenerics(),
-            "InternalFailureFields" to internalFailureFields(),
-            "NotSetGenerics" to notSetGenerics(),
-            "NotSetFields" to notSetFields(),
+            "InternalFailureGenerics" to internalFailureGenerics.join(", "),
+            "InternalFailureFields" to internalFailureFields.join(", "),
+            "NotSetGenerics" to notSetGenerics.join(", "),
+            "NotSetFields" to notSetFields.join(", "),
             "Router" to protocol.routerType(),
             "Protocol" to protocol.markerStruct(),
             *codegenScope,
