@@ -321,7 +321,7 @@ class JsonParserGenerator(
             rustTemplate(
                 """
                 #{expect_number_or_null}(tokens.next())?
-                    .map(|v| #{NumberType}::try_from(v))
+                    .map(#{NumberType}::try_from)
                     .transpose()?
                 """,
                 "NumberType" to symbolProvider.toSymbol(target),
