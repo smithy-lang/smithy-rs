@@ -12,11 +12,11 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.letIf
+import software.amazon.smithy.rust.codegen.client.util.hasTrait
 import java.util.logging.Logger
 
 class STSDecorator : RustCodegenDecorator<ClientCodegenContext> {
