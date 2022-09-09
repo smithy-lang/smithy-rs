@@ -37,22 +37,22 @@ const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"]
 /// 4. The status code is checked against a predetermined list of status codes
 #[non_exhaustive]
 #[derive(Clone, Debug)]
-pub struct AwsResponseClassifier;
+pub struct AwsResponseRetryClassifier;
 
-impl AwsResponseClassifier {
-    /// Create an `AwsResponseClassifier` with the default set of known error & status codes
+impl AwsResponseRetryClassifier {
+    /// Create an `AwsResponseRetryClassifier` with the default set of known error & status codes
     pub fn new() -> Self {
-        AwsResponseClassifier
+        AwsResponseRetryClassifier
     }
 }
 
-impl Default for AwsResponseClassifier {
+impl Default for AwsResponseRetryClassifier {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T, E> ClassifyRetry<T, SdkError<E>> for AwsResponseClassifier
+impl<T, E> ClassifyRetry<T, SdkError<E>> for AwsResponseRetryClassifier
 where
     E: ProvideErrorKind,
 {
@@ -92,7 +92,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::retry::AwsResponseClassifier;
+    use crate::retry::AwsResponseRetryClassifier;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation;
     use aws_smithy_http::result::{SdkError, SdkSuccess};
@@ -146,7 +146,7 @@ mod test {
 
     #[test]
     fn not_an_error() {
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
         let test_response = http::Response::new("OK");
         assert_eq!(
             policy.classify_retry(make_err(UnmodeledError, test_response).as_ref()),
@@ -156,7 +156,7 @@ mod test {
 
     #[test]
     fn classify_by_response_status() {
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
         let test_resp = http::Response::builder()
             .status(500)
             .body("error!")
@@ -169,7 +169,7 @@ mod test {
 
     #[test]
     fn classify_by_response_status_not_retryable() {
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
         let test_resp = http::Response::builder()
             .status(408)
             .body("error!")
@@ -183,7 +183,7 @@ mod test {
     #[test]
     fn classify_by_error_code() {
         let test_response = http::Response::new("OK");
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
 
         assert_eq!(
             policy.classify_retry(
@@ -211,7 +211,7 @@ mod test {
     fn classify_generic() {
         let err = aws_smithy_types::Error::builder().code("SlowDown").build();
         let test_response = http::Response::new("OK");
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
         assert_eq!(
             policy.classify_retry(make_err(err, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ThrottlingError)
@@ -233,7 +233,7 @@ mod test {
             }
         }
 
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
 
         assert_eq!(
             policy.classify_retry(make_err(ModeledRetries, test_response).as_ref()),
@@ -243,7 +243,7 @@ mod test {
 
     #[test]
     fn test_retry_after_header() {
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
         let test_response = http::Response::builder()
             .header("x-amz-retry-after", "5000")
             .body("retry later")
@@ -257,7 +257,7 @@ mod test {
 
     #[test]
     fn classify_response_error() {
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
         assert_eq!(
             policy.classify_retry(
                 Result::<SdkSuccess<()>, SdkError<UnmodeledError>>::Err(SdkError::ResponseError {
@@ -274,7 +274,7 @@ mod test {
 
     #[test]
     fn test_timeout_error() {
-        let policy = AwsResponseClassifier::new();
+        let policy = AwsResponseRetryClassifier::new();
         let err: Result<(), SdkError<UnmodeledError>> = Err(SdkError::TimeoutError("blah".into()));
         assert_eq!(
             policy.classify_retry(err.as_ref()),

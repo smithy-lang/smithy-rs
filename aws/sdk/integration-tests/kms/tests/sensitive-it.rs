@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_http::retry::AwsResponseClassifier;
+use aws_http::retry::AwsResponseRetryClassifier;
 use aws_sdk_kms as kms;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::{self, Parts};
@@ -65,7 +65,7 @@ fn types_are_debug() {
     assert_debug::<kms::client::fluent_builders::CreateAlias>();
 }
 
-async fn create_alias_op() -> Parts<CreateAlias, AwsResponseClassifier> {
+async fn create_alias_op() -> Parts<CreateAlias, AwsResponseRetryClassifier> {
     let conf = kms::Config::builder().build();
     let (_, parts) = CreateAlias::builder()
         .build()
