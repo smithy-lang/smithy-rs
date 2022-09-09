@@ -7,24 +7,24 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.testutil.stubConfigCustomization
-import software.amazon.smithy.rust.codegen.testutil.unitTest
-import software.amazon.smithy.rust.codegen.util.runCommand
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.client.testutil.stubConfigCustomization
+import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.client.util.runCommand
 
 internal class EndpointConfigCustomizationTest {
     private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().asType().member("Params")
