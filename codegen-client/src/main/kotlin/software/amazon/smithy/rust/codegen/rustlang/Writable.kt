@@ -91,33 +91,28 @@ fun rustTypeParameters(
     vararg typeParameters: Any,
 ): Writable = writable {
     if (typeParameters.isNotEmpty()) {
-        rustInlineTemplate("<")
-
-        val iterator: Iterator<Any> = typeParameters.iterator()
-        while (iterator.hasNext()) {
-            when (val typeParameter = iterator.next()) {
-                is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
-                is String -> rustInlineTemplate(typeParameter)
-                is GenericsGenerator -> rustInlineTemplate(
-                    "#{gg:W}",
-                    "gg" to typeParameter.declaration(withAngleBrackets = false),
-                )
-                else -> {
-                    // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
-                    val func = typeParameter as? RustWriter.() -> Unit
-                    if (func != null) {
-                        func.invoke(this)
-                    } else {
-                        throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+        val items = typeParameters.map { typeParameter ->
+            writable {
+                when (typeParameter) {
+                    is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
+                    is String -> rustInlineTemplate(typeParameter)
+                    is GenericsGenerator -> rustInlineTemplate(
+                        "#{gg:W}",
+                        "gg" to typeParameter.declaration(withAngleBrackets = false),
+                    )
+                    else -> {
+                        // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
+                        val func = typeParameter as? RustWriter.() -> Unit
+                        if (func != null) {
+                            func.invoke(this)
+                        } else {
+                            throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+                        }
                     }
                 }
             }
-
-            if (iterator.hasNext()) {
-                rustInlineTemplate(", ")
-            }
         }
 
-        rustInlineTemplate(">")
+        rustInlineTemplate("<#{Items:W}>", "Items" to items.join(", "))
     }
 }
