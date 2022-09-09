@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
@@ -68,13 +69,19 @@ class Instantiator(
         val streaming: Boolean,
         // Whether we are instantiating with a Builder, in which case all setters take Option
         val builder: Boolean,
+        // Fill out `required` fields with a default value.
+        val defaultsForRequiredFields: Boolean,
     )
+
+    companion object {
+        fun defaultContext() = Ctx(lowercaseMapKeys = false, streaming = false, builder = false, defaultsForRequiredFields = false)
+    }
 
     fun render(
         writer: RustWriter,
         shape: Shape,
         arg: Node,
-        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false, builder = false),
+        ctx: Ctx = defaultContext(),
     ) {
         when (shape) {
             // Compound Shapes
@@ -222,14 +229,23 @@ class Instantiator(
      */
     private fun renderUnion(writer: RustWriter, shape: UnionShape, data: ObjectNode, ctx: Ctx) {
         val unionSymbol = symbolProvider.toSymbol(shape)
-        check(data.members.size == 1)
-        val variant = data.members.iterator().next()
-        val memberName = variant.key.value
+
+        val variant = if (ctx.defaultsForRequiredFields && data.members.isEmpty()) {
+            val (name, memberShape) = shape.allMembers.entries.first()
+            val targetShape = model.expectShape(memberShape.target)
+            Node.from(name) to fillDefaultValue(targetShape)
+        } else {
+            check(data.members.size == 1)
+            val entry = data.members.iterator().next()
+            entry.key to entry.value
+        }
+
+        val memberName = variant.first.value
         val member = shape.expectMember(memberName)
         writer.write("#T::${symbolProvider.toMemberName(member)}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
-            renderMember(this, member, variant.value, ctx)
+            renderMember(this, member, variant.second, ctx)
         }
     }
 
@@ -267,16 +283,54 @@ class Instantiator(
      * ```
      */
     private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, ctx: Ctx) {
-        writer.write("#T::builder()", symbolProvider.toSymbol(shape))
-        data.members.forEach { (key, value) ->
-            val memberShape = shape.expectMember(key.value)
+        fun renderMemberHelper(memberShape: MemberShape, value: Node) {
             writer.withBlock(".${memberShape.setterName()}(", ")") {
                 renderMember(this, memberShape, value, ctx)
             }
+        }
+
+        writer.write("#T::builder()", symbolProvider.toSymbol(shape))
+        if (ctx.defaultsForRequiredFields) {
+            shape.allMembers.entries
+                .filter { (name, memberShape) ->
+                    memberShape.isRequired && !data.members.containsKey(Node.from(name))
+                }
+                .forEach { (_, memberShape) ->
+                    renderMemberHelper(memberShape, fillDefaultValue(memberShape))
+                }
+        }
+
+        data.members.forEach { (key, value) ->
+            val memberShape = shape.expectMember(key.value)
+            renderMemberHelper(memberShape, value)
         }
         writer.write(".build()")
         if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
             writer.write(".unwrap()")
         }
+    }
+
+    /**
+     * Returns a default value for a shape.
+     *
+     * Warning: this method does not take into account any constraint traits attached to the shape.
+     */
+    private fun fillDefaultValue(shape: Shape): Node = when (shape) {
+        is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
+
+        // Aggregate shapes.
+        is StructureShape -> Node.objectNode()
+        is UnionShape -> Node.objectNode()
+        is CollectionShape -> Node.arrayNode()
+        is MapShape -> Node.objectNode()
+
+        // Simple Shapes
+        is TimestampShape -> Node.from(0) // Number node for timestamp
+        is BlobShape -> Node.from("") // String node for bytes
+        is StringShape -> Node.from("")
+        is NumberShape -> Node.from(0)
+        is BooleanShape -> Node.from(false)
+        is DocumentShape -> Node.objectNode()
+        else -> throw CodegenException("Unrecognized shape `$shape`")
     }
 }
