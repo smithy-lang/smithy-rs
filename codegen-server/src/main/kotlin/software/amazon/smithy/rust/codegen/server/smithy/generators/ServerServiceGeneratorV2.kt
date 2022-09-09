@@ -274,6 +274,23 @@ class ServerServiceGeneratorV2(
         }
     }
 
+    // Returns a `Writable` comma delimited sequence of `DummyOperation`.
+    private fun internalFailureGenerics(): Writable = writable {
+        for (index in 1..operations.size) {
+            rustTemplate("#{SmithyHttpServer}::operation::InternalFailureOperation,", *codegenScope)
+        }
+    }
+
+    // Returns a `Writable` comma delimited sequence of `builder_field: DummyOperation`.
+    private fun internalFailureFields(): Writable = writable {
+        for (fieldName in builderFieldNames()) {
+            rustTemplate(
+                "$fieldName: #{SmithyHttpServer}::operation::InternalFailureOperation,",
+                *codegenScope,
+            )
+        }
+    }
+
     /** Returns a `Writable` containing the service struct definition and its implementations. */
     private fun struct(): Writable = writable {
         documentShape(service, model)
@@ -290,6 +307,17 @@ class ServerServiceGeneratorV2(
                 pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
                         #{NotSetFields:W}
+                        _exts: std::marker::PhantomData
+                    }
+                }
+
+                /// Constructs an unchecked builder for [`$serviceName`].
+                ///
+                /// This will not enforce that all operations are set, however if an unset operation is used at runtime
+                /// it will return status code 500 and log an error.
+                pub fn unchecked_builder() -> $builderName<#{InternalFailureGenerics:W}> {
+                    $builderName {
+                        #{InternalFailureFields:W}
                         _exts: std::marker::PhantomData
                     }
                 }
@@ -331,6 +359,8 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
+            "InternalFailureGenerics" to internalFailureGenerics(),
+            "InternalFailureFields" to internalFailureFields(),
             "NotSetGenerics" to notSetGenerics(),
             "NotSetFields" to notSetFields(),
             "Router" to protocol.routerType(),

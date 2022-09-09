@@ -4,7 +4,8 @@
  */
 
 use std::{
-    future::Future,
+    convert::Infallible,
+    future::{Future, Ready},
     marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
@@ -13,11 +14,13 @@ use std::{
 use futures_util::ready;
 use pin_project_lite::pin_project;
 use tower::{layer::util::Stack, Layer, Service};
+use tracing::error;
 
 use crate::{
     body::BoxBody,
     request::{FromParts, FromRequest},
     response::IntoResponse,
+    runtime_error::InternalFailureException,
 };
 
 use super::{Operation, OperationError, OperationShape};
@@ -259,4 +262,51 @@ where
 }
 
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
+///
+/// This does _not_ implement [`Upgradable`] purposely.
 pub struct MissingOperation;
+
+/// A marker struct indicating an [`Operation`] has not been set in a builder.
+///
+/// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
+pub struct InternalFailureOperation;
+
+impl<P, Op, Exts, B> Upgradable<P, Op, Exts, B> for InternalFailureOperation
+where
+    InternalFailureException: IntoResponse<P>,
+{
+    type Service = InternalFailureService<P>;
+
+    fn upgrade(self) -> Self::Service {
+        InternalFailureService { _protocol: PhantomData }
+    }
+}
+
+/// A [`Service`] which always returns an internal failure message.
+pub struct InternalFailureService<P> {
+    _protocol: PhantomData<P>,
+}
+
+impl<P> Clone for InternalFailureService<P> {
+    fn clone(&self) -> Self {
+        InternalFailureService { _protocol: PhantomData }
+    }
+}
+
+impl<R, P> Service<R> for InternalFailureService<P>
+where
+    InternalFailureException: IntoResponse<P>,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _request: R) -> Self::Future {
+        error!("internal failure occurred");
+        std::future::ready(Ok(InternalFailureException.into_response()))
+    }
+}
