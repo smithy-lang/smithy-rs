@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::borrow::Cow;
+
 use http::Request;
 use regex::Regex;
 
@@ -104,13 +106,13 @@ impl From<&PathSpec> for Regex {
                 .0
                 .iter()
                 .map(|segment_spec| match segment_spec {
-                    PathSegment::Literal(literal) => literal,
+                    PathSegment::Literal(literal) => Cow::Owned(regex::escape(literal)),
                     // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
                     // `*` instead of `+` because the empty string `""` can be bound to a label.
-                    PathSegment::Label => "[^/]*",
-                    PathSegment::Greedy => ".*",
+                    PathSegment::Label => Cow::Borrowed("[^/]*"),
+                    PathSegment::Greedy => Cow::Borrowed(".*"),
                 })
-                .fold(String::new(), |a, b| a + sep + b)
+                .fold(String::new(), |a, b| a + sep + &b)
         };
 
         Regex::new(&format!("^{}$", re)).expect("invalid `Regex` from `PathSpec`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
@@ -468,5 +470,23 @@ mod tests {
         for (method, uri) in &hits {
             assert_eq!(Match::Yes, label_spec.matches(&req(method, uri, None)));
         }
+    }
+
+    #[test]
+    fn unsanitary_path() {
+        let spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![
+                PathSegment::Literal(String::from("ReDosLiteral")),
+                PathSegment::Label,
+                PathSegment::Literal(String::from("(a+)+")),
+            ],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            Match::Yes,
+            spec.matches(&req(&Method::GET, "/ReDosLiteral/abc/(a+)+", None))
+        );
     }
 }

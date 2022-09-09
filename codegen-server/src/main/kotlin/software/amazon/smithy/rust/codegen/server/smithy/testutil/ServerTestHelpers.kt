@@ -9,15 +9,15 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenConfig
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ServerRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenConfig
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(

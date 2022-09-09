@@ -8,18 +8,18 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ServerCombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.error.ServerCombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 
 /**
  * Generates a unified error enum for [operation]. It depends on [ServerCombinedErrorGenerator]
