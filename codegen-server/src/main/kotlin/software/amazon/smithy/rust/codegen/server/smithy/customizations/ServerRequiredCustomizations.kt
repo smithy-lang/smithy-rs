@@ -5,15 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.rustlang.Feature
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
-import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
-import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.client.rustlang.Feature
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.CrateVersionGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SmithyTypesPubUseGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
 
 /**
  * A set of customizations that are included in all protocols.
