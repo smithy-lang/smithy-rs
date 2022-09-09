@@ -75,4 +75,37 @@ internal class RustTypeParametersTest {
 
         writer.toString() shouldContain "'<()>'"
     }
+
+    @Test
+    fun `join iterable`() {
+        val writer = RustWriter.forModule("model")
+        val itemsA = listOf(writable("a"), writable("b"), writable("c")).join(", ")
+        val itemsB = listOf(writable("d"), writable("e"), writable("f")).join(writable(", "))
+        writer.rustTemplate("vec![#{ItemsA:W}, #{ItemsB:W}]", "ItemsA" to itemsA, "ItemsB" to itemsB)
+        writer.toString() shouldContain "vec![a, b, c, d, e, f]"
+    }
+
+    @Test
+    fun `join array`() {
+        val writer = RustWriter.forModule("model")
+        arrayOf(writable("A"), writable("B"), writable("C")).join("-")(writer)
+        arrayOf(writable("D"), writable("E"), writable("F")).join(writable("+"))(writer)
+        writer.toString() shouldContain "A-B-CD+E+F"
+    }
+
+    @Test
+    fun `join sequence`() {
+        val writer = RustWriter.forModule("model")
+        sequence {
+            yield(writable("A"))
+            yield(writable("B"))
+            yield(writable("C"))
+        }.join("-")(writer)
+        sequence {
+            yield(writable("D"))
+            yield(writable("E"))
+            yield(writable("F"))
+        }.join(writable("+"))(writer)
+        writer.toString() shouldContain "A-B-CD+E+F"
+    }
 }
