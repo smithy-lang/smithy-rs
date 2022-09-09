@@ -34,7 +34,10 @@ service Config {
         uri: "/",
         body: "{\"as\": 5, \"async\": true}",
         bodyMediaType: "application/json",
-        headers: {"Content-Type": "application/x-amz-json-1.1"}
+        headers: {
+            "Content-Type": "application/x-amz-json-1.1",
+            "X-Amz-Target": "Config.ReservedWordsAsMembers",
+        },
     }
 ])
 operation ReservedWordsAsMembers {
@@ -78,7 +81,10 @@ structure Type {
         uri: "/",
         body: "{\"regular_string\": \"hello!\"}",
         bodyMediaType: "application/json",
-        headers: {"Content-Type": "application/x-amz-json-1.1"}
+        headers: {
+            "Content-Type": "application/x-amz-json-1.1",
+            "X-Amz-Target": "Config.StructureNamePunning",
+        },
     }
 ])
 operation StructureNamePunning {
