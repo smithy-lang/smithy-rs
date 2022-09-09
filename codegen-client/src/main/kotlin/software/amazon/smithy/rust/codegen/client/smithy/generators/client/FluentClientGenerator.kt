@@ -67,7 +67,7 @@ class FluentClientGenerator(
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
     private val retryClassifier: RuntimeType = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
-        .member("retry::DefaultResponseClassifier"),
+        .member("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =

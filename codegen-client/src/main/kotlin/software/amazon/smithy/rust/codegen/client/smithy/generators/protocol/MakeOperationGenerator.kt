@@ -48,7 +48,7 @@ open class MakeOperationGenerator(
     protected val symbolProvider = coreCodegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
     private val defaultClassifier = CargoDependency.SmithyHttp(runtimeConfig)
-        .asType().member("retry::DefaultResponseClassifier")
+        .asType().member("retry::DefaultResponseRetryClassifier")
 
     private val sdkId =
         coreCodegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")

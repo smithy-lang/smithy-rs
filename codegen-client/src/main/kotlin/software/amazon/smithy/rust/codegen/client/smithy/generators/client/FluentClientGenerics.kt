@@ -78,7 +78,7 @@ data class FlexibleClientGenerics(
                 #{Operation},
                 #{OperationOutput},
                 #{OperationError},
-                #{RetryClassifier:W}
+                #{RetryClassifier}
             >
             """,
             "client" to client,
