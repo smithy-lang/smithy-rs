@@ -12,18 +12,18 @@ use crate::result::SdkError;
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
 
 /// Classifies what kind of retry is needed for a given `response`.
-pub trait ClassifyResponse<T, E>: Clone {
-    fn classify(&self, response: Result<&T, &E>) -> RetryKind;
+pub trait ClassifyRetry<T, E>: Clone {
+    fn classify_retry(&self, response: Result<&T, &E>) -> RetryKind;
 }
 
 const TRANSIENT_ERROR_STATUS_CODES: &[u16] = &[500, 502, 503, 504];
 
-/// The default implementation of [`ClassifyResponse`] for generated clients.
+/// The default implementation of [`ClassifyRetry`] for generated clients.
 #[derive(Clone, Debug, Default)]
-pub struct DefaultResponseClassifier;
+pub struct DefaultResponseRetryClassifier;
 
-impl DefaultResponseClassifier {
-    /// Creates a new `DefaultResponseClassifier`
+impl DefaultResponseRetryClassifier {
+    /// Creates a new `DefaultResponseRetryClassifier`
     pub fn new() -> Self {
         Default::default()
     }
@@ -56,11 +56,11 @@ impl DefaultResponseClassifier {
     }
 }
 
-impl<T, E> ClassifyResponse<T, SdkError<E>> for DefaultResponseClassifier
+impl<T, E> ClassifyRetry<T, SdkError<E>> for DefaultResponseRetryClassifier
 where
     E: ProvideErrorKind,
 {
-    fn classify(&self, result: Result<&T, &SdkError<E>>) -> RetryKind {
+    fn classify_retry(&self, result: Result<&T, &SdkError<E>>) -> RetryKind {
         let (err, response) = match Self::try_extract_err_response(result) {
             Ok(extracted) => extracted,
             Err(retry_kind) => return retry_kind,
@@ -81,7 +81,7 @@ mod test {
     use crate::body::SdkBody;
     use crate::operation;
     use crate::result::{SdkError, SdkSuccess};
-    use crate::retry::ClassifyResponse;
+    use crate::retry::ClassifyRetry;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use std::fmt;
 
@@ -130,36 +130,36 @@ mod test {
 
     #[test]
     fn not_an_error() {
-        let policy = DefaultResponseClassifier::new();
+        let policy = DefaultResponseRetryClassifier::new();
         let test_response = http::Response::new("OK");
         assert_eq!(
-            policy.classify(make_err(UnmodeledError, test_response).as_ref()),
+            policy.classify_retry(make_err(UnmodeledError, test_response).as_ref()),
             RetryKind::UnretryableFailure
         );
     }
 
     #[test]
     fn classify_by_response_status() {
-        let policy = DefaultResponseClassifier::new();
+        let policy = DefaultResponseRetryClassifier::new();
         let test_resp = http::Response::builder()
             .status(500)
             .body("error!")
             .unwrap();
         assert_eq!(
-            policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
+            policy.classify_retry(make_err(UnmodeledError, test_resp).as_ref()),
             RetryKind::Error(ErrorKind::TransientError)
         );
     }
 
     #[test]
     fn classify_by_response_status_not_retryable() {
-        let policy = DefaultResponseClassifier::new();
+        let policy = DefaultResponseRetryClassifier::new();
         let test_resp = http::Response::builder()
             .status(408)
             .body("error!")
             .unwrap();
         assert_eq!(
-            policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
+            policy.classify_retry(make_err(UnmodeledError, test_resp).as_ref()),
             RetryKind::UnretryableFailure
         );
     }
@@ -179,19 +179,19 @@ mod test {
             }
         }
 
-        let policy = DefaultResponseClassifier::new();
+        let policy = DefaultResponseRetryClassifier::new();
 
         assert_eq!(
-            policy.classify(make_err(ModeledRetries, test_response).as_ref()),
+            policy.classify_retry(make_err(ModeledRetries, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ClientError)
         );
     }
 
     #[test]
     fn classify_response_error() {
-        let policy = DefaultResponseClassifier::new();
+        let policy = DefaultResponseRetryClassifier::new();
         assert_eq!(
-            policy.classify(
+            policy.classify_retry(
                 Result::<SdkSuccess<()>, SdkError<UnmodeledError>>::Err(SdkError::ResponseError {
                     err: Box::new(UnmodeledError),
                     raw: operation::Response::new(
@@ -206,10 +206,10 @@ mod test {
 
     #[test]
     fn test_timeout_error() {
-        let policy = DefaultResponseClassifier::new();
+        let policy = DefaultResponseRetryClassifier::new();
         let err: Result<(), SdkError<UnmodeledError>> = Err(SdkError::TimeoutError("blah".into()));
         assert_eq!(
-            policy.classify(err.as_ref()),
+            policy.classify_retry(err.as_ref()),
             RetryKind::Error(ErrorKind::TransientError)
         );
     }

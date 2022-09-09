@@ -282,7 +282,7 @@ private fun renderCustomizableOperationSendMethod(
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
         "SdkSuccess" to smithyHttp.member("result::SdkSuccess"),
-        "ClassifyResponse" to smithyHttp.member("retry::ClassifyResponse"),
+        "ClassifyRetry" to smithyHttp.member("retry::ClassifyRetry"),
         "ParseHttpResponse" to smithyHttp.member("response::ParseHttpResponse"),
     )
 
@@ -297,7 +297,7 @@ private fun renderCustomizableOperationSendMethod(
             where
                 E: std::error::Error,
                 O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyResponse}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
+                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
             {
                 self.handle.client.call(self.operation).await
             }

@@ -14,7 +14,7 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::{Operation, Request};
 use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::{SdkError, SdkSuccess};
-use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use aws_smithy_types::timeout;
 use aws_smithy_types::tristate::TriState;
@@ -167,10 +167,10 @@ impl ParseStrictResponse for CredentialsResponseParser {
 #[derive(Clone, Debug)]
 struct HttpCredentialRetryPolicy;
 
-impl ClassifyResponse<SdkSuccess<Credentials>, SdkError<CredentialsError>>
+impl ClassifyRetry<SdkSuccess<Credentials>, SdkError<CredentialsError>>
     for HttpCredentialRetryPolicy
 {
-    fn classify(
+    fn classify_retry(
         &self,
         response: Result<&SdkSuccess<credentials::Credentials>, &SdkError<CredentialsError>>,
     ) -> RetryKind {
@@ -211,7 +211,7 @@ mod test {
     use aws_smithy_http::operation;
     use aws_smithy_http::response::ParseStrictResponse;
     use aws_smithy_http::result::{SdkError, SdkSuccess};
-    use aws_smithy_http::retry::ClassifyResponse;
+    use aws_smithy_http::retry::ClassifyRetry;
     use aws_smithy_types::retry::{ErrorKind, RetryKind};
     use aws_types::credentials::CredentialsError;
     use aws_types::Credentials;
@@ -245,7 +245,7 @@ mod test {
             .unwrap();
 
         assert_eq!(
-            HttpCredentialRetryPolicy.classify(sdk_resp(bad_response).as_ref()),
+            HttpCredentialRetryPolicy.classify_retry(sdk_resp(bad_response).as_ref()),
             RetryKind::Error(ErrorKind::ServerError)
         );
     }
@@ -266,7 +266,7 @@ mod test {
         let sdk_result = sdk_resp(ok_response);
 
         assert_eq!(
-            HttpCredentialRetryPolicy.classify(sdk_result.as_ref()),
+            HttpCredentialRetryPolicy.classify_retry(sdk_result.as_ref()),
             RetryKind::Unnecessary
         );
 
@@ -281,7 +281,7 @@ mod test {
             .unwrap();
         let sdk_result = sdk_resp(error_response);
         assert_eq!(
-            HttpCredentialRetryPolicy.classify(sdk_result.as_ref()),
+            HttpCredentialRetryPolicy.classify_retry(sdk_result.as_ref()),
             RetryKind::UnretryableFailure
         );
         let sdk_error = sdk_result.expect_err("should be error");

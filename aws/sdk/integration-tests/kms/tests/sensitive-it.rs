@@ -9,7 +9,7 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::{self, Parts};
 use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use bytes::Bytes;
 use kms::error::CreateAliasError;

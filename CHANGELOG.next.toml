@@ -194,7 +194,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "`ClassifyResponse` is no longer implemented for the unit type."
+message = "`ClassifyResponse` was renamed to `ClassifyRetry` and is no longer implemented for the unit type."
 references = ["smithy-rs#1715", "smithy-rs#1717"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"

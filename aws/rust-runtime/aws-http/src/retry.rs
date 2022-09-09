@@ -5,7 +5,7 @@
 //! AWS-specific retry logic
 
 use aws_smithy_http::result::SdkError;
-use aws_smithy_http::retry::{ClassifyResponse, DefaultResponseClassifier};
+use aws_smithy_http::retry::{ClassifyRetry, DefaultResponseRetryClassifier};
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
 use std::time::Duration;
 
@@ -28,7 +28,7 @@ const THROTTLING_ERRORS: &[&str] = &[
 ];
 const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
-/// Implementation of [`ClassifyResponse`] that models AWS error codes.
+/// Implementation of [`ClassifyRetry`] that models AWS error codes.
 ///
 /// In order of priority:
 /// 1. The `x-amz-retry-after` header is checked
@@ -52,12 +52,13 @@ impl Default for AwsResponseClassifier {
     }
 }
 
-impl<T, E> ClassifyResponse<T, SdkError<E>> for AwsResponseClassifier
+impl<T, E> ClassifyRetry<T, SdkError<E>> for AwsResponseClassifier
 where
     E: ProvideErrorKind,
 {
-    fn classify(&self, result: Result<&T, &SdkError<E>>) -> RetryKind {
-        let (err, response) = match DefaultResponseClassifier::try_extract_err_response(result) {
+    fn classify_retry(&self, result: Result<&T, &SdkError<E>>) -> RetryKind {
+        let (err, response) = match DefaultResponseRetryClassifier::try_extract_err_response(result)
+        {
             Ok(extracted) => extracted,
             Err(retry_kind) => return retry_kind,
         };
@@ -95,7 +96,7 @@ mod test {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation;
     use aws_smithy_http::result::{SdkError, SdkSuccess};
-    use aws_smithy_http::retry::ClassifyResponse;
+    use aws_smithy_http::retry::ClassifyRetry;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use std::fmt;
     use std::time::Duration;
@@ -148,7 +149,7 @@ mod test {
         let policy = AwsResponseClassifier::new();
         let test_response = http::Response::new("OK");
         assert_eq!(
-            policy.classify(make_err(UnmodeledError, test_response).as_ref()),
+            policy.classify_retry(make_err(UnmodeledError, test_response).as_ref()),
             RetryKind::UnretryableFailure
         );
     }
@@ -161,7 +162,7 @@ mod test {
             .body("error!")
             .unwrap();
         assert_eq!(
-            policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
+            policy.classify_retry(make_err(UnmodeledError, test_resp).as_ref()),
             RetryKind::Error(ErrorKind::TransientError)
         );
     }
@@ -174,7 +175,7 @@ mod test {
             .body("error!")
             .unwrap();
         assert_eq!(
-            policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
+            policy.classify_retry(make_err(UnmodeledError, test_resp).as_ref()),
             RetryKind::UnretryableFailure
         );
     }
@@ -185,13 +186,15 @@ mod test {
         let policy = AwsResponseClassifier::new();
 
         assert_eq!(
-            policy.classify(make_err(CodedError { code: "Throttling" }, test_response).as_ref()),
+            policy.classify_retry(
+                make_err(CodedError { code: "Throttling" }, test_response).as_ref()
+            ),
             RetryKind::Error(ErrorKind::ThrottlingError)
         );
 
         let test_response = http::Response::new("OK");
         assert_eq!(
-            policy.classify(
+            policy.classify_retry(
                 make_err(
                     CodedError {
                         code: "RequestTimeout"
@@ -210,7 +213,7 @@ mod test {
         let test_response = http::Response::new("OK");
         let policy = AwsResponseClassifier::new();
         assert_eq!(
-            policy.classify(make_err(err, test_response).as_ref()),
+            policy.classify_retry(make_err(err, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ThrottlingError)
         );
     }
@@ -233,7 +236,7 @@ mod test {
         let policy = AwsResponseClassifier::new();
 
         assert_eq!(
-            policy.classify(make_err(ModeledRetries, test_response).as_ref()),
+            policy.classify_retry(make_err(ModeledRetries, test_response).as_ref()),
             RetryKind::Error(ErrorKind::ClientError)
         );
     }
@@ -247,7 +250,7 @@ mod test {
             .unwrap();
 
         assert_eq!(
-            policy.classify(make_err(UnmodeledError, test_response).as_ref()),
+            policy.classify_retry(make_err(UnmodeledError, test_response).as_ref()),
             RetryKind::Explicit(Duration::from_millis(5000))
         );
     }
@@ -256,7 +259,7 @@ mod test {
     fn classify_response_error() {
         let policy = AwsResponseClassifier::new();
         assert_eq!(
-            policy.classify(
+            policy.classify_retry(
                 Result::<SdkSuccess<()>, SdkError<UnmodeledError>>::Err(SdkError::ResponseError {
                     err: Box::new(UnmodeledError),
                     raw: operation::Response::new(
@@ -274,7 +277,7 @@ mod test {
         let policy = AwsResponseClassifier::new();
         let err: Result<(), SdkError<UnmodeledError>> = Err(SdkError::TimeoutError("blah".into()));
         assert_eq!(
-            policy.classify(err.as_ref()),
+            policy.classify_retry(err.as_ref()),
             RetryKind::Error(ErrorKind::TransientError)
         );
     }

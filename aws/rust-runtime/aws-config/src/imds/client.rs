@@ -23,7 +23,7 @@ use aws_smithy_http::endpoint::Endpoint;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::{Metadata, Operation};
 use aws_smithy_http::response::ParseStrictResponse;
-use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_http_tower::map_request::{
     AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
 };
@@ -730,8 +730,8 @@ impl ImdsErrorPolicy {
 /// - 403 (IMDS disabled): **Not Retryable**
 /// - 404 (Not found): **Not Retryable**
 /// - >=500 (server error): **Retryable**
-impl<T, E> ClassifyResponse<SdkSuccess<T>, SdkError<E>> for ImdsErrorPolicy {
-    fn classify(&self, response: Result<&SdkSuccess<T>, &SdkError<E>>) -> RetryKind {
+impl<T, E> ClassifyRetry<SdkSuccess<T>, SdkError<E>> for ImdsErrorPolicy {
+    fn classify_retry(&self, response: Result<&SdkSuccess<T>, &SdkError<E>>) -> RetryKind {
         match response {
             Ok(_) => RetryKind::Unnecessary,
             Err(SdkError::ResponseError { raw, .. }) | Err(SdkError::ServiceError { raw, .. }) => {
@@ -1006,7 +1006,7 @@ pub(crate) mod test {
     /// Successful responses should classify as `RetryKind::Unnecessary`
     #[test]
     fn successful_response_properly_classified() {
-        use aws_smithy_http::retry::ClassifyResponse;
+        use aws_smithy_http::retry::ClassifyRetry;
 
         let policy = ImdsErrorPolicy;
         fn response_200() -> operation::Response {
@@ -1018,7 +1018,7 @@ pub(crate) mod test {
         };
         assert_eq!(
             RetryKind::Unnecessary,
-            policy.classify(Ok::<_, &SdkError<()>>(&success))
+            policy.classify_retry(Ok::<_, &SdkError<()>>(&success))
         );
 
         // Emulate a failure to parse the response body (using an io error since it's easy to construct in a test)
@@ -1028,7 +1028,7 @@ pub(crate) mod test {
         };
         assert_eq!(
             RetryKind::UnretryableFailure,
-            policy.classify(Err::<&SdkSuccess<()>, _>(&failure))
+            policy.classify_retry(Err::<&SdkSuccess<()>, _>(&failure))
         );
     }
 

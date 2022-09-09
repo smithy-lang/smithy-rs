@@ -318,7 +318,7 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "ClassifyResponse" to runtimeConfig.smithyHttp().member("retry::ClassifyResponse"),
+                        "ClassifyRetry" to runtimeConfig.smithyHttp().member("retry::ClassifyRetry"),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
                         "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),

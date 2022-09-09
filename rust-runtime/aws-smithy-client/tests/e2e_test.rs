@@ -20,7 +20,7 @@ mod test_operation {
     use aws_smithy_http::operation;
     use aws_smithy_http::response::ParseHttpResponse;
     use aws_smithy_http::result::SdkError;
-    use aws_smithy_http::retry::ClassifyResponse;
+    use aws_smithy_http::retry::ClassifyRetry;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use bytes::Bytes;
     use std::error::Error;
@@ -69,12 +69,12 @@ mod test_operation {
     #[derive(Clone)]
     pub(super) struct TestPolicy;
 
-    impl<T, E> ClassifyResponse<T, SdkError<E>> for TestPolicy
+    impl<T, E> ClassifyRetry<T, SdkError<E>> for TestPolicy
     where
         E: ProvideErrorKind + Debug,
         T: Debug,
     {
-        fn classify(&self, err: Result<&T, &SdkError<E>>) -> RetryKind {
+        fn classify_retry(&self, err: Result<&T, &SdkError<E>>) -> RetryKind {
             let kind = match err {
                 Err(SdkError::ServiceError { err, .. }) => err.retryable_error_kind(),
                 Ok(_) => return RetryKind::Unnecessary,

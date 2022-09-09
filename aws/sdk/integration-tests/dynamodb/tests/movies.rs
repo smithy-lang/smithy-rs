@@ -11,7 +11,7 @@ use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::result::{SdkError, SdkSuccess};
-use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_types::retry::RetryKind;
 use dynamodb::error::DescribeTableError;
 use dynamodb::input::{DescribeTableInput, PutItemInput, QueryInput};
@@ -116,12 +116,12 @@ struct WaitForReadyTable<R> {
     inner: R,
 }
 
-impl<R> ClassifyResponse<SdkSuccess<DescribeTableOutput>, SdkError<DescribeTableError>>
+impl<R> ClassifyRetry<SdkSuccess<DescribeTableOutput>, SdkError<DescribeTableError>>
     for WaitForReadyTable<R>
 where
-    R: ClassifyResponse<SdkSuccess<DescribeTableOutput>, SdkError<DescribeTableError>>,
+    R: ClassifyRetry<SdkSuccess<DescribeTableOutput>, SdkError<DescribeTableError>>,
 {
-    fn classify(
+    fn classify_retry(
         &self,
         response: Result<&SdkSuccess<DescribeTableOutput>, &SdkError<DescribeTableError>>,
     ) -> RetryKind {
