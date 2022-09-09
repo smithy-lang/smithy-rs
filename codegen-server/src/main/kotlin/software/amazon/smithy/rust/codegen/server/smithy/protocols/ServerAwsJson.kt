@@ -7,24 +7,24 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.escape
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
-import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.awsJsonFieldName
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonCustomization
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSection
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.escape
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.awsJsonFieldName
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSection
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.util.hasTrait
 
 /**
  * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGenerator]

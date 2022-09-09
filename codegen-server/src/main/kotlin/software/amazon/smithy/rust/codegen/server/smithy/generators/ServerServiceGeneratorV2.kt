@@ -6,22 +6,21 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.rustlang.join
-import software.amazon.smithy.rust.codegen.rustlang.plus
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.client.rustlang.join
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.util.toPascalCase
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class ServerServiceGeneratorV2(
     coreCodegenContext: CoreCodegenContext,

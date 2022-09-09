@@ -8,18 +8,18 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.EventStreamMarshallerGenerator
+import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.client.testutil.testRustSettings
+import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.client.util.dq
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.EventStreamMarshallerGenerator
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.testutil.testRustSettings
-import software.amazon.smithy.rust.codegen.testutil.unitTest
-import software.amazon.smithy.rust.codegen.util.dq
 
 class EventStreamMarshallerGeneratorTest {
     @ParameterizedTest

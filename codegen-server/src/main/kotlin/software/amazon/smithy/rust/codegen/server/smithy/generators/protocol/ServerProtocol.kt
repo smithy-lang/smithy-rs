@@ -7,20 +7,20 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
-import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
 
 private fun allOperations(coreCodegenContext: CoreCodegenContext): List<OperationShape> {
     val index = TopDownIndex.of(coreCodegenContext.model)
