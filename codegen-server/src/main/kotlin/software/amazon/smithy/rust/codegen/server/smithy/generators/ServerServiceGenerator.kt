@@ -7,14 +7,15 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 
 /**
  * ServerServiceGenerator
@@ -37,15 +38,11 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
+        rustCrate.withModule(DefaultPublicModules["operation"]!!) { writer ->
+            ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, protocolGenerator).render(writer)
+        }
+
         for (operation in operations) {
-            rustCrate.useShapeWriter(operation) { operationWriter ->
-                protocolGenerator.serverRenderOperation(
-                    operationWriter,
-                    operation,
-                )
-                ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, operation, operationWriter)
-                    .render()
-            }
             if (operation.errors.isNotEmpty()) {
                 rustCrate.withModule(RustModule.Error) { writer ->
                     renderCombinedErrors(writer, operation)
