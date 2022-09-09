@@ -42,7 +42,7 @@ pub struct AwsResponseRetryClassifier;
 impl AwsResponseRetryClassifier {
     /// Create an `AwsResponseRetryClassifier` with the default set of known error & status codes
     pub fn new() -> Self {
-        AwsResponseRetryClassifier
+        Self
     }
 }
 
@@ -57,6 +57,9 @@ where
     E: ProvideErrorKind,
 {
     fn classify_retry(&self, result: Result<&T, &SdkError<E>>) -> RetryKind {
+        // Run common retry classification logic from aws-smithy-http, and if it yields
+        // a `RetryKind`, then return that immediately. Otherwise, continue on to run some
+        // AWS SDK specific classification logic.
         let (err, response) = match DefaultResponseRetryClassifier::try_extract_err_response(result)
         {
             Ok(extracted) => extracted,

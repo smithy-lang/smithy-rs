@@ -74,7 +74,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override val bounds = writable { }
 
     /** Bounds for generated `send()` functions */
-    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryPolicy: Writable): Writable = writable { }
+    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable = writable { }
 
     override fun toGenericsGenerator(): GenericsGenerator {
         return GenericsGenerator()
@@ -98,7 +98,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
-            retryPolicy = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier").writable,
+            retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
         rustCrate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
             renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
