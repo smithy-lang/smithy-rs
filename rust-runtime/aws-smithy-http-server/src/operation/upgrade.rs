@@ -207,8 +207,10 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let clone = self.inner.clone();
+        let service = std::mem::replace(&mut self.inner, clone);
         UpgradeFuture {
-            service: self.inner.clone(),
+            service,
             inner: Inner::FromRequest {
                 inner: <(Op::Input, Exts) as FromRequest<P, B>>::from_request(req),
             },
