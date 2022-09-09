@@ -40,7 +40,7 @@ class ServerServiceGeneratorV2(
     private val symbolProvider = coreCodegenContext.symbolProvider
 
     private val service = coreCodegenContext.serviceShape
-    private val serviceName = service.id.name
+    private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
