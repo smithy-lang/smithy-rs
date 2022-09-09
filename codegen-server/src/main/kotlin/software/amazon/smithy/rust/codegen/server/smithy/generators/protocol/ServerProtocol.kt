@@ -83,7 +83,8 @@ class ServerAwsJsonProtocol(
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
         val allOperationShapes = allOperations(coreCodegenContext)
 
-        // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol
+        // visitor should not be invoked in service shapes"
         // val serviceName = symbolProvider.toSymbol(service).name
         val serviceName = service.id.name
         val pairs = writable {
@@ -120,7 +121,8 @@ private fun restRouterConstruction(
 ): Writable = writable {
     val operations = allOperations(coreCodegenContext)
 
-    // TODO(restore): This causes a panic: "symbol visitor should not be invoked in service shapes"
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol visitor
+    // should not be invoked in service shapes"
     // val serviceName = symbolProvider.toSymbol(service).name
     val serviceName = coreCodegenContext.serviceShape.id.name
     val pairs = writable {
