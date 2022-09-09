@@ -13,20 +13,20 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.client.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.client.util.getTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.util.getTrait
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
