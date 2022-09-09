@@ -3,15 +3,19 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
+import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
@@ -50,6 +54,30 @@ fun Shape.hasPublicConstrainedWrapperTupleType(model: Model): Boolean = when (th
     is StringShape -> !this.hasTrait<EnumTrait>() && this.hasTrait<LengthTrait>()
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model)
     else -> false
+}
+
+/**
+ * Returns whether a shape's type _name_ contains a non-public type when `publicConstrainedTypes` is `false`.
+ *
+ * For example, a `Vec<crate::model::LengthString>` contains a non-public type, because `crate::model::LengthString`
+ * is `pub(crate)` when `publicConstrainedTypes` is `false`
+ *
+ * Note that a structure shape's type _definition_ may contain non-public types, but its _name_ is always public.
+ *
+ *  Note how we short-circuit on `publicConstrainedTypes = true`, but we still require it to be passed in instead of laying
+ *  the responsibility on the caller, for API safety usage.
+ */
+fun Shape.containsNonPublicType(
+    model: Model,
+    symbolProvider: SymbolProvider,
+    publicConstrainedTypes: Boolean,
+): Boolean = !publicConstrainedTypes && when (this) {
+    is SimpleShape -> hasPublicConstrainedWrapperTupleType(model)
+    is MemberShape -> model.expectShape(this.target).containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+    is CollectionShape -> this.canReachConstrainedShape(model, symbolProvider)
+    is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
+    is StructureShape, is UnionShape -> false
+    else -> UNREACHABLE("the above arms should be exhaustive, but we received shape: $this")
 }
 
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =

@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbol
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.containsNonPublicType
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isTransitivelyButNotDirectlyConstrained
 
@@ -92,10 +93,11 @@ class PubCrateConstrainedCollectionGenerator(
                 //
                 // Note that we could add the iteration code unconditionally and it would still be correct, but the `into()` calls
                 // would be useless. Clippy flags this as [`useless_conversion`]. We could deactivate the lint, but it's probably
-                // best that we just don't emit a useless iteration, lest the compiler not optimize it away, and to make the
-                // generated code a little bit simpler.
+                // best that we just don't emit a useless iteration, lest the compiler not optimize it away (see [Godbolt]),
+                // and to make the generated code a little bit simpler.
                 //
                 // [`useless_conversion`]: https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion.
+                // [Godbolt]: https://godbolt.org/z/eheWebWMa
                 val innerNeedsConstraining =
                     !innerShape.isDirectlyConstrained(symbolProvider) && (innerShape is CollectionShape || innerShape is MapShape)
 
@@ -124,11 +126,17 @@ class PubCrateConstrainedCollectionGenerator(
                     *codegenScope
                 )
             } else {
+                val innerNeedsConversion = innerShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+
                 rustTemplate(
                     """
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
-                            v.0.into_iter().map(|item| item.into()).collect()
+                            ${ if (innerNeedsConversion) {
+                                "v.0.into_iter().map(|item| item.into()).collect()"
+                            } else {
+                                "v.0"
+                            } }
                         }
                     }
                     """,

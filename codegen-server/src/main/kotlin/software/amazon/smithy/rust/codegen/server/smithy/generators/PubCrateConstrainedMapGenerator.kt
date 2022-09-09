@@ -16,16 +16,9 @@ import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbol
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.containsNonPublicType
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isTransitivelyButNotDirectlyConstrained
-
-// TODO I'm looking at this class and `ConstrainedMapGenerator` and cannot help but think that we could dispense with
-//   the stuff `PubCrate*` (i.e. the entire `constrained module), by just generating the `Constrained*` shapes and
-//   marking them `pub(crate)`. After all, when `publicConstrainedTypes` is `false`, we're still generating the
-//   constrained types and using them in the deser path, but we're marking them `pub(crate)`, and it works fine.
-//   Maybe this approach is better, since this is less code than the public constrained types' generators, and it
-//   makes the distinction between what is directly constrained vs what is transitively but not directly constrained
-//   clearer.
 
 /**
  * A generator for a wrapper tuple newtype over a map shape's symbol type.
@@ -124,11 +117,20 @@ class PubCrateConstrainedMapGenerator(
                     *codegenScope
                 )
             } else {
+                val keyNeedsConversion = keyShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+                val valueNeedsConversion = valueShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+
                 rustTemplate(
                     """
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
-                            v.0.into_iter().map(|(k, v)| (k.into(), v.into())).collect()
+                            ${ if (keyNeedsConversion || valueNeedsConversion) {
+                                val keyConversion = if (keyNeedsConversion) { ".into()" } else { "" }
+                                val valueConversion = if (valueNeedsConversion) { ".into()" } else { "" }
+                                "v.0.into_iter().map(|(k, v)| (k$keyConversion, v$valueConversion)).collect()"
+                            } else {
+                                "v.0"
+                            } }
                         }
                     }
                     """,
