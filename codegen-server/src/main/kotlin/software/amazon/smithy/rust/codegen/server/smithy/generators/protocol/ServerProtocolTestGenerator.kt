@@ -106,6 +106,7 @@ class ServerProtocolTestGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
+        "Tokio" to ServerCargoDependency.TokioDev.asType(),
         "Tower" to CargoDependency.Tower.asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(coreCodegenContext.runtimeConfig).asType(),
         "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
@@ -553,18 +554,25 @@ class ServerProtocolTestGenerator(
 
     /** Checks the request using the new service builder. */
     private fun checkRequest2(operationShape: OperationShape, operationSymbol: Symbol, httpRequestTestCase: HttpRequestTestCase, rustWriter: RustWriter) {
-        val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
+        val (inputT, _) = operationInputOutputTypes[operationShape]!!
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
         rustWriter.rustTemplate(
             """
+            let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let service = crate::service::$serviceName::unchecked_builder()
-                .$operationName(|input: $inputT| async move {
-                    #{Body:W}
+                .$operationName(move |input: $inputT| {
+                    let sender = sender.clone();
+                    async move {
+                        let result = { #{Body:W} };
+                        sender.send(()).await.expect("receiver dropped early");
+                        result
+                    }
                 })
                 .build::<#{Hyper}::body::Body>();
             let http_response = #{Tower}::ServiceExt::oneshot(service, http_request)
                 .await
                 .expect("unable to make an HTTP request");
+            assert!(receiver.recv().await.is_some())
             """,
             "Body" to checkRequestHandler(operationShape, httpRequestTestCase),
             *codegenScope,
