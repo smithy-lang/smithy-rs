@@ -94,7 +94,7 @@ async fn errors_are_retryable() {
             err: e,
             raw: operation::Response::new(http_response.map(SdkBody::from)),
         });
-    let retry_kind = op.retry_policy.classify(err.as_ref());
+    let retry_kind = op.retry_classifier.classify_retry(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }
 
@@ -112,6 +112,6 @@ async fn unmodeled_errors_are_retryable() {
             err: e,
             raw: operation::Response::new(http_response.map(SdkBody::from)),
         });
-    let retry_kind = op.retry_policy.classify(err.as_ref());
+    let retry_kind = op.retry_classifier.classify_retry(err.as_ref());
     assert_eq!(retry_kind, RetryKind::Error(ErrorKind::ThrottlingError));
 }
