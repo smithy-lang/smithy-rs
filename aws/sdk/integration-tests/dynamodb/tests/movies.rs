@@ -174,7 +174,7 @@ async fn movies_it() {
         add_item(&client, table_name, item.clone()).await;
     }
     let films_2222 = movies_in_year(&client, table_name, 2222).await;
-    // this isn't back to the future, there are no movies from 2022
+    // this isn't "Back To The Future", there are no movies from 2222
     assert_eq!(films_2222.count, 0);
 
     let films_2013 = movies_in_year(&client, table_name, 2013).await;
