@@ -28,7 +28,7 @@ const THROTTLING_ERRORS: &[&str] = &[
 ];
 const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
-/// Implementation of [`ClassifyRetry`] that models AWS error codes.
+/// Implementation of [`ClassifyRetry`] that classifies AWS error codes.
 ///
 /// In order of priority:
 /// 1. The `x-amz-retry-after` header is checked
