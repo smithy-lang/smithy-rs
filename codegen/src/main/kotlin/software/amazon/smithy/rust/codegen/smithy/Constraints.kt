@@ -64,8 +64,8 @@ fun Shape.hasPublicConstrainedWrapperTupleType(model: Model): Boolean = when (th
  *
  * Note that a structure shape's type _definition_ may contain non-public types, but its _name_ is always public.
  *
- *  Note how we short-circuit on `publicConstrainedTypes = true`, but we still require it to be passed in instead of laying
- *  the responsibility on the caller, for API safety usage.
+ * Note how we short-circuit on `publicConstrainedTypes = true`, but we still require it to be passed in instead of laying
+ * the responsibility on the caller, for API safety usage.
  */
 fun Shape.containsNonPublicType(
     model: Model,

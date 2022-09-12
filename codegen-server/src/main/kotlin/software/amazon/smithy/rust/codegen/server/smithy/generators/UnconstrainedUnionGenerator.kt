@@ -169,8 +169,9 @@ class UnconstrainedUnionGenerator(
                     ) {
                         if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
                             val targetShape = model.expectShape(member.target)
+                            // TODO Use `hasPublicConstrainedWrapperTupleType`.
                             val resolveToNonPublicConstrainedType =
-                                targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>()
+                                targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>() &&
                                 (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
 
                             val hasBox = member.hasTrait<RustBoxTrait>()
