@@ -38,12 +38,10 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
-import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
@@ -52,6 +50,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -556,7 +555,7 @@ class HttpBindingGenerator(
             val listHeader = memberType is CollectionShape
             rustTemplate(
                 """
-                for (k, v) in ${ if (workingWithPublicConstrainedWrapperTupleType(memberShape)) "&$field.0" else field } {
+                for (k, v) in ${ if (workingWithPublicConstrainedWrapperTupleType(memberShape, coreCodegenContext)) "&$field.0" else field } {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
@@ -603,7 +602,7 @@ class HttpBindingGenerator(
                 } else {
                     // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member traits are not
                     //  supported yet.
-                    val expr = if (workingWithPublicConstrainedWrapperTupleType(target)) "&$targetName.0" else targetName
+                    val expr = if (workingWithPublicConstrainedWrapperTupleType(target, coreCodegenContext)) "&$targetName.0" else targetName
                     quoteValue("AsRef::<str>::as_ref($expr)")
                 }
             }
@@ -622,9 +621,4 @@ class HttpBindingGenerator(
             else -> throw CodegenException("unexpected shape: $target")
         }
     }
-
-    private fun workingWithPublicConstrainedWrapperTupleType(shape: Shape) =
-        codegenTarget == CodegenTarget.SERVER &&
-            (coreCodegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes &&
-            shape.hasPublicConstrainedWrapperTupleType(model)
 }

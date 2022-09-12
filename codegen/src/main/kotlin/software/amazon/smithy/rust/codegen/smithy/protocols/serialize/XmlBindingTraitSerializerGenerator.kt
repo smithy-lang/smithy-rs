@@ -38,11 +38,9 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
-import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
@@ -51,6 +49,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -58,7 +57,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
 class XmlBindingTraitSerializerGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataSerializerGenerator {
     private val symbolProvider = coreCodegenContext.symbolProvider
@@ -289,9 +288,7 @@ class XmlBindingTraitSerializerGenerator(
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
         when (model.expectShape(member.target)) {
             is StringShape -> {
-                val workingWithPublicConstrainedWrapperTupleType =
-                    codegenTarget == CodegenTarget.SERVER && member.hasPublicConstrainedWrapperTupleType(model)
-                if (workingWithPublicConstrainedWrapperTupleType) {
+                if (workingWithPublicConstrainedWrapperTupleType(member, coreCodegenContext)) {
                     rust("$input.0.as_str()")
                 } else {
                     rust("$input.as_str()")

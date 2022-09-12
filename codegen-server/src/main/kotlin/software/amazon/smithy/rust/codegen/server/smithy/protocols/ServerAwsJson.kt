@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
@@ -91,7 +90,6 @@ class ServerAwsJsonSerializerGenerator(
             httpBindingResolver,
             ::awsJsonFieldName,
             customizations = listOf(ServerAwsJsonError(awsJsonVersion)),
-            publicConstrainedTypes = serverCodegenContext.settings.codegenConfig.publicConstrainedTypes
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 

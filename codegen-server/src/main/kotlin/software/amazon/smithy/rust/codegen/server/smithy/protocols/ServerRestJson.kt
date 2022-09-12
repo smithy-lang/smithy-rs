@@ -47,6 +47,5 @@ class ServerRestJson(private val serverCodegenContext: ServerCodegenContext) : R
             serverCodegenContext,
             httpBindingResolver,
             ::restJsonFieldName,
-            publicConstrainedTypes = serverCodegenContext.settings.codegenConfig.publicConstrainedTypes,
         )
 }

@@ -36,18 +36,17 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
-import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -68,12 +67,11 @@ sealed class JsonSection(name: String) : Section(name) {
 typealias JsonCustomization = NamedSectionGenerator<JsonSection>
 
 class JsonSerializerGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
     private val customizations: List<JsonCustomization> = listOf(),
-    private val publicConstrainedTypes: Boolean = false,
 ) : StructuredDataSerializerGenerator {
     private data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
@@ -353,9 +351,7 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
         val writer = context.writerExpression
 
-        val workingWithPublicConstrainedWrapperTupleType =
-            codegenTarget == CodegenTarget.SERVER && context.shape.hasPublicConstrainedWrapperTupleType(model)
-        val value = if (publicConstrainedTypes && workingWithPublicConstrainedWrapperTupleType) {
+        val value = if (workingWithPublicConstrainedWrapperTupleType(context.shape, coreCodegenContext)) {
             ValueExpression.Value("${context.valueExpression.name}.0")
         } else {
             context.valueExpression
@@ -435,9 +431,7 @@ class JsonSerializerGenerator(
         val valueName = safeName("value")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyTarget = model.expectShape(context.shape.key.target)
-            val workingWithPublicConstrainedWrapperTupleType =
-                codegenTarget == CodegenTarget.SERVER && keyTarget.hasPublicConstrainedWrapperTupleType(model)
-            val keyExpression = if (publicConstrainedTypes && workingWithPublicConstrainedWrapperTupleType) {
+            val keyExpression = if (workingWithPublicConstrainedWrapperTupleType(keyTarget, coreCodegenContext)) {
                 "$keyName.0.as_str()"
             } else if (keyTarget.hasTrait<EnumTrait>()) {
                 "$keyName.as_str()"

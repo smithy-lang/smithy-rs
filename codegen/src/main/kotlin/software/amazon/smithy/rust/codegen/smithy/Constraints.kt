@@ -15,6 +15,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
@@ -48,13 +49,25 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
     else -> false
 }
 
-// TODO Make this method take in the `publicConstrainedTypes` boolean, even if it is just going to AND it with the rest of the condition, for API safety usage.
-fun Shape.hasPublicConstrainedWrapperTupleType(model: Model): Boolean = when (this) {
-    is MapShape -> this.hasTrait<LengthTrait>()
-    is StringShape -> !this.hasTrait<EnumTrait>() && this.hasTrait<LengthTrait>()
-    is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model)
+fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTypes: Boolean): Boolean = when (this) {
+    is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
+    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && this.hasTrait<LengthTrait>())
+    is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
     else -> false
 }
+
+fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model: Model) =
+    hasPublicConstrainedWrapperTupleType(model, true)
+
+/**
+ * Helper function to determine whether a shape will map to a _public_ constrained wrapper tuple type.
+ */
+fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, coreCodegenContext: CoreCodegenContext) =
+    coreCodegenContext.target == CodegenTarget.SERVER &&
+        shape.hasPublicConstrainedWrapperTupleType(
+            coreCodegenContext.model,
+            (coreCodegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes,
+        )
 
 /**
  * Returns whether a shape's type _name_ contains a non-public type when `publicConstrainedTypes` is `false`.
@@ -72,7 +85,7 @@ fun Shape.containsNonPublicType(
     symbolProvider: SymbolProvider,
     publicConstrainedTypes: Boolean,
 ): Boolean = !publicConstrainedTypes && when (this) {
-    is SimpleShape -> hasPublicConstrainedWrapperTupleType(model)
+    is SimpleShape -> wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)
     is MemberShape -> model.expectShape(this.target).containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
     is CollectionShape -> this.canReachConstrainedShape(model, symbolProvider)
     is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
