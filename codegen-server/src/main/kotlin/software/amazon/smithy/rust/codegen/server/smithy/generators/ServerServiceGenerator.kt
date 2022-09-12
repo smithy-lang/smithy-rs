@@ -7,14 +7,18 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 
 /**
@@ -63,6 +67,36 @@ open class ServerServiceGenerator(
         ) { writer ->
             renderOperationRegistry(writer, operations)
         }
+
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
+        rustCrate.withModule(
+            RustModule(
+                "operation_shape",
+                RustMetadata(
+                    visibility = Visibility.PUBLIC,
+                    additionalAttributes = listOf(
+                        Attribute.DocHidden,
+                    ),
+                ),
+                null,
+            ),
+        ) { writer ->
+            for (operation in operations) {
+                ServerOperationGenerator(coreCodegenContext, operation).render(writer)
+            }
+        }
+
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
+        rustCrate.withModule(
+            RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
+        ) { writer ->
+            val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
+            ServerServiceGeneratorV2(
+                coreCodegenContext,
+                serverProtocol,
+            ).render(writer)
+        }
+
         renderExtras(operations)
     }
 

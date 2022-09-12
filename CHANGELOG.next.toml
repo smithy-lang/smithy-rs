@@ -187,6 +187,12 @@ references = ["smithy-rs#1680"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
 author = "ogudavid"
 
+[[aws-sdk-rust]]
+message = "The AWS STS SDK now automatically retries `IDPCommunicationError` when calling `AssumeRoleWithWebIdentity`"
+references = ["smithy-rs#966", "smithy-rs#1718"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
 [[smithy-rs]]
 message = "Generated clients now retry transient errors without replacing the retry policy."
 references = ["smithy-rs#1715", "smithy-rs#1717"]

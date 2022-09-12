@@ -129,7 +129,7 @@ class AwsJsonSerializerGenerator(
 }
 
 open class AwsJson(
-    private val coreCodegenContext: CoreCodegenContext,
+    val coreCodegenContext: CoreCodegenContext,
     private val awsJsonVersion: AwsJsonVersion,
 ) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
@@ -142,6 +142,8 @@ open class AwsJson(
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
     private val jsonDeserModule = RustModule.private("json_deser")
+
+    val version: AwsJsonVersion get() = awsJsonVersion
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsJsonHttpBindingResolver(coreCodegenContext.model, awsJsonVersion)

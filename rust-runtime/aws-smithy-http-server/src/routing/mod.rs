@@ -7,6 +7,11 @@
 //!
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
+use std::{
+    convert::Infallible,
+    task::{Context, Poll},
+};
+
 use self::request_spec::RequestSpec;
 use self::routers::{aws_json::AwsJsonRouter, rest::RestRouter, RoutingService};
 use crate::body::{boxed, Body, BoxBody, HttpBody};
@@ -14,10 +19,6 @@ use crate::error::BoxError;
 use crate::protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml};
 
 use http::{Request, Response};
-use std::{
-    convert::Infallible,
-    task::{Context, Poll},
-};
 use tower::layer::Layer;
 use tower::{Service, ServiceBuilder};
 use tower_http::map_response_body::MapResponseBodyLayer;
@@ -30,7 +31,8 @@ mod lambda_handler;
 pub mod request_spec;
 
 mod route;
-mod routers;
+#[doc(hidden)]
+pub mod routers;
 mod tiny_map;
 
 pub use self::lambda_handler::LambdaHandler;
