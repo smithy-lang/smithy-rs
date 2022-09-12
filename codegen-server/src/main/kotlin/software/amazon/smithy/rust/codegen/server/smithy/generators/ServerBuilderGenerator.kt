@@ -578,7 +578,7 @@ enum class ConstraintViolationKind {
 data class ConstraintViolation(val forMember: MemberShape, val kind: ConstraintViolationKind) {
     fun name() = when (kind) {
         ConstraintViolationKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
-        ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "${forMember.memberName.toPascalCase()}ConstraintViolation"
+        ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "${forMember.memberName.toPascalCase()}"
     }
 
     /**

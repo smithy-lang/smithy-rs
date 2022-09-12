@@ -131,7 +131,7 @@ class UnconstrainedUnionGenerator(
     }
 
     data class ConstraintViolation(val forMember: MemberShape) {
-        fun name() = "${forMember.memberName.toPascalCase()}ConstraintViolation"
+        fun name() = forMember.memberName.toPascalCase()
     }
 
     private fun constraintViolations() =
