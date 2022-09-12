@@ -168,11 +168,12 @@
 //! - The intention of `PollError` is to signal that the underlying service is no longer able to take requests, so
 //! should be discarded. See [`Service::poll_ready`](tower::Service::poll_ready).
 //!
-//! The [`UpgradeLayer`] and it's [`Layer::Service`] [`Upgrade`] are both parameterized by a protocol. This allows
-//! for upgrading to `Service<http::Request, Response = http::Response, Error = PollError>` to be protocol dependent.
+//! The [`UpgradeLayer`] and it's [`Layer::Service`](tower::Layer::Service) [`Upgrade`] are both parameterized by a
+//! protocol. This allows for upgrading to `Service<http::Request, Response = http::Response, Error = PollError>` to be
+//! protocol dependent.
 //!
-//! The [`Operation::upgrade`] will apply [`UpgradeLayer`] to `S` then apply the [`Layer`] `L`. The service builder
-//! provided to the user will perform this composition on `build`.
+//! The [`Operation::upgrade`] will apply [`UpgradeLayer`] to `S` then apply the [`Layer`](tower::Layer) `L`. The
+//! service builder provided to the user will perform this composition on `build`.
 //!
 //! [Smithy operation]: https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation
 
@@ -181,25 +182,20 @@ mod operation_service;
 mod shape;
 mod upgrade;
 
-use tower::{
-    layer::util::{Identity, Stack},
-    Layer,
-};
+use tower::layer::util::{Identity, Stack};
 
 pub use handler::*;
 pub use operation_service::*;
 pub use shape::*;
 pub use upgrade::*;
 
-/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`] `L`.
+/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`](tower::Layer) `L`.
 ///
 /// The `L` is held and applied lazily during [`Operation::upgrade`].
 pub struct Operation<S, L = Identity> {
     inner: S,
     layer: L,
 }
-
-type StackedUpgradeService<P, Op, E, B, L, S> = <Stack<UpgradeLayer<P, Op, E, B>, L> as Layer<S>>::Service;
 
 impl<S, L> Operation<S, L> {
     /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
@@ -208,20 +204,6 @@ impl<S, L> Operation<S, L> {
             inner: self.inner,
             layer: Stack::new(self.layer, layer),
         }
-    }
-
-    /// Takes the [`Operation`], containing the inner [`Service`](tower::Service) `S`, the HTTP [`Layer`] `L` and
-    /// composes them together using [`UpgradeLayer`] for a specific protocol and [`OperationShape`].
-    ///
-    /// The composition is made explicit in the method constraints and return type.
-    pub fn upgrade<P, Op, E, B>(self) -> StackedUpgradeService<P, Op, E, B, L, S>
-    where
-        UpgradeLayer<P, Op, E, B>: Layer<S>,
-        L: Layer<<UpgradeLayer<P, Op, E, B> as Layer<S>>::Service>,
-    {
-        let Self { inner, layer } = self;
-        let layer = Stack::new(UpgradeLayer::new(), layer);
-        layer.layer(inner)
     }
 }
 
@@ -252,9 +234,6 @@ impl<Op, H> Operation<IntoService<Op, H>> {
         }
     }
 }
-
-/// A marker struct indicating an [`Operation`] has not been set in a builder.
-pub struct OperationNotSet;
 
 /// The operation [`Service`](tower::Service) has two classes of failure modes - those specified by the Smithy model
 /// and those associated with [`Service::poll_ready`](tower::Service::poll_ready).

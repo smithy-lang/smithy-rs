@@ -32,7 +32,10 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-use std::future::{ready, Future, Ready};
+use std::{
+    convert::Infallible,
+    future::{ready, Future, Ready},
+};
 
 use futures_util::{
     future::{try_join, MapErr, MapOk, TryJoin},
@@ -115,6 +118,25 @@ pub trait FromParts<Protocol>: Sized {
 
     /// Extracts `self` from a [`Parts`] synchronously.
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;
+}
+
+impl<P> FromParts<P> for () {
+    type Rejection = Infallible;
+
+    fn from_parts(_parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        Ok(())
+    }
+}
+
+impl<P, T> FromParts<P> for (T,)
+where
+    T: FromParts<P>,
+{
+    type Rejection = T::Rejection;
+
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        Ok((T::from_parts(parts)?,))
+    }
 }
 
 impl<P, T1, T2> FromParts<P> for (T1, T2)

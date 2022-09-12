@@ -74,6 +74,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import java.util.logging.Logger
 
 /*
@@ -119,6 +120,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
+    private val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
@@ -207,9 +209,31 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         )
                 }
             }
+
+            impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+            where
+                B: #{SmithyHttpServer}::body::HttpBody + Send,
+                B: 'static,
+                ${streamingBodyTraitBounds(operationShape)}
+                B::Data: Send,
+                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+            {
+                type Rejection = #{RuntimeError};
+                type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send>>;
+
+                fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                    let fut = async move {
+                        let mut request_parts = #{SmithyHttpServer}::request::RequestParts::new(request);
+                        $inputName::from_request(&mut request_parts).await.map(|x| x.0)
+                    };
+                    Box::pin(fut)
+                }
+            }
+
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
+            "Marker" to serverProtocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verify_response_content_type" to verifyResponseContentType,
         )
@@ -265,10 +289,23 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         $intoResponseImpl
                     }
                 }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName::Output(self).into_response()
+                    }
+                }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName::Error(self).into_response()
+                    }
+                }
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
+                "Marker" to serverProtocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
                 "serialize_error" to serverSerializeError(operationShape),
             )
@@ -297,9 +334,16 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         $intoResponseImpl
                     }
                 }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName(self).into_response()
+                    }
+                }
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
+                "Marker" to serverProtocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
             )
         }
