@@ -36,7 +36,7 @@ dependencies {
 
 val allCodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.amazonaws.simple#ConstraintsService", "constraints"),
+    CodegenTest("com.amazonaws.constraints#ConstraintsService", "constraints"),
     CodegenTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
     CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
