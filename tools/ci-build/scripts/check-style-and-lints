@@ -11,7 +11,7 @@ sdk-lints check --all
 sdk-lints fix --all
 
 # shellcheck disable=SC2046
-rustfmt --check --edition 2018 $(find . -name '*.rs' -print | grep -v /target/)
+rustfmt --check --edition 2021 $(find . -name '*.rs' -print | grep -v /target/)
 
 ./gradlew -p buildSrc test
 ./gradlew ktlint
