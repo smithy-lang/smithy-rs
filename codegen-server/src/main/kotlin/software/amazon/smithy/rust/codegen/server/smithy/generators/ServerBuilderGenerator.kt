@@ -75,7 +75,7 @@ class ServerBuilderGenerator(
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val symbolProvider = codegenContext.symbolProvider
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -94,7 +94,7 @@ class ServerBuilderGenerator(
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained()
+        "MaybeConstrained" to RuntimeType.MaybeConstrained(),
     )
 
     fun render(writer: RustWriter) {
@@ -198,7 +198,7 @@ class ServerBuilderGenerator(
                 }
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -212,7 +212,7 @@ class ServerBuilderGenerator(
             }
             """,
             *codegenScope,
-            "StructureMaybeConstrained" to structureSymbol.makeMaybeConstrained()
+            "StructureMaybeConstrained" to structureSymbol.makeMaybeConstrained(),
         )
     }
 
@@ -232,7 +232,7 @@ class ServerBuilderGenerator(
                 """
                 The builder fails to construct a #D if you do not provide a value for all non-`Option`al members.
                 """,
-                structureSymbol
+                structureSymbol,
             )
 
             if (constraintViolations().size > 1) {
@@ -319,10 +319,10 @@ class ServerBuilderGenerator(
                         !(targetShape is StringShape && targetShape.hasTrait<EnumTrait>()) &&
                         targetShape !is StructureShape
 
-                    val maybeConstrainedVariant = if (isInputFullyUnconstrained)
+                    val maybeConstrainedVariant = if (isInputFullyUnconstrained) {
                         // Step 2 above.
                         "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Unconstrained"
-                    else {
+                    } else {
                         "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     }
 
@@ -361,8 +361,8 @@ class ServerBuilderGenerator(
     private fun constrainedTypeHoldsFinalType(member: MemberShape): Boolean {
         val targetShape = model.expectShape(member.target)
         return targetShape is StructureShape ||
-                targetShape is UnionShape ||
-                member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)
+            targetShape is UnionShape ||
+            member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)
     }
 
     /**
@@ -383,7 +383,7 @@ class ServerBuilderGenerator(
                 //  The only reason why this condition can't simply be `member.isOptional`
                 //  is because non-`required` blob streaming members are interpreted as
                 //  `required`, so we can't use `member.isOptional` here.
-                symbolProvider.toSymbol(member).isOptional()
+                symbolProvider.toSymbol(member).isOptional(),
             ) { "Option<$it>" }
         val memberName = symbolProvider.toMemberName(member)
 
@@ -401,7 +401,7 @@ class ServerBuilderGenerator(
                 }
                 };
                 self
-                """
+                """,
             )
         }
     }
@@ -434,7 +434,7 @@ class ServerBuilderGenerator(
                 }
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -447,7 +447,7 @@ class ServerBuilderGenerator(
                 }
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -462,8 +462,8 @@ class ServerBuilderGenerator(
             } else {
                 pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
             }
-            // Strip the `Option` in case the member is not `required`.
-            .mapRustType { it.stripOuter<RustType.Option>() }
+                // Strip the `Option` in case the member is not `required`.
+                .mapRustType { it.stripOuter<RustType.Option>() }
 
             val hadBox = strippedOption.isRustBoxed()
             strippedOption
@@ -525,7 +525,7 @@ class ServerBuilderGenerator(
                                 )
                                 .transpose()?
                                 """,
-                                *codegenScope
+                                *codegenScope,
                             )
                         } else {
                             rustTemplate(
@@ -571,6 +571,7 @@ class ServerBuilderGenerator(
 enum class ConstraintViolationKind {
     // A field is required but was not provided.
     MISSING_MEMBER,
+
     // An unconstrained type was provided for a field targeting a constrained shape, but it failed to convert into the constrained type.
     CONSTRAINED_SHAPE_FAILURE,
 }
@@ -628,10 +629,10 @@ fun renderConstraintViolation(
         ConstraintViolationKind.MISSING_MEMBER -> {
             writer.docs(
                 "${constraintViolationMessage(
-                        constraintViolation,
-                        symbolProvider,
-                        structureSymbol,
-                    ).replaceFirstChar { it.uppercase() }}.",
+                    constraintViolation,
+                    symbolProvider,
+                    structureSymbol,
+                ).replaceFirstChar { it.uppercase() }}.",
             )
             writer.rust("${constraintViolation.name()},")
         }
@@ -652,4 +653,3 @@ fun renderConstraintViolation(
             writer.rust("${constraintViolation.name()}(#T),", constraintViolationSymbol)
         }
     }
-

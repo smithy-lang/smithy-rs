@@ -49,8 +49,8 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.smithy.generators.TypeConversionGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
@@ -669,7 +669,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             protocol,
             codegenContext,
             unconstrainedShapeSymbolProvider,
-            operationShape
+            operationShape,
         )
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
@@ -715,7 +715,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                     });
                     }
-                    """
+                    """,
                 )
             }
         }
@@ -1034,7 +1034,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                     """
                                     let entry = query_params.entry(String::from(k)).or_default();
                                     entry.push(String::from(v));
-                                    """
+                                    """,
                                 )
                             }
                         }
@@ -1053,21 +1053,23 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
                 val hasConstrainedTarget =
-                        model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
+                    model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
                 val memberName = unconstrainedShapeSymbolProvider.toMemberName(binding.member)
                 val isOptional = unconstrainedShapeSymbolProvider.toSymbol(binding.member).isOptional()
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
                         "input = input.${
-                            binding.member.deserializerBuilderSetterName(codegenContext.target)
-                        }(", ");"
+                        binding.member.deserializerBuilderSetterName(codegenContext.target)
+                        }(",
+                        ");",
                     ) {
                         conditionalBlock("Some(", ")", conditional = isOptional) {
                             conditionalBlock(
                                 "#T(",
                                 ")",
                                 conditional = hasConstrainedTarget,
-                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() }) {
+                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() },
+                            ) {
                                 write(memberName)
                             }
                         }

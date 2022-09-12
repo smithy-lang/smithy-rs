@@ -30,13 +30,13 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 class ConstrainedStringGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
-    val shape: StringShape
+    val shape: StringShape,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -67,7 +67,7 @@ class ConstrainedStringGenerator(
         }
         val constrainedTypeMetadata = RustMetadata(
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Hash)),
-            visibility = constrainedTypeVisibility
+            visibility = constrainedTypeVisibility,
         )
 
         // TODO Display impl does not honor `sensitive` trait.
@@ -150,7 +150,7 @@ class ConstrainedStringGenerator(
                 pub enum ${constraintViolation.name} {
                     Length(usize),
                 }
-                """
+                """,
             )
         }
     }

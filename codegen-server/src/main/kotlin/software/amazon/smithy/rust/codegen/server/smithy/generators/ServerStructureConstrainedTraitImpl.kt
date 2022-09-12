@@ -16,7 +16,7 @@ class ServerStructureConstrainedTraitImpl(
     private val symbolProvider: RustSymbolProvider,
     private val publicConstrainedTypes: Boolean,
     private val shape: StructureShape,
-    private val writer: RustWriter
+    private val writer: RustWriter,
 ) {
     fun render() {
         writer.rustTemplate(
@@ -27,7 +27,7 @@ class ServerStructureConstrainedTraitImpl(
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "Structure" to symbolProvider.toSymbol(shape),
-            "Builder" to shape.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
+            "Builder" to shape.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes),
         )
     }
 }

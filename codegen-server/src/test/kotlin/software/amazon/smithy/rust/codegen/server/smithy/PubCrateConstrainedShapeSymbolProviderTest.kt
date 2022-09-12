@@ -68,7 +68,7 @@ class PubCrateConstrainedShapeSymbolProviderTest {
 
         transitivelyConstrainedCollectionType shouldBe RustType.Opaque(
             "TransitivelyConstrainedCollectionConstrained",
-            "crate::constrained::transitively_constrained_collection_constrained"
+            "crate::constrained::transitively_constrained_collection_constrained",
         )
     }
 
@@ -80,7 +80,7 @@ class PubCrateConstrainedShapeSymbolProviderTest {
 
         transitivelyConstrainedMapType shouldBe RustType.Opaque(
             "TransitivelyConstrainedMapConstrained",
-            "crate::constrained::transitively_constrained_map_constrained"
+            "crate::constrained::transitively_constrained_map_constrained",
         )
     }
 
@@ -92,8 +92,8 @@ class PubCrateConstrainedShapeSymbolProviderTest {
         memberType shouldBe RustType.Option(
             RustType.Opaque(
                 "TransitivelyConstrainedCollectionConstrained",
-                "crate::constrained::transitively_constrained_collection_constrained"
-            )
+                "crate::constrained::transitively_constrained_collection_constrained",
+            ),
         )
     }
 

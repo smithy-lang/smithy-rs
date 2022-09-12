@@ -16,8 +16,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -63,7 +63,7 @@ class ConstrainedStringGeneratorTest {
                 "@length(min: 3, max: 3)",
                 "👍👍👍", // These three emojis are three Unicode scalar values.
                 "👍👍👍👍",
-            )
+            ),
         ).map {
             TestCase(
                 """
@@ -73,7 +73,7 @@ class ConstrainedStringGeneratorTest {
                 string ConstrainedString
                 """.asSmithyModel(),
                 it.second,
-                it.third
+                it.third,
             )
         }
 
@@ -98,7 +98,7 @@ class ConstrainedStringGeneratorTest {
                 symbolProvider,
                 constraintViolationSymbolProvider,
                 writer,
-                constrainedStringShape
+                constrainedStringShape,
             ).render()
 
             writer.unitTest(
@@ -106,21 +106,21 @@ class ConstrainedStringGeneratorTest {
                 test = """
                     let string = String::from("${testCase.validString}");
                     let _constrained = ConstrainedString::parse(string).unwrap();
-                """
+                """,
             )
             writer.unitTest(
                 name = "try_from_success",
                 test = """
                     let string = String::from("${testCase.validString}");
                     let _constrained: ConstrainedString = string.try_into().unwrap();
-                """
+                """,
             )
             writer.unitTest(
                 name = "parse_fail",
                 test = """
                     let string = String::from("${testCase.invalidString}");
                     let _constrained = ConstrainedString::parse(string).unwrap_err();
-                """
+                """,
             )
             writer.unitTest(
                 name = "try_from_fail",
@@ -128,7 +128,7 @@ class ConstrainedStringGeneratorTest {
                     let string = String::from("${testCase.invalidString}");
                     let constrained_res: Result<ConstrainedString, _> = string.try_into();
                     constrained_res.unwrap_err();
-                """
+                """,
             )
             writer.unitTest(
                 name = "inner",
@@ -137,7 +137,7 @@ class ConstrainedStringGeneratorTest {
                     let constrained = ConstrainedString::parse(string).unwrap();
 
                     assert_eq!(constrained.inner(), "${testCase.validString}");
-                """
+                """,
             )
             writer.unitTest(
                 name = "into_inner",
@@ -146,7 +146,7 @@ class ConstrainedStringGeneratorTest {
                     let constrained = ConstrainedString::parse(string.clone()).unwrap();
 
                     assert_eq!(constrained.into_inner(), string);
-                """
+                """,
             )
         }
 
@@ -174,7 +174,7 @@ class ConstrainedStringGeneratorTest {
             symbolProvider,
             constraintViolationSymbolProvider,
             writer,
-            constrainedStringShape
+            constrainedStringShape,
         ).render()
 
         // Check that the wrapped type is `pub(crate)`.

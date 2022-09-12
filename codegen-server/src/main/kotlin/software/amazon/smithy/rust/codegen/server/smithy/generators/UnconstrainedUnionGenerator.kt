@@ -39,14 +39,14 @@ class UnconstrainedUnionGenerator(
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
-    val shape: UnionShape
+    val shape: UnionShape,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -71,12 +71,12 @@ class UnconstrainedUnionGenerator(
                 ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, Clone)]
                 pub(crate) enum $name
-                """
+                """,
             ) {
                 sortedMembers.forEach { member ->
                     rust(
                         "${unconstrainedShapeSymbolProvider.toMemberName(member)}(#T),",
-                        unconstrainedShapeSymbolProvider.toSymbol(member)
+                        unconstrainedShapeSymbolProvider.toSymbol(member),
                     )
                 }
             }
@@ -113,7 +113,7 @@ class UnconstrainedUnionGenerator(
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
             "ConstrainedSymbol" to constrainedSymbol,
-            "UnconstrainedSymbol" to symbol
+            "UnconstrainedSymbol" to symbol,
         )
 
         val constraintViolationVisibility = if (publicConstrainedTypes) {
@@ -123,7 +123,7 @@ class UnconstrainedUnionGenerator(
         }
         modelsModuleWriter.withModule(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-            RustMetadata(visibility = constraintViolationVisibility)
+            RustMetadata(visibility = constraintViolationVisibility),
         ) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
             rustBlock("pub enum $constraintViolationName") {
@@ -153,7 +153,7 @@ class UnconstrainedUnionGenerator(
 
         writer.rust(
             "${constraintViolation.name()}(#T),",
-            constraintViolationSymbol
+            constraintViolationSymbol,
         )
     }
 
@@ -173,7 +173,7 @@ class UnconstrainedUnionGenerator(
                             val targetShape = model.expectShape(member.target)
                             val resolveToNonPublicConstrainedType =
                                 targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>() &&
-                                (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
+                                    (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
 
                             val (unconstrainedVar, boxIt) = if (member.hasTrait<RustBoxTrait>()) {
                                 "(*unconstrained)" to ".map(Box::new).map_err(Box::new)"
@@ -198,7 +198,7 @@ class UnconstrainedUnionGenerator(
                                         constrained.into()
                                     }
                                     """,
-                                    "ConstrainedSymbol" to constrainedSymbol
+                                    "ConstrainedSymbol" to constrainedSymbol,
                                 )
                             } else {
                                 rust(
@@ -207,7 +207,7 @@ class UnconstrainedUnionGenerator(
                                         .try_into()
                                         $boxIt
                                         .map_err(Self::Error::${ConstraintViolation(member).name()})?
-                                    """
+                                    """,
                                 )
                             }
                         }

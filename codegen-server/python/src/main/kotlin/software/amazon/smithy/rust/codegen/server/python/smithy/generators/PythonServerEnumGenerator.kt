@@ -17,8 +17,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.util.dq
 

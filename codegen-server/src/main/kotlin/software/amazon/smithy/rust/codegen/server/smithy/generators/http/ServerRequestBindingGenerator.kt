@@ -19,7 +19,7 @@ class ServerRequestBindingGenerator(
     protocol: Protocol,
     coreCodegenContext: CoreCodegenContext,
     unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
-    operationShape: OperationShape
+    operationShape: OperationShape,
 ) {
     private val httpBindingGenerator =
         HttpBindingGenerator(protocol, coreCodegenContext, unconstrainedShapeSymbolProvider, operationShape)

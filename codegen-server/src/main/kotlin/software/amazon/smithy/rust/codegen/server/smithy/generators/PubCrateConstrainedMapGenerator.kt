@@ -38,7 +38,7 @@ class PubCrateConstrainedMapGenerator(
     val codegenContext: ServerCodegenContext,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     val writer: RustWriter,
-    val shape: MapShape
+    val shape: MapShape,
 ) {
     private val model = codegenContext.model
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
@@ -82,7 +82,7 @@ class PubCrateConstrainedMapGenerator(
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
 
             if (publicConstrainedTypes) {
@@ -97,24 +97,24 @@ class PubCrateConstrainedMapGenerator(
                     impl #{From}<#{Symbol}> for $name {
                         fn from(v: #{Symbol}) -> Self {
                             ${ if (innerNeedsConstraining) {
-                                "Self(v.into_iter().map(|(k, v)| (k, v.into())).collect())"
-                            } else {
-                                "Self(v)"
-                            } }
+                        "Self(v.into_iter().map(|(k, v)| (k, v.into())).collect())"
+                    } else {
+                        "Self(v)"
+                    } }
                         }
                     }
 
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
                             ${ if (innerNeedsConstraining) {
-                                "v.0.into_iter().map(|(k, v)| (k, v.into())).collect()"
-                            } else {
-                                "v.0"
-                            } }
+                        "v.0.into_iter().map(|(k, v)| (k, v.into())).collect()"
+                    } else {
+                        "v.0"
+                    } }
                         }
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             } else {
                 val keyNeedsConversion = keyShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
@@ -125,16 +125,16 @@ class PubCrateConstrainedMapGenerator(
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
                             ${ if (keyNeedsConversion || valueNeedsConversion) {
-                                val keyConversion = if (keyNeedsConversion) { ".into()" } else { "" }
-                                val valueConversion = if (valueNeedsConversion) { ".into()" } else { "" }
-                                "v.0.into_iter().map(|(k, v)| (k$keyConversion, v$valueConversion)).collect()"
-                            } else {
-                                "v.0"
-                            } }
+                        val keyConversion = if (keyNeedsConversion) { ".into()" } else { "" }
+                        val valueConversion = if (valueNeedsConversion) { ".into()" } else { "" }
+                        "v.0.into_iter().map(|(k, v)| (k$keyConversion, v$valueConversion)).collect()"
+                    } else {
+                        "v.0"
+                    } }
                         }
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }

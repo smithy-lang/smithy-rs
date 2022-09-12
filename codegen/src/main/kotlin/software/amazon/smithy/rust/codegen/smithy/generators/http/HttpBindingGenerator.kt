@@ -94,7 +94,7 @@ class HttpBindingGenerator(
     private val protocol: Protocol,
     private val coreCodegenContext: CoreCodegenContext,
     private val symbolProvider: RustSymbolProvider,
-    private val operationShape: OperationShape
+    private val operationShape: OperationShape,
 ) {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenTarget = coreCodegenContext.target
@@ -354,16 +354,16 @@ class HttpBindingGenerator(
         } else if (coreShape.isPrimitive()) {
             rust(
                 "let $parsedValue = #T::read_many_primitive::<${coreType.render()}>(headers)?;",
-                headerUtil
+                headerUtil,
             )
         } else {
             check(coreShape.isStringShape) {
                 "The `httpHeader` trait can be applied to structure members that target a `boolean`, `number`, `string`, or " +
-                        "`timestamp`; or a `structure` member that targets a list/set of these types. Found $coreShape."
+                    "`timestamp`; or a `structure` member that targets a list/set of these types. Found $coreShape."
             }
             rust(
                 "let $parsedValue: Vec<${coreType.render()}> = #T::read_many_from_str(headers)?;",
-                headerUtil
+                headerUtil,
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
@@ -404,8 +404,8 @@ class HttpBindingGenerator(
                 )
             else -> {
                 val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER &&
-                        targetShape is CollectionShape &&
-                        targetShape.canReachConstrainedShape(model, symbolProvider)
+                    targetShape is CollectionShape &&
+                    targetShape.canReachConstrainedShape(model, symbolProvider)
                 if (returnUnconstrainedType) {
                     rust(
                         """
@@ -415,7 +415,7 @@ class HttpBindingGenerator(
                             None
                         })
                         """,
-                        symbolProvider.toSymbol(targetShape)
+                        symbolProvider.toSymbol(targetShape),
                     )
                 } else {
                     rustTemplate(
@@ -427,7 +427,7 @@ class HttpBindingGenerator(
                             Ok($parsedValue.pop())
                         }
                         """,
-                        "header_util" to headerUtil
+                        "header_util" to headerUtil,
                     )
                 }
             }

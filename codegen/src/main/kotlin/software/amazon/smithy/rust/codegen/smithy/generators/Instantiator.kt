@@ -166,7 +166,7 @@ class Instantiator(
                 conditional = when (codegenTarget) {
                     CodegenTarget.CLIENT -> ctx.builder || symbol.isOptional()
                     CodegenTarget.SERVER -> symbol.isOptional()
-                }
+                },
             ) {
                 writer.conditionalBlock(
                     "Box::new(",

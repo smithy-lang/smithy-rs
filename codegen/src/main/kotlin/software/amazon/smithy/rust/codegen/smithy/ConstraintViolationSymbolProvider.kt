@@ -65,9 +65,9 @@ class ConstraintViolationSymbolProvider(
         val symbol = base.toSymbol(shape)
         val constraintViolationNamespace =
             "${symbol.namespace.let { it.ifEmpty { "crate::${Models.namespace}" } }}::${
-                RustReservedWords.escapeIfNeeded(
-                    shape.contextName(serviceShape).toSnakeCase()
-                )
+            RustReservedWords.escapeIfNeeded(
+                shape.contextName(serviceShape).toSnakeCase(),
+            )
             }"
         val rustType = RustType.Opaque(constraintViolationName, constraintViolationNamespace)
         return Symbol.builder()
@@ -99,9 +99,9 @@ class ConstraintViolationSymbolProvider(
             }
             is StringShape -> {
                 val namespace = "crate::${Models.namespace}::${
-                    RustReservedWords.escapeIfNeeded(
-                        shape.contextName(serviceShape).toSnakeCase()
-                    )
+                RustReservedWords.escapeIfNeeded(
+                    shape.contextName(serviceShape).toSnakeCase(),
+                )
                 }"
                 val rustType = RustType.Opaque(constraintViolationName, namespace)
                 Symbol.builder()

@@ -9,8 +9,8 @@ import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -51,7 +51,7 @@ class ServerEnumGeneratorTest {
             constraintViolationSymbolProvider,
             writer,
             shape,
-            shape.expectTrait()
+            shape.expectTrait(),
         ).render()
         writer.compileAndTest(
             """
@@ -59,7 +59,7 @@ class ServerEnumGeneratorTest {
             assert_eq!(InstanceType::try_from("t2.nano").unwrap(), InstanceType::T2Nano);
             assert_eq!(InstanceType::from_str("t2.nano").unwrap(), InstanceType::T2Nano);
             assert_eq!(InstanceType::try_from("unknown").unwrap_err(), crate::model::instance_type::ConstraintViolation(String::from("unknown")));
-            """
+            """,
         )
     }
 
@@ -71,7 +71,7 @@ class ServerEnumGeneratorTest {
             constraintViolationSymbolProvider,
             writer,
             shape,
-            shape.expectTrait()
+            shape.expectTrait(),
         ).render()
         writer.compileAndTest(
             """
@@ -93,7 +93,7 @@ class ServerEnumGeneratorTest {
             constraintViolationSymbolProvider,
             writer,
             shape,
-            shape.expectTrait()
+            shape.expectTrait(),
         ).render()
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }

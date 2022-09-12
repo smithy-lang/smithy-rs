@@ -220,8 +220,9 @@ class JsonParserGenerator(
                             CodegenTarget.CLIENT -> {
                                 withBlock(
                                     "builder = builder.${
-                                        member.deserializerBuilderSetterName(codegenTarget)
-                                    }(", ");"
+                                    member.deserializerBuilderSetterName(codegenTarget)
+                                    }(",
+                                    ");",
                                 ) {
                                     deserializeMember(member)
                                 }
@@ -230,8 +231,9 @@ class JsonParserGenerator(
                                 if (symbolProvider.toSymbol(member).isOptional()) {
                                     withBlock(
                                         "builder = builder.${
-                                            member.deserializerBuilderSetterName(codegenTarget)
-                                        }(", ");"
+                                        member.deserializerBuilderSetterName(codegenTarget)
+                                        }(",
+                                        ");",
                                     ) {
                                         deserializeMember(member)
                                     }
@@ -242,10 +244,10 @@ class JsonParserGenerator(
                                         """
                                         {
                                             builder = builder.${
-                                                member.deserializerBuilderSetterName(codegenTarget)
-                                            }(v);
+                                        member.deserializerBuilderSetterName(codegenTarget)
+                                        }(v);
                                         }
-                                        """
+                                        """,
                                     )
                                 }
                             }
@@ -275,7 +277,8 @@ class JsonParserGenerator(
         if (symbol.isRustBoxed()) {
             if (codegenTarget == CodegenTarget.SERVER &&
                 model.expectShape(memberShape.container).isStructureShape &&
-                memberShape.targetCanReachConstrainedShape(model, symbolProvider)) {
+                memberShape.targetCanReachConstrainedShape(model, symbolProvider)
+            ) {
                 // Before boxing, convert into `MaybeConstrained` if the target can reach a constrained shape.
                 rust(".map(|x| x.into())")
             }

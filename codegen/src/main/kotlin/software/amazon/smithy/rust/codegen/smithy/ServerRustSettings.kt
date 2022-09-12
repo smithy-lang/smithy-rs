@@ -78,7 +78,7 @@ data class ServerCodegenConfig(
     override val debugMode: Boolean = defaultDebugMode,
     override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
     // TODO Unit test that we don't generate public constrained types when this setting is false.
-    val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes
+    val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList,
 ) {

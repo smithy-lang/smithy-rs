@@ -23,14 +23,14 @@ class UnconstrainedCollectionGenerator(
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
-    val shape: CollectionShape
+    val shape: CollectionShape,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -93,7 +93,7 @@ class UnconstrainedCollectionGenerator(
         }
         modelsModuleWriter.withModule(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-            RustMetadata(visibility = constraintViolationVisibility)
+            RustMetadata(visibility = constraintViolationVisibility),
         ) {
             rustTemplate(
                 """

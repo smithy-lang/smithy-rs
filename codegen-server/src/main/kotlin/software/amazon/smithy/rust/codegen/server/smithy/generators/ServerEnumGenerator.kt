@@ -27,7 +27,7 @@ open class ServerEnumGenerator(
 
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -39,7 +39,7 @@ open class ServerEnumGenerator(
 
     override fun renderFromForStr() {
         writer.withModule(
-            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()
+            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
         ) {
             rustTemplate(
                 """
@@ -71,7 +71,7 @@ open class ServerEnumGenerator(
             """,
             "String" to RuntimeType.String,
             "TryFrom" to RuntimeType.TryFrom,
-            "UnknownVariantSymbol" to constraintViolationSymbol
+            "UnknownVariantSymbol" to constraintViolationSymbol,
         )
     }
 
@@ -85,7 +85,7 @@ open class ServerEnumGenerator(
                 }
             }
             """,
-            "UnknownVariantSymbol" to constraintViolationSymbol
+            "UnknownVariantSymbol" to constraintViolationSymbol,
         )
     }
 }

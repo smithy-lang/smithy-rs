@@ -186,24 +186,27 @@ internal class HttpVersionListGeneratorTest {
 
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
-                .withDecorator(object : AddRustTestsDecorator<ClientCodegenContext>("validate_eventstream_http", {
-                    TokioTest.render(this)
-                    rust(
-                        """
-                        async fn test_http_version_list_defaults() {
-                            let conf = $moduleName::Config::builder().build();
-                            let op = $moduleName::operation::SayHello::builder()
-                                .build().expect("valid operation")
-                                .make_operation(&conf).await.unwrap();
-                            let properties = op.properties();
-                            let actual_http_versions = properties.get::<Vec<http::Version>>()
-                                .expect("http versions list should be in property bag");
-                            let expected_http_versions = &vec![http::Version::HTTP_2];
-                            assert_eq!(actual_http_versions, expected_http_versions);
-                        }
-                        """,
-                    )
-                },) {
+                .withDecorator(object : AddRustTestsDecorator<ClientCodegenContext>(
+                    "validate_eventstream_http",
+                    {
+                        TokioTest.render(this)
+                        rust(
+                            """
+                            async fn test_http_version_list_defaults() {
+                                let conf = $moduleName::Config::builder().build();
+                                let op = $moduleName::operation::SayHello::builder()
+                                    .build().expect("valid operation")
+                                    .make_operation(&conf).await.unwrap();
+                                let properties = op.properties();
+                                let actual_http_versions = properties.get::<Vec<http::Version>>()
+                                    .expect("http versions list should be in property bag");
+                                let expected_http_versions = &vec![http::Version::HTTP_2];
+                                assert_eq!(actual_http_versions, expected_http_versions);
+                            }
+                            """,
+                        )
+                    },
+                ) {
                         override fun configCustomizations(
                             codegenContext: ClientCodegenContext,
                             baseCustomizations: List<ConfigCustomization>,

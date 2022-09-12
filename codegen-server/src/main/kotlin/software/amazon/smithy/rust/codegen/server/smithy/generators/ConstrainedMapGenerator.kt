@@ -41,7 +41,7 @@ class ConstrainedMapGenerator(
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -73,7 +73,7 @@ class ConstrainedMapGenerator(
         }
         val constrainedTypeMetadata = RustMetadata(
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq)),
-            visibility = constrainedTypeVisibility
+            visibility = constrainedTypeVisibility,
         )
 
         val codegenScope = arrayOf(
@@ -81,7 +81,7 @@ class ConstrainedMapGenerator(
             "ValueSymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.value.target)),
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
-            "ConstraintViolation" to constraintViolation
+            "ConstraintViolation" to constraintViolation,
         )
 
         // TODO Display impl missing; it should honor `sensitive` trait.
@@ -130,7 +130,7 @@ class ConstrainedMapGenerator(
                 }
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
 
         if (!publicConstrainedTypes && isValueConstrained(shape, model, symbolProvider)) {

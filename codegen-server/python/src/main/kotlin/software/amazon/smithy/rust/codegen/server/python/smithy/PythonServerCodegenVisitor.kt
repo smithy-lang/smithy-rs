@@ -112,7 +112,7 @@ class PythonServerCodegenVisitor(
                     constraintViolationSymbolProvider,
                     writer,
                     shape,
-                    enum
+                    enum,
                 ).render()
             }
         }

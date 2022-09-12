@@ -22,7 +22,7 @@ class ConstrainedTraitForEnumGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     val writer: RustWriter,
-    val shape: StringShape
+    val shape: StringShape,
 ) {
     fun render() {
         shape.expectTrait<EnumTrait>()

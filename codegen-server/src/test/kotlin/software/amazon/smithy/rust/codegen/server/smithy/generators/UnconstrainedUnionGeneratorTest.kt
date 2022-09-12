@@ -10,9 +10,9 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
@@ -81,7 +81,7 @@ class UnconstrainedUnionGeneratorTest {
                     constraintViolationSymbolProvider,
                     unconstrainedModuleWriter,
                     modelsModuleWriter,
-                    unionShape
+                    unionShape,
                 ).render()
 
                 unconstrainedModuleWriter.unitTest(
@@ -98,7 +98,7 @@ class UnconstrainedUnionGeneratorTest {
                             expected_err,
                             crate::model::Union::try_from(union_unconstrained).unwrap_err()
                         );
-                        """
+                        """,
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -113,7 +113,7 @@ class UnconstrainedUnionGeneratorTest {
                         let actual: crate::model::Union = crate::model::Union::try_from(union_unconstrained).unwrap();
 
                         assert_eq!(expected, actual);
-                        """
+                        """,
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -124,7 +124,7 @@ class UnconstrainedUnionGeneratorTest {
 
                         let _union: crate::constrained::MaybeConstrained<crate::model::Union> =
                             union_unconstrained.into();
-                        """
+                        """,
                 )
                 project.compileAndTest()
             }

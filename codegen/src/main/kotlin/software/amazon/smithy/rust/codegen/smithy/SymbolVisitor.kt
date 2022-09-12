@@ -301,7 +301,8 @@ open class SymbolVisitor(
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
-        return symbolBuilder(shape,
+        return symbolBuilder(
+            shape,
             RustType.Opaque(
                 shape.contextName(serviceShape)
                     .replaceFirstChar { it.uppercase() },
@@ -362,7 +363,7 @@ fun handleOptionality(
     symbol: Symbol,
     member: MemberShape,
     nullableIndex: NullableIndex,
-    config: SymbolVisitorConfig? = null
+    config: SymbolVisitorConfig? = null,
 ): Symbol {
     val handleRequired = config?.handleRequired ?: true
     return if (handleRequired && member.isRequired) {
@@ -384,7 +385,6 @@ fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
     if (shape.hasTrait<RustBoxTrait>()) {
         symbol.makeRustBoxed()
     } else symbol
-
 
 fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
     val builder = Symbol.builder().putProperty(SHAPE_KEY, shape)

@@ -19,13 +19,13 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 class MapConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
     private val modelsModuleWriter: RustWriter,
-    val shape: MapShape
+    val shape: MapShape,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -59,7 +59,7 @@ class MapConstraintViolationGenerator(
         }
         modelsModuleWriter.withModule(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-            RustMetadata(visibility = constraintViolationVisibility)
+            RustMetadata(visibility = constraintViolationVisibility),
         ) {
             // TODO We should really have two `ConstraintViolation` types here. One will just have variants for each
             //  constraint trait on the map shape, for use by the user. The other one will have variants if the shape's

@@ -99,10 +99,10 @@ fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: Sym
 fun MemberShape.requiresNewtype() =
     // Note that member shapes whose only constraint trait is `required` do not require a newtype.
     this.hasTrait<LengthTrait>() ||
-            this.hasTrait<RangeTrait>() ||
-            // `uniqueItems` is deprecated, so we ignore it.
-            // this.hasTrait<UniqueItemsTrait>() ||
-            this.hasTrait<PatternTrait>()
+        this.hasTrait<RangeTrait>() ||
+        // `uniqueItems` is deprecated, so we ignore it.
+        // this.hasTrait<UniqueItemsTrait>() ||
+        this.hasTrait<PatternTrait>()
 
 fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider) =
     this.isDirectlyConstrained(symbolProvider) || (model.expectShape(this.target).isDirectlyConstrained(symbolProvider))

@@ -63,7 +63,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
             model: Model,
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
-            publicConstrainedTypes: Boolean = true
+            publicConstrainedTypes: Boolean = true,
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // TODO Docs
@@ -71,7 +71,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
                     if (publicConstrainedTypes) ConstrainedShapeSymbolProvider(
                         it,
                         model,
-                        serviceShape
+                        serviceShape,
                     ) else it
                 }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)

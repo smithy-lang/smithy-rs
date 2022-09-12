@@ -165,7 +165,7 @@ val DefaultPublicModules = setOf(
     ModelsModule,
     InputsModule,
     OutputsModule,
-    ConfigModule
+    ConfigModule,
 ).associateBy { it.name }
 
 /**

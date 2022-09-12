@@ -244,7 +244,7 @@ open class ServerCodegenVisitor(
                 val serverBuilderGenerator = ServerBuilderGenerator(
                     codegenContext,
                     shape,
-                    if (shape.isReachableFromOperationInput()) pubCrateConstrainedShapeSymbolProvider else null
+                    if (shape.isReachableFromOperationInput()) pubCrateConstrainedShapeSymbolProvider else null,
                 )
                 serverBuilderGenerator.render(writer)
 
@@ -282,7 +282,7 @@ open class ServerCodegenVisitor(
     private fun collectionShape(shape: CollectionShape) {
         if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
-                symbolProvider
+                symbolProvider,
             )
         ) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for collection shape $shape")
@@ -293,7 +293,7 @@ open class ServerCodegenVisitor(
                         pubCrateConstrainedShapeSymbolProvider,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
-                        shape
+                        shape,
                     ).render()
                 }
             }
@@ -304,7 +304,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     pubCrateConstrainedShapeSymbolProvider,
                     writer,
-                    shape
+                    shape,
                 ).render()
             }
         }
@@ -314,7 +314,7 @@ open class ServerCodegenVisitor(
         val renderUnconstrainedMap =
             shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
-                symbolProvider
+                symbolProvider,
             )
         if (renderUnconstrainedMap) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
@@ -324,7 +324,7 @@ open class ServerCodegenVisitor(
                     pubCrateConstrainedShapeSymbolProvider,
                     unconstrainedShapeSymbolProvider,
                     unconstrainedModuleWriter,
-                    shape
+                    shape,
                 ).render()
             }
 
@@ -335,7 +335,7 @@ open class ServerCodegenVisitor(
                         codegenContext,
                         pubCrateConstrainedShapeSymbolProvider,
                         writer,
-                        shape
+                        shape,
                     ).render()
                 }
             }
@@ -348,7 +348,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     modelsModuleWriter,
                     shape,
-                    if (renderUnconstrainedMap) unconstrainedShapeSymbolProvider.toSymbol(shape) else null
+                    if (renderUnconstrainedMap) unconstrainedShapeSymbolProvider.toSymbol(shape) else null,
                 ).render()
             }
         }
@@ -381,7 +381,7 @@ open class ServerCodegenVisitor(
                 spec v1 IDL, but it's unclear what the semantics are. In any case, the Smithy CLI should enforce the
                 constraints (which it currently does not), not each code generator.
                 See https://github.com/awslabs/smithy/issues/1121f for more information.
-                """.trimIndent()
+                """.trimIndent(),
             )
         } else if (shape.isDirectlyConstrained(symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
@@ -406,7 +406,7 @@ open class ServerCodegenVisitor(
 
         if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
-                symbolProvider
+                symbolProvider,
             )
         ) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for union shape $shape")
@@ -417,7 +417,7 @@ open class ServerCodegenVisitor(
                         pubCrateConstrainedShapeSymbolProvider,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
-                        shape
+                        shape,
                     ).render()
                 }
             }

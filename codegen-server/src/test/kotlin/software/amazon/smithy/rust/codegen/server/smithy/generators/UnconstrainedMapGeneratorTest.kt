@@ -10,9 +10,9 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
@@ -83,7 +83,7 @@ class UnconstrainedMapGeneratorTest {
                     unconstrainedShapeSymbolProvider,
                     pubCrateConstrainedShapeSymbolProvider,
                     writer,
-                    it
+                    it,
                 ).render()
             }
         }
@@ -99,7 +99,7 @@ class UnconstrainedMapGeneratorTest {
                         pubCrateConstrainedShapeSymbolProvider,
                         constraintViolationSymbolProvider,
                         unconstrainedModuleWriter,
-                        it
+                        it,
                     ).render()
 
                     MapConstraintViolationGenerator(
@@ -107,7 +107,7 @@ class UnconstrainedMapGeneratorTest {
                         symbolProvider,
                         constraintViolationSymbolProvider,
                         modelsModuleWriter,
-                        it
+                        it,
                     ).render()
                 }
 
@@ -141,7 +141,7 @@ class UnconstrainedMapGeneratorTest {
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
 
                         assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
-                        """
+                        """,
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -172,7 +172,7 @@ class UnconstrainedMapGeneratorTest {
                         expected,
                         crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap().into()
                     );
-                    """
+                    """,
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -191,7 +191,7 @@ class UnconstrainedMapGeneratorTest {
                     );
 
                     let _map_a: crate::constrained::MaybeConstrained<crate::constrained::map_a_constrained::MapAConstrained> = map_a_unconstrained.into();
-                    """
+                    """,
                 )
 
                 project.compileAndTest()

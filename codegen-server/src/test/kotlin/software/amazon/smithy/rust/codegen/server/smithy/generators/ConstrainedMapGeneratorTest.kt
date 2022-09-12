@@ -18,9 +18,9 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
@@ -79,7 +79,7 @@ class ConstrainedMapGeneratorTest {
                 }
                 """.asSmithyModel(),
                 it.second,
-                it.third
+                it.third,
             )
         }
 
@@ -105,7 +105,7 @@ class ConstrainedMapGeneratorTest {
                 symbolProvider,
                 constraintViolationSymbolProvider,
                 writer,
-                constrainedMapShape
+                constrainedMapShape,
             )
 
             val instantiator =
@@ -122,21 +122,21 @@ class ConstrainedMapGeneratorTest {
                 test = """
                     let map = build_valid_map();
                     let _constrained = ConstrainedMap::parse(map).unwrap();
-                """
+                """,
             )
             writer.unitTest(
                 name = "try_from_success",
                 test = """
                     let map = build_valid_map();
                     let _constrained: ConstrainedMap = map.try_into().unwrap();
-                """
+                """,
             )
             writer.unitTest(
                 name = "parse_fail",
                 test = """
                     let map = build_invalid_map();
                     let _constrained = ConstrainedMap::parse(map).unwrap_err();
-                """
+                """,
             )
             writer.unitTest(
                 name = "try_from_fail",
@@ -144,7 +144,7 @@ class ConstrainedMapGeneratorTest {
                     let map = build_invalid_map();
                     let constrained_res: Result<ConstrainedMap, _> = map.try_into();
                     constrained_res.unwrap_err();
-                """
+                """,
             )
             writer.unitTest(
                 name = "inner",
@@ -153,7 +153,7 @@ class ConstrainedMapGeneratorTest {
                     let constrained = ConstrainedMap::parse(map.clone()).unwrap();
 
                     assert_eq!(constrained.inner(), &map);
-                """
+                """,
             )
             writer.unitTest(
                 name = "into_inner",
@@ -162,7 +162,7 @@ class ConstrainedMapGeneratorTest {
                     let constrained = ConstrainedMap::parse(map.clone()).unwrap();
 
                     assert_eq!(constrained.into_inner(), map);
-                """
+                """,
             )
         }
 
@@ -193,7 +193,7 @@ class ConstrainedMapGeneratorTest {
             symbolProvider,
             constraintViolationSymbolProvider,
             writer,
-            constrainedMapShape
+            constrainedMapShape,
         )
 
         // Check that the wrapped type is `pub(crate)`.
@@ -205,14 +205,14 @@ class ConstrainedMapGeneratorTest {
         symbolProvider: RustSymbolProvider,
         constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
         writer: RustWriter,
-        constrainedMapShape: MapShape
+        constrainedMapShape: MapShape,
     ) {
         ConstrainedMapGenerator(
             model,
             symbolProvider,
             constraintViolationSymbolProvider,
             writer,
-            constrainedMapShape
+            constrainedMapShape,
         ).render()
 
         MapConstraintViolationGenerator(
@@ -220,7 +220,7 @@ class ConstrainedMapGeneratorTest {
             symbolProvider,
             constraintViolationSymbolProvider,
             writer,
-            constrainedMapShape
+            constrainedMapShape,
         ).render()
     }
 }

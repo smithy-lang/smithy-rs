@@ -39,7 +39,7 @@ class PubCrateConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     val writer: RustWriter,
-    val shape: CollectionShape
+    val shape: CollectionShape,
 ) {
     private val model = codegenContext.model
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
@@ -81,7 +81,7 @@ class PubCrateConstrainedCollectionGenerator(
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
 
             if (publicConstrainedTypes) {
@@ -106,24 +106,24 @@ class PubCrateConstrainedCollectionGenerator(
                     impl #{From}<#{Symbol}> for $name {
                         fn from(v: #{Symbol}) -> Self {
                             ${ if (innerNeedsConstraining) {
-                                "Self(v.into_iter().map(|item| item.into()).collect())"
-                            } else {
-                                "Self(v)"
-                            } }
+                        "Self(v.into_iter().map(|item| item.into()).collect())"
+                    } else {
+                        "Self(v)"
+                    } }
                         }
                     }
 
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
                             ${ if (innerNeedsConstraining) {
-                                "v.0.into_iter().map(|item| item.into()).collect()"
-                            } else {
-                                "v.0"
-                            } }
+                        "v.0.into_iter().map(|item| item.into()).collect()"
+                    } else {
+                        "v.0"
+                    } }
                         }
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             } else {
                 val innerNeedsConversion = innerShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
@@ -133,14 +133,14 @@ class PubCrateConstrainedCollectionGenerator(
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
                             ${ if (innerNeedsConversion) {
-                                "v.0.into_iter().map(|item| item.into()).collect()"
-                            } else {
-                                "v.0"
-                            } }
+                        "v.0.into_iter().map(|item| item.into()).collect()"
+                    } else {
+                        "v.0"
+                    } }
                         }
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }

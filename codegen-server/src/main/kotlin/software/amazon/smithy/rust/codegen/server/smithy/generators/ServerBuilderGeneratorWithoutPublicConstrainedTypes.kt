@@ -47,6 +47,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
+
     // TODO moduleName
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
     private val moduleName = builderSymbol.namespace.split("::").last()
@@ -57,7 +58,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained()
+        "MaybeConstrained" to RuntimeType.MaybeConstrained(),
     )
 
     fun render(writer: RustWriter) {
@@ -146,7 +147,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 """
                 The builder fails to construct a #D if you do not provide a value for all non-`Option`al members.
                 """,
-                structureSymbol
+                structureSymbol,
             )
         }
         // TODO Could be single block
@@ -230,7 +231,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 }
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -243,7 +244,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 }
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
     }
 

@@ -38,13 +38,13 @@ val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
 fun serverTestSymbolProvider(
     model: Model,
     serviceShape: ServiceShape? = null,
-    publicConstrainedTypesEnabled: Boolean = true
+    publicConstrainedTypesEnabled: Boolean = true,
 ): RustSymbolProvider =
     RustCodegenServerPlugin.baseSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
         ServerTestSymbolVisitorConfig,
-        publicConstrainedTypes = publicConstrainedTypesEnabled
+        publicConstrainedTypes = publicConstrainedTypesEnabled,
     )
 
 fun serverTestRustSettings(
@@ -77,7 +77,7 @@ fun serverTestCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
     settings: ServerRustSettings = serverTestRustSettings(),
-    protocolShapeId: ShapeId? = null
+    protocolShapeId: ShapeId? = null,
 ): ServerCodegenContext {
     val service =
         serviceShape
@@ -97,7 +97,7 @@ fun serverTestCodegenContext(
         settings,
         unconstrainedShapeSymbolProvider,
         constrainedShapeSymbolProvider,
-        constraintViolationSymbolProvider
+        constraintViolationSymbolProvider,
     )
 }
 

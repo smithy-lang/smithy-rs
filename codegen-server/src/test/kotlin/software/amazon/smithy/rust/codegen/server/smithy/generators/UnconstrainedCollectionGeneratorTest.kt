@@ -10,9 +10,9 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
@@ -81,7 +81,7 @@ class UnconstrainedCollectionGeneratorTest {
                     unconstrainedShapeSymbolProvider,
                     pubCrateConstrainedShapeSymbolProvider,
                     writer,
-                    it
+                    it,
                 ).render()
             }
         }
@@ -97,7 +97,7 @@ class UnconstrainedCollectionGeneratorTest {
                         constraintViolationSymbolProvider,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
-                        it
+                        it,
                     ).render()
                 }
 
@@ -118,7 +118,7 @@ class UnconstrainedCollectionGeneratorTest {
                         expected_err,
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap_err()
                     );
-                    """
+                    """,
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -136,7 +136,7 @@ class UnconstrainedCollectionGeneratorTest {
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap().into();
                         
                     assert_eq!(expected, actual);
-                    """
+                    """,
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -147,7 +147,7 @@ class UnconstrainedCollectionGeneratorTest {
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                     let _list_a: crate::constrained::MaybeConstrained<crate::constrained::list_a_constrained::ListAConstrained> = list_a_unconstrained.into();
-                    """
+                    """,
                 )
                 project.compileAndTest()
             }

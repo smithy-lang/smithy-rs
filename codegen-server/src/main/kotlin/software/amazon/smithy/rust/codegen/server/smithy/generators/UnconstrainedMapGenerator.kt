@@ -27,7 +27,7 @@ class UnconstrainedMapGenerator(
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
-    val shape: MapShape
+    val shape: MapShape,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -35,7 +35,7 @@ class UnconstrainedMapGenerator(
     private val name = symbol.name
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
-        with (codegenContext.constraintViolationSymbolProvider) {
+        with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {
                 this
             } else {
@@ -90,8 +90,8 @@ class UnconstrainedMapGenerator(
                     // TODO I think this breaks if the value shape is a constrained enum (?) Add protocol test.
                     val resolveToNonPublicConstrainedValueType =
                         isValueConstrained(valueShape, model, symbolProvider) &&
-                                !valueShape.isDirectlyConstrained(symbolProvider) &&
-                                !valueShape.isStructureShape
+                            !valueShape.isDirectlyConstrained(symbolProvider) &&
+                            !valueShape.isStructureShape
                     val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
                         pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
                     } else {
@@ -111,7 +111,7 @@ class UnconstrainedMapGenerator(
                         let hm = res?;
                         """,
                         "ConstrainedKeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape),
-                        "ConstrainedValueSymbol" to constrainedValueSymbol
+                        "ConstrainedValueSymbol" to constrainedValueSymbol,
                     )
 
                     val constrainedValueTypeIsNotFinalType =
@@ -147,7 +147,7 @@ class UnconstrainedMapGenerator(
                                 hm.into_iter().map(|(k, v)| (k, v.into())).collect();
                             """,
                             "KeySymbol" to symbolProvider.toSymbol(keyShape),
-                            "ValueSymbol" to symbolProvider.toSymbol(valueShape)
+                            "ValueSymbol" to symbolProvider.toSymbol(valueShape),
                         )
                     }
                 } else {
