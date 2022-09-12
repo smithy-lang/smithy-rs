@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -167,10 +169,9 @@ class UnconstrainedUnionGenerator(
                     ) {
                         if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
                             val targetShape = model.expectShape(member.target)
-                            val resolveToNonPublicConstrainedType = !publicConstrainedTypes ||
-                                (!targetShape.isDirectlyConstrained(symbolProvider) &&
-                                !targetShape.isStructureShape &&
-                                !targetShape.isUnionShape)
+                            val resolveToNonPublicConstrainedType =
+                                targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>()
+                                (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
 
                             val hasBox = member.hasTrait<RustBoxTrait>()
                             if (hasBox) {
