@@ -58,6 +58,13 @@ interface ServerProtocol : Protocol {
         requestSpecModule: RuntimeType,
     ): Writable
 
+    /**
+     * In some protocols, such as restJson1,
+     * when there is no modeled body input, content type must not be set and the body must be empty.
+     * Returns a boolean indicating whether to perform this check.
+     */
+    fun serverContentTypeCheckNoModeledInput(): Boolean = false
+
     companion object {
         /** Upgrades the core protocol to a `ServerProtocol`. */
         fun fromCoreProtocol(protocol: Protocol): ServerProtocol = when (protocol) {
