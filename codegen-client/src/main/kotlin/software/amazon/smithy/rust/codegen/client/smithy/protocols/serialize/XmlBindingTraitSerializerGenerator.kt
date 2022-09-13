@@ -43,18 +43,18 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerat
 import software.amazon.smithy.rust.codegen.client.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.client.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
-import software.amazon.smithy.rust.codegen.client.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class XmlBindingTraitSerializerGenerator(
     coreCodegenContext: CoreCodegenContext,

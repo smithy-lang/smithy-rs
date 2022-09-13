@@ -17,8 +17,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.client.util.hasEventStreamMember
-import software.amazon.smithy.rust.codegen.client.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 
 private data class PubUseType(
     val type: RuntimeType,

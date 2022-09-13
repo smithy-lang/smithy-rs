@@ -21,10 +21,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCust
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.client.util.expectMember
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
-import software.amazon.smithy.rust.codegen.client.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.expectMember
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDependency(
     InlineAwsDependency.forRustFile(

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.util
+package software.amazon.smithy.rust.codegen.core.util
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
@@ -18,8 +18,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 
 inline fun <reified T : Shape> Model.lookup(shapeId: String): T {
     return this.expectShape(ShapeId.from(shapeId), T::class.java)

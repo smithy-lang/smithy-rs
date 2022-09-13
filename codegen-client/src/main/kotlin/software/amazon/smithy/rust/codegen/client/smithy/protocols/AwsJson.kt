@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.JsonPar
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 sealed class AwsJsonVersion {
     abstract val value: String

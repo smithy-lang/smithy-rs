@@ -18,10 +18,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
 import software.amazon.smithy.rust.codegen.client.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.client.util.orNull
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
     WrappingSymbolProvider(base) {

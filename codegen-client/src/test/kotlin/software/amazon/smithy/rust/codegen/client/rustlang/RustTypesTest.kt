@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.rustlang
 
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 
@@ -131,5 +132,12 @@ internal class RustTypesTest {
             RustType.Dyn(RustType.Opaque("Foo", "foo")).writable,
             "'dyn foo::Foo'",
         )
+    }
+
+    @Test
+    fun `types render properly`() {
+        val type = RustType.Box(RustType.Option(RustType.Reference("a", RustType.Vec(RustType.String))))
+        type.render(false) shouldBe "Box<Option<&'a Vec<String>>>"
+        type.render(true) shouldBe "std::boxed::Box<std::option::Option<&'a std::vec::Vec<std::string::String>>>"
     }
 }

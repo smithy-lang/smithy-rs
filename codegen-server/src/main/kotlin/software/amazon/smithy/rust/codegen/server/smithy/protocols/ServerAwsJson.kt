@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.Jso
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSection
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
  * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGenerator]

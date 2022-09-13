@@ -16,13 +16,13 @@ import software.amazon.smithy.rust.codegen.client.rustlang.render
 import software.amazon.smithy.rust.codegen.client.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.eventStreamErrorSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.eventStreamErrors
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.isEventStream
-import software.amazon.smithy.rust.codegen.client.util.isInputEventStream
-import software.amazon.smithy.rust.codegen.client.util.isOutputEventStream
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 
 /**
  * Wrapping symbol provider to wrap modeled types with the aws-smithy-http Event Stream send/receive types.
