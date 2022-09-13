@@ -150,6 +150,8 @@ open class RestJson(val coreCodegenContext: CoreCodegenContext) : Protocol {
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
 
 fun restJsonFieldName(member: MemberShape): String {
