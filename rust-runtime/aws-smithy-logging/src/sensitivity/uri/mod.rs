@@ -17,7 +17,7 @@ pub use greedy_label::*;
 pub use label::*;
 pub use query::*;
 
-use crate::logging::{MakeDisplay, MakeFmt, MakeIdentity};
+use crate::{MakeDisplay, MakeFmt, MakeIdentity};
 
 /// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Specific parts of the [`Uri`] as are
 /// marked as sensitive using the methods provided.
@@ -271,7 +271,9 @@ mod tests {
         let expecteds = LAST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let path_len = original.path().split('/').skip(1).count();
-            let output = SensitiveUri::new(&original).label(|x| x + 1 == path_len).to_string();
+            let output = SensitiveUri::new(&original)
+                .label(|x| x + 1 == path_len)
+                .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
@@ -296,7 +298,9 @@ mod tests {
     #[test]
     fn query_mark_all_keys() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveUri::new(&original)
                 .query(|_| QueryMarker {
@@ -328,7 +332,9 @@ mod tests {
     #[test]
     fn query_mark_all_values() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveUri::new(&original)
                 .query(|_| QueryMarker {
@@ -360,10 +366,15 @@ mod tests {
     #[test]
     fn query_mark_all_pairs() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveUri::new(&original)
-                .query(|_| QueryMarker { key: true, value: true })
+                .query(|_| QueryMarker {
+                    key: true,
+                    value: true,
+                })
                 .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }

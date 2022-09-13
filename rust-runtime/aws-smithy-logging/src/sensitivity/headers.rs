@@ -9,7 +9,7 @@ use std::fmt::{Debug, Display, Error, Formatter};
 
 use http::{header::HeaderName, HeaderMap};
 
-use crate::logging::MakeFmt;
+use crate::MakeFmt;
 
 use super::Sensitive;
 
@@ -115,7 +115,10 @@ where
 
             let key = if let Some(key_suffix) = key_suffix {
                 let key_str = key.as_str();
-                OrFmt::Left(ThenDebug(&key_str[..key_suffix], Sensitive(&key_str[key_suffix..])))
+                OrFmt::Left(ThenDebug(
+                    &key_str[..key_suffix],
+                    Sensitive(&key_str[key_suffix..]),
+                ))
             } else {
                 OrFmt::Right(key)
             };
@@ -181,7 +184,12 @@ mod tests {
     {
         values
             .into_iter()
-            .map(|(key, value)| (HeaderName::from_static(key), HeaderValue::from_static(value)))
+            .map(|(key, value)| {
+                (
+                    HeaderName::from_static(key),
+                    HeaderValue::from_static(value),
+                )
+            })
             .collect()
     }
 

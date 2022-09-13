@@ -1,0 +1,10 @@
+[package]
+name = "aws-smithy-logging"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+unredacted-logging = []
+
+[dependencies]
+http = "0.2.8"

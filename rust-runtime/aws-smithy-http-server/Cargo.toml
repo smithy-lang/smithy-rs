@@ -12,11 +12,9 @@ Server runtime for Smithy Rust Server Framework.
 """
 publish = true
 
-[features]
-unredacted-logging = []
-
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-logging = { path = "../aws-smithy-logging" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }

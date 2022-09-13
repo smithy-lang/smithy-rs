@@ -9,7 +9,7 @@ use std::fmt::{Debug, Error, Formatter};
 
 use http::{header::HeaderName, HeaderMap};
 
-use crate::logging::{MakeFmt, MakeIdentity};
+use crate::{MakeFmt, MakeIdentity};
 
 use super::{
     headers::{HeaderMarker, MakeHeaders},

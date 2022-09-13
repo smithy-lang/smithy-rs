@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::logging::{sensitivity::Sensitive, MakeFmt};
+use crate::{sensitivity::Sensitive, MakeFmt};
 
 /// A wrapper around a path [`&str`](str) which modifies the behavior of [`Display`]. Specific path segments are marked
 /// as sensitive by providing predicate over the segment index. This accommodates the [httpLabel trait] with
@@ -84,7 +84,7 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::logging::sensitivity::uri::tests::EXAMPLES;
+    use crate::sensitivity::uri::tests::EXAMPLES;
 
     use super::Label;
 

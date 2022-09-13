@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::logging::{sensitivity::Sensitive, MakeFmt};
+use crate::{sensitivity::Sensitive, MakeFmt};
 
 /// A wrapper around a path [`&str`](str) which modifies the behavior of [`Display`]. The suffix of the path is marked
 /// as sensitive by providing a byte position. This accommodates the [httpLabel trait with greedy labels].
@@ -68,7 +68,7 @@ impl<'a> MakeFmt<&'a str> for MakeGreedyLabel {
 mod tests {
     use http::Uri;
 
-    use crate::logging::sensitivity::uri::tests::EXAMPLES;
+    use crate::sensitivity::uri::tests::EXAMPLES;
 
     use super::*;
 

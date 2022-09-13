@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::logging::MakeFmt;
+use crate::MakeFmt;
 
 use super::REDACTED;
 
