@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -18,8 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.util.dq
 
 /**
@@ -28,16 +26,12 @@ import software.amazon.smithy.rust.codegen.util.dq
  * some utility functions like `__str__()` and `__repr__()`.
  */
 class PythonServerEnumGenerator(
-    model: Model,
-    symbolProvider: RustSymbolProvider,
-    constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
     shape: StringShape,
     enumTrait: EnumTrait,
 ) : ServerEnumGenerator(
-    model,
-    symbolProvider,
-    constraintViolationSymbolProvider,
+    codegenContext,
     writer,
     shape,
     enumTrait,

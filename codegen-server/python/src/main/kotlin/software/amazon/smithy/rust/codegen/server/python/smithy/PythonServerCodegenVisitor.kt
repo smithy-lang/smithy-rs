@@ -23,9 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.util.getTrait
 
 /**
@@ -64,7 +62,16 @@ class PythonServerCodegenVisitor(
 
         // Override `codegenContext` which carries the symbolProvider.
         codegenContext =
-            ServerCodegenContext(model, symbolProvider, service, protocol, settings, unconstrainedShapeSymbolProvider)
+            ServerCodegenContext(
+                model,
+                symbolProvider,
+                service,
+                protocol,
+                settings,
+                unconstrainedShapeSymbolProvider,
+                constrainedShapeSymbolProvider,
+                constraintViolationSymbolProvider,
+            )
 
         // Override `rustCrate` which carries the symbolProvider.
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
@@ -88,12 +95,8 @@ class PythonServerCodegenVisitor(
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
             PythonServerStructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
-            val builderGenerator =
-                BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-            builderGenerator.render(writer)
-            writer.implBlock(shape, symbolProvider) {
-                builderGenerator.renderConvenienceMethod(this)
-            }
+
+            renderStructureShapeBuilder(shape, writer)
         }
     }
 
@@ -106,14 +109,7 @@ class PythonServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
-                PythonServerEnumGenerator(
-                    model,
-                    symbolProvider,
-                    constraintViolationSymbolProvider,
-                    writer,
-                    shape,
-                    enum,
-                ).render()
+                PythonServerEnumGenerator(codegenContext, writer, shape, enum).render()
             }
         }
     }

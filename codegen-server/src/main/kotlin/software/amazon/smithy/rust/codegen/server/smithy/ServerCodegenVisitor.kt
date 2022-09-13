@@ -21,6 +21,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
@@ -84,7 +85,7 @@ open class ServerCodegenVisitor(
     protected var symbolProvider: RustSymbolProvider
     protected val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider
-    private val constrainedShapeSymbolProvider: RustSymbolProvider
+    protected val constrainedShapeSymbolProvider: RustSymbolProvider
     protected val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider
     protected var rustCrate: RustCrate
     private val fileManifest = context.fileManifest
@@ -240,38 +241,45 @@ open class ServerCodegenVisitor(
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
 
-            if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
-                val serverBuilderGenerator = ServerBuilderGenerator(
-                    codegenContext,
-                    shape,
-                    if (shape.isReachableFromOperationInput()) pubCrateConstrainedShapeSymbolProvider else null,
-                )
-                serverBuilderGenerator.render(writer)
+            renderStructureShapeBuilder(shape, writer)
+        }
+    }
 
-                if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-                    writer.implBlock(shape, symbolProvider) {
-                        serverBuilderGenerator.renderConvenienceMethod(this)
-                    }
-                }
-            }
+    protected fun renderStructureShapeBuilder(
+        shape: StructureShape,
+        writer: RustWriter,
+    ) {
+        if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
+            val serverBuilderGenerator = ServerBuilderGenerator(
+                codegenContext,
+                shape,
+                if (shape.isReachableFromOperationInput()) pubCrateConstrainedShapeSymbolProvider else null,
+            )
+            serverBuilderGenerator.render(writer)
 
-            if (shape.isReachableFromOperationInput()) {
-                ServerStructureConstrainedTraitImpl(
-                    symbolProvider,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
-                    shape,
-                    writer,
-                ).render()
-            }
-
-            if (!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-                val serverBuilderGeneratorWithoutPublicConstrainedTypes =
-                    ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape)
-                serverBuilderGeneratorWithoutPublicConstrainedTypes.render(writer)
-
+            if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
                 writer.implBlock(shape, symbolProvider) {
-                    serverBuilderGeneratorWithoutPublicConstrainedTypes.renderConvenienceMethod(this)
+                    serverBuilderGenerator.renderConvenienceMethod(this)
                 }
+            }
+        }
+
+        if (shape.isReachableFromOperationInput()) {
+            ServerStructureConstrainedTraitImpl(
+                symbolProvider,
+                codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                shape,
+                writer,
+            ).render()
+        }
+
+        if (!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+            val serverBuilderGeneratorWithoutPublicConstrainedTypes =
+                ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape)
+            serverBuilderGeneratorWithoutPublicConstrainedTypes.render(writer)
+
+            writer.implBlock(shape, symbolProvider) {
+                serverBuilderGeneratorWithoutPublicConstrainedTypes.renderConvenienceMethod(this)
             }
         }
     }
