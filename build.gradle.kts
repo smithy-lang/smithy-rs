@@ -16,7 +16,7 @@ buildscript {
 
 plugins {
     kotlin("jvm") version "1.3.72" apply false
-    id("org.jetbrains.dokka") version "1.4.30"
+    id("org.jetbrains.dokka") version "1.7.10"
 }
 
 allprojects {
@@ -24,7 +24,6 @@ allprojects {
         mavenLocal()
         mavenCentral()
         google()
-        maven("https://maven.pkg.jetbrains.space/public/p/kotlinx-html/maven") // https://github.com/Kotlin/kotlinx.html/issues/173
     }
 }
 
