@@ -9,18 +9,22 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 
 private fun allOperations(coreCodegenContext: CoreCodegenContext): List<OperationShape> {
     val index = TopDownIndex.of(coreCodegenContext.model)
@@ -39,6 +43,29 @@ interface ServerProtocol : Protocol {
      * (`self.operation_name`, ...), and the `Model`.
      */
     fun routerConstruction(operationValues: Iterable<Writable>): Writable
+
+    /**
+     * Returns the name of the constructor to be used on the `Router` type, to instantiate a `Router` using this
+     * protocol.
+     */
+    fun serverRouterRuntimeConstructor(): String
+
+    /**
+     * Returns a writable for the `RequestSpec` for an operation.
+     */
+    fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable
+
+    /**
+     * In some protocols, such as restJson1,
+     * when there is no modeled body input, content type must not be set and the body must be empty.
+     * Returns a boolean indicating whether to perform this check.
+     */
+    fun serverContentTypeCheckNoModeledInput(): Boolean = false
 
     companion object {
         /** Upgrades the core protocol to a `ServerProtocol`. */
@@ -61,6 +88,9 @@ class ServerAwsJsonProtocol(
     )
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val service = coreCodegenContext.serviceShape
+
+    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+        ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)
 
     companion object {
         fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.coreCodegenContext, awsJson.version)
@@ -109,6 +139,23 @@ class ServerAwsJsonProtocol(
             "Router" to routerType(),
             "Pairs" to pairs,
         )
+    }
+
+    /**
+     * Returns the operation name as required by the awsJson1.x protocols.
+     */
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ) = writable {
+        rust("""String::from("$serviceName.$operationName")""")
+    }
+
+    override fun serverRouterRuntimeConstructor() = when (version) {
+        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
+        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
     }
 }
 
@@ -170,6 +217,17 @@ class ServerRestJsonProtocol(
     override fun routerType() = restRouterType(runtimeConfig)
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
 
 class ServerRestXmlProtocol(
@@ -188,4 +246,15 @@ class ServerRestXmlProtocol(
     override fun routerType() = restRouterType(runtimeConfig)
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
