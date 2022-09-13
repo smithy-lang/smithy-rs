@@ -21,8 +21,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersio
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 
 private fun allOperations(coreCodegenContext: CoreCodegenContext): List<OperationShape> {
     val index = TopDownIndex.of(coreCodegenContext.model)
@@ -86,6 +88,9 @@ class ServerAwsJsonProtocol(
     )
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val service = coreCodegenContext.serviceShape
+
+    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+        ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)
 
     companion object {
         fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.coreCodegenContext, awsJson.version)
@@ -221,6 +226,8 @@ class ServerRestJsonProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
 
 class ServerRestXmlProtocol(
@@ -248,4 +255,6 @@ class ServerRestXmlProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
