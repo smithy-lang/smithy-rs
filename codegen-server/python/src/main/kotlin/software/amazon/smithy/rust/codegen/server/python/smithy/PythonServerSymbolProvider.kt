@@ -22,9 +22,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.client.smithy.shape
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
