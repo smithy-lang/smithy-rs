@@ -90,6 +90,13 @@ interface Protocol {
      * protocol.
      */
     fun serverRouterRuntimeConstructor(): String
+
+    /**
+     * In some protocols, such as restJson1,
+     * when there is no modeled body input, content type must not be set and the body must be empty.
+     * Returns a boolean indicating whether to perform this check.
+     */
+    fun serverContentTypeCheckNoModeledInput(): Boolean = false
 }
 
 typealias ProtocolMap<C> = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>>
