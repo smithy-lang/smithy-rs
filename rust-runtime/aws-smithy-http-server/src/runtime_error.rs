@@ -21,7 +21,10 @@
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
 //! [`RuntimeError::into_response`] method to render and send a response.
 
-use crate::{protocols::Protocol, response::Response};
+use crate::{
+    protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml, Protocol},
+    response::{IntoResponse, Response},
+};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
@@ -48,13 +51,52 @@ impl RuntimeErrorKind {
     }
 }
 
+pub struct InternalFailureException;
+
+impl IntoResponse<AwsJson10> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::AwsJson10).into_response()
+    }
+}
+
+impl IntoResponse<AwsJson11> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::AwsJson11).into_response()
+    }
+}
+
+impl IntoResponse<AwsRestJson1> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::RestJson1).into_response()
+    }
+}
+
+impl IntoResponse<AwsRestXml> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::RestXml).into_response()
+    }
+}
+
 #[derive(Debug)]
 pub struct RuntimeError {
     pub protocol: Protocol,
     pub kind: RuntimeErrorKind,
 }
 
+impl<P> IntoResponse<P> for RuntimeError {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        self.into_response()
+    }
+}
+
 impl RuntimeError {
+    pub fn internal_failure_from_protocol(protocol: Protocol) -> Self {
+        RuntimeError {
+            protocol,
+            kind: RuntimeErrorKind::InternalFailure(crate::Error::new(String::new())),
+        }
+    }
+
     pub fn into_response(self) -> Response {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,

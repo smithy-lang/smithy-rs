@@ -9,10 +9,10 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolLoader
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolMap
 
 class ServerProtocolLoader(supportedProtocols: ProtocolMap<ServerCodegenContext>) :
     ProtocolLoader<ServerCodegenContext>(supportedProtocols) {

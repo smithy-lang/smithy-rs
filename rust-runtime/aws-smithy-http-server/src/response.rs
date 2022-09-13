@@ -42,3 +42,9 @@ pub trait IntoResponse<Protocol> {
     /// Performs a conversion into a [`http::Response`].
     fn into_response(self) -> http::Response<BoxBody>;
 }
+
+impl<P> IntoResponse<P> for std::convert::Infallible {
+    fn into_response(self) -> http::Response<BoxBody> {
+        match self {}
+    }
+}
