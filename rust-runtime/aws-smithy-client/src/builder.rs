@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::sync::Arc;
-
 use crate::{bounds, erase, retry, Client};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use aws_smithy_types::timeout;
+use aws_smithy_types::timeout::TimeoutConfig;
+use std::sync::Arc;
 
 /// A builder that provides more customization options when constructing a [`Client`].
 ///
@@ -25,7 +24,7 @@ pub struct Builder<C = (), M = (), R = retry::Standard> {
     // the client.
     standard_retry_config: Option<retry::Config>,
     retry_policy: R,
-    timeout_config: timeout::Config,
+    timeout_config: TimeoutConfig,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
@@ -40,7 +39,7 @@ where
             middleware: Default::default(),
             standard_retry_config: Some(retry::Config::default()),
             retry_policy: Default::default(),
-            timeout_config: Default::default(),
+            timeout_config: TimeoutConfig::disabled(),
             sleep_impl: default_async_sleep(),
         }
     }
@@ -200,19 +199,34 @@ impl<C, M> Builder<C, M, retry::Standard> {
 
 impl<C, M> Builder<C, M> {
     /// Set the standard retry policy's configuration.
-    pub fn set_retry_config(&mut self, config: retry::Config) {
+    pub fn set_retry_config(&mut self, config: retry::Config) -> &mut Self {
         self.standard_retry_config = Some(config.clone());
         self.retry_policy.with_config(config);
+        self
+    }
+
+    /// Set the standard retry policy's configuration.
+    pub fn retry_config(mut self, config: retry::Config) -> Self {
+        self.set_retry_config(config);
+        self
     }
 
     /// Set a timeout config for the builder
-    pub fn set_timeout_config(&mut self, timeout_config: timeout::Config) {
+    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) -> &mut Self {
         self.timeout_config = timeout_config;
+        self
+    }
+
+    /// Set a timeout config for the builder
+    pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+        self.timeout_config = timeout_config;
+        self
     }
 
     /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
-    pub fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) {
+    pub fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
         self.sleep_impl = async_sleep;
+        self
     }
 
     /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
@@ -319,8 +333,6 @@ mod tests {
     use super::*;
     use crate::never::NeverConnector;
     use aws_smithy_async::rt::sleep::Sleep;
-    use aws_smithy_types::timeout;
-    use aws_smithy_types::tristate::TriState;
     use std::panic::{self, AssertUnwindSafe};
     use std::time::Duration;
 
@@ -361,9 +373,9 @@ mod tests {
             .middleware(tower::layer::util::Identity::new());
         builder.set_sleep_impl(None);
 
-        let timeout_config = timeout::Config::new().with_http_timeouts(
-            timeout::Http::new().with_connect_timeout(TriState::Set(Duration::from_secs(1))),
-        );
+        let timeout_config = TimeoutConfig::builder()
+            .connect_timeout(Duration::from_secs(1))
+            .build();
         assert!(timeout_config.has_timeouts());
         builder.set_timeout_config(timeout_config);
 
@@ -408,9 +420,9 @@ mod tests {
             .connector(NeverConnector::new())
             .middleware(tower::layer::util::Identity::new());
 
-        let timeout_config = timeout::Config::new().with_http_timeouts(
-            timeout::Http::new().with_connect_timeout(TriState::Set(Duration::from_secs(1))),
-        );
+        let timeout_config = TimeoutConfig::builder()
+            .connect_timeout(Duration::from_secs(1))
+            .build();
         assert!(timeout_config.has_timeouts());
         builder.set_timeout_config(timeout_config);
 

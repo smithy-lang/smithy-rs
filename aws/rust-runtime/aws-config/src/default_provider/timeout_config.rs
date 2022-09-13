@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_types::timeout;
-
 use crate::environment::timeout_config::EnvironmentVariableTimeoutConfigProvider;
 use crate::profile;
 use crate::provider_config::ProviderConfig;
+use aws_sdk_sso::config::TimeoutConfig;
+use std::time::Duration;
+
+const SDK_DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_millis(3100);
 
 /// Default [`timeout::Config`] Provider chain
 ///
@@ -79,7 +81,7 @@ impl Builder {
     /// This will panic if:
     /// - a timeout is set to `NaN`, a negative number, or infinity
     /// - a timeout can't be parsed as a floating point number
-    pub async fn timeout_config(self) -> timeout::Config {
+    pub async fn timeout_config(self) -> TimeoutConfig {
         // Both of these can return errors due to invalid config settings and we want to surface those as early as possible
         // hence, we'll panic if any config values are invalid (missing values are OK though)
         // We match this instead of unwrapping so we can print the error with the `Display` impl instead of the `Debug` impl that unwrap uses
@@ -92,6 +94,12 @@ impl Builder {
             Err(err) => panic!("{}", err),
         };
 
-        builder_from_env.take_unset_from(builder_from_profile)
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1732): Implement complete timeout defaults specification
+        let defaults = TimeoutConfig::builder().connect_timeout(SDK_DEFAULT_CONNECT_TIMEOUT);
+
+        builder_from_env
+            .take_unset_from(builder_from_profile)
+            .take_unset_from(defaults)
+            .build()
     }
 }

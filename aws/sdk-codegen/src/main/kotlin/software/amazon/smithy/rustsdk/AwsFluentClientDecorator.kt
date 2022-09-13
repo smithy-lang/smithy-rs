@@ -50,6 +50,7 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val dynMiddleware = RuntimeType("DynMiddleware", smithyClientDep, "aws_smithy_client::erase")
     val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
     val retryConfig = RuntimeType("RetryConfig", smithyTypesDep, "aws_smithy_types::retry")
+    val timeoutConfig = RuntimeType("TimeoutConfig", smithyTypesDep, "aws_smithy_types::timeout")
 
     val connectorError = RuntimeType("ConnectorError", smithyHttpDep, "aws_smithy_http::result")
 }
@@ -137,6 +138,7 @@ private class AwsFluentClientExtensions(types: Types) {
         "DynMiddleware" to types.dynMiddleware,
         "Middleware" to types.defaultMiddleware,
         "RetryConfig" to types.retryConfig,
+        "TimeoutConfig" to types.timeoutConfig,
         "SmithyConnector" to types.smithyConnector,
         "aws_smithy_client" to types.awsSmithyClient,
         "aws_types" to types.awsTypes,
@@ -154,15 +156,13 @@ private class AwsFluentClientExtensions(types: Types) {
                     E: Into<#{ConnectorError}>,
                 {
                     let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
                     let mut builder = #{aws_smithy_client}::Builder::new()
                         .connector(#{DynConnector}::new(conn))
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    if let Some(sleep_impl) = conf.sleep_impl() {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
+                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .retry_config(retry_config.into())
+                        .timeout_config(timeout_config);
+                    builder.set_sleep_impl(conf.sleep_impl());
                     let client = builder.build();
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
@@ -177,21 +177,17 @@ private class AwsFluentClientExtensions(types: Types) {
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
                     let sleep_impl = conf.sleep_impl();
                     if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
                         panic!("An async sleep implementation is required for retries or timeouts to work. \
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");
                     }
                     let mut builder = #{aws_smithy_client}::Builder::dyn_https()
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
-                    // only set it if we actually have a sleep impl.
-                    if let Some(sleep_impl) = sleep_impl {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
+                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .retry_config(retry_config.into())
+                        .timeout_config(timeout_config);
+                    builder.set_sleep_impl(sleep_impl);
                     let client = builder.build();
 
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
@@ -249,7 +245,7 @@ private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenCon
                         /// ```
                         /// **Constructing a client with custom configuration**
                         /// ```rust,no_run
-                        /// use #{aws_config}::RetryConfig;
+                        /// use #{aws_config}::retry::RetryConfig;
                         /// ## async fn docs() {
                         /// let shared_config = #{aws_config}::load_from_env().await;
                         /// let config = $crateName::config::Builder::from(&shared_config)

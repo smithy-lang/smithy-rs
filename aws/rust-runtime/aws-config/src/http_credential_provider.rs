@@ -16,8 +16,6 @@ use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_smithy_types::timeout;
-use aws_smithy_types::tristate::TriState;
 use aws_types::credentials::CredentialsError;
 use aws_types::{credentials, Credentials};
 
@@ -80,7 +78,7 @@ impl HttpCredentialProvider {
 #[derive(Default)]
 pub(crate) struct Builder {
     provider_config: Option<ProviderConfig>,
-    http_timeout_config: timeout::Http,
+    http_settings: Option<HttpSettings>,
 }
 
 impl Builder {
@@ -89,36 +87,25 @@ impl Builder {
         self
     }
 
-    // read_timeout and connect_timeout accept options to enable easy pass through from
-    // other builders
-    pub(crate) fn read_timeout(mut self, read_timeout: Option<Duration>) -> Self {
-        self.http_timeout_config = self
-            .http_timeout_config
-            .with_read_timeout(read_timeout.into());
-        self
-    }
-
-    pub(crate) fn connect_timeout(mut self, connect_timeout: Option<Duration>) -> Self {
-        self.http_timeout_config = self
-            .http_timeout_config
-            .with_connect_timeout(connect_timeout.into());
+    pub(crate) fn http_settings(mut self, http_settings: HttpSettings) -> Self {
+        self.http_settings = Some(http_settings);
         self
     }
 
     pub(crate) fn build(self, provider_name: &'static str, uri: Uri) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let default_timeout_config = timeout::Http::new()
-            .with_connect_timeout(TriState::Set(DEFAULT_CONNECT_TIMEOUT))
-            .with_read_timeout(TriState::Set(DEFAULT_READ_TIMEOUT));
-        let http_timeout_config = self
-            .http_timeout_config
-            .take_unset_from(default_timeout_config);
-        let http_settings = HttpSettings::default().with_http_timeout_config(http_timeout_config);
+        let http_settings = self.http_settings.unwrap_or_else(|| {
+            HttpSettings::builder()
+                .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
+                .read_timeout(DEFAULT_READ_TIMEOUT)
+                .build()
+        });
         let connector = expect_connector(provider_config.connector(&http_settings));
-        let client = aws_smithy_client::Builder::new()
+        let mut client_builder = aws_smithy_client::Client::builder()
             .connector(connector)
-            .sleep_impl(provider_config.sleep())
-            .build();
+            .middleware(Identity::new());
+        client_builder.set_sleep_impl(provider_config.sleep());
+        let client = client_builder.build();
         HttpCredentialProvider {
             uri,
             client,

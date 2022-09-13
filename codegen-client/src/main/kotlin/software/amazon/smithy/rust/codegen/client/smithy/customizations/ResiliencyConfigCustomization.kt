@@ -25,7 +25,7 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
         "AsyncSleep" to sleepModule.member("AsyncSleep"),
         "RetryConfig" to retryConfig.member("RetryConfig"),
         "Sleep" to sleepModule.member("Sleep"),
-        "TimeoutConfig" to timeoutModule.member("Config"),
+        "TimeoutConfig" to timeoutModule.member("TimeoutConfig"),
     )
 
     override fun section(section: ServiceConfig) = writable {
@@ -172,12 +172,11 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                     /// ```no_run
                     /// ## use std::time::Duration;
                     /// use $moduleUseName::config::Config;
-                    /// use aws_smithy_types::{timeout, tristate::TriState};
+                    /// use aws_smithy_types::timeout::TimeoutConfig;
                     ///
-                    /// let api_timeouts = timeout::Api::new()
-                    ///     .with_call_attempt_timeout(TriState::Set(Duration::from_secs(1)));
-                    /// let timeout_config = timeout::Config::new()
-                    ///     .with_api_timeouts(api_timeouts);
+                    /// let timeout_config = TimeoutConfig::builder()
+                    ///     .operation_attempt_timeout(Duration::from_secs(1))
+                    ///     .build();
                     /// let config = Config::builder().timeout_config(timeout_config).build();
                     /// ```
                     pub fn timeout_config(mut self, timeout_config: #{TimeoutConfig}) -> Self {
@@ -195,10 +194,9 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                     /// use aws_smithy_types::{timeout, tristate::TriState};
                     ///
                     /// fn set_request_timeout(builder: &mut Builder) {
-                    ///     let api_timeouts = timeout::Api::new()
-                    ///         .with_call_attempt_timeout(TriState::Set(Duration::from_secs(1)));
-                    ///     let timeout_config = timeout::Config::new()
-                    ///         .with_api_timeouts(api_timeouts);
+                    ///     let timeout_config = TimeoutConfig::builder()
+                    ///         .operation_attempt_timeout(Duration::from_secs(1))
+                    ///         .build();
                     ///     builder.set_timeout_config(Some(timeout_config));
                     /// }
                     ///
@@ -234,7 +232,7 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                     """
                     pub use #{retry}::RetryConfig;
                     pub use #{sleep}::AsyncSleep;
-                    pub use #{timeout}::Config as TimeoutConfig;
+                    pub use #{timeout}::TimeoutConfig;
                     """,
                     "retry" to smithyTypesRetry(runtimeConfig),
                     "sleep" to smithyAsyncRtSleep(runtimeConfig),

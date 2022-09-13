@@ -9,10 +9,13 @@
 //! [`Client`](crate::Client).
 //!
 //! # Examples
+//!
 //! ### Construct a Smithy Client with Hyper and Rustls
+//!
 //! In the basic case, customers should not need to use this module. A default implementation of Hyper
 //! with `rustls` will be constructed during client creation. However, if you are creating a Smithy
 //! [`Client`](crate::Client), directly, use the `https()` method to match the default behavior:
+//!
 //! ```no_run
 //! use aws_smithy_client::Builder;
 //! use aws_smithy_client::erase::DynConnector;
@@ -23,16 +26,23 @@
 //! ```
 //!
 //! ### Create a Hyper client with a custom timeout
-//! One common use case for constructing a connector directly is setting `CONNECT` timeouts. Since the
-//! internal connector is cheap to clone, you can also use this to share a connector between multiple services.
+//!
+//! One common use case for constructing a connector directly is setting socket connect or HTTP read timeouts.
+//! Since the internal connector is cheap to clone, you can also use this to share a connector between multiple services.
+//!
 //! ```no_run
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
-//! use aws_smithy_types::timeout;
+//! use aws_smithy_client::http_connector::HttpSettings;
 //!
-//! let timeout = timeout::Http::new().with_connect_timeout(Some(Duration::from_secs(1)).into());
-//! let connector = hyper_ext::Adapter::builder().timeout(&timeout).build(conns::https());
+//! let connector = hyper_ext::Adapter::builder()
+//!     .http_settings(
+//!         HttpSettings::builder()
+//!             .connect_timeout(Duration::from_secs(5))
+//!             .build()
+//!     )
+//!     .build(conns::https());
 //! // Replace this with your middleware
 //! type MyMiddleware = tower::layer::util::Identity;
 //! // once you have a connector, use it to construct a Smithy client:
@@ -52,14 +62,12 @@ use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::retry::ErrorKind;
-use aws_smithy_types::timeout;
-use aws_smithy_types::tristate::TriState;
-
-use crate::erase::DynConnector;
-use crate::never::stream::EmptyStream;
-use crate::Builder as ClientBuilder;
 
 use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, HttpTimeoutError};
+use crate::erase::DynConnector;
+use crate::http_connector::HttpSettings;
+use crate::never::stream::EmptyStream;
+use crate::Builder as ClientBuilder;
 
 /// Adapter from a [`hyper::Client`](hyper::Client) to a connector usable by a Smithy [`Client`](crate::Client).
 ///
@@ -160,7 +168,6 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
     None
 }
 
-#[derive(Default, Debug)]
 /// Builder for [`hyper_ext::Adapter`](Adapter)
 ///
 /// Unlike a Smithy client, the [`tower::Service`] inside a [`hyper_ext::Adapter`](Adapter) is actually a service that
@@ -181,10 +188,11 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// // Replace `Identity` with your middleware implementation:
 /// let client = aws_smithy_client::Client::<DynConnector, Identity>::new(DynConnector::new(hyper_connector));
 /// ```
+#[derive(Default, Debug)]
 pub struct Builder {
-    http_timeout_config: timeout::Http,
-    sleep: Option<Arc<dyn AsyncSleep>>,
-    client_builder: hyper::client::Builder,
+    http_settings: Option<HttpSettings>,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    client_builder: Option<hyper::client::Builder>,
 }
 
 impl Builder {
@@ -197,63 +205,88 @@ impl Builder {
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
     {
+        let client_builder = self.client_builder.unwrap_or_default();
+        let sleep_impl = self.sleep_impl.or_else(default_async_sleep);
+        let (connect_timeout, read_timeout) = self
+            .http_settings
+            .map(|c| (c.connect_timeout(), c.read_timeout()))
+            .unwrap_or((None, None));
+
         // if we are using Hyper, Tokio must already be enabled so we can fallback to Tokio.
-        let sleep = self.sleep.or_else(default_async_sleep);
-        let connector = match self.http_timeout_config.connect_timeout() {
-            TriState::Set(duration) => ConnectTimeout::new(
+        let connector = match connect_timeout {
+            Some(duration) => ConnectTimeout::new(
                 connector,
-                sleep
+                sleep_impl
                     .clone()
-                    .expect("a sleep impl must be provided to use timeouts"),
+                    .expect("a sleep impl must be provided in order to have a connect timeout"),
                 duration,
             ),
-            // Some day, we could provide a default timeout if none is set. Today is not that day.
-            TriState::Unset | TriState::Disabled => ConnectTimeout::no_timeout(connector),
+            None => ConnectTimeout::no_timeout(connector),
         };
-        let base = self.client_builder.build(connector);
-        let http_timeout = match self.http_timeout_config.read_timeout() {
-            TriState::Set(duration) => HttpReadTimeout::new(
+        let base = client_builder.build(connector);
+        let read_timeout = match read_timeout {
+            Some(duration) => HttpReadTimeout::new(
                 base,
-                sleep
+                sleep_impl
                     .clone()
-                    .expect("a sleep impl must be provided to use timeouts"),
+                    .expect("a sleep impl must be provided in order to have a read timeout"),
                 duration,
             ),
-            // Some day, we could provide a default timeout if none is set. Today is not that day.
-            TriState::Unset | TriState::Disabled => HttpReadTimeout::no_timeout(base),
+            None => HttpReadTimeout::no_timeout(base),
         };
-        Adapter(http_timeout)
+        Adapter(read_timeout)
     }
 
     /// Set the async sleep implementation used for timeouts
     ///
     /// Calling this is only necessary for testing or to use something other than
     /// [`aws_smithy_async::rt::sleep::default_async_sleep`].
-    pub fn sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
-        Self {
-            sleep: Some(Arc::new(sleep_impl)),
-            ..self
-        }
+    pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep + 'static>) -> Self {
+        self.sleep_impl = Some(sleep_impl);
+        self
     }
 
-    /// Configure the timeout for the HyperAdapter
+    /// Set the async sleep implementation used for timeouts
     ///
-    /// When unset, the underlying adaptor will not use any timeouts.
-    pub fn timeout(self, http_timeout_config: &timeout::Http) -> Self {
-        Self {
-            http_timeout_config: http_timeout_config.clone(),
-            ..self
-        }
+    /// Calling this is only necessary for testing or to use something other than
+    /// [`aws_smithy_async::rt::sleep::default_async_sleep`].
+    pub fn set_sleep_impl(
+        &mut self,
+        sleep_impl: Option<Arc<dyn AsyncSleep + 'static>>,
+    ) -> &mut Self {
+        self.sleep_impl = sleep_impl;
+        self
+    }
+
+    /// Configure the HTTP settings for the `HyperAdapter`
+    pub fn http_settings(mut self, http_settings: HttpSettings) -> Self {
+        self.http_settings = Some(http_settings);
+        self
+    }
+
+    /// Configure the HTTP settings for the `HyperAdapter`
+    pub fn set_http_settings(&mut self, http_settings: Option<HttpSettings>) -> &mut Self {
+        self.http_settings = http_settings;
+        self
     }
 
     /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
-    pub fn hyper_builder(self, hyper_builder: hyper::client::Builder) -> Self {
-        Self {
-            client_builder: hyper_builder,
-            ..self
-        }
+    pub fn hyper_builder(mut self, hyper_builder: hyper::client::Builder) -> Self {
+        self.client_builder = Some(hyper_builder);
+        self
+    }
+
+    /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
+    ///
+    /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
+    pub fn set_hyper_builder(
+        &mut self,
+        hyper_builder: Option<hyper::client::Builder>,
+    ) -> &mut Self {
+        self.client_builder = hyper_builder;
+        self
     }
 }
 
@@ -527,18 +560,16 @@ mod timeout_middleware {
 
     #[cfg(test)]
     mod test {
-        use std::time::Duration;
-
-        use tower::Service;
-
+        use crate::http_connector::HttpSettings;
+        use crate::hyper_ext::Adapter;
+        use crate::never::{NeverConnected, NeverReplies};
         use aws_smithy_async::assert_elapsed;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_http::body::SdkBody;
-        use aws_smithy_types::timeout;
-        use aws_smithy_types::tristate::TriState;
-
-        use crate::hyper_ext::Adapter;
-        use crate::never::{NeverConnected, NeverReplies};
+        use aws_smithy_types::timeout::TimeoutConfig;
+        use std::sync::Arc;
+        use std::time::Duration;
+        use tower::Service;
 
         #[allow(unused)]
         fn connect_timeout_is_correct<T: Send + Sync + Clone + 'static>() {
@@ -551,11 +582,14 @@ mod timeout_middleware {
         #[tokio::test]
         async fn http_connect_timeout_works() {
             let inner = NeverConnected::new();
-            let timeout =
-                timeout::Http::new().with_connect_timeout(TriState::Set(Duration::from_secs(1)));
+            let http_settings = HttpSettings::from_timeout_config(
+                &TimeoutConfig::builder()
+                    .connect_timeout(Duration::from_secs(1))
+                    .build(),
+            );
             let mut hyper = Adapter::builder()
-                .timeout(&timeout)
-                .sleep_impl(TokioSleep::new())
+                .http_settings(http_settings)
+                .sleep_impl(Arc::new(TokioSleep::new()))
                 .build(inner);
             let now = tokio::time::Instant::now();
             tokio::time::pause();
@@ -583,12 +617,15 @@ mod timeout_middleware {
         #[tokio::test]
         async fn http_read_timeout_works() {
             let inner = NeverReplies::new();
-            let timeout = timeout::Http::new()
-                .with_connect_timeout(TriState::Set(Duration::from_secs(1)))
-                .with_read_timeout(TriState::Set(Duration::from_secs(2)));
+            let http_settings = HttpSettings::from_timeout_config(
+                &TimeoutConfig::builder()
+                    .connect_timeout(Duration::from_secs(1))
+                    .read_timeout(Duration::from_secs(2))
+                    .build(),
+            );
             let mut hyper = Adapter::builder()
-                .timeout(&timeout)
-                .sleep_impl(TokioSleep::new())
+                .http_settings(http_settings)
+                .sleep_impl(Arc::new(TokioSleep::new()))
                 .build(inner);
             let now = tokio::time::Instant::now();
             tokio::time::pause();

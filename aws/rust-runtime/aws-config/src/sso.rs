@@ -41,10 +41,11 @@ impl crate::provider_config::ProviderConfig {
         use crate::connector::expect_connector;
         use aws_smithy_client::http_connector::HttpSettings;
 
-        aws_smithy_client::Builder::<(), SsoMiddleware>::new()
+        let mut client_builder = aws_smithy_client::Client::builder()
             .connector(expect_connector(self.connector(&HttpSettings::default())))
-            .sleep_impl(self.sleep())
-            .build()
+            .middleware(SsoMiddleware::default());
+        client_builder.set_sleep_impl(self.sleep());
+        client_builder.build()
     }
 }
 

@@ -10,19 +10,15 @@ use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
 
 use aws_smithy_types::timeout;
-use aws_smithy_types::tristate::TriState;
 use aws_types::os_shim_internal::{Env, Fs};
 
+use aws_sdk_sso::config::{TimeoutConfig, TimeoutConfigBuilder};
 use std::time::Duration;
 
-// Currently unsupported timeouts
 const PROFILE_VAR_CONNECT_TIMEOUT: &str = "connect_timeout";
-const PROFILE_VAR_TLS_NEGOTIATION_TIMEOUT: &str = "tls_negotiation_timeout";
 const PROFILE_VAR_READ_TIMEOUT: &str = "read_timeout";
-
-// Supported timeouts
-const PROFILE_VAR_API_CALL_ATTEMPT_TIMEOUT: &str = "api_call_attempt_timeout";
-const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
+const PROFILE_VAR_OPERATION_ATTEMPT_TIMEOUT: &str = "operation_attempt_timeout";
+const PROFILE_VAR_OPERATION_TIMEOUT: &str = "operation_timeout";
 
 /// Load timeout configuration properties from a profile file
 ///
@@ -36,15 +32,15 @@ const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
 /// **Sets timeouts for the `default` profile**
 /// ```ini
 /// [default]
-/// api_call_attempt_timeout = 2
-/// api_call_timeout = 3
+/// operation_attempt_timeout = 2
+/// operation_timeout = 3
 /// ```
 ///
-/// **Sets the `api_call_attempt_timeout` to 0.5 seconds _if and only if_ the `other` profile is selected.**
+/// **Sets the `operation_attempt_timeout` to 0.5 seconds _if and only if_ the `other` profile is selected.**
 ///
 /// ```ini
 /// [profile other]
-/// api_call_attempt_timeout = 0.5
+/// operation_attempt_timeout = 0.5
 /// ```
 ///
 /// This provider is part of the [default timeout config provider chain](crate::default_provider::timeout_config).
@@ -104,7 +100,7 @@ impl ProfileFileTimeoutConfigProvider {
     }
 
     /// Attempt to create a new [`timeout::Config`](aws_smithy_types::timeout::Config) from a profile file.
-    pub async fn timeout_config(&self) -> Result<timeout::Config, timeout::ConfigError> {
+    pub async fn timeout_config(&self) -> Result<TimeoutConfigBuilder, timeout::ConfigError> {
         let profile = match super::parser::load(&self.fs, &self.env).await {
             Ok(profile) => profile,
             Err(err) => {
@@ -129,55 +125,39 @@ impl ProfileFileTimeoutConfigProvider {
                     );
                 }
                 // return an empty config
-                return Ok(timeout::Config::new());
+                return Ok(TimeoutConfigBuilder::new());
             }
         };
 
-        // Warn users that set unsupported timeouts in their profile
-        for timeout in [
-            PROFILE_VAR_CONNECT_TIMEOUT,
-            PROFILE_VAR_TLS_NEGOTIATION_TIMEOUT,
-            PROFILE_VAR_READ_TIMEOUT,
-        ] {
-            warn_if_unsupported_timeout_is_set(selected_profile, timeout);
-        }
-
-        let api_call_attempt_timeout = construct_timeout_from_profile_var(
+        let mut builder = TimeoutConfig::builder();
+        builder.set_connect_timeout(timeout_from_profile_var(
             selected_profile,
-            PROFILE_VAR_API_CALL_ATTEMPT_TIMEOUT,
-        )?;
-        let api_call_timeout =
-            construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_API_CALL_TIMEOUT)?;
+            PROFILE_VAR_CONNECT_TIMEOUT,
+        )?);
+        builder.set_read_timeout(timeout_from_profile_var(
+            selected_profile,
+            PROFILE_VAR_READ_TIMEOUT,
+        )?);
+        builder.set_operation_attempt_timeout(timeout_from_profile_var(
+            selected_profile,
+            PROFILE_VAR_OPERATION_ATTEMPT_TIMEOUT,
+        )?);
+        builder.set_operation_timeout(timeout_from_profile_var(
+            selected_profile,
+            PROFILE_VAR_OPERATION_TIMEOUT,
+        )?);
 
-        let api_timeouts = timeout::Api::new()
-            .with_call_timeout(api_call_timeout)
-            .with_call_attempt_timeout(api_call_attempt_timeout);
-
-        // Only API-related timeouts are currently supported
-        Ok(timeout::Config::new().with_api_timeouts(api_timeouts))
+        Ok(builder)
     }
 }
 
-fn construct_timeout_from_profile_var(
+fn timeout_from_profile_var(
     profile: &Profile,
     var: &'static str,
-) -> Result<TriState<Duration>, timeout::ConfigError> {
+) -> Result<Option<Duration>, timeout::ConfigError> {
     let profile_name = format!("aws profile [{}]", profile.name());
     match profile.get(var) {
-        Some(timeout) => {
-            parse_str_as_timeout(timeout, var.into(), profile_name.into()).map(TriState::Set)
-        }
-        None => Ok(TriState::Unset),
-    }
-}
-
-fn warn_if_unsupported_timeout_is_set(profile: &Profile, var: &'static str) {
-    if profile.get(var).is_some() {
-        tracing::warn!(
-                "Profile '{}' set {} timeout but that feature is currently unimplemented so the setting will be ignored. \
-                To help us prioritize support for this feature, please upvote aws-sdk-rust#151 (https://github.com/awslabs/aws-sdk-rust/issues/151)",
-            profile.name(),
-            var
-        )
+        Some(timeout) => parse_str_as_timeout(timeout, var.into(), profile_name.into()).map(Some),
+        None => Ok(None),
     }
 }

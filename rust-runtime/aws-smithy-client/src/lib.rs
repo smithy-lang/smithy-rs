@@ -84,11 +84,6 @@ pub mod conns {
         crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 }
 
-use std::error::Error;
-use std::sync::Arc;
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
-
-use crate::timeout::generate_timeout_service_params_from_timeout_config;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
@@ -98,6 +93,11 @@ use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
+use aws_smithy_types::timeout::TimeoutConfig;
+use std::error::Error;
+use std::sync::Arc;
+use timeout::ClientTimeoutParams;
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 /// Smithy service client.
 ///
@@ -127,7 +127,7 @@ pub struct Client<
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
-    timeout_config: aws_smithy_types::timeout::Config,
+    timeout_config: TimeoutConfig,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
@@ -162,15 +162,12 @@ impl<C, M> Client<C, M> {
 
 impl<C, M, R> Client<C, M, R> {
     /// Set the client's timeout configuration.
-    pub fn set_timeout_config(&mut self, timeout_config: aws_smithy_types::timeout::Config) {
+    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) {
         self.timeout_config = timeout_config;
     }
 
     /// Set the client's timeout configuration.
-    pub fn with_timeout_config(
-        mut self,
-        timeout_config: aws_smithy_types::timeout::Config,
-    ) -> Self {
+    pub fn with_timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
         self.set_timeout_config(timeout_config);
         self
     }
@@ -237,18 +234,16 @@ where
     {
         let connector = self.connector.clone();
 
-        let timeout_service_params = generate_timeout_service_params_from_timeout_config(
-            &self.timeout_config.api,
-            self.sleep_impl.clone(),
-        );
+        let timeout_params =
+            ClientTimeoutParams::new(&self.timeout_config, self.sleep_impl.clone());
 
         let svc = ServiceBuilder::new()
-            .layer(TimeoutLayer::new(timeout_service_params.api_call))
+            .layer(TimeoutLayer::new(timeout_params.operation_timeout))
             .retry(
                 self.retry_policy
                     .new_request_policy(self.sleep_impl.clone()),
             )
-            .layer(TimeoutLayer::new(timeout_service_params.api_call_attempt))
+            .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.

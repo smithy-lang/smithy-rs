@@ -5,11 +5,10 @@
 
 //! Functionality related to creating new HTTP Connectors
 
-use std::sync::Arc;
-
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpSettings;
+use std::sync::Arc;
 
 // unused when all crate features are disabled
 /// Unwrap an [`Option<DynConnector>`](aws_smithy_client::erase::DynConnector), and panic with a helpful error message if it's `None`
@@ -23,7 +22,7 @@ fn base(
     sleep: Option<Arc<dyn AsyncSleep>>,
 ) -> aws_smithy_client::hyper_ext::Builder {
     let mut hyper =
-        aws_smithy_client::hyper_ext::Adapter::builder().timeout(&settings.http_timeout_config);
+        aws_smithy_client::hyper_ext::Adapter::builder().http_settings(settings.clone());
     if let Some(sleep) = sleep {
         hyper = hyper.sleep_impl(sleep);
     }
