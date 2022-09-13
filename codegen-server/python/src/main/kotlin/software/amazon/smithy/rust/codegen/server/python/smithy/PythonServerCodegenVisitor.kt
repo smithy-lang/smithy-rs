@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 
 /**
@@ -136,7 +137,7 @@ class PythonServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext),
+            ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(codegenContext)),
             codegenContext,
         )
             .render()

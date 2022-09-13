@@ -16,13 +16,11 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
@@ -141,17 +139,6 @@ open class RestJson(val coreCodegenContext: CoreCodegenContext) : Protocol {
                 *errorScope,
             )
         }
-
-    override fun serverRouterRequestSpec(
-        operationShape: OperationShape,
-        operationName: String,
-        serviceName: String,
-        requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
-
-    override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
-
-    override fun serverContentTypeCheckNoModeledInput() = true
 }
 
 fun restJsonFieldName(member: MemberShape): String {

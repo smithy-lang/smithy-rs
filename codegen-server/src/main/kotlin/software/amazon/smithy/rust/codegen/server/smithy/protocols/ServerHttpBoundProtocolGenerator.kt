@@ -58,7 +58,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.toOptional
 import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
@@ -89,7 +88,7 @@ import java.util.logging.Logger
  */
 class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
-    protocol: Protocol,
+    protocol: ServerProtocol,
 ) : ProtocolGenerator(
     codegenContext,
     protocol,
@@ -115,7 +114,7 @@ class ServerHttpBoundProtocolGenerator(
  */
 private class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: ServerCodegenContext,
-    private val protocol: Protocol,
+    private val protocol: ServerProtocol,
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
