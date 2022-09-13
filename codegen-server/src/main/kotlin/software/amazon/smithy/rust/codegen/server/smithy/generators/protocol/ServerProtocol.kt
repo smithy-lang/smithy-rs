@@ -9,11 +9,13 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
@@ -39,6 +41,22 @@ interface ServerProtocol : Protocol {
      * (`self.operation_name`, ...), and the `Model`.
      */
     fun routerConstruction(operationValues: Iterable<Writable>): Writable
+
+    /**
+     * Returns the name of the constructor to be used on the `Router` type, to instantiate a `Router` using this
+     * protocol.
+     */
+    fun serverRouterRuntimeConstructor(): String
+
+    /**
+     * Returns a writable for the `RequestSpec` for an operation.
+     */
+    fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable
 
     companion object {
         /** Upgrades the core protocol to a `ServerProtocol`. */
@@ -110,6 +128,23 @@ class ServerAwsJsonProtocol(
             "Pairs" to pairs,
         )
     }
+
+    /**
+     * Returns the operation name as required by the awsJson1.x protocols.
+     */
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ) = writable {
+        rust("""String::from("$serviceName.$operationName")""")
+    }
+
+    override fun serverRouterRuntimeConstructor() = when (version) {
+        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
+        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
+    }
 }
 
 private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::rest")
@@ -170,6 +205,15 @@ class ServerRestJsonProtocol(
     override fun routerType() = restRouterType(runtimeConfig)
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 }
 
 class ServerRestXmlProtocol(
@@ -188,4 +232,13 @@ class ServerRestXmlProtocol(
     override fun routerType() = restRouterType(runtimeConfig)
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 }
