@@ -21,8 +21,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersio
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 
 private fun allOperations(coreCodegenContext: CoreCodegenContext): List<OperationShape> {
     val index = TopDownIndex.of(coreCodegenContext.model)
@@ -58,6 +60,13 @@ interface ServerProtocol : Protocol {
         requestSpecModule: RuntimeType,
     ): Writable
 
+    /**
+     * In some protocols, such as restJson1,
+     * when there is no modeled body input, content type must not be set and the body must be empty.
+     * Returns a boolean indicating whether to perform this check.
+     */
+    fun serverContentTypeCheckNoModeledInput(): Boolean = false
+
     companion object {
         /** Upgrades the core protocol to a `ServerProtocol`. */
         fun fromCoreProtocol(protocol: Protocol): ServerProtocol = when (protocol) {
@@ -79,6 +88,9 @@ class ServerAwsJsonProtocol(
     )
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val service = coreCodegenContext.serviceShape
+
+    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+        ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)
 
     companion object {
         fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.coreCodegenContext, awsJson.version)
@@ -214,6 +226,8 @@ class ServerRestJsonProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
 
 class ServerRestXmlProtocol(
@@ -241,4 +255,6 @@ class ServerRestXmlProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = true
 }
