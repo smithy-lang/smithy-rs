@@ -73,7 +73,7 @@ class UnconstrainedUnionGeneratorTest {
                         let builder = crate::model::Structure::builder();
                         let union_unconstrained = union_unconstrained::UnionUnconstrained::Structure(builder);
 
-                        let expected_err = crate::model::union::ConstraintViolation::StructureConstraintViolation(
+                        let expected_err = crate::model::union::ConstraintViolation::Structure(
                             crate::model::structure::ConstraintViolation::MissingRequiredMember,
                         );
 
