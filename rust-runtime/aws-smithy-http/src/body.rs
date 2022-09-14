@@ -4,17 +4,16 @@
  */
 
 use bytes::Bytes;
+use futures::Stream;
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
 use pin_project_lite::pin_project;
+
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-
-use crate::callback::BodyCallback;
-use crate::header::append_merge_header_maps;
 
 pub type Error = Box<dyn StdError + Send + Sync>;
 
@@ -35,9 +34,6 @@ pin_project! {
         // In the event of retry, this function will be called to generate a new body. See
         // [`try_clone()`](SdkBody::try_clone)
         rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
-        // A list of callbacks that will be called at various points of this `SdkBody`'s lifecycle
-        #[pin]
-        callbacks: Vec<Box<dyn BodyCallback>>,
     }
 }
 
@@ -96,7 +92,6 @@ impl SdkBody {
         Self {
             inner: Inner::Dyn { inner: body },
             rebuild: None,
-            callbacks: Vec::new(),
         }
     }
 
@@ -113,7 +108,6 @@ impl SdkBody {
         SdkBody {
             inner: initial.inner,
             rebuild: Some(Arc::new(move || f().inner)),
-            callbacks: Vec::new(),
         }
     }
 
@@ -121,7 +115,6 @@ impl SdkBody {
         Self {
             inner: Inner::Taken,
             rebuild: None,
-            callbacks: Vec::new(),
         }
     }
 
@@ -129,7 +122,6 @@ impl SdkBody {
         Self {
             inner: Inner::Once { inner: None },
             rebuild: Some(Arc::new(|| Inner::Once { inner: None })),
-            callbacks: Vec::new(),
         }
     }
 
@@ -137,7 +129,7 @@ impl SdkBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Bytes, Error>>> {
-        let mut this = self.project();
+        let this = self.project();
         let polling_result = match this.inner.project() {
             InnerProj::Once { ref mut inner } => {
                 let data = inner.take();
@@ -153,26 +145,6 @@ impl SdkBody {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
         };
-
-        match &polling_result {
-            // When we get some bytes back from polling, pass those bytes to each callback in turn
-            Poll::Ready(Some(Ok(bytes))) => {
-                for callback in this.callbacks.iter_mut() {
-                    // Callbacks can run into errors when reading bytes. They'll be surfaced here
-                    callback.update(bytes)?;
-                }
-            }
-            // When we're done polling for bytes, run each callback's `trailers()` method. If any calls to
-            // `trailers()` return an error, propagate that error up. Otherwise, continue.
-            Poll::Ready(None) => {
-                for callback_result in this.callbacks.iter().map(BodyCallback::trailers) {
-                    if let Err(e) = callback_result {
-                        return Poll::Ready(Some(Err(e)));
-                    }
-                }
-            }
-            _ => (),
-        }
 
         polling_result
     }
@@ -192,23 +164,15 @@ impl SdkBody {
     pub fn try_clone(&self) -> Option<Self> {
         self.rebuild.as_ref().map(|rebuild| {
             let next = rebuild();
-            let callbacks = self.callbacks.iter().map(BodyCallback::make_new).collect();
-
             Self {
                 inner: next,
                 rebuild: self.rebuild.clone(),
-                callbacks,
             }
         })
     }
 
     pub fn content_length(&self) -> Option<u64> {
         http_body::Body::size_hint(self).exact()
-    }
-
-    pub fn with_callback(&mut self, callback: Box<dyn BodyCallback>) -> &mut Self {
-        self.callbacks.push(callback);
-        self
     }
 
     pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Sync + Send + 'static) -> SdkBody {
@@ -235,7 +199,6 @@ impl From<Bytes> for SdkBody {
             rebuild: Some(Arc::new(move || Inner::Once {
                 inner: Some(bytes.clone()),
             })),
-            callbacks: Vec::new(),
         }
     }
 }
@@ -245,7 +208,6 @@ impl From<hyper::Body> for SdkBody {
         SdkBody {
             inner: Inner::Streaming { inner: body },
             rebuild: None,
-            callbacks: Vec::new(),
         }
     }
 }
@@ -283,38 +245,17 @@ impl http_body::Body for SdkBody {
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        let mut header_map = None;
-        // Iterate over all callbacks, checking each for any `HeaderMap`s
-        for callback in &self.callbacks {
-            match callback.trailers() {
-                // If this is the first `HeaderMap` we've encountered, save it
-                Ok(Some(right_header_map)) if header_map.is_none() => {
-                    header_map = Some(right_header_map);
-                }
-                // If this is **not** the first `HeaderMap` we've encountered, merge it
-                Ok(Some(right_header_map)) if header_map.is_some() => {
-                    header_map = Some(append_merge_header_maps(
-                        header_map.unwrap(),
-                        right_header_map,
-                    ));
-                }
-                // Early return if a callback encountered an error.
-                Err(e) => {
-                    return Poll::Ready(Err(e));
-                }
-                // Otherwise, continue on to the next iteration of the loop.
-                _ => continue,
-            }
-        }
-        Poll::Ready(Ok(header_map))
+        // `SdkBody`s have no trailers. If returning trailers is necessary,
+        // use `SdkBody::map` to wrap this body with another body that does return trailers.
+        Poll::Ready(Ok(None))
     }
 
     fn is_end_stream(&self) -> bool {
         match &self.inner {
             Inner::Once { inner: None } => true,
             Inner::Once { inner: Some(bytes) } => bytes.is_empty(),
-            Inner::Streaming { inner: hyper_body } => hyper_body.is_end_stream(),
-            Inner::Dyn { inner: box_body } => box_body.is_end_stream(),
+            Inner::Streaming { inner } => inner.is_end_stream(),
+            Inner::Dyn { inner } => inner.is_end_stream(),
             Inner::Taken => true,
         }
     }
@@ -323,9 +264,43 @@ impl http_body::Body for SdkBody {
         match &self.inner {
             Inner::Once { inner: None } => SizeHint::with_exact(0),
             Inner::Once { inner: Some(bytes) } => SizeHint::with_exact(bytes.len() as u64),
-            Inner::Streaming { inner: hyper_body } => hyper_body.size_hint(),
-            Inner::Dyn { inner: box_body } => box_body.size_hint(),
+            Inner::Streaming { inner } => http_body::Body::size_hint(inner),
+            Inner::Dyn { inner } => http_body::Body::size_hint(inner),
             Inner::Taken => SizeHint::new(),
+        }
+    }
+}
+
+const SIZE_HINT_32_BIT_PANIC_MESSAGE: &str = r#"
+You're running a 32-bit system and this stream's length is too large to be represented with a usize.
+Please limit stream length to less than 4.294Gb or run this program on a 64-bit computer architecture.
+"#;
+
+impl Stream for SdkBody {
+    type Item = Result<Bytes, std::io::Error>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // By converting to IO errors here, we get access to a bunch of `futures` extension traits.
+        // We get access to extension traits from `tokio` too!
+        //
+        // Convert an `SdkBody` into a `tokio::io::AsyncRead` like so:
+        // let body = tokio_util::io::StreamReader::new(SdkBody::from(input));
+        //
+        // Convert an `SdkBody` into a `futures::io::AsyncRead` like so:
+        // let body = SdkBody::from(input).into_async_read();
+        self.poll_data(cx).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size_hint = http_body::Body::size_hint(self);
+        match (
+            size_hint.lower().try_into(),
+            size_hint.upper().map(TryInto::try_into).transpose(),
+        ) {
+            (Ok(lower), Ok(upper)) => (lower, upper),
+            (Err(_), _) | (_, Err(_)) => {
+                panic!("{}", SIZE_HINT_32_BIT_PANIC_MESSAGE)
+            }
         }
     }
 }
@@ -394,5 +369,37 @@ mod test {
     fn sdk_body_is_send() {
         fn is_send<T: Send>() {}
         is_send::<SdkBody>()
+    }
+
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn sdk_body_can_be_tokio_async_read() {
+        use tokio::io::AsyncBufReadExt;
+
+        let body = SdkBody::from("data 1\ndata 2\ndata 3\n");
+        let body = tokio_util::io::StreamReader::new(body);
+        let async_buf_read = tokio::io::BufReader::new(body);
+
+        let mut lines = async_buf_read.lines();
+
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 1".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 2".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 3".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), None);
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn sdk_body_can_be_futures_async_read() {
+        use futures::AsyncReadExt;
+        use futures::stream::TryStreamExt;
+
+        let input: &[u8] = b"This is a test body.";
+        let mut body = SdkBody::from(input).into_async_read();
+        let mut output = [0u8; 20];
+        let _ = body.read(&mut output).await.unwrap();
+
+        assert_eq!(&output, input);
     }
 }

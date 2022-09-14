@@ -104,10 +104,10 @@ impl Display for BuildError {
             BuildError::MissingField { field, details } => {
                 write!(f, "{} was missing. {}", field, details)
             }
-            BuildError::SerializationError(inner) => {
-                write!(f, "failed to serialize input: {}", inner)
+            BuildError::SerializationError(_) => {
+                write!(f, "failed to serialize input")
             }
-            BuildError::Other(inner) => write!(f, "error during request construction: {}", inner),
+            BuildError::Other(_) => write!(f, "unexpected error during request construction"),
             BuildError::InvalidUri { uri, err, message } => {
                 write!(
                     f,
@@ -122,7 +122,7 @@ impl Display for BuildError {
 impl Error for BuildError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            BuildError::SerializationError(inner) => Some(inner as _),
+            BuildError::SerializationError(inner) => Some(inner),
             BuildError::Other(inner) => Some(inner.as_ref()),
             _ => None,
         }

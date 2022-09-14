@@ -5,12 +5,10 @@
 
 //! Provides Sender/Receiver implementations for Event Stream codegen.
 
-use std::error::Error as StdError;
-
 mod receiver;
 mod sender;
 
-pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;
+pub use crate::BoxError;
 
 #[doc(inline)]
 pub use sender::{EventStreamSender, MessageStreamAdapter, MessageStreamError};

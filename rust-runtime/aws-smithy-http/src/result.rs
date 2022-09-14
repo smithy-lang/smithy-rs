@@ -43,7 +43,7 @@ pub enum SdkError<E, R = operation::Response> {
     /// have been sent.
     DispatchFailure(ConnectorError),
 
-    /// A response was received but it was not parseable according the the protocol (for example
+    /// A response was received but it was not parseable according to the protocol (for example
     /// the server hung up while the body was being read)
     ResponseError {
         /// Error encountered while parsing the response
@@ -79,11 +79,7 @@ impl Display for ConnectorError {
     }
 }
 
-impl Error for ConnectorError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(self.err.as_ref())
-    }
-}
+impl Error for ConnectorError {}
 
 impl ConnectorError {
     /// Construct a [`ConnectorError`] from an error caused by a timeout
@@ -167,8 +163,7 @@ impl Display for ConnectorErrorKind {
             ConnectorErrorKind::Timeout => write!(f, "timeout"),
             ConnectorErrorKind::User => write!(f, "user error"),
             ConnectorErrorKind::Io => write!(f, "io error"),
-            ConnectorErrorKind::Other(Some(kind)) => write!(f, "{:?}", kind),
-            ConnectorErrorKind::Other(None) => write!(f, "other"),
+            ConnectorErrorKind::Other(_) => write!(f, "unclassified error"),
         }
     }
 }
@@ -178,12 +173,16 @@ where
     E: Error,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        use SdkError::*;
         match self {
-            SdkError::ConstructionFailure(err) => write!(f, "failed to construct request: {}", err),
-            SdkError::TimeoutError(err) => write!(f, "request has timed out: {}", err),
-            SdkError::DispatchFailure(err) => Display::fmt(&err, f),
-            SdkError::ResponseError { err, .. } => Display::fmt(&err, f),
-            SdkError::ServiceError { err, .. } => Display::fmt(&err, f),
+            ConstructionFailure(_) => write!(f, "failed to construct request"),
+            TimeoutError(_) => write!(f, "request has timed out"),
+            DispatchFailure(_) => write!(f, "failed to dispatch the request"),
+            ResponseError { .. } => write!(
+                f,
+                "received response could not be parsed according to the expected protocol"
+            ),
+            ServiceError { .. } => write!(f, "service returned an error"),
         }
     }
 }

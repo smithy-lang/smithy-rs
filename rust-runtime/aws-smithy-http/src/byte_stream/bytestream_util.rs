@@ -4,7 +4,7 @@
  */
 
 use bytes::Bytes;
-use futures_core::ready;
+use futures::ready;
 use http::HeaderMap;
 use http_body::{Body, SizeHint};
 use std::future::Future;
@@ -285,7 +285,7 @@ impl Body for PathBody {
                     };
                 }
                 State::Loaded(ref mut stream) => {
-                    use futures_core::Stream;
+                    use futures::Stream;
                     return match ready!(Pin::new(stream).poll_next(cx)) {
                         Some(Ok(bytes)) => Poll::Ready(Some(Ok(bytes))),
                         None => Poll::Ready(None),

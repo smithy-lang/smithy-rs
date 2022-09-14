@@ -6,7 +6,7 @@
 use crate::result::SdkError;
 use aws_smithy_eventstream::frame::{MarshallMessage, SignMessage};
 use bytes::Bytes;
-use futures_core::Stream;
+use futures::Stream;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fmt::Debug;
@@ -184,8 +184,7 @@ mod tests {
         Header, HeaderValue, Message, NoOpSigner, SignMessage, SignMessageError,
     };
     use bytes::Bytes;
-    use futures_core::Stream;
-    use futures_util::stream::StreamExt;
+    use futures::{Stream, StreamExt};
     use std::error::Error as StdError;
 
     #[derive(Debug)]

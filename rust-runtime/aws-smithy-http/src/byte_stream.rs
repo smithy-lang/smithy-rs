@@ -121,12 +121,13 @@
 //! ```
 
 use crate::body::SdkBody;
-use crate::callback::BodyCallback;
+
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
-use http_body::Body;
+use futures::Stream;
 use pin_project_lite::pin_project;
+
 use std::error::Error as StdError;
 use std::fmt::{Debug, Formatter};
 use std::io::IoSlice;
@@ -372,16 +373,8 @@ impl ByteStream {
         FsBuilder::new().file(file).build().await
     }
 
-    /// Set a callback on this `ByteStream`. The callback's methods will be called at various points
-    /// throughout this `ByteStream`'s life cycle. See the [`BodyCallback`](BodyCallback) trait for
-    /// more information.
-    pub fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
-        self.inner.with_body_callback(body_callback);
-        self
-    }
-
     #[cfg(feature = "rt-tokio")]
-    /// Convert this `ByteStream` into a struct that implements [`AsyncRead`](tokio::io::AsyncRead).
+    /// Convert this `ByteStream` into a struct that implements [`tokio::io::AsyncRead`](tokio::io::AsyncRead).
     ///
     /// # Example
     ///
@@ -454,11 +447,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        Some(self.0.as_ref() as _)
-    }
-}
+impl StdError for Error {}
 
 impl From<Error> for std::io::Error {
     fn from(err: Error) -> Self {
@@ -466,7 +455,7 @@ impl From<Error> for std::io::Error {
     }
 }
 
-impl futures_core::stream::Stream for ByteStream {
+impl Stream for ByteStream {
     type Item = Result<Bytes, Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -542,6 +531,8 @@ impl<B> Inner<B> {
     where
         B: http_body::Body<Data = Bytes>,
     {
+        use http_body::Body;
+
         let mut output = SegmentedBuf::new();
         let body = self.body;
         crate::pin_mut!(body);
@@ -552,19 +543,12 @@ impl<B> Inner<B> {
     }
 }
 
-impl Inner<SdkBody> {
-    fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
-        self.body.with_callback(body_callback);
-        self
-    }
-}
-
 const SIZE_HINT_32_BIT_PANIC_MESSAGE: &str = r#"
 You're running a 32-bit system and this stream's length is too large to be represented with a usize.
 Please limit stream length to less than 4.294Gb or run this program on a 64-bit computer architecture.
 "#;
 
-impl<B> futures_core::stream::Stream for Inner<B>
+impl<B> Stream for Inner<B>
 where
     B: http_body::Body<Data = Bytes>,
 {
@@ -576,10 +560,10 @@ where
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let size_hint = http_body::Body::size_hint(&self.body);
-        let lower = size_hint.lower().try_into();
-        let upper = size_hint.upper().map(|u| u.try_into()).transpose();
-
-        match (lower, upper) {
+        match (
+            size_hint.lower().try_into(),
+            size_hint.upper().map(TryInto::try_into).transpose(),
+        ) {
             (Ok(lower), Ok(upper)) => (lower, upper),
             (Err(_), _) | (_, Err(_)) => {
                 panic!("{}", SIZE_HINT_32_BIT_PANIC_MESSAGE)
