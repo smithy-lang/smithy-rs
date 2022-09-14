@@ -15,7 +15,7 @@ use http::{self, Uri};
 
 use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::{EndpointShim, Params};
-use aws_http::retry::AwsErrorRetryPolicy;
+use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
@@ -75,7 +75,7 @@ impl ParseHttpResponse for TestOperationParser {
     }
 }
 
-fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
+fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier> {
     let req = operation::Request::new(
         http::Request::builder()
             .uri("https://test-service.test-region.amazonaws.com/")
@@ -110,7 +110,8 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
         Result::<_, Infallible>::Ok(req)
     })
     .unwrap();
-    Operation::new(req, TestOperationParser).with_retry_policy(AwsErrorRetryPolicy::new())
+    Operation::new(req, TestOperationParser)
+        .with_retry_classifier(AwsResponseRetryClassifier::new())
 }
 
 #[cfg(any(feature = "native-tls", feature = "rustls"))]

@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.client.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.client.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
@@ -67,7 +66,8 @@ class FluentClientGenerator(
         client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType(),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryPolicy: Writable = RustType.Unit.writable,
+    private val retryClassifier: RuntimeType = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
+        .member("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -317,19 +317,19 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "ClassifyResponse" to runtimeConfig.smithyHttp().member("retry::ClassifyResponse"),
+                        "ClassifyRetry" to runtimeConfig.smithyHttp().member("retry::ClassifyRetry"),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
                         "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
                         "SdkSuccess" to runtimeConfig.smithyHttp().member("result::SdkSuccess"),
-                        "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryPolicy),
+                        "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),
-                            retryPolicy,
+                            retryClassifier,
                             generics.toGenericsGenerator(),
                         ),
                     )
-                    PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryPolicy)?.also { paginatorType ->
+                    PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)?.also { paginatorType ->
                         rustTemplate(
                             """
                             /// Create a paginator for this request
