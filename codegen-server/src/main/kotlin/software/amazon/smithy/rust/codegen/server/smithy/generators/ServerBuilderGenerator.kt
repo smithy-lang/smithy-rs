@@ -55,6 +55,7 @@ import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -68,9 +69,8 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 class ServerBuilderGenerator(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
-    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider? = null,
 ) {
-    private val takeInUnconstrainedTypes = pubCrateConstrainedShapeSymbolProvider != null
+    private val takeInUnconstrainedTypes = shape.isReachableFromOperationInput()
     private val model = codegenContext.model
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val symbolProvider = codegenContext.symbolProvider
@@ -83,6 +83,7 @@ class ServerBuilderGenerator(
             }
         }
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
+    private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
@@ -460,7 +461,7 @@ class ServerBuilderGenerator(
             val strippedOption = if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
                 constrainedShapeSymbolProvider.toSymbol(member)
             } else {
-                pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
+                pubCrateConstrainedShapeSymbolProvider.toSymbol(member)
             }
                 // Strip the `Option` in case the member is not `required`.
                 .mapRustType { it.stripOuter<RustType.Option>() }

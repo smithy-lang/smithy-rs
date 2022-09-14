@@ -71,9 +71,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             // `aws_smithy_http_server_python::types`.
             PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let {
-                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER)
-                }
+                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)

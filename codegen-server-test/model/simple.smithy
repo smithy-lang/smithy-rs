@@ -126,9 +126,16 @@ structure StoreServiceBlobInput {
     @required
     @httpPayload
     content: Blob,
+
+    @httpHeader("lengthString")
+    lengthString: LengthString,
 }
 
 @documentation("Store a blob for a service id output structure")
 structure StoreServiceBlobOutput {
-
+    @required
+    lengthString: LengthString
 }
+
+@length(min: 1, max: 68)
+string LengthString

@@ -12,16 +12,14 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
+import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
@@ -83,21 +81,32 @@ fun serverTestCodegenContext(
         serviceShape
             ?: model.serviceShapes.firstOrNull()
             ?: ServiceShape.builder().version("test").id("test#Service").build()
-    val symbolProvider = serverTestSymbolProvider(model, serviceShape)
-    val unconstrainedShapeSymbolProvider =
-        UnconstrainedShapeSymbolProvider(symbolProvider, model, service, settings.codegenConfig.publicConstrainedTypes)
-    val constrainedShapeSymbolProvider = serverTestSymbolProvider(model, publicConstrainedTypesEnabled = true)
-    val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, service)
     val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
+    val symbolVisitorConfig =
+        SymbolVisitorConfig(
+            runtimeConfig = settings.runtimeConfig,
+            renameExceptions = false,
+            handleRequired = true,
+            handleRustBoxing = true,
+        )
+    val serverSymbolProviders = ServerSymbolProviders.from(
+        model,
+        service,
+        symbolVisitorConfig,
+        settings.codegenConfig.publicConstrainedTypes,
+        RustCodegenServerPlugin::baseSymbolProvider
+    )
+
     return ServerCodegenContext(
         model,
-        symbolProvider,
+        serverSymbolProviders.symbolProvider,
         service,
         protocol,
         settings,
-        unconstrainedShapeSymbolProvider,
-        constrainedShapeSymbolProvider,
-        constraintViolationSymbolProvider,
+        serverSymbolProviders.unconstrainedShapeSymbolProvider,
+        serverSymbolProviders.constrainedShapeSymbolProvider,
+        serverSymbolProviders.constraintViolationSymbolProvider,
+        serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
     )
 }
 
@@ -107,12 +116,9 @@ fun serverTestCodegenContext(
 fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
     StructureGenerator(model, symbolProvider, writer, this).render(CodegenTarget.SERVER)
     val serverCodegenContext = serverTestCodegenContext(model)
-    val pubCrateConstrainedShapeSymbolProvider =
-        PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serverCodegenContext.serviceShape)
     val modelBuilder = ServerBuilderGenerator(
         serverCodegenContext,
         this,
-        pubCrateConstrainedShapeSymbolProvider,
     )
     modelBuilder.render(writer)
     writer.implBlock(this, symbolProvider) {
