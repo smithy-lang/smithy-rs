@@ -25,6 +25,34 @@ use crate::{
 
 use super::{Operation, OperationError, OperationShape};
 
+/// An operation [`Service`] builder accepts extensions
+/// that add new functions to the builder
+/// through a [`BuilderModify`]
+pub trait BuilderModify<NewModifier> {
+    type Output;
+
+    fn apply(self, modifier: NewModifier) -> Self::Output;
+}
+
+/// Maps one [`operation::Operation`] to another.
+/// A [`BuilderModify`] modifier is an [`OperationMap`].
+pub trait OperationMap<P, Op, S, L> {
+    type Service;
+    type Layer;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
+}
+
+pub struct IdentityModifier;
+impl<P, Op, S, L> OperationMap<P, Op, S, L> for IdentityModifier {
+    type Service = S;
+    type Layer = L;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<S, L> {
+        input
+    }
+}
+
 /// A [`Layer`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
 ///
@@ -218,16 +246,41 @@ where
     }
 }
 
+pub struct OperationStack<Inner, Outer> {
+    inner: Inner,
+    outer: Outer,
+}
+
+impl<Inner, Outer> OperationStack<Inner, Outer> {
+    pub fn new(inner: Inner, outer: Outer) -> Self {
+        OperationStack { inner, outer }
+    }
+}
+
+impl<P, Op, S, L, Inner, Outer> OperationMap<P, Op, S, L> for OperationStack<Inner, Outer>
+where
+    Inner: OperationMap<P, Op, S, L>,
+    Outer: OperationMap<P, Op, Inner::Service, Inner::Layer>,
+{
+    type Service = Outer::Service;
+    type Layer = Outer::Layer;
+
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+        let inner = self.inner.map(input);
+        self.outer.map(inner)
+    }
+}
+
 /// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
-pub trait Upgradable<Protocol, Operation, Exts, B> {
+pub trait Upgradable<Protocol, Operation, Exts, B, Modifier> {
     type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
 
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
-    fn upgrade(self) -> Self::Service;
+    fn upgrade(self, modifier: &Modifier) -> Self::Service;
 }
 
-impl<P, Op, Exts, B, S, L, PollError> Upgradable<P, Op, Exts, B> for Operation<S, L>
+impl<P, Op, Exts, B, Modifier, S, L, PollError> Upgradable<P, Op, Exts, B, Modifier> for Operation<S, L>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -245,21 +298,26 @@ where
     // The signature of the inner service is correct
     S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
 
-    // Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
-    L: Layer<Upgrade<P, Op, Exts, B, S>>,
+    // The modifier takes this operation as input
+    Modifier: OperationMap<P, Op, S, L>,
+
+    // The modified Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
+    Modifier::Layer: Layer<Upgrade<P, Op, Exts, B, Modifier::Service>>,
 
     // The signature of the output is correct
-    L::Service: Service<http::Request<B>, Response = http::Response<BoxBody>>,
+    <Modifier::Layer as Layer<Upgrade<P, Op, Exts, B, Modifier::Service>>>::Service:
+        Service<http::Request<B>, Response = http::Response<BoxBody>>,
 {
-    type Service = L::Service;
+    type Service = <Modifier::Layer as Layer<Upgrade<P, Op, Exts, B, Modifier::Service>>>::Service;
 
     /// Takes the [`Operation<S, L>`](Operation), applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self) -> Self::Service {
-        let layer = Stack::new(UpgradeLayer::new(), self.layer);
-        layer.layer(self.inner)
+    fn upgrade(self, modifier: &Modifier) -> Self::Service {
+        let mapped = modifier.map(self);
+        let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
+        layer.layer(mapped.inner)
     }
 }
 
@@ -273,13 +331,13 @@ pub struct MissingOperation;
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
 pub struct FailOnMissingOperation;
 
-impl<P, Op, Exts, B> Upgradable<P, Op, Exts, B> for FailOnMissingOperation
+impl<P, Op, Exts, B, Mod> Upgradable<P, Op, Exts, B, Mod> for FailOnMissingOperation
 where
     InternalFailureException: IntoResponse<P>,
 {
     type Service = MissingFailure<P>;
 
-    fn upgrade(self) -> Self::Service {
+    fn upgrade(self, _modifier: &Mod) -> Self::Service {
         MissingFailure { _protocol: PhantomData }
     }
 }

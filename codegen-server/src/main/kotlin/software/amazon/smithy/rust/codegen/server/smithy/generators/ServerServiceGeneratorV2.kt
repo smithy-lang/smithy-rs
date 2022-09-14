@@ -64,6 +64,7 @@ class ServerServiceGeneratorV2(
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
+        val modifierType = listOf("Modifier")
         for ((index, pair) in builderFieldNames.zip(operationStructNames).withIndex()) {
             val (fieldName, structName) = pair
 
@@ -128,16 +129,17 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics).joinToString(", ")}>
+                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics + modifierType).joinToString(", ")}>
                 {
                     $builderName {
                         ${switchedFields.joinToString(", ")},
-                        _exts: std::marker::PhantomData
+                        _exts: std::marker::PhantomData,
+                        modifier: self.modifier,
                     }
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "HandlerSetterGenerics" to (replacedOpServiceGenerics + (replacedExtGenerics.map { writable(it) })).join(", "),
+                "HandlerSetterGenerics" to (replacedOpServiceGenerics + ((replacedExtGenerics + modifierType).map { writable(it) })).join(", "),
                 *codegenScope,
             )
 
@@ -159,6 +161,7 @@ class ServerServiceGeneratorV2(
                     crate::operation_shape::${symbolProvider.toSymbol(operation).name.toPascalCase()},
                     $exts,
                     B,
+                    Modifier,
                 >,
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
@@ -174,15 +177,17 @@ class ServerServiceGeneratorV2(
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
         val extensionTypesDefault = extensionTypes.map { "$it = ()" }
-        val structGenerics = (builderOps + extensionTypesDefault).joinToString(", ")
-        val builderGenerics = (builderOps + extensionTypes).joinToString(", ")
+        val modifierType = listOf("Modifier")
+        val modifierTypeDefault = listOf("Modifier = #{SmithyHttpServer}::operation::IdentityModifier")
+        val structGenerics = (builderOps + extensionTypesDefault + modifierTypeDefault).joinToString(", ")
+        val builderGenerics = (builderOps + extensionTypes + modifierType).joinToString(", ")
 
         // Generate router construction block.
         val router = protocol
             .routerConstruction(
                 builderFieldNames
                     .map {
-                        writable { rustTemplate("self.$it.upgrade()") }
+                        writable { rustTemplate("self.$it.upgrade(&self.modifier)") }
                     }
                     .asIterable(),
             )
@@ -194,7 +199,8 @@ class ServerServiceGeneratorV2(
             pub struct $builderName<$structGenerics> {
                 ${builderFields.joinToString(", ")},
                 ##[allow(unused_parens)]
-                _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>
+                _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>,
+                modifier: Modifier,
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -265,7 +271,8 @@ class ServerServiceGeneratorV2(
                 pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
                         #{NotSetFields:W},
-                        _exts: std::marker::PhantomData
+                        _exts: std::marker::PhantomData,
+                        modifier: #{SmithyHttpServer}::operation::IdentityModifier
                     }
                 }
 
@@ -276,7 +283,8 @@ class ServerServiceGeneratorV2(
                 pub fn unchecked_builder() -> $builderName<#{InternalFailureGenerics:W}> {
                     $builderName {
                         #{InternalFailureFields:W},
-                        _exts: std::marker::PhantomData
+                        _exts: std::marker::PhantomData,
+                        modifier: #{SmithyHttpServer}::operation::IdentityModifier
                     }
                 }
             }
