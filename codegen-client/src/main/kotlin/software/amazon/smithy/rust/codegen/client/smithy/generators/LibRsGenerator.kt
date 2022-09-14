@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.client.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 sealed class LibRsSection(name: String) : Section(name) {
     object Attributes : LibRsSection("Attributes")

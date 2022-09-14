@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class ApiGatewayDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "ApiGateway"

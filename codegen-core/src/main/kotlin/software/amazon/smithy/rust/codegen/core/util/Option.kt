@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.util
+package software.amazon.smithy.rust.codegen.core.util
 
 import java.util.Optional
 

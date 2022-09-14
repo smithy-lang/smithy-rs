@@ -18,9 +18,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.client.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 class HttpChecksumRequiredGenerator(
     private val coreCodegenContext: CoreCodegenContext,

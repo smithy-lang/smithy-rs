@@ -13,9 +13,9 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 typealias HttpLocation = HttpBinding.Location
 

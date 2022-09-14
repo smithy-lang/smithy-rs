@@ -30,8 +30,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.operationErrors
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
  * For a given Operation ([this]), return the symbol referring to the unified error. This can be used

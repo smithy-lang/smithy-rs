@@ -27,12 +27,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSect
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
-import software.amazon.smithy.rust.codegen.client.util.hasEventStreamOperations
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * The SigV4SigningDecorator:

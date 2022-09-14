@@ -9,10 +9,10 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 class EventStreamNormalizerTest {
     @Test

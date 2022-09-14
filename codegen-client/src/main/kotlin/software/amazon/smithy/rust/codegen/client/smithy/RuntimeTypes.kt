@@ -23,8 +23,8 @@ import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.util.orNull
 import software.amazon.smithy.rust.codegen.core.Version
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 
 private const val DEFAULT_KEY = "DEFAULT"

@@ -11,8 +11,8 @@ import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.client.rustlang.Feature
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.client.util.deepMergeWith
 import software.amazon.smithy.rust.codegen.core.Version
+import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 
 /**
  * Customizations to apply to the generated Cargo.toml file.

@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.client.util.hasEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 
 /**
  * The NoOpEventStreamSigningDecorator:

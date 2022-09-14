@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolMap
-import software.amazon.smithy.rust.codegen.client.util.deepMergeWith
+import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 import java.util.ServiceLoader
 import java.util.logging.Logger
 

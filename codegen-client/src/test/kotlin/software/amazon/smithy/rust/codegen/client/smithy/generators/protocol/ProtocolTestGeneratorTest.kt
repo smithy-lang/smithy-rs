@@ -28,10 +28,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.client.util.CommandFailed
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.outputShape
-import software.amazon.smithy.rust.codegen.client.util.runCommand
+import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.nio.file.Path
 
 private class TestProtocolPayloadGenerator(private val body: String) : ProtocolPayloadGenerator {

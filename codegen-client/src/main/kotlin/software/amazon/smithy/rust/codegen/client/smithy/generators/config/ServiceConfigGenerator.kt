@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
  * [ServiceConfig] is the parent type of sections that can be overridden when generating a config for a service.

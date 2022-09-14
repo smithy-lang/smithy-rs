@@ -39,9 +39,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.renderUnknow
 import software.amazon.smithy.rust.codegen.client.smithy.generators.unknownVariantError
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 open class EventStreamMarshallerGenerator(
     private val model: Model,

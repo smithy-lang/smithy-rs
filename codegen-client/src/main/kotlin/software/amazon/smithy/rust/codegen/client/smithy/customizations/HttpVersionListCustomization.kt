@@ -15,8 +15,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 
 private fun RuntimeConfig.httpVersionModule(): RuntimeType =
     RuntimeType("http_versions", this.runtimeCrate("http"), "aws_smithy_http")

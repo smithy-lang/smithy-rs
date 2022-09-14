@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.client.testutil.stubConfigCustomization
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
-import software.amazon.smithy.rust.codegen.client.util.runCommand
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 internal class EndpointConfigCustomizationTest {
     private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().asType().member("Params")

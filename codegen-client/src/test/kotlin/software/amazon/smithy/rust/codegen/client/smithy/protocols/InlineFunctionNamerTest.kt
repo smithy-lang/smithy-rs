@@ -10,7 +10,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.client.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class InlineFunctionNamerTest {
     private val testModel = """

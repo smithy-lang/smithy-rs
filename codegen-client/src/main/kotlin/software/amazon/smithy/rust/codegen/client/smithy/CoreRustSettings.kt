@@ -12,7 +12,7 @@ import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
 import kotlin.streams.toList

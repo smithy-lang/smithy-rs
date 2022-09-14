@@ -16,10 +16,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.operationErrors
-import software.amazon.smithy.rust.codegen.client.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.client.util.inputShape
-import software.amazon.smithy.rust.codegen.client.util.outputShape
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator

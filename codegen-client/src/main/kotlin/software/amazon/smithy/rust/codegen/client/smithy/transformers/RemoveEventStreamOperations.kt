@@ -10,8 +10,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.client.util.findStreamingMember
-import software.amazon.smithy.rust.codegen.client.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.logging.Logger
 
 // TODO(EventStream): [CLEANUP] Remove this class once the Event Stream implementation is stable
