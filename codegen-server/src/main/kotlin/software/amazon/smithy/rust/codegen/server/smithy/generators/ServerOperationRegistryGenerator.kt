@@ -28,13 +28,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.Outputs
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 /**
  * [ServerOperationRegistryGenerator] renders the `OperationRegistry` struct, a place where users can register their
@@ -49,7 +49,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
  */
 class ServerOperationRegistryGenerator(
     private val coreCodegenContext: CoreCodegenContext,
-    private val protocol: Protocol,
+    private val protocol: ServerProtocol,
     private val operations: List<OperationShape>,
 ) {
     private val crateName = coreCodegenContext.settings.moduleName

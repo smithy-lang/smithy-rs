@@ -146,9 +146,8 @@ pub async fn wait(
             .map_err(|err| {
                 aws_smithy_http::result::SdkError::ConstructionFailure(err.into())
             })?;
-        // The `ClassifyResponse` trait is implemented for `()` as never retry,
-        // so this disables the default retry for the operation
-        let operation = operation.with_retry_policy(());
+        // Assume `ClassifyRetry` trait is implemented for `NeverRetry` to always return `RetryKind::Unnecessary`
+        let operation = operation.with_retry_classifier(NeverRetry::new());
 
         let result = handle.client.call(operation).await;
         match classify_result(&input, result) {

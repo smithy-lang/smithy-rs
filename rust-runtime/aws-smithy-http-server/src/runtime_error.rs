@@ -34,8 +34,8 @@ pub enum RuntimeErrorKind {
     /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
     // TODO(https://github.com/awslabs/smithy-rs/issues/1663)
-    // UnsupportedMediaType,
     NotAcceptable,
+    UnsupportedMediaType,
 }
 
 /// String representation of the runtime error type.
@@ -47,6 +47,7 @@ impl RuntimeErrorKind {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
             RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
+            RuntimeErrorKind::UnsupportedMediaType => "UnsupportedMediaTypeException",
         }
     }
 }
@@ -102,6 +103,7 @@ impl RuntimeError {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
             RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
+            RuntimeErrorKind::UnsupportedMediaType => http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
         };
 
         let body = crate::body::to_boxed(match self.protocol {
@@ -149,6 +151,9 @@ impl From<crate::rejection::ResponseRejection> for RuntimeErrorKind {
 
 impl From<crate::rejection::RequestRejection> for RuntimeErrorKind {
     fn from(err: crate::rejection::RequestRejection) -> Self {
-        RuntimeErrorKind::Serialization(crate::Error::new(err))
+        match err {
+            crate::rejection::RequestRejection::MissingContentType(_reason) => RuntimeErrorKind::UnsupportedMediaType,
+            _ => RuntimeErrorKind::Serialization(crate::Error::new(err)),
+        }
     }
 }
