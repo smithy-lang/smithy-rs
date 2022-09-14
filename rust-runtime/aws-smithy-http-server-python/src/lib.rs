@@ -13,6 +13,7 @@
 
 mod error;
 pub mod logging;
+mod middleware;
 mod server;
 mod socket;
 pub mod types;
@@ -21,6 +22,8 @@ pub mod types;
 pub use error::Error;
 #[doc(inline)]
 pub use logging::LogLevel;
+#[doc(inline)]
+pub use middleware::{PyMiddlewareHandler, PyRequest, PyMiddlewareHandlers, PyMiddleware, middleware_wrapper};
 #[doc(inline)]
 pub use server::{PyApp, PyHandler};
 #[doc(inline)]

@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import aiohttp
+
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.error import ResourceNotFoundException
+from libpokemon_service_server_sdk.http import Request
 from libpokemon_service_server_sdk.input import (
     EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
     HealthCheckOperationInput, StreamPokemonRadioOperationInput)
@@ -109,6 +111,23 @@ class Context:
 app = App()
 # Register the context.
 app.context(Context())
+# Register a middleware.
+
+
+###########################################################
+# Middleware
+###########################################################
+@app.middleware
+def check_header(request: Request):
+    logging.info("Inside MID1")
+    logging.info(request)
+
+
+@app.middleware
+def check_header2(request: Request):
+    logging.info("Inside MID2")
+    logging.info(request)
+    raise ValueError("Lol")
 
 
 ###########################################################
