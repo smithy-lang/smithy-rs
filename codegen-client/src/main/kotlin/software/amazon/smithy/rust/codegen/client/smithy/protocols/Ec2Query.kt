@@ -11,7 +11,6 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
@@ -96,17 +95,4 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
                 rust("#T::parse_generic_error(payload.as_ref())", ec2QueryErrors)
             }
         }
-
-    override fun serverRouterRequestSpec(
-        operationShape: OperationShape,
-        operationName: String,
-        serviceName: String,
-        requestSpecModule: RuntimeType,
-    ): Writable {
-        TODO("Not yet implemented")
-    }
-
-    override fun serverRouterRuntimeConstructor(): String {
-        TODO("Not yet implemented")
-    }
 }

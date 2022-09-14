@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 
@@ -31,7 +30,7 @@ open class ServerServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val protocol: Protocol,
+    private val protocol: ServerProtocol,
     private val coreCodegenContext: CoreCodegenContext,
 ) {
     private val index = TopDownIndex.of(coreCodegenContext.model)
