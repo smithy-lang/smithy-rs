@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -60,7 +61,6 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormaliz
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
-import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.util.runCommand
@@ -76,7 +76,7 @@ open class ServerCodegenVisitor(
 ) : ShapeVisitor.Default<Unit>() {
 
     protected val logger = Logger.getLogger(javaClass.name)
-    protected val settings = ServerRustSettings.from(context.model, context.settings)
+    protected var settings = ServerRustSettings.from(context.model, context.settings)
 
     protected var rustCrate: RustCrate
     private val fileManifest = context.fileManifest
@@ -328,24 +328,33 @@ open class ServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        shape.getTrait<EnumTrait>()?.also { enum ->
+        fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
+            ServerEnumGenerator(codegenContext, writer, shape)
+        stringShape(shape, ::serverEnumGeneratorFactory)
+    }
+
+    protected fun stringShape(
+        shape: StringShape,
+        enumShapeGeneratorFactory: (codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) -> ServerEnumGenerator,
+    ) {
+        if (shape.hasTrait<EnumTrait>()) {
             logger.info("[rust-server-codegen] Generating an enum $shape")
             rustCrate.useShapeWriter(shape) { writer ->
-                ServerEnumGenerator(codegenContext, writer, shape, enum).render()
+                enumShapeGeneratorFactory(codegenContext, writer, shape).render()
                 ConstrainedTraitForEnumGenerator(model, codegenContext.symbolProvider, writer, shape).render()
             }
         }
 
-        if (shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+        if (shape.hasTrait<EnumTrait>() && shape.hasTrait<LengthTrait>()) {
             logger.warning(
                 """
-                String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy
-                spec v1 IDL, but it's unclear what the semantics are. In any case, the Smithy CLI should enforce the
+                String shape $shape has an `enum` trait and the `length` trait. This is valid according to the Smithy
+                IDL v1 spec, but it's unclear what the semantics are. In any case, the Smithy core libraries should enforce the
                 constraints (which it currently does not), not each code generator.
                 See https://github.com/awslabs/smithy/issues/1121f for more information.
                 """.trimIndent(),
             )
-        } else if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+        } else if (!shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) { writer ->
                 ConstrainedStringGenerator(codegenContext, writer, shape).render()

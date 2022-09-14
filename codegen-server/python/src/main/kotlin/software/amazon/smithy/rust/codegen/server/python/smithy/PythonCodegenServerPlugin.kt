@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvid
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolVisitor
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonStreamingShapeMetadataProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
@@ -66,10 +67,13 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             model: Model,
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
+            publicConstrainedTypes: Boolean = true,
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
             PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+                // TODO Docs
+                .let { if (publicConstrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes

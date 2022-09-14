@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.lookup
 
 class ServerEnumGeneratorTest {
@@ -41,7 +40,7 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates TryFrom, FromStr and errors for enums`() {
-        ServerEnumGenerator(codegenContext, writer, shape, shape.expectTrait()).render()
+        ServerEnumGenerator(codegenContext, writer, shape).render()
         writer.compileAndTest(
             """
             use std::str::FromStr;
@@ -54,7 +53,7 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without the unknown variant`() {
-        ServerEnumGenerator(codegenContext, writer, shape, shape.expectTrait()).render()
+        ServerEnumGenerator(codegenContext, writer, shape).render()
         writer.compileAndTest(
             """
             // check no unknown
@@ -69,7 +68,7 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without non_exhaustive`() {
-        ServerEnumGenerator(codegenContext, writer, shape, shape.expectTrait()).render()
+        ServerEnumGenerator(codegenContext, writer, shape).render()
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
 }

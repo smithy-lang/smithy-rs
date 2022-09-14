@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -29,13 +28,7 @@ class PythonServerEnumGenerator(
     codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
     shape: StringShape,
-    enumTrait: EnumTrait,
-) : ServerEnumGenerator(
-    codegenContext,
-    writer,
-    shape,
-    enumTrait,
-) {
+) : ServerEnumGenerator(codegenContext, writer, shape) {
 
     private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
 
@@ -47,11 +40,6 @@ class PythonServerEnumGenerator(
 
     private fun renderPyClass() {
         Attribute.Custom("pyo3::pyclass", symbols = pyo3Symbols).render(writer)
-    }
-
-    override fun renderFromForStr() {
-        renderPyClass()
-        super.renderFromForStr()
     }
 
     private fun renderPyO3Methods() {

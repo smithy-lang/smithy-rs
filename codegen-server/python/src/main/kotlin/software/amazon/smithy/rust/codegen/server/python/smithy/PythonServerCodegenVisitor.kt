@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
@@ -26,7 +27,6 @@ import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.util.getTrait
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -62,12 +62,15 @@ class PythonServerCodegenVisitor(
 
         model = codegenDecorator.transformModel(service, baseModel)
 
+        // `publicConstrainedTypes` must always be `false` for the Python server.
+        settings = settings.copy(codegenConfig = settings.codegenConfig.copy(publicConstrainedTypes = false))
+
         fun baseSymbolProviderFactory(
             model: Model,
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
-            _publicConstrainedTypes: Boolean = true,
-        ) = PythonCodegenServerPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig)
+            publicConstrainedTypes: Boolean
+        ) = PythonCodegenServerPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             model,
@@ -124,12 +127,9 @@ class PythonServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        logger.info("[rust-server-codegen] Generating an enum $shape")
-        shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                PythonServerEnumGenerator(codegenContext, writer, shape, enum).render()
-            }
-        }
+        fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
+            PythonServerEnumGenerator(codegenContext, writer, shape)
+        stringShape(shape, ::pythonServerEnumGeneratorFactory)
     }
 
     /**
