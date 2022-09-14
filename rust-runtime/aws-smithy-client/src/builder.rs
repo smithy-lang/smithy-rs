@@ -10,6 +10,14 @@ use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::sync::Arc;
 
+#[derive(Clone, Debug)]
+enum BuilderRetryConfig<R> {
+    // Since generic specialization isn't a thing yet, we have to keep a copy of the retry
+    // config around when using standard retry so that it can be properly validated.
+    Standard { has_retry: bool, policy: R },
+    Overridden(R),
+}
+
 /// A builder that provides more customization options when constructing a [`Client`].
 ///
 /// To start, call [`Builder::new`]. Then, chain the method calls to configure the `Builder`.
@@ -19,12 +27,8 @@ use std::sync::Arc;
 pub struct Builder<C = (), M = (), R = retry::Standard> {
     connector: C,
     middleware: M,
-    // Keep a copy of standard retry config when the standard policy is used
-    // so that we can do additional validation against the `sleep_impl` when
-    // the client.
-    standard_retry_config: Option<retry::Config>,
-    retry_policy: R,
-    timeout_config: TimeoutConfig,
+    retry_config: BuilderRetryConfig<R>,
+    timeout_config: Option<TimeoutConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
@@ -34,12 +38,15 @@ where
     M: Default,
 {
     fn default() -> Self {
+        let default_retry_config = retry::Config::default();
         Self {
             connector: Default::default(),
             middleware: Default::default(),
-            standard_retry_config: Some(retry::Config::default()),
-            retry_policy: Default::default(),
-            timeout_config: TimeoutConfig::disabled(),
+            retry_config: BuilderRetryConfig::Standard {
+                has_retry: default_retry_config.has_retry(),
+                policy: retry::Standard::new(default_retry_config),
+            },
+            timeout_config: None,
             sleep_impl: default_async_sleep(),
         }
     }
@@ -78,9 +85,8 @@ impl<M, R> Builder<(), M, R> {
     pub fn connector<C>(self, connector: C) -> Builder<C, M, R> {
         Builder {
             connector,
-            standard_retry_config: self.standard_retry_config,
-            retry_policy: self.retry_policy,
             middleware: self.middleware,
+            retry_config: self.retry_config,
             timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
         }
@@ -135,8 +141,7 @@ impl<C, R> Builder<C, (), R> {
     pub fn middleware<M>(self, middleware: M) -> Builder<C, M, R> {
         Builder {
             connector: self.connector,
-            standard_retry_config: self.standard_retry_config,
-            retry_policy: self.retry_policy,
+            retry_config: self.retry_config,
             timeout_config: self.timeout_config,
             middleware,
             sleep_impl: self.sleep_impl,
@@ -187,9 +192,7 @@ impl<C, M> Builder<C, M, retry::Standard> {
     pub fn retry_policy<R>(self, retry_policy: R) -> Builder<C, M, R> {
         Builder {
             connector: self.connector,
-            // Intentionally clear out the standard retry config when the retry policy is overridden.
-            standard_retry_config: None,
-            retry_policy,
+            retry_config: BuilderRetryConfig::Overridden(retry_policy),
             timeout_config: self.timeout_config,
             middleware: self.middleware,
             sleep_impl: self.sleep_impl,
@@ -199,27 +202,30 @@ impl<C, M> Builder<C, M, retry::Standard> {
 
 impl<C, M> Builder<C, M> {
     /// Set the standard retry policy's configuration.
-    pub fn set_retry_config(&mut self, config: retry::Config) -> &mut Self {
-        self.standard_retry_config = Some(config.clone());
-        self.retry_policy.with_config(config);
+    pub fn set_retry_config(&mut self, config: Option<retry::Config>) -> &mut Self {
+        let config = config.unwrap_or_default();
+        self.retry_config = BuilderRetryConfig::Standard {
+            has_retry: config.has_retry(),
+            policy: retry::Standard::new(config),
+        };
         self
     }
 
     /// Set the standard retry policy's configuration.
     pub fn retry_config(mut self, config: retry::Config) -> Self {
-        self.set_retry_config(config);
+        self.set_retry_config(Some(config));
         self
     }
 
     /// Set a timeout config for the builder
-    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) -> &mut Self {
+    pub fn set_timeout_config(&mut self, timeout_config: Option<TimeoutConfig>) -> &mut Self {
         self.timeout_config = timeout_config;
         self
     }
 
     /// Set a timeout config for the builder
     pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
-        self.timeout_config = timeout_config;
+        self.timeout_config = Some(timeout_config);
         self
     }
 
@@ -230,8 +236,8 @@ impl<C, M> Builder<C, M> {
     }
 
     /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
-    pub fn sleep_impl(mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) -> Self {
-        self.set_sleep_impl(async_sleep);
+    pub fn sleep_impl(mut self, async_sleep: Arc<dyn AsyncSleep>) -> Self {
+        self.set_sleep_impl(Some(async_sleep));
         self
     }
 }
@@ -245,8 +251,7 @@ impl<C, M, R> Builder<C, M, R> {
         Builder {
             connector: map(self.connector),
             middleware: self.middleware,
-            standard_retry_config: self.standard_retry_config,
-            retry_policy: self.retry_policy,
+            retry_config: self.retry_config,
             timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
         }
@@ -260,8 +265,7 @@ impl<C, M, R> Builder<C, M, R> {
         Builder {
             connector: self.connector,
             middleware: map(self.middleware),
-            standard_retry_config: self.standard_retry_config,
-            retry_policy: self.retry_policy,
+            retry_config: self.retry_config,
             timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
         }
@@ -269,6 +273,7 @@ impl<C, M, R> Builder<C, M, R> {
 
     /// Build a Smithy service [`Client`].
     pub fn build(self) -> Client<C, M, R> {
+        let timeout_config = self.timeout_config.unwrap_or_else(TimeoutConfig::disabled);
         if self.sleep_impl.is_none() {
             const ADDITIONAL_HELP: &str =
                 "Either disable retry by setting max attempts to one, or pass in a `sleep_impl`. \
@@ -276,22 +281,23 @@ impl<C, M, R> Builder<C, M, R> {
                 the `aws-smithy-async` crate is required for your async runtime. If you are using \
                 Tokio, then make sure the `rt-tokio` feature is enabled to have its sleep \
                 implementation set automatically.";
-            if self
-                .standard_retry_config
-                .map(|src| src.has_retry())
-                .unwrap_or(false)
-            {
-                panic!("Retries require a `sleep_impl`, but none was passed into the builder. {ADDITIONAL_HELP}");
-            } else if self.timeout_config.has_timeouts() {
+            if let BuilderRetryConfig::Standard { has_retry, .. } = self.retry_config {
+                if has_retry {
+                    panic!("Retries require a `sleep_impl`, but none was passed into the builder. {ADDITIONAL_HELP}");
+                }
+            }
+            if timeout_config.has_timeouts() {
                 panic!("Timeouts require a `sleep_impl`, but none was passed into the builder. {ADDITIONAL_HELP}");
             }
         }
-
         Client {
             connector: self.connector,
-            retry_policy: self.retry_policy,
+            retry_policy: match self.retry_config {
+                BuilderRetryConfig::Standard { policy, .. } => policy,
+                BuilderRetryConfig::Overridden(policy) => policy,
+            },
             middleware: self.middleware,
-            timeout_config: self.timeout_config,
+            timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -377,7 +383,7 @@ mod tests {
             .connect_timeout(Duration::from_secs(1))
             .build();
         assert!(timeout_config.has_timeouts());
-        builder.set_timeout_config(timeout_config);
+        builder.set_timeout_config(Some(timeout_config));
 
         let result = panic::catch_unwind(AssertUnwindSafe(move || {
             let _ = builder.build();
@@ -394,7 +400,7 @@ mod tests {
 
         let retry_config = retry::Config::default();
         assert!(retry_config.has_retry());
-        builder.set_retry_config(retry_config);
+        builder.set_retry_config(Some(retry_config));
 
         let result = panic::catch_unwind(AssertUnwindSafe(move || {
             let _ = builder.build();
@@ -424,11 +430,11 @@ mod tests {
             .connect_timeout(Duration::from_secs(1))
             .build();
         assert!(timeout_config.has_timeouts());
-        builder.set_timeout_config(timeout_config);
+        builder.set_timeout_config(Some(timeout_config));
 
         let retry_config = retry::Config::default();
         assert!(retry_config.has_retry());
-        builder.set_retry_config(retry_config);
+        builder.set_retry_config(Some(retry_config));
 
         let _ = builder.build();
     }

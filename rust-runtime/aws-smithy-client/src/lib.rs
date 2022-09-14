@@ -131,6 +131,13 @@ pub struct Client<
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
+impl Client<(), (), ()> {
+    /// Returns a client builder
+    pub fn builder() -> Builder {
+        Builder::new()
+    }
+}
+
 // Quick-create for people who just want "the default".
 impl<C, M> Client<C, M>
 where
@@ -144,45 +151,6 @@ where
             .connector(connector)
             .middleware(M::default())
             .build()
-    }
-}
-
-impl<C, M> Client<C, M> {
-    /// Set the standard retry policy's configuration.
-    pub fn set_retry_config(&mut self, config: retry::Config) {
-        self.retry_policy.with_config(config);
-    }
-
-    /// Adjust a standard retry client with the given policy configuration.
-    pub fn with_retry_config(mut self, config: retry::Config) -> Self {
-        self.set_retry_config(config);
-        self
-    }
-}
-
-impl<C, M, R> Client<C, M, R> {
-    /// Set the client's timeout configuration.
-    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) {
-        self.timeout_config = timeout_config;
-    }
-
-    /// Set the client's timeout configuration.
-    pub fn with_timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
-        self.set_timeout_config(timeout_config);
-        self
-    }
-
-    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
-    ///
-    /// *Note: If `None` is passed, this will prevent the client from using retries or timeouts.*
-    pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
-        self.sleep_impl = sleep_impl;
-    }
-
-    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
-    pub fn with_sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
-        self.set_sleep_impl(Some(sleep_impl));
-        self
     }
 }
 
