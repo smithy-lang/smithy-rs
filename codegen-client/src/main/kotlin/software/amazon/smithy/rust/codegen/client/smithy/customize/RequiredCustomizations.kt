@@ -54,12 +54,14 @@ class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
     ): List<LibRsCustomization> =
         baseCustomizations + CrateVersionGenerator() +
             SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) +
-            AllowLintsGenerator() +
-            ResiliencyReExportCustomization(codegenContext.runtimeConfig)
+            AllowLintsGenerator()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
+
+        // Re-export resiliency types
+        ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
     }
 
     override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
