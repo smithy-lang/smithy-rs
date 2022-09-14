@@ -1,120 +1,3 @@
-//! Authorize requests using the [`Authorization`] header asynchronously.
-//!
-//! [`Authorization`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization
-//!
-//! # Example
-//!
-//! ```
-//! use tower_http::auth::{AsyncRequireAuthorizationLayer, AsyncAuthorizeRequest};
-//! use hyper::{Request, Response, Body, Error};
-//! use http::{StatusCode, header::AUTHORIZATION};
-//! use tower::{Service, ServiceExt, ServiceBuilder, service_fn};
-//! use futures_util::future::BoxFuture;
-//!
-//! #[derive(Clone, Copy)]
-//! struct MyAuth;
-//!
-//! impl<B> AsyncAuthorizeRequest<B> for MyAuth
-//! where
-//!     B: Send + Sync + 'static,
-//! {
-//!     type RequestBody = B;
-//!     type ResponseBody = Body;
-//!     type Future = BoxFuture<'static, Result<Request<B>, Response<Self::ResponseBody>>>;
-//!
-//!     fn authorize(&mut self, mut request: Request<B>) -> Self::Future {
-//!         Box::pin(async {
-//!             if let Some(user_id) = check_auth(&request).await {
-//!                 // Set `user_id` as a request extension so it can be accessed by other
-//!                 // services down the stack.
-//!                 request.extensions_mut().insert(user_id);
-//!
-//!                 Ok(request)
-//!             } else {
-//!                 let unauthorized_response = Response::builder()
-//!                     .status(StatusCode::UNAUTHORIZED)
-//!                     .body(Body::empty())
-//!                     .unwrap();
-//!
-//!                 Err(unauthorized_response)
-//!             }
-//!         })
-//!     }
-//! }
-//!
-//! async fn check_auth<B>(request: &Request<B>) -> Option<UserId> {
-//!     // ...
-//!     # None
-//! }
-//!
-//! #[derive(Debug)]
-//! struct UserId(String);
-//!
-//! async fn handle(request: Request<Body>) -> Result<Response<Body>, Error> {
-//!     // Access the `UserId` that was set in `on_authorized`. If `handle` gets called the
-//!     // request was authorized and `UserId` will be present.
-//!     let user_id = request
-//!         .extensions()
-//!         .get::<UserId>()
-//!         .expect("UserId will be there if request was authorized");
-//!
-//!     println!("request from {:?}", user_id);
-//!
-//!     Ok(Response::new(Body::empty()))
-//! }
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let service = ServiceBuilder::new()
-//!     // Authorize requests using `MyAuth`
-//!     .layer(AsyncRequireAuthorizationLayer::new(MyAuth))
-//!     .service_fn(handle);
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! Or using a closure:
-//!
-//! ```
-//! use tower_http::auth::{AsyncRequireAuthorizationLayer, AsyncAuthorizeRequest};
-//! use hyper::{Request, Response, Body, Error};
-//! use http::StatusCode;
-//! use tower::{Service, ServiceExt, ServiceBuilder};
-//! use futures_util::future::BoxFuture;
-//!
-//! async fn check_auth<B>(request: &Request<B>) -> Option<UserId> {
-//!     // ...
-//!     # None
-//! }
-//!
-//! #[derive(Debug)]
-//! struct UserId(String);
-//!
-//! async fn handle(request: Request<Body>) -> Result<Response<Body>, Error> {
-//!     # todo!();
-//!     // ...
-//! }
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let service = ServiceBuilder::new()
-//!     .layer(AsyncRequireAuthorizationLayer::new(|request: Request<Body>| async move {
-//!         if let Some(user_id) = check_auth(&request).await {
-//!             Ok(request)
-//!         } else {
-//!             let unauthorized_response = Response::builder()
-//!                 .status(StatusCode::UNAUTHORIZED)
-//!                 .body(Body::empty())
-//!                 .unwrap();
-//!
-//!             Err(unauthorized_response)
-//!         }
-//!     }))
-//!     .service_fn(handle);
-//! # Ok(())
-//! # }
-//! ```
-
 use aws_smithy_http_server::body::{boxed, BoxBody};
 use bytes::Bytes;
 use futures::future::BoxFuture;
@@ -124,9 +7,10 @@ use hyper::Body;
 use pin_project_lite::pin_project;
 use pyo3::{pyclass, IntoPy, PyAny, PyErr, PyObject, PyResult};
 use std::{
+    error::Error,
     future::Future,
     pin::Pin,
-    task::{Context, Poll}, error::Error,
+    task::{Context, Poll},
 };
 use tower::{Layer, Service};
 
@@ -171,11 +55,6 @@ impl Clone for PyRequest {
     }
 }
 
-/// A Python handler function representation.
-///
-/// The Python business logic implementation needs to carry some information
-/// to be executed properly like the size of its arguments and if it is
-/// a coroutine.
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareHandler {
     pub name: String,
@@ -189,10 +68,7 @@ pub struct PyMiddlewareHandlers(pub Vec<PyMiddlewareHandler>);
 
 // Our request handler. This is where we would implement the application logic
 // for responding to HTTP requests...
-pub async fn middleware_wrapper(
-    request: PyRequest,
-    handler: PyMiddlewareHandler,
-) -> PyResult<()> {
+pub async fn middleware_wrapper(request: PyRequest, handler: PyMiddlewareHandler) -> PyResult<()> {
     let result = if handler.is_coroutine {
         tracing::debug!("Executing Python handler coroutine `stream_pokemon_radio_operation()`");
         let result = pyo3::Python::with_gil(|py| {
@@ -200,9 +76,7 @@ pub async fn middleware_wrapper(
             let coroutine = pyhandler.call1((request,))?;
             pyo3_asyncio::tokio::into_future(coroutine)
         })?;
-        result
-            .await
-            .map(|_| ())
+        result.await.map(|_| ())
     } else {
         tracing::debug!("Executing Python handler function `stream_pokemon_radio_operation()`");
         tokio::task::block_in_place(move || {
@@ -242,7 +116,9 @@ where
                 } else {
                     PyRequest::new(&request)
                 };
-                middleware_wrapper(pyrequest, handler).await.map_err(|e| into_response(e))?;
+                middleware_wrapper(pyrequest, handler)
+                    .await
+                    .map_err(|e| into_response(e))?;
             }
             Ok(request)
         })
@@ -250,16 +126,12 @@ where
 }
 
 fn into_response<T: Error>(error: T) -> Response<BoxBody> {
-    Response::builder().status(500).body(boxed(error.to_string())).unwrap()
-
+    Response::builder()
+        .status(500)
+        .body(boxed(error.to_string()))
+        .unwrap()
 }
 
-/// Layer that applies [`AsyncRequireAuthorization`] which authorizes all requests using the
-/// [`Authorization`] header.
-///
-/// See the [module docs](crate::auth::async_require_authorization) for an example.
-///
-/// [`Authorization`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareLayer<T> {
     handler: T,
@@ -413,89 +285,5 @@ where
 
     fn run(&mut self, request: Request<B>) -> Self::Future {
         self(request)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[allow(unused_imports)]
-    use super::*;
-    use futures_util::future::BoxFuture;
-    use http::{header, StatusCode};
-    use hyper::Body;
-    use tower::{BoxError, ServiceBuilder, ServiceExt};
-
-    #[derive(Clone, Copy)]
-    struct MyAuth;
-
-    impl<B> PyMiddleware<B> for MyAuth
-    where
-        B: Send + 'static,
-    {
-        type RequestBody = B;
-        type ResponseBody = Body;
-        type Future = BoxFuture<'static, Result<Request<B>, Response<Self::ResponseBody>>>;
-
-        fn authorize(&mut self, mut request: Request<B>) -> Self::Future {
-            Box::pin(async move {
-                let authorized = request
-                    .headers()
-                    .get(header::AUTHORIZATION)
-                    .and_then(|it| it.to_str().ok())
-                    .and_then(|it| it.strip_prefix("Bearer "))
-                    .map(|it| it == "69420")
-                    .unwrap_or(false);
-
-                if authorized {
-                    let user_id = UserId("6969".to_owned());
-                    request.extensions_mut().insert(user_id);
-                    Ok(request)
-                } else {
-                    Err(Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .body(Body::empty())
-                        .unwrap())
-                }
-            })
-        }
-    }
-
-    #[derive(Debug)]
-    struct UserId(String);
-
-    #[tokio::test]
-    async fn require_async_auth_works() {
-        let mut service = ServiceBuilder::new()
-            .layer(PyMiddlewareLayer::new(MyAuth))
-            .service_fn(echo);
-
-        let request = Request::get("/")
-            .header(header::AUTHORIZATION, "Bearer 69420")
-            .body(Body::empty())
-            .unwrap();
-
-        let res = service.ready().await.unwrap().call(request).await.unwrap();
-
-        assert_eq!(res.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn require_async_auth_401() {
-        let mut service = ServiceBuilder::new()
-            .layer(PyMiddlewareLayer::new(MyAuth))
-            .service_fn(echo);
-
-        let request = Request::get("/")
-            .header(header::AUTHORIZATION, "Bearer deez")
-            .body(Body::empty())
-            .unwrap();
-
-        let res = service.ready().await.unwrap().call(request).await.unwrap();
-
-        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-    }
-
-    async fn echo(req: Request<Body>) -> Result<Response<Body>, BoxError> {
-        Ok(Response::new(req.into_body()))
     }
 }
