@@ -117,7 +117,7 @@ open class ServerCodegenVisitor(
             service,
             symbolVisitorConfig,
             settings.codegenConfig.publicConstrainedTypes,
-            RustCodegenServerPlugin::baseSymbolProvider
+            RustCodegenServerPlugin::baseSymbolProvider,
         )
 
         codegenContext = ServerCodegenContext(

@@ -90,7 +90,7 @@ fun serverTestCodegenContext(
         service,
         ServerTestSymbolVisitorConfig,
         settings.codegenConfig.publicConstrainedTypes,
-        RustCodegenServerPlugin::baseSymbolProvider
+        RustCodegenServerPlugin::baseSymbolProvider,
     )
 
     return ServerCodegenContext(

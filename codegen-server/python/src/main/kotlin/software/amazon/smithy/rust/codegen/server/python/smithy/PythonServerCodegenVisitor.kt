@@ -69,7 +69,7 @@ class PythonServerCodegenVisitor(
             model: Model,
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
-            publicConstrainedTypes: Boolean
+            publicConstrainedTypes: Boolean,
         ) = PythonCodegenServerPlugin.baseSymbolProvider(model, serviceShape, symbolVisitorConfig, publicConstrainedTypes)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
