@@ -273,6 +273,7 @@ class EventStreamUnmarshallerGenerator(
                             """
                             std::str::from_utf8(message.payload())
                                 .map_err(|_| #{Error}::Unmarshalling("message payload is not valid UTF-8".into()))?
+                                .to_owned()
                             """,
                             *codegenScope,
                         )

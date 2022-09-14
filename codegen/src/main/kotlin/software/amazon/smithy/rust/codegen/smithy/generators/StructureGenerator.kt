@@ -61,6 +61,7 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
  */
 fun MemberShape.deserializerBuilderSetterName(codegenTarget: CodegenTarget) =
     when (codegenTarget) {
+        // TODO Both these arms return the same result.
         CodegenTarget.CLIENT -> this.setterName()
         CodegenTarget.SERVER -> "set_${this.memberName.toSnakeCase()}"
     }
