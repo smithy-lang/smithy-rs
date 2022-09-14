@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -37,22 +36,12 @@ class ServerEnumGeneratorTest {
     """.asSmithyModel()
 
     private val codegenContext = serverTestCodegenContext(model)
-    private val symbolProvider = codegenContext.symbolProvider
-    private val serviceShape = codegenContext.serviceShape
-    private val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
     private val writer = RustWriter.forModule("model")
     private val shape = model.lookup<StringShape>("test#InstanceType")
 
     @Test
     fun `it generates TryFrom, FromStr and errors for enums`() {
-        ServerEnumGenerator(
-            model,
-            symbolProvider,
-            constraintViolationSymbolProvider,
-            writer,
-            shape,
-            shape.expectTrait(),
-        ).render()
+        ServerEnumGenerator(codegenContext, writer, shape, shape.expectTrait()).render()
         writer.compileAndTest(
             """
             use std::str::FromStr;
@@ -65,14 +54,7 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without the unknown variant`() {
-        ServerEnumGenerator(
-            model,
-            symbolProvider,
-            constraintViolationSymbolProvider,
-            writer,
-            shape,
-            shape.expectTrait(),
-        ).render()
+        ServerEnumGenerator(codegenContext, writer, shape, shape.expectTrait()).render()
         writer.compileAndTest(
             """
             // check no unknown
@@ -87,14 +69,7 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without non_exhaustive`() {
-        ServerEnumGenerator(
-            model,
-            symbolProvider,
-            constraintViolationSymbolProvider,
-            writer,
-            shape,
-            shape.expectTrait(),
-        ).render()
+        ServerEnumGenerator(codegenContext, writer, shape, shape.expectTrait()).render()
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
 }

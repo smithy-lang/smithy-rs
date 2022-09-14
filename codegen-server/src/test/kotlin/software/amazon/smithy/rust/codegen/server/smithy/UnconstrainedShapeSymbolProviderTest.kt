@@ -8,11 +8,11 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProviders
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -62,17 +62,16 @@ class UnconstrainedShapeSymbolProviderTest {
             }
             """.asSmithyModel()
 
-        val serviceShape = model.lookup<ServiceShape>("test#TestService")
-        val symbolProvider = UnconstrainedShapeSymbolProvider(serverTestSymbolProvider(model, serviceShape), model, serviceShape)
+        val unconstrainedShapeSymbolProvider = serverTestSymbolProviders(model).unconstrainedShapeSymbolProvider
 
         val listAShape = model.lookup<ListShape>("test#ListA")
-        val listAType = symbolProvider.toSymbol(listAShape).rustType()
+        val listAType = unconstrainedShapeSymbolProvider.toSymbol(listAShape).rustType()
 
         val listBShape = model.lookup<ListShape>("test#ListB")
-        val listBType = symbolProvider.toSymbol(listBShape).rustType()
+        val listBType = unconstrainedShapeSymbolProvider.toSymbol(listBShape).rustType()
 
         val structureCShape = model.lookup<StructureShape>("test#StructureC")
-        val structureCType = symbolProvider.toSymbol(structureCShape).rustType()
+        val structureCType = unconstrainedShapeSymbolProvider.toSymbol(structureCShape).rustType()
 
         listAType shouldBe RustType.Opaque("ListAUnconstrained", "crate::unconstrained::list_a_unconstrained")
         listBType shouldBe RustType.Opaque("ListBUnconstrained", "crate::unconstrained::list_b_unconstrained")
@@ -94,13 +93,12 @@ class UnconstrainedShapeSymbolProviderTest {
             }
             """.asSmithyModel()
 
-        val serviceShape = model.lookup<ServiceShape>("test#TestService")
-        val symbolProvider = UnconstrainedShapeSymbolProvider(serverTestSymbolProvider(model, serviceShape), model, serviceShape)
+        val unconstrainedShapeSymbolProvider = serverTestSymbolProviders(model).unconstrainedShapeSymbolProvider
 
         val listAShape = model.lookup<ListShape>("test#ListA")
         val structureBShape = model.lookup<StructureShape>("test#StructureB")
 
-        symbolProvider.toSymbol(structureBShape).rustType().render() shouldBe "crate::model::StructureB"
-        symbolProvider.toSymbol(listAShape).rustType().render() shouldBe "std::vec::Vec<crate::model::StructureB>"
+        unconstrainedShapeSymbolProvider.toSymbol(structureBShape).rustType().render() shouldBe "crate::model::StructureB"
+        unconstrainedShapeSymbolProvider.toSymbol(listAShape).rustType().render() shouldBe "std::vec::Vec<crate::model::StructureB>"
     }
 }

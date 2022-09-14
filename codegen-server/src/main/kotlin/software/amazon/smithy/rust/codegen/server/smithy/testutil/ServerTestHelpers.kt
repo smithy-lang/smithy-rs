@@ -33,16 +33,19 @@ val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     handleRequired = true,
 )
 
-fun serverTestSymbolProvider(
-    model: Model,
-    serviceShape: ServiceShape? = null,
-    publicConstrainedTypesEnabled: Boolean = true,
-): RustSymbolProvider =
-    RustCodegenServerPlugin.baseSymbolProvider(
+private fun testServiceShapeFor(model: Model) =
+    model.serviceShapes.firstOrNull() ?: ServiceShape.builder().version("test").id("test#Service").build()
+
+fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null) =
+    serverTestSymbolProviders(model, serviceShape).symbolProvider
+
+fun serverTestSymbolProviders(model: Model, serviceShape: ServiceShape? = null) =
+    ServerSymbolProviders.from(
         model,
-        serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
+        serviceShape ?: testServiceShapeFor(model),
         ServerTestSymbolVisitorConfig,
-        publicConstrainedTypes = publicConstrainedTypesEnabled,
+        serverTestRustSettings((serviceShape ?: testServiceShapeFor(model)).id).codegenConfig.publicConstrainedTypes,
+        RustCodegenServerPlugin::baseSymbolProvider,
     )
 
 fun serverTestRustSettings(
@@ -82,17 +85,10 @@ fun serverTestCodegenContext(
             ?: model.serviceShapes.firstOrNull()
             ?: ServiceShape.builder().version("test").id("test#Service").build()
     val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
-    val symbolVisitorConfig =
-        SymbolVisitorConfig(
-            runtimeConfig = settings.runtimeConfig,
-            renameExceptions = false,
-            handleRequired = true,
-            handleRustBoxing = true,
-        )
     val serverSymbolProviders = ServerSymbolProviders.from(
         model,
         service,
-        symbolVisitorConfig,
+        ServerTestSymbolVisitorConfig,
         settings.codegenConfig.publicConstrainedTypes,
         RustCodegenServerPlugin::baseSymbolProvider
     )

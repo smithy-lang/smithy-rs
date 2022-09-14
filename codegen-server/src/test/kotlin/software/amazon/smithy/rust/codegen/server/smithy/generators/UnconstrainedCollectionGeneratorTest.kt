@@ -7,15 +7,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
@@ -59,9 +55,9 @@ class UnconstrainedCollectionGeneratorTest {
                 string: String
             }
             """.asSmithyModel()
-        val symbolProvider = serverTestSymbolProvider(model)
+        val codegenContext = serverTestCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
 
-        val serviceShape = model.lookup<ServiceShape>("test#TestService")
         val listA = model.lookup<ListShape>("test#ListA")
         val listB = model.lookup<ListShape>("test#ListB")
 
@@ -71,34 +67,15 @@ class UnconstrainedCollectionGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
-        val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
-        val pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(RustModule.private("constrained")) { writer ->
             listOf(listA, listB).forEach {
-                PubCrateConstrainedCollectionGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
-                    pubCrateConstrainedShapeSymbolProvider,
-                    writer,
-                    it,
-                ).render()
+                PubCrateConstrainedCollectionGenerator(codegenContext, writer, it).render()
             }
         }
         project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
             project.withModule(ModelsModule) { modelsModuleWriter ->
-                val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
                 listOf(listA, listB).forEach {
-                    UnconstrainedCollectionGenerator(
-                        model,
-                        symbolProvider,
-                        unconstrainedShapeSymbolProvider,
-                        pubCrateConstrainedShapeSymbolProvider,
-                        constraintViolationSymbolProvider,
-                        unconstrainedModuleWriter,
-                        modelsModuleWriter,
-                        it,
-                    ).render()
+                    UnconstrainedCollectionGenerator(codegenContext, unconstrainedModuleWriter, modelsModuleWriter, it).render()
                 }
 
                 unconstrainedModuleWriter.unitTest(

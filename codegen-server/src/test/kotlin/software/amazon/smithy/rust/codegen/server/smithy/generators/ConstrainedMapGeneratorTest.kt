@@ -19,10 +19,8 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -95,18 +93,11 @@ class ConstrainedMapGeneratorTest {
 
         val codegenContext = serverTestCodegenContext(testCase.model, serviceShape)
         val symbolProvider = codegenContext.symbolProvider
-        val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, testCase.model, serviceShape)
 
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ModelsModule) { writer ->
-            render(
-                testCase.model,
-                symbolProvider,
-                constraintViolationSymbolProvider,
-                writer,
-                constrainedMapShape,
-            )
+            render(codegenContext, writer, constrainedMapShape)
 
             val instantiator =
                 Instantiator(symbolProvider, testCase.model, codegenContext.runtimeConfig, codegenContext.target)
@@ -180,47 +171,23 @@ class ConstrainedMapGeneratorTest {
                 value: String
             }
             """.asSmithyModel()
-        val serviceShape = model.lookup<ServiceShape>("test#TestService")
         val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
-
-        val symbolProvider = serverTestSymbolProvider(model)
-        val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
 
         val writer = RustWriter.forModule(ModelsModule.name)
 
-        render(
-            model,
-            symbolProvider,
-            constraintViolationSymbolProvider,
-            writer,
-            constrainedMapShape,
-        )
+        val codegenContext = serverTestCodegenContext(model)
+        render(codegenContext, writer, constrainedMapShape)
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedMap(pub(crate) std::collections::HashMap<std::string::String, std::string::String>);"
     }
 
     private fun render(
-        model: Model,
-        symbolProvider: RustSymbolProvider,
-        constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+        codegenContext: ServerCodegenContext,
         writer: RustWriter,
         constrainedMapShape: MapShape,
     ) {
-        ConstrainedMapGenerator(
-            model,
-            symbolProvider,
-            constraintViolationSymbolProvider,
-            writer,
-            constrainedMapShape,
-        ).render()
-
-        MapConstraintViolationGenerator(
-            model,
-            symbolProvider,
-            constraintViolationSymbolProvider,
-            writer,
-            constrainedMapShape,
-        ).render()
+        ConstrainedMapGenerator(codegenContext, writer, constrainedMapShape).render()
+        MapConstraintViolationGenerator(codegenContext, writer, constrainedMapShape).render()
     }
 }

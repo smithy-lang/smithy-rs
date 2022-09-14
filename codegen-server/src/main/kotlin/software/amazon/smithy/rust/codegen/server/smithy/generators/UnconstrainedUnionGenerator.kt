@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
@@ -36,13 +35,13 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 // TODO Docs
 class UnconstrainedUnionGenerator(
     val codegenContext: ServerCodegenContext,
-    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
     val shape: UnionShape,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =

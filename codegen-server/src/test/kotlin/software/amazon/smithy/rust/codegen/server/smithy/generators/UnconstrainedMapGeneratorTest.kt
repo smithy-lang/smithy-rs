@@ -7,15 +7,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
@@ -61,9 +57,9 @@ class UnconstrainedMapGeneratorTest {
                 string: String
             }
             """.asSmithyModel()
-        val symbolProvider = serverTestSymbolProvider(model)
+        val codegenContext = serverTestCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
 
-        val serviceShape = model.lookup<ServiceShape>("test#TestService")
         val mapA = model.lookup<MapShape>("test#MapA")
         val mapB = model.lookup<MapShape>("test#MapB")
 
@@ -73,42 +69,17 @@ class UnconstrainedMapGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
-        val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
-        val pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(RustModule.private("constrained")) { writer ->
             listOf(mapA, mapB).forEach {
-                PubCrateConstrainedMapGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
-                    pubCrateConstrainedShapeSymbolProvider,
-                    writer,
-                    it,
-                ).render()
+                PubCrateConstrainedMapGenerator(codegenContext, writer, it).render()
             }
         }
         project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
             project.withModule(ModelsModule) { modelsModuleWriter ->
-                val constraintViolationSymbolProvider =
-                    ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
                 listOf(mapA, mapB).forEach {
-                    UnconstrainedMapGenerator(
-                        model,
-                        symbolProvider,
-                        unconstrainedShapeSymbolProvider,
-                        pubCrateConstrainedShapeSymbolProvider,
-                        constraintViolationSymbolProvider,
-                        unconstrainedModuleWriter,
-                        it,
-                    ).render()
+                    UnconstrainedMapGenerator(codegenContext, unconstrainedModuleWriter, it).render()
 
-                    MapConstraintViolationGenerator(
-                        model,
-                        symbolProvider,
-                        constraintViolationSymbolProvider,
-                        modelsModuleWriter,
-                        it,
-                    ).render()
+                    MapConstraintViolationGenerator(codegenContext, modelsModuleWriter, it).render()
                 }
 
                 unconstrainedModuleWriter.unitTest(

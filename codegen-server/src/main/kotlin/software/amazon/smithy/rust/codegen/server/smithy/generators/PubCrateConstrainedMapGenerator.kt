@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -36,13 +35,13 @@ import software.amazon.smithy.rust.codegen.smithy.isTransitivelyButNotDirectlyCo
  */
 class PubCrateConstrainedMapGenerator(
     val codegenContext: ServerCodegenContext,
-    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape,
 ) {
     private val model = codegenContext.model
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
+    private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val symbolProvider = codegenContext.symbolProvider
 

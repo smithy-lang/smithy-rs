@@ -11,13 +11,11 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProviders
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
@@ -44,9 +42,9 @@ class PubCrateConstrainedShapeSymbolProviderTest {
         }
         """.asSmithyModel()
 
-    private val serviceShape = model.lookup<ServiceShape>("test#TestService")
-    private val symbolProvider = serverTestSymbolProvider(model, serviceShape, publicConstrainedTypesEnabled = false)
-    private val pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
+    private val serverTestSymbolProviders = serverTestSymbolProviders(model)
+    private val symbolProvider = serverTestSymbolProviders.symbolProvider
+    private val pubCrateConstrainedShapeSymbolProvider = serverTestSymbolProviders.pubCrateConstrainedShapeSymbolProvider
 
     @Test
     fun `it should crash when provided with a shape that is directly constrained`() {

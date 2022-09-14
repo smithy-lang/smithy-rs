@@ -6,16 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -53,9 +49,9 @@ class UnconstrainedUnionGeneratorTest {
                 requiredMember: String
             }
             """.asSmithyModel()
-        val symbolProvider = serverTestSymbolProvider(model)
+        val codegenContext = serverTestCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
 
-        val serviceShape = model.lookup<ServiceShape>("test#TestService")
         val unionShape = model.lookup<UnionShape>("test#Union")
 
         val project = TestWorkspace.testProject(symbolProvider)
@@ -64,25 +60,12 @@ class UnconstrainedUnionGeneratorTest {
             model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
-        val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(ModelsModule) { writer ->
             UnionGenerator(model, symbolProvider, writer, unionShape, renderUnknownVariant = false).render()
         }
         project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
             project.withModule(ModelsModule) { modelsModuleWriter ->
-                val pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
-                val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
-
-                UnconstrainedUnionGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
-                    pubCrateConstrainedShapeSymbolProvider,
-                    constraintViolationSymbolProvider,
-                    unconstrainedModuleWriter,
-                    modelsModuleWriter,
-                    unionShape,
-                ).render()
+                UnconstrainedUnionGenerator(codegenContext, unconstrainedModuleWriter, modelsModuleWriter, unionShape).render()
 
                 unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_fail_to_constrain",
