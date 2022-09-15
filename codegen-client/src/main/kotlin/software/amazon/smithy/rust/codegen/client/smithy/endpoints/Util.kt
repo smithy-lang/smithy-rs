@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.smithy.endpoints
+package software.amazon.smithy.rust.codegen.client.smithy.endpoints
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
@@ -15,13 +15,8 @@ import software.amazon.smithy.rulesengine.language.lang.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.lang.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
-import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
-import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class EndpointRulesetIndex(model: Model) : KnowledgeIndex {
 

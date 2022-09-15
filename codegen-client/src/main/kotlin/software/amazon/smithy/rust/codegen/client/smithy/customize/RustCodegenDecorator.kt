@@ -12,12 +12,12 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.client.smithy.endpoints.RulesEngineBuiltInResolver
 import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
-import software.amazon.smithy.rust.codegen.smithy.endpoints.RulesEngineBuiltInResolver
 import java.util.ServiceLoader
 import java.util.logging.Logger
 

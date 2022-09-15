@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.smithy.endpoints
+package software.amazon.smithy.rust.codegen.client.smithy.endpoints
 
 import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.StringNode
@@ -13,17 +13,16 @@ import software.amazon.smithy.rulesengine.language.lang.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.lang.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.lang.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
 
 /**
  * BuiltInResolver enables potentially external codegen stages to provide sources for `builtIn` parameters.
@@ -147,9 +146,9 @@ class CreateEndpointParams(
         memberParams.forEach { (memberShape, param) ->
             rust(
                 ".${EndpointParamsGenerator.setterName(param.name)}(${section.input}.${
-                ctx.symbolProvider.toMemberName(
-                    memberShape,
-                )
+                    ctx.symbolProvider.toMemberName(
+                        memberShape,
+                    )
                 }.as_ref())",
             )
         }

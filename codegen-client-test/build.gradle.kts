@@ -44,6 +44,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
         CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras", imports = listOf("$commonModels/rest-json-extras.smithy")),
         CodegenTest("aws.protocoltests.misc#MiscService", "misc", imports = listOf("$commonModels/misc.smithy")),
+        CodegenTest("aws.protocoltests.json#TestService", "endpoint-rules", imports = listOf("$commonModels/endpoint-rules.smithy")),
         CodegenTest(
             "aws.protocoltests.restxml#RestXml", "rest_xml",
             extraConfig = """, "codegen": { "addMessageToErrors": false } """,
