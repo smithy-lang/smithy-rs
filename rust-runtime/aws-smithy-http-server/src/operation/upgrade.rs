@@ -36,8 +36,8 @@ pub trait Pluggable<NewPlugin> {
 }
 
 /// Maps one [`operation::Operation`] to another.
-/// A [`Pluggable`] plugin is an [`OperationMap`].
-pub trait OperationMap<P, Op, S, L> {
+/// A [`Pluggable`] plugin is an [`Plugin`].
+pub trait Plugin<P, Op, S, L> {
     type Service;
     type Layer;
 
@@ -45,9 +45,9 @@ pub trait OperationMap<P, Op, S, L> {
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
 }
 
-/// An [`OperationMap`] that maps an `input` [`Operation`] to itself.
+/// An [`Plugin`] that maps an `input` [`Operation`] to itself.
 pub struct IdentityPlugin;
-impl<P, Op, S, L> OperationMap<P, Op, S, L> for IdentityPlugin {
+impl<P, Op, S, L> Plugin<P, Op, S, L> for IdentityPlugin {
     type Service = S;
     type Layer = L;
 
@@ -249,24 +249,24 @@ where
     }
 }
 
-/// A wrapper struct to compose an `Inner` [`OperationMap`]
-/// to an `Outer` [`OperationMap`].
-pub struct OperationStack<Inner, Outer> {
+/// A wrapper struct to compose an `Inner` [`Plugin`]
+/// to an `Outer` [`Plugin`].
+pub struct PluginStack<Inner, Outer> {
     inner: Inner,
     outer: Outer,
 }
 
-impl<Inner, Outer> OperationStack<Inner, Outer> {
-    /// Create a new [`OperationStack`].
+impl<Inner, Outer> PluginStack<Inner, Outer> {
+    /// Create a new [`PluginStack`].
     pub fn new(inner: Inner, outer: Outer) -> Self {
-        OperationStack { inner, outer }
+        PluginStack { inner, outer }
     }
 }
 
-impl<P, Op, S, L, Inner, Outer> OperationMap<P, Op, S, L> for OperationStack<Inner, Outer>
+impl<P, Op, S, L, Inner, Outer> Plugin<P, Op, S, L> for PluginStack<Inner, Outer>
 where
-    Inner: OperationMap<P, Op, S, L>,
-    Outer: OperationMap<P, Op, Inner::Service, Inner::Layer>,
+    Inner: Plugin<P, Op, S, L>,
+    Outer: Plugin<P, Op, Inner::Service, Inner::Layer>,
 {
     type Service = Outer::Service;
     type Layer = Outer::Layer;
@@ -286,7 +286,7 @@ pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     fn upgrade(self, plugin: &Plugin) -> Self::Service;
 }
 
-impl<P, Op, Exts, B, Plugin, S, L, PollError> Upgradable<P, Op, Exts, B, Plugin> for Operation<S, L>
+impl<P, Op, Exts, B, Pl, S, L, PollError> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -305,22 +305,22 @@ where
     S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
 
     // The plugin takes this operation as input
-    Plugin: OperationMap<P, Op, S, L>,
+    Pl: Plugin<P, Op, S, L>,
 
     // The modified Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
-    Plugin::Layer: Layer<Upgrade<P, Op, Exts, B, Plugin::Service>>,
+    Pl::Layer: Layer<Upgrade<P, Op, Exts, B, Pl::Service>>,
 
     // The signature of the output is correct
-    <Plugin::Layer as Layer<Upgrade<P, Op, Exts, B, Plugin::Service>>>::Service:
+    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service:
         Service<http::Request<B>, Response = http::Response<BoxBody>>,
 {
-    type Service = <Plugin::Layer as Layer<Upgrade<P, Op, Exts, B, Plugin::Service>>>::Service;
+    type Service = <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service;
 
     /// Takes the [`Operation<S, L>`](Operation), applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self, plugin: &Plugin) -> Self::Service {
+    fn upgrade(self, plugin: &Pl) -> Self::Service {
         let mapped = plugin.map(self);
         let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
         layer.layer(mapped.inner)
@@ -337,13 +337,13 @@ pub struct MissingOperation;
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
 pub struct FailOnMissingOperation;
 
-impl<P, Op, Exts, B, Mod> Upgradable<P, Op, Exts, B, Mod> for FailOnMissingOperation
+impl<P, Op, Exts, B, Plugin> Upgradable<P, Op, Exts, B, Plugin> for FailOnMissingOperation
 where
     InternalFailureException: IntoResponse<P>,
 {
     type Service = MissingFailure<P>;
 
-    fn upgrade(self, _plugin: &Mod) -> Self::Service {
+    fn upgrade(self, _plugin: &Plugin) -> Self::Service {
         MissingFailure { _protocol: PhantomData }
     }
 }

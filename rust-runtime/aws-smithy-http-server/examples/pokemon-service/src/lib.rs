@@ -326,7 +326,7 @@ impl<S> tower::Layer<S> for PrintLayer {
 /// Plugin for the `PokemonService` builder to add a `PrintLayer` over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
-impl<P, Op, S, L> aws_smithy_http_server::operation::OperationMap<P, Op, S, L> for PrintPlugin
+impl<P, Op, S, L> aws_smithy_http_server::operation::Plugin<P, Op, S, L> for PrintPlugin
 where
     Op: aws_smithy_http_server::operation::OperationShape,
 {

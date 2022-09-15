@@ -226,12 +226,12 @@ class ServerServiceGeneratorV2(
             }
 
             impl<$builderGenerics, NewPlugin> #{SmithyHttpServer}::operation::Pluggable<NewPlugin> for $builderName<$builderGenerics> {
-                type Output = $builderName<$builderGenericsNoPlugin, aws_smithy_http_server::operation::OperationStack<$pluginName, NewPlugin>>;
+                type Output = $builderName<$builderGenericsNoPlugin, aws_smithy_http_server::operation::PluginStack<$pluginName, NewPlugin>>;
                 fn apply(self, plugin: NewPlugin) -> Self::Output {
                     $builderName {
                         $setterFields,
                         _exts: self._exts,
-                        plugin: #{SmithyHttpServer}::operation::OperationStack::new(self.plugin, plugin),
+                        plugin: #{SmithyHttpServer}::operation::PluginStack::new(self.plugin, plugin),
                     }
                 }
             }
