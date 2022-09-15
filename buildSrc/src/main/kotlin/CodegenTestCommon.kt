@@ -10,16 +10,28 @@ import org.gradle.kotlin.dsl.register
 import java.io.File
 
 /**
- * This file contains common functionality shared across the buildscripts for the `codegen-test` and `codegen-server-test`
- * modules.
+ * This file contains common functionality shared across the build scripts for the
+ * `codegen-client-test` and `codegen-server-test` modules.
  */
 
-data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
+data class CodegenTest(
+    val service: String,
+    val module: String,
+    val extraConfig: String? = null,
+    val imports: List<String> = emptyList(),
+)
+
+fun generateImports(imports: List<String>): String = if (imports.isEmpty()) {
+    ""
+} else {
+    "\"imports\": [${imports.map { "\"$it\"" }.joinToString(", ")}],"
+}
 
 private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: List<CodegenTest>): String {
     val projections = tests.joinToString(",\n") {
         """
         "${it.module}": {
+            ${generateImports(it.imports)}
             "plugins": {
                 "$pluginName": {
                     "runtimeConfig": {
@@ -31,8 +43,8 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                     "moduleDescription": "test",
                     "moduleAuthors": ["protocoltest@example.com"]
                     ${it.extraConfig ?: ""}
-             }
-           }
+                }
+            }
         }
         """.trimIndent()
     }

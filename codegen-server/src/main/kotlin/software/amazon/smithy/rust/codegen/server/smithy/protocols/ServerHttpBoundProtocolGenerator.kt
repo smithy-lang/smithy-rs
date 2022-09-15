@@ -21,59 +21,64 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.render
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.model.traits.MediaTypeTrait
+import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.client.rustlang.RustType
+import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.client.rustlang.render
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.client.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.extractSymbolFromOption
+import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.TypeConversionGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpMessageType
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.client.smithy.isOptional
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingDescriptor
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.toOptional
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.client.smithy.wrapOptional
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.TypeConversionGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.toOptional
-import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
-import software.amazon.smithy.rust.codegen.smithy.wrapOptional
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.findStreamingMember
-import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.isStreaming
-import software.amazon.smithy.rust.codegen.util.outputShape
-import software.amazon.smithy.rust.codegen.util.toPascalCase
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import java.util.logging.Logger
 
 /*
@@ -83,7 +88,7 @@ import java.util.logging.Logger
  */
 class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
-    protocol: Protocol,
+    protocol: ServerProtocol,
 ) : ProtocolGenerator(
     codegenContext,
     protocol,
@@ -109,7 +114,7 @@ class ServerHttpBoundProtocolGenerator(
  */
 private class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: ServerCodegenContext,
-    private val protocol: Protocol,
+    private val protocol: ServerProtocol,
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
@@ -119,6 +124,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
+    private val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
@@ -166,7 +172,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
-        val verifyResponseContentType = writable {
+        val verifyAcceptHeader = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
@@ -180,6 +186,30 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     *codegenScope,
                 )
             }
+        }
+        val verifyRequestContentTypeHeader = writable {
+            operationShape
+                .inputShape(model)
+                .members()
+                .find { it.hasTrait<HttpPayloadTrait>() }
+                ?.let { payload ->
+                    val target = model.expectShape(payload.target)
+                    if (!target.isBlobShape || target.hasTrait<MediaTypeTrait>()) {
+                        val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)
+                            ?.let { "Some(${it.dq()})" } ?: "None"
+                        rustTemplate(
+                            """
+                            if #{SmithyHttpServer}::protocols::content_type_header_classifier(req, $expectedRequestContentType).is_err() {
+                                return Err(#{RuntimeError} {
+                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
+                                    kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::UnsupportedMediaType,
+                                })
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
         }
 
         // Implement `from_request` trait for input types.
@@ -195,7 +225,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     B::Data: Send,
                     #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 {
-                    #{verify_response_content_type:W}
+                    #{verifyAcceptHeader:W}
+                    #{verifyRequestContentTypeHeader:W}
                     #{parse_request}(req)
                         .await
                         .map($inputName)
@@ -207,11 +238,34 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         )
                 }
             }
+
+            impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+            where
+                B: #{SmithyHttpServer}::body::HttpBody + Send,
+                B: 'static,
+                ${streamingBodyTraitBounds(operationShape)}
+                B::Data: Send,
+                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+            {
+                type Rejection = #{RuntimeError};
+                type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send>>;
+
+                fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                    let fut = async move {
+                        let mut request_parts = #{SmithyHttpServer}::request::RequestParts::new(request);
+                        $inputName::from_request(&mut request_parts).await.map(|x| x.0)
+                    };
+                    Box::pin(fut)
+                }
+            }
+
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
+            "Marker" to serverProtocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
-            "verify_response_content_type" to verifyResponseContentType,
+            "verifyAcceptHeader" to verifyAcceptHeader,
+            "verifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
         )
 
         // Implement `into_response` for output types.
@@ -265,10 +319,23 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         $intoResponseImpl
                     }
                 }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName::Output(self).into_response()
+                    }
+                }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName::Error(self).into_response()
+                    }
+                }
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
+                "Marker" to serverProtocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
                 "serialize_error" to serverSerializeError(operationShape),
             )
@@ -297,9 +364,16 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         $intoResponseImpl
                     }
                 }
+
+                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        $outputName(self).into_response()
+                    }
+                }
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
+                "Marker" to serverProtocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
             )
         }
@@ -667,16 +741,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
+        val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
         if (parser != null) {
-            val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)
             rustTemplate(
                 """
                 let body = request.take_body().ok_or(#{RequestRejection}::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
-                    static EXPECTED_CONTENT_TYPE: #{OnceCell}::sync::Lazy<#{Mime}::Mime> =
-                        #{OnceCell}::sync::Lazy::new(|| "$expectedRequestContentType".parse::<#{Mime}::Mime>().unwrap());
-                    #{SmithyHttpServer}::protocols::check_content_type(request, &EXPECTED_CONTENT_TYPE)?;
                     input = #{parser}(bytes.as_ref(), input)?;
                 }
                 """,
@@ -696,6 +767,16 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         serverRenderUriPathParser(this, operationShape)
         serverRenderQueryStringParser(this, operationShape)
 
+        if (noInputs && protocol.serverContentTypeCheckNoModeledInput()) {
+            conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
+                rustTemplate(
+                    """
+                    #{SmithyHttpServer}::protocols::content_type_header_empty_body_no_modeled_input(request)?;
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
         val err = if (StructureGenerator.fallibleBuilder(inputShape, symbolProvider)) {
             "?"
         } else ""

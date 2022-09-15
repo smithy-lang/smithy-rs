@@ -22,7 +22,8 @@ val smithyVersion: String by project
 val kotestVersion: String by project
 
 dependencies {
-    implementation(project(":codegen"))
+    implementation(project(":codegen-core"))
+    implementation(project(":codegen-client"))
     runtimeOnly(project(":aws:rust-runtime"))
     implementation("org.jsoup:jsoup:1.14.3")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")

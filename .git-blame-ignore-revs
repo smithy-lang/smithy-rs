@@ -1,0 +1,9 @@
+# .git-blame-ignore-revs
+#
+# To make use of this file when running `git blame`, add `--ignore-revs-file .git-blame-ignore-revs` to the arguments.
+# To always make use of this file, run the following:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+
+# Add `client` to `codegen-client` package namespace (#1711)
+1a0f81ae33816c10c9d305f33ea03da23c6265ef

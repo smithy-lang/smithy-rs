@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 
 /**
  * Object used *exclusively* in the runtime of the server, for separation concerns.
@@ -39,6 +39,8 @@ object ServerRuntimeType {
     fun ResponseRejection(runtimeConfig: RuntimeConfig) =
         RuntimeType("ResponseRejection", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::rejection")
 
-    fun Protocol(runtimeConfig: RuntimeConfig) =
-        RuntimeType("Protocol", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+    fun Protocol(name: String, runtimeConfig: RuntimeConfig) =
+        RuntimeType(name, ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
+
+    fun Protocol(runtimeConfig: RuntimeConfig) = Protocol("Protocol", runtimeConfig)
 }
