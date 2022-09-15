@@ -177,10 +177,12 @@ class ServerServiceGeneratorV2(
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
         val extensionTypesDefault = extensionTypes.map { "$it = ()" }
-        val modifierType = listOf("Modifier")
-        val modifierTypeDefault = listOf("Modifier = #{SmithyHttpServer}::operation::IdentityModifier")
+        val modifierName = "Modifier"
+        val modifierTypeList = listOf(modifierName)
+        val modifierTypeDefault = listOf("$modifierName = #{SmithyHttpServer}::operation::IdentityModifier")
         val structGenerics = (builderOps + extensionTypesDefault + modifierTypeDefault).joinToString(", ")
-        val builderGenerics = (builderOps + extensionTypes + modifierType).joinToString(", ")
+        val builderGenerics = (builderOps + extensionTypes + modifierTypeList).joinToString(", ")
+        val builderGenericsNoModifier = (builderOps + extensionTypes).joinToString(", ")
 
         // Generate router construction block.
         val router = protocol
@@ -191,6 +193,9 @@ class ServerServiceGeneratorV2(
                     }
                     .asIterable(),
             )
+        val setterFields = builderFieldNames.map { item ->
+            "$item: self.$item"
+        }.joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
@@ -216,6 +221,17 @@ class ServerServiceGeneratorV2(
                     let router = #{Router:W};
                     $serviceName {
                         router: #{SmithyHttpServer}::routing::routers::RoutingService::new(router),
+                    }
+                }
+            }
+
+            impl<$builderGenerics, NewModifier> #{SmithyHttpServer}::operation::BuilderModify<NewModifier> for $builderName<$builderGenerics> {
+                type Output = $builderName<$builderGenericsNoModifier, aws_smithy_http_server::operation::OperationStack<$modifierName, NewModifier>>;
+                fn apply(self, modifier: NewModifier) -> Self::Output {
+                    $builderName {
+                        $setterFields,
+                        _exts: self._exts,
+                        modifier: #{SmithyHttpServer}::operation::OperationStack::new(self.modifier, modifier),
                     }
                 }
             }
