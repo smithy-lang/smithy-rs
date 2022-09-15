@@ -9,9 +9,9 @@ import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeType
-import software.amazon.smithy.rulesengine.language.lang.parameters.Builtins
-import software.amazon.smithy.rulesengine.language.lang.parameters.Parameter
-import software.amazon.smithy.rulesengine.language.lang.parameters.Parameters
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
 import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCust
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 /**
  * BuiltInResolver enables potentially external codegen stages to provide sources for `builtIn` parameters.

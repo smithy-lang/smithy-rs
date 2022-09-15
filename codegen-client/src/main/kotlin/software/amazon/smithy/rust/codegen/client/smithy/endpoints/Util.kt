@@ -10,12 +10,17 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.KnowledgeIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.EndpointRuleset
-import software.amazon.smithy.rulesengine.language.lang.Identifier
-import software.amazon.smithy.rulesengine.language.lang.parameters.Parameter
-import software.amazon.smithy.rulesengine.language.lang.parameters.ParameterType
+import software.amazon.smithy.rulesengine.language.syntax.Identifier
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
+import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.client.rustlang.RustType
+import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.client.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class EndpointRulesetIndex(model: Model) : KnowledgeIndex {
@@ -24,7 +29,7 @@ class EndpointRulesetIndex(model: Model) : KnowledgeIndex {
 
     fun endpointRulesForService(serviceShape: ServiceShape) = rulesets.computeIfAbsent(
         serviceShape,
-    ) { serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleset.fromNode(it) } }
+    ) { serviceShape.getTrait<EndpointRuleSetTrait>() ?.ruleSet?.let { EndpointRuleset.fromNode(it) } }
 
     companion object {
         fun of(model: Model): EndpointRulesetIndex {

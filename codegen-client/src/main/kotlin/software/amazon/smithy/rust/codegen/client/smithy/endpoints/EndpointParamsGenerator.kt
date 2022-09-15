@@ -7,23 +7,31 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoints
 
 import software.amazon.smithy.rulesengine.language.EndpointRuleset
 import software.amazon.smithy.rulesengine.language.eval.Value
-import software.amazon.smithy.rulesengine.language.lang.parameters.Parameters
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.client.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.client.rustlang.docs
+import software.amazon.smithy.rust.codegen.client.rustlang.isCopy
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType.Companion.Clone
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType.Companion.Debug
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType.Companion.Default
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType.Companion.PartialEq
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.ValueExpression
+import software.amazon.smithy.rust.codegen.client.smithy.isOptional
+import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.client.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.client.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 val EndpointsModule = RustModule.public("endpoint_resolver", "Endpoint resolution functionality")
 
@@ -203,7 +211,7 @@ class EndpointParamsGenerator(private val parameters: Parameters) {
         }
     }
 
-    private fun value(value: ValueExpression.Value): String {
+    private fun value(value: Value): String {
         return when (value) {
             is Value.Str -> value.value().dq() + ".to_string()"
             is Value.Bool -> value.expectBool().toString()
