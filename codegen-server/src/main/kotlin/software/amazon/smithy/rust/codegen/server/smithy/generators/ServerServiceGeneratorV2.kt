@@ -64,7 +64,7 @@ class ServerServiceGeneratorV2(
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
-        val modifierType = listOf("Modifier")
+        val pluginType = listOf("Plugin")
         for ((index, pair) in builderFieldNames.zip(operationStructNames).withIndex()) {
             val (fieldName, structName) = pair
 
@@ -129,17 +129,17 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics + modifierType).joinToString(", ")}>
+                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics + pluginType).joinToString(", ")}>
                 {
                     $builderName {
                         ${switchedFields.joinToString(", ")},
                         _exts: std::marker::PhantomData,
-                        modifier: self.modifier,
+                        plugin: self.plugin,
                     }
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "HandlerSetterGenerics" to (replacedOpServiceGenerics + ((replacedExtGenerics + modifierType).map { writable(it) })).join(", "),
+                "HandlerSetterGenerics" to (replacedOpServiceGenerics + ((replacedExtGenerics + pluginType).map { writable(it) })).join(", "),
                 *codegenScope,
             )
 
@@ -161,7 +161,7 @@ class ServerServiceGeneratorV2(
                     crate::operation_shape::${symbolProvider.toSymbol(operation).name.toPascalCase()},
                     $exts,
                     B,
-                    Modifier,
+                    Plugin,
                 >,
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
@@ -177,19 +177,19 @@ class ServerServiceGeneratorV2(
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
         val extensionTypesDefault = extensionTypes.map { "$it = ()" }
-        val modifierName = "Modifier"
-        val modifierTypeList = listOf(modifierName)
-        val modifierTypeDefault = listOf("$modifierName = #{SmithyHttpServer}::operation::IdentityModifier")
-        val structGenerics = (builderOps + extensionTypesDefault + modifierTypeDefault).joinToString(", ")
-        val builderGenerics = (builderOps + extensionTypes + modifierTypeList).joinToString(", ")
-        val builderGenericsNoModifier = (builderOps + extensionTypes).joinToString(", ")
+        val pluginName = "Plugin"
+        val pluginTypeList = listOf(pluginName)
+        val pluginTypeDefault = listOf("$pluginName = #{SmithyHttpServer}::operation::IdentityPlugin")
+        val structGenerics = (builderOps + extensionTypesDefault + pluginTypeDefault).joinToString(", ")
+        val builderGenerics = (builderOps + extensionTypes + pluginTypeList).joinToString(", ")
+        val builderGenericsNoPlugin = (builderOps + extensionTypes).joinToString(", ")
 
         // Generate router construction block.
         val router = protocol
             .routerConstruction(
                 builderFieldNames
                     .map {
-                        writable { rustTemplate("self.$it.upgrade(&self.modifier)") }
+                        writable { rustTemplate("self.$it.upgrade(&self.plugin)") }
                     }
                     .asIterable(),
             )
@@ -205,7 +205,7 @@ class ServerServiceGeneratorV2(
                 ${builderFields.joinToString(", ")},
                 ##[allow(unused_parens)]
                 _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>,
-                modifier: Modifier,
+                plugin: Plugin,
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -225,13 +225,13 @@ class ServerServiceGeneratorV2(
                 }
             }
 
-            impl<$builderGenerics, NewModifier> #{SmithyHttpServer}::operation::BuilderModify<NewModifier> for $builderName<$builderGenerics> {
-                type Output = $builderName<$builderGenericsNoModifier, aws_smithy_http_server::operation::OperationStack<$modifierName, NewModifier>>;
-                fn apply(self, modifier: NewModifier) -> Self::Output {
+            impl<$builderGenerics, NewPlugin> #{SmithyHttpServer}::operation::Pluggable<NewPlugin> for $builderName<$builderGenerics> {
+                type Output = $builderName<$builderGenericsNoPlugin, aws_smithy_http_server::operation::OperationStack<$pluginName, NewPlugin>>;
+                fn apply(self, plugin: NewPlugin) -> Self::Output {
                     $builderName {
                         $setterFields,
                         _exts: self._exts,
-                        modifier: #{SmithyHttpServer}::operation::OperationStack::new(self.modifier, modifier),
+                        plugin: #{SmithyHttpServer}::operation::OperationStack::new(self.plugin, plugin),
                     }
                 }
             }
@@ -288,7 +288,7 @@ class ServerServiceGeneratorV2(
                     $builderName {
                         #{NotSetFields:W},
                         _exts: std::marker::PhantomData,
-                        modifier: #{SmithyHttpServer}::operation::IdentityModifier
+                        plugin: #{SmithyHttpServer}::operation::IdentityPlugin
                     }
                 }
 
@@ -300,7 +300,7 @@ class ServerServiceGeneratorV2(
                     $builderName {
                         #{InternalFailureFields:W},
                         _exts: std::marker::PhantomData,
-                        modifier: #{SmithyHttpServer}::operation::IdentityModifier
+                        plugin: #{SmithyHttpServer}::operation::IdentityPlugin
                     }
                 }
             }

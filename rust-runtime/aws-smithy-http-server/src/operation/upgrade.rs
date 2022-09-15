@@ -27,24 +27,27 @@ use super::{Operation, OperationError, OperationShape};
 
 /// An operation [`Service`] builder accepts extensions
 /// that add new functions to the builder
-/// through a [`BuilderModify`]
-pub trait BuilderModify<NewModifier> {
+/// through a [`Pluggable`]
+pub trait Pluggable<NewPlugin> {
     type Output;
 
-    fn apply(self, modifier: NewModifier) -> Self::Output;
+    /// A service builder applies this `plugin`.
+    fn apply(self, plugin: NewPlugin) -> Self::Output;
 }
 
 /// Maps one [`operation::Operation`] to another.
-/// A [`BuilderModify`] modifier is an [`OperationMap`].
+/// A [`Pluggable`] plugin is an [`OperationMap`].
 pub trait OperationMap<P, Op, S, L> {
     type Service;
     type Layer;
 
+    /// Map an [`Operation`] to another.
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
 }
 
-pub struct IdentityModifier;
-impl<P, Op, S, L> OperationMap<P, Op, S, L> for IdentityModifier {
+/// An [`OperationMap`] that maps an `input` [`Operation`] to itself.
+pub struct IdentityPlugin;
+impl<P, Op, S, L> OperationMap<P, Op, S, L> for IdentityPlugin {
     type Service = S;
     type Layer = L;
 
@@ -246,12 +249,15 @@ where
     }
 }
 
+/// A wrapper struct to compose an `Inner` [`OperationMap`]
+/// to an `Outer` [`OperationMap`].
 pub struct OperationStack<Inner, Outer> {
     inner: Inner,
     outer: Outer,
 }
 
 impl<Inner, Outer> OperationStack<Inner, Outer> {
+    /// Create a new [`OperationStack`].
     pub fn new(inner: Inner, outer: Outer) -> Self {
         OperationStack { inner, outer }
     }
@@ -273,14 +279,14 @@ where
 
 /// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
-pub trait Upgradable<Protocol, Operation, Exts, B, Modifier> {
+pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
 
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
-    fn upgrade(self, modifier: &Modifier) -> Self::Service;
+    fn upgrade(self, plugin: &Plugin) -> Self::Service;
 }
 
-impl<P, Op, Exts, B, Modifier, S, L, PollError> Upgradable<P, Op, Exts, B, Modifier> for Operation<S, L>
+impl<P, Op, Exts, B, Plugin, S, L, PollError> Upgradable<P, Op, Exts, B, Plugin> for Operation<S, L>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -298,24 +304,24 @@ where
     // The signature of the inner service is correct
     S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
 
-    // The modifier takes this operation as input
-    Modifier: OperationMap<P, Op, S, L>,
+    // The plugin takes this operation as input
+    Plugin: OperationMap<P, Op, S, L>,
 
     // The modified Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
-    Modifier::Layer: Layer<Upgrade<P, Op, Exts, B, Modifier::Service>>,
+    Plugin::Layer: Layer<Upgrade<P, Op, Exts, B, Plugin::Service>>,
 
     // The signature of the output is correct
-    <Modifier::Layer as Layer<Upgrade<P, Op, Exts, B, Modifier::Service>>>::Service:
+    <Plugin::Layer as Layer<Upgrade<P, Op, Exts, B, Plugin::Service>>>::Service:
         Service<http::Request<B>, Response = http::Response<BoxBody>>,
 {
-    type Service = <Modifier::Layer as Layer<Upgrade<P, Op, Exts, B, Modifier::Service>>>::Service;
+    type Service = <Plugin::Layer as Layer<Upgrade<P, Op, Exts, B, Plugin::Service>>>::Service;
 
     /// Takes the [`Operation<S, L>`](Operation), applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self, modifier: &Modifier) -> Self::Service {
-        let mapped = modifier.map(self);
+    fn upgrade(self, plugin: &Plugin) -> Self::Service {
+        let mapped = plugin.map(self);
         let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
         layer.layer(mapped.inner)
     }
@@ -337,7 +343,7 @@ where
 {
     type Service = MissingFailure<P>;
 
-    fn upgrade(self, _modifier: &Mod) -> Self::Service {
+    fn upgrade(self, _plugin: &Mod) -> Self::Service {
         MissingFailure { _protocol: PhantomData }
     }
 }

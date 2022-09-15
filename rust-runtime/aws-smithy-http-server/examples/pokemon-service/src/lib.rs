@@ -14,10 +14,7 @@ use std::{
 };
 
 use async_stream::stream;
-use aws_smithy_http_server::{
-    operation::{IdentityModifier, OperationStack},
-    Extension,
-};
+use aws_smithy_http_server::Extension;
 use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
@@ -326,10 +323,10 @@ impl<S> tower::Layer<S> for PrintLayer {
     }
 }
 
-/// Modifier for the `PokemonService` builder to add a `PrintLayer` over operations.
+/// Plugin for the `PokemonService` builder to add a `PrintLayer` over operations.
 #[derive(Debug)]
-pub struct PrintModifier;
-impl<P, Op, S, L> aws_smithy_http_server::operation::OperationMap<P, Op, S, L> for PrintModifier
+pub struct PrintPlugin;
+impl<P, Op, S, L> aws_smithy_http_server::operation::OperationMap<P, Op, S, L> for PrintPlugin
 where
     Op: aws_smithy_http_server::operation::OperationShape,
 {
@@ -345,17 +342,19 @@ where
 }
 
 /// The extention to the `PokemonService` builder to add the `print()` function.
-pub trait PrintExt: aws_smithy_http_server::operation::BuilderModify<PrintModifier> {
-    /// Applies `PrintModifier` to an operation builder.
+pub trait PrintExt: aws_smithy_http_server::operation::Pluggable<PrintPlugin> {
+    /// Causes all operations to print the operation name when called.
+    ///
+    /// This works by applying the [`LoggingModifier`].
     fn print(self) -> Self::Output
     where
         Self: Sized,
     {
-        self.apply(PrintModifier)
+        self.apply(PrintPlugin)
     }
 }
 
-impl<Builder> PrintExt for Builder where Builder: aws_smithy_http_server::operation::BuilderModify<PrintModifier> {}
+impl<Builder> PrintExt for Builder where Builder: aws_smithy_http_server::operation::Pluggable<PrintPlugin> {}
 
 #[cfg(test)]
 mod tests {

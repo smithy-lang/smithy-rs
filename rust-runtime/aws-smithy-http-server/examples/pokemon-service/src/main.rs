@@ -6,15 +6,13 @@
 // This program is exported as a binary named `pokemon-service`.
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::{
-    operation::{BuilderModify, OperationMap, OperationStack},
-    AddExtensionLayer,
-};
+use aws_smithy_http_server::{AddExtensionLayer, Router};
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
-    setup_tracing, PrintExt, PrintModifier, State,
+    setup_tracing, State,
 };
+use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
@@ -33,7 +31,7 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
-    let app = pokemon_service_server_sdk::service::PokemonService::builder()
+    let app: Router = OperationRegistryBuilder::default()
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -43,13 +41,16 @@ pub async fn main() {
         .capture_pokemon_operation(capture_pokemon)
         .empty_operation(empty_operation)
         .health_check_operation(health_check_operation)
-        .print()
-        .build();
+        .build()
+        .expect("Unable to build operation registry")
+        // Convert it into a router that will route requests to the matching operation
+        // implementation.
+        .into();
 
     // Setup shared state and middlewares.
     let shared_state = Arc::new(State::default());
     let app = app.layer(
-        &ServiceBuilder::new()
+        ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .layer(AddExtensionLayer::new(shared_state)),
     );
