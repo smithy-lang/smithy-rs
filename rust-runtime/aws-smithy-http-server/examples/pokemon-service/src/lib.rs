@@ -19,6 +19,9 @@ use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, o
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
+#[doc(hidden)]
+pub mod plugin;
+
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
     "When several of these Pokémon gather, their electricity could build and cause lightning storms.";
 const PIKACHU_SPANISH_FLAVOR_TEXT: &str =
@@ -281,80 +284,6 @@ pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::Empt
 pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {
     output::HealthCheckOperationOutput {}
 }
-
-/// Service that adds a print log
-#[derive(Clone, Debug)]
-pub struct PrintService<S> {
-    inner: S,
-    name: &'static str,
-}
-
-impl<R, S> tower::Service<R> for PrintService<S>
-where
-    S: tower::Service<R>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: R) -> Self::Future {
-        println!("Hi {}", self.name);
-        self.inner.call(req)
-    }
-}
-
-/// Layer for the `PrintService`.
-#[derive(Debug)]
-pub struct PrintLayer {
-    name: &'static str,
-}
-impl<S> tower::Layer<S> for PrintLayer {
-    type Service = PrintService<S>;
-
-    fn layer(&self, service: S) -> Self::Service {
-        PrintService {
-            inner: service,
-            name: self.name,
-        }
-    }
-}
-
-/// Plugin for the `PokemonService` builder to add a `PrintLayer` over operations.
-#[derive(Debug)]
-pub struct PrintPlugin;
-impl<P, Op, S, L> aws_smithy_http_server::operation::Plugin<P, Op, S, L> for PrintPlugin
-where
-    Op: aws_smithy_http_server::operation::OperationShape,
-{
-    type Service = S;
-    type Layer = tower::layer::util::Stack<L, PrintLayer>;
-
-    fn map(
-        &self,
-        input: aws_smithy_http_server::operation::Operation<S, L>,
-    ) -> aws_smithy_http_server::operation::Operation<Self::Service, Self::Layer> {
-        input.layer(PrintLayer { name: Op::NAME })
-    }
-}
-
-/// The extention to the `PokemonService` builder to add the `print()` function.
-pub trait PrintExt: aws_smithy_http_server::operation::Pluggable<PrintPlugin> {
-    /// Causes all operations to print the operation name when called.
-    ///
-    /// This works by applying the [`LoggingModifier`].
-    fn print(self) -> Self::Output
-    where
-        Self: Sized,
-    {
-        self.apply(PrintPlugin)
-    }
-}
-
-impl<Builder> PrintExt for Builder where Builder: aws_smithy_http_server::operation::Pluggable<PrintPlugin> {}
 
 #[cfg(test)]
 mod tests {

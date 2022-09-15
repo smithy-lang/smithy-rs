@@ -18,43 +18,13 @@ use tracing::error;
 
 use crate::{
     body::BoxBody,
+    plugin::Plugin,
     request::{FromParts, FromRequest},
     response::IntoResponse,
     runtime_error::InternalFailureException,
 };
 
 use super::{Operation, OperationError, OperationShape};
-
-/// An operation [`Service`] builder accepts extensions
-/// that add new functions to the builder
-/// through a [`Pluggable`]
-pub trait Pluggable<NewPlugin> {
-    type Output;
-
-    /// A service builder applies this `plugin`.
-    fn apply(self, plugin: NewPlugin) -> Self::Output;
-}
-
-/// Maps one [`operation::Operation`] to another.
-/// A [`Pluggable`] plugin is an [`Plugin`].
-pub trait Plugin<P, Op, S, L> {
-    type Service;
-    type Layer;
-
-    /// Map an [`Operation`] to another.
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
-}
-
-/// An [`Plugin`] that maps an `input` [`Operation`] to itself.
-pub struct IdentityPlugin;
-impl<P, Op, S, L> Plugin<P, Op, S, L> for IdentityPlugin {
-    type Service = S;
-    type Layer = L;
-
-    fn map(&self, input: Operation<S, L>) -> Operation<S, L> {
-        input
-    }
-}
 
 /// A [`Layer`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -249,34 +219,6 @@ where
     }
 }
 
-/// A wrapper struct to compose an `Inner` [`Plugin`]
-/// to an `Outer` [`Plugin`].
-pub struct PluginStack<Inner, Outer> {
-    inner: Inner,
-    outer: Outer,
-}
-
-impl<Inner, Outer> PluginStack<Inner, Outer> {
-    /// Create a new [`PluginStack`].
-    pub fn new(inner: Inner, outer: Outer) -> Self {
-        PluginStack { inner, outer }
-    }
-}
-
-impl<P, Op, S, L, Inner, Outer> Plugin<P, Op, S, L> for PluginStack<Inner, Outer>
-where
-    Inner: Plugin<P, Op, S, L>,
-    Outer: Plugin<P, Op, Inner::Service, Inner::Layer>,
-{
-    type Service = Outer::Service;
-    type Layer = Outer::Layer;
-
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        let inner = self.inner.map(input);
-        self.outer.map(inner)
-    }
-}
-
 /// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
 pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
@@ -316,7 +258,7 @@ where
 {
     type Service = <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service;
 
-    /// Takes the [`Operation<S, L>`](Operation), applies [`UpgradeLayer`] to
+    /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.

@@ -179,7 +179,7 @@ class ServerServiceGeneratorV2(
         val extensionTypesDefault = extensionTypes.map { "$it = ()" }
         val pluginName = "Plugin"
         val pluginTypeList = listOf(pluginName)
-        val pluginTypeDefault = listOf("$pluginName = #{SmithyHttpServer}::operation::IdentityPlugin")
+        val pluginTypeDefault = listOf("$pluginName = #{SmithyHttpServer}::plugin::IdentityPlugin")
         val structGenerics = (builderOps + extensionTypesDefault + pluginTypeDefault).joinToString(", ")
         val builderGenerics = (builderOps + extensionTypes + pluginTypeList).joinToString(", ")
         val builderGenericsNoPlugin = (builderOps + extensionTypes).joinToString(", ")
@@ -225,13 +225,13 @@ class ServerServiceGeneratorV2(
                 }
             }
 
-            impl<$builderGenerics, NewPlugin> #{SmithyHttpServer}::operation::Pluggable<NewPlugin> for $builderName<$builderGenerics> {
-                type Output = $builderName<$builderGenericsNoPlugin, aws_smithy_http_server::operation::PluginStack<$pluginName, NewPlugin>>;
+            impl<$builderGenerics, NewPlugin> #{SmithyHttpServer}::plugin::Pluggable<NewPlugin> for $builderName<$builderGenerics> {
+                type Output = $builderName<$builderGenericsNoPlugin, aws_smithy_http_server::plugin::PluginStack<$pluginName, NewPlugin>>;
                 fn apply(self, plugin: NewPlugin) -> Self::Output {
                     $builderName {
                         $setterFields,
                         _exts: self._exts,
-                        plugin: #{SmithyHttpServer}::operation::PluginStack::new(self.plugin, plugin),
+                        plugin: #{SmithyHttpServer}::plugin::PluginStack::new(self.plugin, plugin),
                     }
                 }
             }
@@ -288,7 +288,7 @@ class ServerServiceGeneratorV2(
                     $builderName {
                         #{NotSetFields:W},
                         _exts: std::marker::PhantomData,
-                        plugin: #{SmithyHttpServer}::operation::IdentityPlugin
+                        plugin: #{SmithyHttpServer}::plugin::IdentityPlugin
                     }
                 }
 
@@ -300,7 +300,7 @@ class ServerServiceGeneratorV2(
                     $builderName {
                         #{InternalFailureFields:W},
                         _exts: std::marker::PhantomData,
-                        plugin: #{SmithyHttpServer}::operation::IdentityPlugin
+                        plugin: #{SmithyHttpServer}::plugin::IdentityPlugin
                     }
                 }
             }

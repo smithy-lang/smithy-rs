@@ -34,7 +34,7 @@ impl PokemonServiceVariant {
         };
 
         // Give PokémonService some time to start up.
-        time::sleep(Duration::from_millis(500)).await;
+        time::sleep(Duration::from_millis(1000)).await;
 
         process
     }
