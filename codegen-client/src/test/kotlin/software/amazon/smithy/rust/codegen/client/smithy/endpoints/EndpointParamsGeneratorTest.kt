@@ -9,10 +9,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.rulesengine.testutil.TestDiscovery
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.testutil.unitTest
+import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.client.testutil.unitTest
 import java.util.stream.Stream
 
 internal class EndpointParamsGeneratorTest {
@@ -32,7 +31,6 @@ internal class EndpointParamsGeneratorTest {
                     // this might fail if there are required fields
                     let _ = #{Params}::builder().build();
                     """,
-                    "Params" to EndpointParamsGenerator(testSuite.ruleset()).paramsStruct(),
                     "Params" to EndpointParamsGenerator(testSuite.ruleset().parameters).paramsStruct(),
                 )
             }
