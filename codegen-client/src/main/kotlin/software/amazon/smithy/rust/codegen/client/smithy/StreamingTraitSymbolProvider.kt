@@ -14,11 +14,11 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticOutputTrait
-import software.amazon.smithy.rust.codegen.client.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 /**
  * Wrapping symbol provider to change `Blob` to `ByteStream` when it targets a streaming member

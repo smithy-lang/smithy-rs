@@ -28,8 +28,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGener
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
-import software.amazon.smithy.rust.codegen.client.util.dq
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.io.File
 
 val TestRuntimeConfig =

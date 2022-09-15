@@ -17,7 +17,6 @@ object EC2MakePrimitivesOptional {
             for (member in struct.allMembers.values) {
                 updates.add(member.toBuilder().addTrait(ClientOptionalTrait()).build())
             }
-
         }
         return ModelTransformer.create().replaceShapes(model, updates)
     }

@@ -27,9 +27,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationBui
 import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.expectMember
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectMember
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 fun HttpTrait.uriFormatString(): String {
     return uri.rustFormatString("/", "/")

@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
-import software.amazon.smithy.rust.codegen.client.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class CombinedErrorGeneratorTest {
     private val baseModel = """

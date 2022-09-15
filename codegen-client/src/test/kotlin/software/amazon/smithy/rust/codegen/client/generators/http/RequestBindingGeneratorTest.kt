@@ -29,8 +29,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilde
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 class RequestBindingGeneratorTest {
     private val baseModel = """

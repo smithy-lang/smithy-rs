@@ -27,16 +27,17 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolLoader
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.client.util.CommandFailed
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.runCommand
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.util.logging.Logger
 
 /**

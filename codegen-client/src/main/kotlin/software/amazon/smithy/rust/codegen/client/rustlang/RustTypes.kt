@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.rustlang
 
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.util.dq
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
  * Dereference [input]
