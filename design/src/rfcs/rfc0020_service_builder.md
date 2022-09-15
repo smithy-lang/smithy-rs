@@ -1,6 +1,6 @@
 # RFC: Service Builder Improvements
 
-> Status: RFC
+> Status: Accepted
 
 One might characterize `smithy-rs` as a tool for transforming a [Smithy service](https://awslabs.github.io/smithy/1.0/spec/core/model.html#service) into a [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) builder. A Smithy model defines behavior of the generated service partially - handlers must be passed to the builder before the `tower::Service` is fully specified. This builder structure is the primary API surface we provide to the customer, as a result, it is important that it meets their needs.
 
@@ -860,5 +860,6 @@ A toy implementation of the combined proposal is presented in [this PR](https://
   - <https://github.com/awslabs/smithy-rs/pull/1666>
 - [x] Add middleware primitives and error types to `rust-runtime/aws-smithy-http-server`.
   - <https://github.com/awslabs/smithy-rs/pull/1679>
-- [ ] Add code generation which outputs new service builder.
+- [x] Add code generation which outputs new service builder.
+  - <https://github.com/awslabs/smithy-rs/pull/1693>
 - [ ] Deprecate `OperationRegistryBuilder`, `OperationRegistry` and `Router`.

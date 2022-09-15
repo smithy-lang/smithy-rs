@@ -1,1 +1,0 @@
-../../model/simple.smithy

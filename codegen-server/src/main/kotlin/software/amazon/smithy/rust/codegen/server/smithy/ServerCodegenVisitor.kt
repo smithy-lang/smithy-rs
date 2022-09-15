@@ -21,8 +21,9 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.smithy.Constrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
@@ -38,32 +39,33 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.Constrained
-import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
-import software.amazon.smithy.rust.codegen.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.Unconstrained
-import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.transformers.AggregateShapesReachableFromOperationInputTagger
-import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.util.CommandFailed
-import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rust.codegen.util.isReachableFromOperationInput
-import software.amazon.smithy.rust.codegen.util.runCommand
+import software.amazon.smithy.rust.codegen.client.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.client.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ServerRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.client.smithy.Unconstrained
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStreamNormalizer
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.client.util.CommandFailed
+import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.client.util.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.client.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import java.util.logging.Logger
 
 /**
@@ -147,6 +149,8 @@ open class ServerCodegenVisitor(
      */
     protected fun baselineTransform(model: Model) =
         model
+            // Flattens mixins out of the model and removes them from the model
+            .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
@@ -159,6 +163,12 @@ open class ServerCodegenVisitor(
             .let { RemoveEventStreamOperations.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
+
+    /**
+     * Exposure purely for unit test purposes.
+     */
+    internal fun baselineTransformInternalTest(model: Model) =
+        baselineTransform(model)
 
     /**
      * Execute code generation
@@ -404,7 +414,7 @@ open class ServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext),
+            ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(codegenContext)),
             codegenContext,
         )
             .render()

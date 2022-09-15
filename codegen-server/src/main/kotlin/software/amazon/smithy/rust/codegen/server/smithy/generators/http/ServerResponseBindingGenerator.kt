@@ -7,11 +7,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpBindingGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpBindingGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpMessageType
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 
 class ServerResponseBindingGenerator(
     protocol: Protocol,

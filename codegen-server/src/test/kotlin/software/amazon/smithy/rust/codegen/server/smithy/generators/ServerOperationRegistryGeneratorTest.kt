@@ -9,11 +9,12 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.client.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.util.lookup
 
 class ServerOperationRegistryGeneratorTest {
     private val model = """
@@ -67,7 +68,7 @@ class ServerOperationRegistryGeneratorTest {
 
         val index = TopDownIndex.of(serverCodegenContext.model)
         val operations = index.getContainedOperations(serverCodegenContext.serviceShape).sortedBy { it.id }
-        val protocol = protocolGeneratorFactory.protocol(serverCodegenContext)
+        val protocol = ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(serverCodegenContext))
 
         val generator = ServerOperationRegistryGenerator(serverCodegenContext, protocol, operations)
         val writer = RustWriter.forModule("operation_registry")

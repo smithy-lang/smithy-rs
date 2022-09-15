@@ -12,12 +12,21 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures_util::future::Either;
+use bytes::Bytes;
+use futures_util::{
+    future::{Either, MapOk},
+    TryFutureExt,
+};
 use http::Response;
+use http_body::Body as HttpBody;
 use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::debug;
 
-use crate::{body::BoxBody, response::IntoResponse};
+use crate::{
+    body::{boxed, BoxBody},
+    error::BoxError,
+    response::IntoResponse,
+};
 
 pub mod aws_json;
 pub mod rest;
@@ -94,8 +103,8 @@ impl<R, P> RoutingService<R, P> {
 }
 
 type EitherOneshotReady<S, B> = Either<
-    Oneshot<S, http::Request<B>>,
-    Ready<Result<<S as Service<http::Request<B>>>::Response, <S as Service<http::Request<B>>>::Error>>,
+    MapOk<Oneshot<S, http::Request<B>>, fn(<S as Service<http::Request<B>>>::Response) -> http::Response<BoxBody>>,
+    Ready<Result<http::Response<BoxBody>, <S as Service<http::Request<B>>>::Error>>,
 >;
 
 pin_project_lite::pin_project! {
@@ -110,14 +119,19 @@ where
     S: Service<http::Request<B>>,
 {
     /// Creates a [`RoutingFuture`] from [`ServiceExt::oneshot`].
-    pub(super) fn from_oneshot(future: Oneshot<S, http::Request<B>>) -> Self {
+    pub(super) fn from_oneshot<RespB>(future: Oneshot<S, http::Request<B>>) -> Self
+    where
+        S: Service<http::Request<B>, Response = http::Response<RespB>>,
+        RespB: HttpBody<Data = Bytes> + Send + 'static,
+        RespB::Error: Into<BoxError>,
+    {
         Self {
-            inner: Either::Left(future),
+            inner: Either::Left(future.map_ok(|x| x.map(boxed))),
         }
     }
 
     /// Creates a [`RoutingFuture`] from [`Service::Response`].
-    pub(super) fn from_response(response: S::Response) -> Self {
+    pub(super) fn from_response(response: http::Response<BoxBody>) -> Self {
         Self {
             inner: Either::Right(ready(Ok(response))),
         }
@@ -128,18 +142,20 @@ impl<S, B> Future for RoutingFuture<S, B>
 where
     S: Service<http::Request<B>>,
 {
-    type Output = <S::Future as Future>::Output;
+    type Output = Result<http::Response<BoxBody>, S::Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.project().inner.poll(cx)
     }
 }
 
-impl<R, P, B> Service<http::Request<B>> for RoutingService<R, P>
+impl<R, P, B, RespB> Service<http::Request<B>> for RoutingService<R, P>
 where
     R: Router<B>,
-    R::Service: Service<http::Request<B>, Response = http::Response<BoxBody>> + Clone,
+    R::Service: Service<http::Request<B>, Response = http::Response<RespB>> + Clone,
     R::Error: IntoResponse<P> + Error,
+    RespB: HttpBody<Data = Bytes> + Send + 'static,
+    RespB::Error: Into<BoxError>,
 {
     type Response = Response<BoxBody>;
     type Error = <R::Service as Service<http::Request<B>>>::Error;

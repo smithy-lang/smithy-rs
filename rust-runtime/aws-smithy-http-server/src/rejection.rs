@@ -197,8 +197,8 @@ pub enum MissingContentTypeReason {
     ToStrError(http::header::ToStrError),
     MimeParseError(mime::FromStrError),
     UnexpectedMimeType {
-        expected_mime: &'static mime::Mime,
-        found_mime: mime::Mime,
+        expected_mime: Option<mime::Mime>,
+        found_mime: Option<mime::Mime>,
     },
 }
 

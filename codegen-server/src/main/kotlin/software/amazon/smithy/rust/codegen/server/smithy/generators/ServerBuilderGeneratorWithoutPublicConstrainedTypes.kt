@@ -8,27 +8,27 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
-import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
-import software.amazon.smithy.rust.codegen.rustlang.docs
-import software.amazon.smithy.rust.codegen.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.client.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.client.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.client.rustlang.docs
+import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.serverBuilderSymbol
+import software.amazon.smithy.rust.codegen.client.smithy.isOptional
+import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.serverBuilderSymbol
-import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
 
 /**
  * TODO Docs

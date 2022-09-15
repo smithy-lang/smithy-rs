@@ -5,19 +5,19 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency.Companion.BytesUtils
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency.Companion.TempFile
-import software.amazon.smithy.rust.codegen.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency.Companion.BytesUtils
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency.Companion.TempFile
+import software.amazon.smithy.rust.codegen.client.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
 import java.nio.file.Files
 import java.nio.file.Paths
 

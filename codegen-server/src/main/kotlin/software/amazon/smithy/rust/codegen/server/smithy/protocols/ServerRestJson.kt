@@ -6,14 +6,15 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.smithy.protocols.restJsonFieldName
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.restJsonFieldName
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 
 /**
  * RestJson1 server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
@@ -23,7 +24,7 @@ class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGe
     override fun protocol(codegenContext: ServerCodegenContext): Protocol = ServerRestJson(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
-        ServerHttpBoundProtocolGenerator(codegenContext, ServerRestJson(codegenContext))
+        ServerHttpBoundProtocolGenerator(codegenContext, ServerRestJsonProtocol(codegenContext))
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

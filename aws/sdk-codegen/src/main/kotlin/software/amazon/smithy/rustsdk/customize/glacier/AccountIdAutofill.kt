@@ -7,12 +7,12 @@ package software.amazon.smithy.rustsdk.customize.glacier
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.client.util.inputShape
 
 class AccountIdAutofill() : OperationCustomization() {
     override fun mutSelf(): Boolean = true

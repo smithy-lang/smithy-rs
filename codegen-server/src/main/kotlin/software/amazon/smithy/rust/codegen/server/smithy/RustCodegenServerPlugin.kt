@@ -10,17 +10,17 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.BaseSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.client.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.StreamingShapeMetadataProvider
+import software.amazon.smithy.rust.codegen.client.smithy.StreamingShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
-import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import java.util.logging.Level
 import java.util.logging.Logger
 
