@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.smithy.transformers
+package software.amazon.smithy.rust.codegen.client.smithy.transformers
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
@@ -13,11 +13,12 @@ import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticAggregateShapeReachableFromOperationInputTagTrait
-import software.amazon.smithy.rust.codegen.client.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticAggregateShapeReachableFromOperationInputTagTrait
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 
 /**
  * TODO Docs
+ * TODO Move this to server or core.
  */
 object AggregateShapesReachableFromOperationInputTagger {
     fun transform(model: Model): Model {

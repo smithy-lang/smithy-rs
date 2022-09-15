@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.error.TopLev
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 /**
  * ServiceGenerator

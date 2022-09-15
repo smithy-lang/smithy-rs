@@ -26,8 +26,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.client.smithy.symbolBuilder
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 /**
  * The [ConstrainedShapeSymbolProvider] returns, for a given _directly_

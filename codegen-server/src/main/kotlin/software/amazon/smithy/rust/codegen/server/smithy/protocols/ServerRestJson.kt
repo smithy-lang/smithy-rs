@@ -6,14 +6,14 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.restJsonFieldName
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.restJsonFieldName
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 
 /**

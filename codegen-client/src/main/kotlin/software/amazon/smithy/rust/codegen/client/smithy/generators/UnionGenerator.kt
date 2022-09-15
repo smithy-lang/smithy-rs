@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.client.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 fun CodegenTarget.renderUnknownVariant() = when (this) {
     CodegenTarget.SERVER -> false

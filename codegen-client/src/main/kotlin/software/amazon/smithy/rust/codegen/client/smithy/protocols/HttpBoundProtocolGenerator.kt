@@ -36,13 +36,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.operationErrors
-import software.amazon.smithy.rust.codegen.client.util.UNREACHABLE
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.isStreaming
-import software.amazon.smithy.rust.codegen.client.util.outputShape
-import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
     coreCodegenContext: CoreCodegenContext,

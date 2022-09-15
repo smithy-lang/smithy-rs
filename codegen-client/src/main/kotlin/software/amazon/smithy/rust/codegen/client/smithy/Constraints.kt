@@ -16,8 +16,8 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.util.UNREACHABLE
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 // TODO Move this file to `core` or `server`.
 
@@ -98,6 +98,7 @@ fun Shape.containsNonPublicType(
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
 
+// TODO seems unused
 fun MemberShape.requiresNewtype() =
     // Note that member shapes whose only constraint trait is `required` do not require a newtype.
     this.hasTrait<LengthTrait>() ||

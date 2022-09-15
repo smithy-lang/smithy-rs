@@ -43,19 +43,19 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.serverBuilde
 import software.amazon.smithy.rust.codegen.client.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.isRustBoxed
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
 import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.client.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.client.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.client.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.isReachableFromOperationInput
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
-import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 

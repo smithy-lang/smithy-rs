@@ -6,10 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.client.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingDescriptor

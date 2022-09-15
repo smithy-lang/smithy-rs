@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.RestXml
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.XmlBindingTraitSerializerGenerator
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 class RestXmlFactory(
     private val generator: (ClientCodegenContext) -> Protocol = { RestXml(it) },

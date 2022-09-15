@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.error
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType.*
+import software.amazon.smithy.rust.codegen.client.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asDeref
@@ -23,12 +23,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType.Companion.S
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
 import software.amazon.smithy.rust.codegen.client.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.errorMessageMember
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 sealed class ErrorKind {
     abstract fun writable(runtimeConfig: RuntimeConfig): Writable
@@ -86,12 +86,12 @@ class ErrorGenerator(
             if (messageShape != null) {
                 val messageSymbol = symbolProvider.toSymbol(messageShape).mapRustType { t -> t.asDeref() }
                 val (returnType, message) = if (messageSymbol.rustType()
-                    .stripOuter<Option>() is Opaque
+                    .stripOuter<RustType.Option>() is RustType.Opaque
                 ) {
                     // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
                     if (messageSymbol.isOptional()) {
                         "Option<&${
-                        messageSymbol.rustType().stripOuter<Option>().render()
+                        messageSymbol.rustType().stripOuter<RustType.Option>().render()
                         }>" to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
                     } else {
                         "&${messageSymbol.rustType().render()}" to "&self.${symbolProvider.toMemberName(messageShape)}"

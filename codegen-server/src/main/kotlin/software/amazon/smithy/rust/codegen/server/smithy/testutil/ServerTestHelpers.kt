@@ -11,19 +11,19 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
-import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
+import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(

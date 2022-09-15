@@ -52,11 +52,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingRe
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.deserializeFunctionName
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.util.PANIC
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
-import software.amazon.smithy.rust.codegen.client.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
 // TODO: Separate commit: Make all functions pub(crate). If the functions have in their type signature a pub(crate) type,

@@ -13,8 +13,8 @@ import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.client.util.findMemberWithTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 class IdempotencyTokenGenerator(coreCodegenContext: CoreCodegenContext, private val operationShape: OperationShape) :
     OperationCustomization() {

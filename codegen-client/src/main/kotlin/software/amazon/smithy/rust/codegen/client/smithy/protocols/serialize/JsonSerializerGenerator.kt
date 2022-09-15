@@ -45,13 +45,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingRe
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.client.smithy.workingWithPublicConstrainedWrapperTupleType
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
-import software.amazon.smithy.rust.codegen.client.util.outputShape
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
  * Class describing a JSON section that can be used in a customization.

@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 /**
  * [ConstrainedTraitForEnumGenerator] TODO Docs

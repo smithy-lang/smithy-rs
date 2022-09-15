@@ -40,12 +40,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.deserializer
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.eventStreamErrors
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 class EventStreamUnmarshallerGenerator(
     private val protocol: Protocol,

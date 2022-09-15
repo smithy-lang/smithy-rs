@@ -19,7 +19,7 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
  * Default delegator to enable easily decorating another symbol provider.

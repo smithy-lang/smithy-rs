@@ -22,10 +22,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.client.util.doubleQuote
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.doubleQuote
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
 class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {

@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 /**
  * Clones an entire operation and its input/output shapes under a new name.
