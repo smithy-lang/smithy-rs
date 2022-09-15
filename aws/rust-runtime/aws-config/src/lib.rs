@@ -132,8 +132,6 @@ pub mod connector;
 
 pub mod credential_process;
 
-pub(crate) mod parsing;
-
 // Re-export types from smithy-types
 pub use aws_smithy_types::retry;
 pub use aws_smithy_types::timeout;
