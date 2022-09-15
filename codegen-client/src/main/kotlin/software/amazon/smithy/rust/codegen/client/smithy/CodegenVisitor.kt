@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -60,8 +61,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = settings.codegenConfig.renameExceptions,
-                handleRequired = false,
                 handleRustBoxing = true,
+                nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
