@@ -74,11 +74,6 @@ class FluentClientGenerator(
             "client",
             "Client and fluent builders for calling the service.",
         )
-
-        val customizableOperationModule = RustModule.public(
-            "customizable_operation",
-            "Wrap operations in a special type allowing for the modification of operations and the requests inside before sending them",
-        )
     }
 
     private val serviceShape = codegenContext.serviceShape
@@ -284,7 +279,7 @@ class FluentClientGenerator(
                         /// Consume this builder, creating a customizable operation that can be modified before being
                         /// sent. The operation's inner [http::Request] can be modified as well.
                         pub async fn customize(self) -> std::result::Result<
-                            crate::customizable_operation::CustomizableOperation#{customizable_op_type_params:W},
+                            crate::operation::customize::CustomizableOperation#{customizable_op_type_params:W},
                             #{SdkError}<#{OperationError}>
                         > #{send_bounds:W} {
                             let handle = self.handle.clone();
@@ -292,7 +287,7 @@ class FluentClientGenerator(
                                 .make_operation(&handle.conf)
                                 .await
                                 .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
-                            Ok(crate::customizable_operation::CustomizableOperation { handle, operation })
+                            Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
                         /// Sends the request and returns the response.

@@ -6,8 +6,11 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
+import software.amazon.smithy.rust.codegen.client.rustlang.docs
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
@@ -23,8 +26,17 @@ class CustomizableOperationGenerator(
     private val generics: FluentClientGenerics,
     private val includeFluentClient: Boolean,
 ) {
+    companion object {
+        const val CUSTOMIZE_MODULE = "crate::operation::customize"
+    }
+
     fun render(crate: RustCrate) {
-        crate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
+        crate.withModule(RustModule.Operation) { writer ->
+            writer.docs("Operation customization and supporting types")
+            writer.rust("pub mod customize;")
+        }
+
+        crate.withNonRootModule(CUSTOMIZE_MODULE) { writer ->
             renderCustomizableOperationModule(writer)
 
             if (includeFluentClient) {
@@ -65,7 +77,7 @@ class CustomizableOperationGenerator(
 
             /// A wrapper type for [`Operation`](aws_smithy_http::operation::Operation)s that allows for
             /// customization of the operation before it is sent. A `CustomizableOperation` may be sent
-            /// by calling its [`.send()`][crate::customizable_operation::CustomizableOperation::send] method.
+            /// by calling its [`.send()`][crate::operation::customize::CustomizableOperation::send] method.
             ##[derive(Debug)]
             pub struct CustomizableOperation#{combined_generics_decl:W} {
                 pub(crate) handle: Arc<Handle#{handle_generics_decl:W}>,

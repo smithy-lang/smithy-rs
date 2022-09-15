@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeA
 import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
@@ -101,7 +102,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
             ),
             retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
+        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) { writer ->
             renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
         }
         rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
