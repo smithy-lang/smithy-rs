@@ -15,8 +15,8 @@ use crate::operation::Operation;
 /// # struct PrintPlugin;
 /// # use aws_smithy_http_server::plugin::Pluggable;
 /// trait PrintExt: Pluggable<PrintPlugin> {
-///     fn print(self) -> Self::Output {
-///         self.apply(&PrintPlugin);
+///     fn print(self) -> Self::Output where Self: Sized {
+///         self.apply(PrintPlugin)
 ///     }
 /// }
 /// impl<Builder> PrintExt for Builder where Builder: Pluggable<PrintPlugin> {}
