@@ -14,9 +14,9 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.typeNameContainsNonPublicType
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.isTransitivelyButNotDirectlyConstrained
+import software.amazon.smithy.rust.codegen.client.smithy.typeNameContainsNonPublicType
 
 /**
  * A generator for a wrapper tuple newtype over a collection shape's symbol

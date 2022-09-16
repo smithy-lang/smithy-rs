@@ -778,11 +778,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     """
                     {
                         input = input.${member.setterName()}(${
-                        if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                            "Some(value)"
-                        } else {
-                            "value"
-                        }
+                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                        "Some(value)"
+                    } else {
+                        "value"
+                    }
                     });
                     }
                     """,
@@ -1139,7 +1139,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
                         "input = input.${
-                            binding.member.setterName()
+                        binding.member.setterName()
                         }(",
                         ");",
                     ) {
