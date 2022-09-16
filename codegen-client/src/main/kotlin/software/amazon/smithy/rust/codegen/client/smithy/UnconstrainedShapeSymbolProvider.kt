@@ -22,8 +22,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.serverBuilde
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-// TODO Move this to `core` or `server`.
-
 /**
  * The [UnconstrainedShapeSymbolProvider] returns, _for a given constrained
  * shape_, a symbol whose Rust type can hold the corresponding unconstrained
@@ -64,6 +62,8 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * symbol provider _not_ wrap [PublicConstrainedShapeSymbolProvider] (from the
  * `codegen-server` subproject), because that symbol provider will return a
  * constrained type for shapes that have constraint traits attached.
+ *
+ * TODO Move this to `core`; remove below sentence.
  *
  * While this symbol provider is only used by the server, it needs to be in the
  * `codegen` subproject because the (common to client and server) parsers use

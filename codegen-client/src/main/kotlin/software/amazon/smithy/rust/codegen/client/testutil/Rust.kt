@@ -90,7 +90,6 @@ object TestWorkspace {
         }
     }
 
-    // TODO This should not be used by the server because it's using ClientCodegenConfig.
     @Suppress("NAME_SHADOWING")
     fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
         val subprojectDir = subproject()

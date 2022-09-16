@@ -109,7 +109,12 @@ open class StructureGenerator(
          * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
          * fallible builder to be constructed.
          */
-        fun serverHasFallibleBuilder(structureShape: StructureShape, model: Model, symbolProvider: SymbolProvider, takeInUnconstrainedTypes: Boolean) =
+        fun serverHasFallibleBuilder(
+            structureShape: StructureShape,
+            model: Model,
+            symbolProvider: SymbolProvider,
+            takeInUnconstrainedTypes: Boolean,
+        ) =
             if (takeInUnconstrainedTypes) {
                 structureShape.canReachConstrainedShape(model, symbolProvider)
             } else {

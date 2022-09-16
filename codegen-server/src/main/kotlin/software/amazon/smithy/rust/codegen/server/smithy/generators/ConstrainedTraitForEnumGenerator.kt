@@ -16,7 +16,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 /**
- * [ConstrainedTraitForEnumGenerator] TODO Docs
+ * [ConstrainedTraitForEnumGenerator] generates code that implements the [RuntimeType.ConstrainedTrait] trait on an
+ * enum shape.
  */
 class ConstrainedTraitForEnumGenerator(
     val model: Model,

@@ -67,13 +67,15 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             model: Model,
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
-            publicConstrainedTypes: Boolean = true,
+            constrainedTypes: Boolean = true,
         ) =
             // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
             PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
-                // TODO Docs
-                .let { if (publicConstrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
+                // Generate public constrained types for directly constrained shapes.
+                // In the Python server project, this is only done to generate constrained types for simple shapes (e.g.
+                // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
+                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes

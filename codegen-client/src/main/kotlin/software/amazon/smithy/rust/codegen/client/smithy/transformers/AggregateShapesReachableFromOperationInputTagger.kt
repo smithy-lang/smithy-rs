@@ -9,7 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
@@ -17,8 +16,23 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticAggregate
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 
 /**
- * TODO Docs
- * TODO Move this to server or core.
+ * Tag all [aggregate shapes] reachable from operation input with the
+ * [SyntheticAggregateShapeReachableFromOperationInputTagTrait] tag.
+ *
+ * This is useful to determine whether we need to generate code to
+ * enforce constraints upon request deserialization in the server.
+ *
+ * This needs to be a model transformer; it cannot be lazily calculated
+ * when needed. This is because other model transformers may transform
+ * the model such that aggregate shapes that were reachable from operation
+ * input are no longer so. For example, [EventStreamNormalizer] pulls
+ * event stream error variants out of the union shape where they are defined.
+ * As such, [AggregateShapesReachableFromOperationInputTagger] needs to run
+ * before these model transformers.
+ *
+ * [aggregate shapes]: https://awslabs.github.io/smithy/2.0/spec/aggregate-types.html#aggregate-types
+ *
+ * TODO Move this to `core`, together with all the model transformers.
  */
 object AggregateShapesReachableFromOperationInputTagger {
     fun transform(model: Model): Model {
@@ -32,13 +46,12 @@ object AggregateShapesReachableFromOperationInputTagger {
 
         return ModelTransformer.create().mapShapes(model) { shape ->
             when (shape) {
-                is StructureShape, is UnionShape, is ListShape, is SetShape, is MapShape -> {
+                is StructureShape, is UnionShape, is ListShape, is MapShape -> {
                     if (shapesReachableFromOperationInputs.contains(shape)) {
                         val builder = when (shape) {
                             is StructureShape -> shape.toBuilder()
                             is UnionShape -> shape.toBuilder()
                             is ListShape -> shape.toBuilder()
-                            is SetShape -> shape.toBuilder()
                             is MapShape -> shape.toBuilder()
                             else -> UNREACHABLE("the `when` is exhaustive")
                         }

@@ -171,7 +171,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 val memberName = symbolProvider.toMemberName(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
-                    builderMissingFieldForMember(member, symbolProvider)?.also {
+                    builderMissingFieldConstraintViolationForMember(member, symbolProvider)?.also {
                         rust(".ok_or(ConstraintViolation::${it.name()})?")
                     }
                 }
@@ -217,7 +217,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     }
 
     private fun constraintViolations() = members.flatMap { member ->
-        listOfNotNull(builderMissingFieldForMember(member, symbolProvider))
+        listOfNotNull(builderMissingFieldConstraintViolationForMember(member, symbolProvider))
     }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {

@@ -71,7 +71,7 @@ fun Shape.hasEventStreamMember(model: Model): Boolean {
 }
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
-    is StructureShape, is UnionShape, is ListShape, is SetShape, is MapShape -> {
+    is StructureShape, is UnionShape, is ListShape, is MapShape -> {
         shape.hasTrait<SyntheticAggregateShapeReachableFromOperationInputTagTrait>()
     } else -> PANIC("this method does not support shape type ${shape.type}")
 }

@@ -42,7 +42,6 @@ class ServerSymbolProviders private constructor(
                     symbolVisitorConfig,
                     true,
                 ),
-                // TODO Shouldn't `UnconstrainedShapeSymbolProvider` be applied at the same level as the `ConstrainedShapeSymbolProvider`?
                 unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
                     baseSymbolProviderFactory(
                         model,
