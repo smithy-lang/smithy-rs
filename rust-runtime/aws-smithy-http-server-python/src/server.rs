@@ -13,7 +13,7 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
 
-use crate::{middleware::PyMiddlewareHandler, PyMiddlewareHandlers, PySocket};
+use crate::{middleware::PyMiddlewareHandler, PyMiddlewares, PySocket};
 
 /// A Python handler function representation.
 ///
@@ -61,7 +61,7 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
     /// Mapping between operation names and their `PyHandler` representation.
     fn handlers(&mut self) -> &mut HashMap<String, PyHandler>;
 
-    fn middlewares(&mut self) -> &mut PyMiddlewareHandlers;
+    fn middlewares(&mut self) -> &mut PyMiddlewares;
 
     fn protocol(&self) -> &'static str;
 

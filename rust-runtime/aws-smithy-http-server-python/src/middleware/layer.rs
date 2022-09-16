@@ -3,24 +3,24 @@ use std::{
     task::{Context, Poll},
 };
 
-use aws_smithy_http_server::protocols::Protocol;
+use aws_smithy_http_server::{body::{Body, BoxBody}, protocols::Protocol};
 use futures::{ready, Future};
 use http::{Request, Response};
 use pin_project_lite::pin_project;
 use pyo3_asyncio::TaskLocals;
 use tower::{Layer, Service};
 
-use super::PyMiddlewareTrait;
+use crate::{PyMiddlewares, middleware::PyFuture};
 
 #[derive(Debug, Clone)]
-pub struct PyMiddlewareLayer<T> {
-    handler: T,
+pub struct PyMiddlewareLayer {
+    handlers: PyMiddlewares,
     protocol: Protocol,
     locals: TaskLocals,
 }
 
-impl<T> PyMiddlewareLayer<T> {
-    pub fn new(handler: T, protocol: &str, locals: TaskLocals) -> PyMiddlewareLayer<T> {
+impl PyMiddlewareLayer {
+    pub fn new(handlers: PyMiddlewares, protocol: &str, locals: TaskLocals) -> PyMiddlewareLayer {
         let protocol = match protocol {
             "aws.protocols#restJson1" => Protocol::RestJson1,
             "aws.protocols#restXml" => Protocol::RestXml,
@@ -29,63 +29,69 @@ impl<T> PyMiddlewareLayer<T> {
             _ => panic!(),
         };
         Self {
-            handler,
+            handlers,
             protocol,
             locals,
         }
     }
 }
 
-impl<S, T> Layer<S> for PyMiddlewareLayer<T>
-where
-    T: Clone,
-{
-    type Service = PyMiddlewareService<S, T>;
+impl<S> Layer<S> for PyMiddlewareLayer {
+    type Service = PyMiddlewareService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        PyMiddlewareService::new(inner, self.handler.clone(), self.protocol, self.locals.clone())
+        PyMiddlewareService::new(
+            inner,
+            self.handlers.clone(),
+            self.protocol,
+            self.locals.clone(),
+        )
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct PyMiddlewareService<S, T> {
+pub struct PyMiddlewareService<S> {
     inner: S,
-    handler: T,
+    handlers: PyMiddlewares,
     protocol: Protocol,
-    locals: TaskLocals
+    locals: TaskLocals,
 }
 
-impl<S, T> PyMiddlewareService<S, T> {
-    pub fn new(inner: S, handler: T, protocol: Protocol, locals: TaskLocals) -> PyMiddlewareService<S, T> {
+impl<S> PyMiddlewareService<S> {
+    pub fn new(
+        inner: S,
+        handlers: PyMiddlewares,
+        protocol: Protocol,
+        locals: TaskLocals,
+    ) -> PyMiddlewareService<S> {
         Self {
             inner,
-            handler,
+            handlers,
             protocol,
-            locals
+            locals,
         }
     }
 
-    pub fn layer(handler: T, protocol: &str, locals: TaskLocals) -> PyMiddlewareLayer<T> {
-        PyMiddlewareLayer::new(handler, protocol, locals)
+    pub fn layer(handlers: PyMiddlewares, protocol: &str, locals: TaskLocals) -> PyMiddlewareLayer {
+        PyMiddlewareLayer::new(handlers, protocol, locals)
     }
 }
 
-impl<ReqBody, ResBody, S, M> Service<Request<ReqBody>> for PyMiddlewareService<S, M>
+impl<S> Service<Request<Body>> for PyMiddlewareService<S>
 where
-    M: PyMiddlewareTrait<ReqBody, ResponseBody = ResBody>,
-    S: Service<Request<M::RequestBody>, Response = Response<ResBody>> + Clone,
+    S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
 {
-    type Response = Response<ResBody>;
+    type Response = Response<BoxBody>;
     type Error = S::Error;
-    type Future = ResponseFuture<M, S, ReqBody>;
+    type Future = ResponseFuture<S>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
         let inner = self.inner.clone();
-        let run = self.handler.run(req, self.protocol, self.locals.clone());
+        let run = self.handlers.run(req, self.protocol, self.locals.clone());
 
         ResponseFuture {
             middleware: State::Running { run },
@@ -95,13 +101,12 @@ where
 }
 
 pin_project! {
-    pub struct ResponseFuture<M, S, ReqBody>
+    pub struct ResponseFuture<S>
     where
-        M: PyMiddlewareTrait<ReqBody>,
-        S: Service<Request<M::RequestBody>>,
+        S: Service<Request<Body>>,
     {
         #[pin]
-        middleware: State<M::Future, S::Future>,
+        middleware: State<PyFuture, S::Future>,
         service: S,
     }
 }
@@ -120,12 +125,11 @@ pin_project! {
     }
 }
 
-impl<M, S, ReqBody, B> Future for ResponseFuture<M, S, ReqBody>
+impl<S> Future for ResponseFuture<S>
 where
-    M: PyMiddlewareTrait<ReqBody, ResponseBody = B>,
-    S: Service<Request<M::RequestBody>, Response = Response<B>>,
+    S: Service<Request<Body>, Response = Response<BoxBody>>,
 {
-    type Output = Result<Response<B>, S::Error>;
+    type Output = Result<Response<BoxBody>, S::Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut this = self.project();

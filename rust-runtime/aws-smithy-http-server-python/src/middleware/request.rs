@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use aws_smithy_http_server::body::Body;
 use http::{Request, Version};
 use pyo3::prelude::*;
 
@@ -11,7 +12,7 @@ pub enum PyHttpVersion {
     Http11,
     H2,
     H3,
-    __NonExhaustive
+    __NonExhaustive,
 }
 
 #[pyclass(name = "Request")]
@@ -26,7 +27,7 @@ pub struct PyRequest {
 }
 
 impl PyRequest {
-    pub fn new<B>(request: &Request<B>) -> Self {
+    pub fn new(request: &Request<Body>) -> Self {
         Self {
             method: request.method().to_string(),
             uri: request.uri().to_string(),

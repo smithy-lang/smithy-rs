@@ -1,6 +1,5 @@
-use aws_smithy_http_server::body::BoxBody;
-use futures::future::BoxFuture;
-use http::{Request, Response};
+use aws_smithy_http_server::body::Body;
+use http::Request;
 use pyo3::prelude::*;
 
 use aws_smithy_http_server::protocols::Protocol;
@@ -8,7 +7,7 @@ use pyo3_asyncio::TaskLocals;
 
 use crate::{PyMiddlewareException, PyRequest, PyResponse};
 
-use super::PyMiddlewareTrait;
+use super::PyFuture;
 
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareHandler {
@@ -18,9 +17,9 @@ pub struct PyMiddlewareHandler {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PyMiddlewareHandlers(Vec<PyMiddlewareHandler>);
+pub struct PyMiddlewares(Vec<PyMiddlewareHandler>);
 
-impl PyMiddlewareHandlers {
+impl PyMiddlewares {
     pub fn new(handlers: Vec<PyMiddlewareHandler>) -> Self {
         Self(handlers)
     }
@@ -77,25 +76,16 @@ impl PyMiddlewareHandlers {
             }),
         })
     }
-}
 
-impl<B> PyMiddlewareTrait<B> for PyMiddlewareHandlers
-where
-    B: Send + Sync + 'static,
-{
-    type RequestBody = B;
-    type ResponseBody = BoxBody;
-    type Future = BoxFuture<'static, Result<Request<B>, Response<Self::ResponseBody>>>;
-
-    fn run(
+    pub fn run(
         &mut self,
-        mut request: http::Request<B>,
+        mut request: Request<Body>,
         protocol: Protocol,
         locals: TaskLocals,
-    ) -> Self::Future {
+    ) -> PyFuture {
         let handlers = self.0.clone();
+        // Run all Python handlers in a loop.
         Box::pin(async move {
-            // Run all Python handlers in a loop.
             tracing::debug!("Executing Python middleware stack");
             for handler in handlers {
                 let name = handler.name.clone();
@@ -115,12 +105,16 @@ where
                             }
                         }
                         if let Some(pyresponse) = pyresponse {
-                            tracing::debug!("Middleware `{name}` returned a HTTP response, exit middleware loop");
+                            tracing::debug!(
+                            "Middleware `{name}` returned a HTTP response, exit middleware loop"
+                        );
                             return Err(pyresponse.into());
                         }
                     }
                     Err(e) => {
-                        tracing::debug!("Middleware `{name}` returned an error, exit middleware loop");
+                        tracing::debug!(
+                            "Middleware `{name}` returned an error, exit middleware loop"
+                        );
                         return Err(e.into_response(protocol));
                     }
                 }

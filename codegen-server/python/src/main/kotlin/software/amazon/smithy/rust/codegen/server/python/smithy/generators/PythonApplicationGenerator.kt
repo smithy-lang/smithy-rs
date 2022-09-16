@@ -104,7 +104,7 @@ class PythonApplicationGenerator(
             ##[derive(Debug, Default)]
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
-                middlewares: #{SmithyPython}::PyMiddlewareHandlers,
+                middlewares: #{SmithyPython}::PyMiddlewares,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
@@ -202,7 +202,7 @@ class PythonApplicationGenerator(
                 fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
                     &mut self.handlers
                 }
-                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewareHandlers {
+                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
                     &mut self.middlewares
                 }
                 fn protocol(&self) -> &'static str {
