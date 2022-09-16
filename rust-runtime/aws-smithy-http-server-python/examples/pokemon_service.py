@@ -14,10 +14,10 @@ import aiohttp
 
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.error import ResourceNotFoundException
-from libpokemon_service_server_sdk.http import Request
 from libpokemon_service_server_sdk.input import (
     EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
     HealthCheckOperationInput, StreamPokemonRadioOperationInput)
+from libpokemon_service_server_sdk.middleware import Request
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
     EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
@@ -118,16 +118,25 @@ app.context(Context())
 # Middleware
 ###########################################################
 @app.middleware
-def check_header(request: Request):
-    logging.info("Inside MID1")
-    logging.info(request)
+def check_content_type_header(request: Request):
+    content_type = request.get_header("content-type")
+    if content_type == "application/json":
+        logging.debug("Found valid `application/json` content type")
+    else:
+        logging.error(f"Invalid content type: {content_type}")
 
 
 @app.middleware
-def check_header2(request: Request):
-    logging.info("Inside MID2")
-    logging.info(request)
-    raise ValueError("Lol")
+async def check_method_and_content_length(request: Request):
+    content_length = request.get_header("content-length")
+    logging.debug(f"Request method: {request.method()}")
+    if content_length is not None:
+        content_length = int(content_length)
+        logging.debug(
+            "Request content length: {content_length}"
+        )
+    else:
+        logging.error(f"Invalid content length: {content_length}")
 
 
 ###########################################################

@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.Errors
 import software.amazon.smithy.rust.codegen.client.smithy.Inputs
@@ -30,7 +31,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
  * Example:
  *     from pool import DatabasePool
  *     from my_library import App, OperationInput, OperationOutput
-
  *     @dataclass
  *     class Context:
  *         db = DatabasePool()
@@ -73,6 +73,7 @@ class PythonApplicationGenerator(
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
             "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+            "http" to CargoDependency.Http.asType(),
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),
@@ -92,6 +93,7 @@ class PythonApplicationGenerator(
         renderPyAppTrait(writer)
         renderAppImpl(writer)
         renderPyMethods(writer)
+        renderPyMiddleware(writer)
     }
 
     fun renderAppStruct(writer: RustWriter) {
@@ -101,6 +103,7 @@ class PythonApplicationGenerator(
             ##[derive(Debug, Default)]
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
+                middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
@@ -116,6 +119,7 @@ class PythonApplicationGenerator(
                 fn clone(&self) -> Self {
                     Self {
                         handlers: self.handlers.clone(),
+                        middlewares: self.middlewares.clone(),
                         context: self.context.clone(),
                         workers: #{parking_lot}::Mutex::new(vec![]),
                     }
@@ -151,7 +155,7 @@ class PythonApplicationGenerator(
                     val name = operationName.toSnakeCase()
                     rustTemplate(
                         """
-                        let ${name}_locals = pyo3_asyncio::TaskLocals::new(event_loop);
+                        let ${name}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
                         let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
                         let router = router.$name(move |input, state| {
                             #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
@@ -162,11 +166,19 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
+                    let middleware_locals = pyo3_asyncio::TaskLocals::new(event_loop);
+                    let middlewares = PyMiddlewareHandlers {
+                        handlers: self.middlewares.clone(),
+                        locals: middleware_locals,
+                    };
+                    let service = #{tower}::ServiceBuilder::new().layer(
+                        #{SmithyPython}::PyMiddlewareLayer::new(middlewares)
+                    );
                     let router: #{SmithyServer}::Router = router
                         .build()
                         .expect("Unable to build operation registry")
                         .into();
-                    Ok(router)
+                    Ok(router.layer(service))
                     """,
                     *codegenScope,
                 )
@@ -181,13 +193,14 @@ class PythonApplicationGenerator(
                 fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
                     &self.workers
                 }
-
                 fn context(&self) -> &Option<#{pyo3}::PyObject> {
                     &self.context
                 }
-
                 fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
                     &mut self.handlers
+                }
+                fn middlewares(&mut self) -> &mut Vec<#{SmithyPython}::PyMiddlewareHandler> {
+                    &mut self.middlewares
                 }
             }
             """,
@@ -216,6 +229,18 @@ class PythonApplicationGenerator(
                 ##[pyo3(text_signature = "(${'$'}self, context)")]
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
                    self.context = Some(context);
+                }
+                /// Register a middleware function that will be run inside a Tower layer, without cloning the body.
+                ##[pyo3(text_signature = "(${'$'}self, func)")]
+                pub fn middleware(&mut self, py: pyo3::Python, func: pyo3::PyObject) -> pyo3::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    self.register_middleware(py, func, false)
+                }
+                /// Register a middleware function that will be run inside a Tower layer, cloning the body.
+                ##[pyo3(text_signature = "(${'$'}self, func)")]
+                pub fn middleware_with_body(&mut self, py: pyo3::Python, func: pyo3::PyObject) -> pyo3::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    self.register_middleware(py, func, true)
                 }
                 /// Main entrypoint: start the server on multiple workers.
                 ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]
@@ -263,6 +288,66 @@ class PythonApplicationGenerator(
                 )
             }
         }
+    }
+
+    private fun renderPyMiddleware(writer: RustWriter) {
+        writer.rustTemplate("""
+        ##[derive(Debug, Clone)]
+        struct PyMiddlewareHandlers {
+            handlers: Vec<#{SmithyPython}::PyMiddlewareHandler>,
+            locals: #{pyo3_asyncio}::TaskLocals
+        }
+
+        impl<B> #{SmithyPython}::PyMiddleware<B> for PyMiddlewareHandlers
+        where
+            B: Send + Sync + 'static,
+        {
+            type RequestBody = B;
+            type ResponseBody = #{SmithyServer}::body::BoxBody;
+            type Future = futures_util::future::BoxFuture<
+                'static,
+                Result<#{http}::Request<B>, #{http}::Response<Self::ResponseBody>>,
+            >;
+
+            fn run(&mut self, request: http::Request<B>) -> Self::Future {
+                let handlers = self.handlers.clone();
+                let locals = self.locals.clone();
+                Box::pin(async move {
+                    // Run all Python handlers in a loop.
+                    for handler in handlers {
+                        let pyrequest = if handler.with_body {
+                            #{SmithyPython}::PyRequest::new_with_body(&request).await
+                        } else {
+                            #{SmithyPython}::PyRequest::new(&request)
+                        };
+                        let loop_locals = locals.clone();
+                        let result = #{pyo3_asyncio}::tokio::scope(
+                            loop_locals,
+                            #{SmithyPython}::py_middleware_wrapper(pyrequest, handler),
+                        );
+                        if let Err(e) = result.await {
+                            let error = crate::operation_ser::serialize_structure_crate_error_internal_server_error(
+                                        &e.into()
+                                    ).unwrap();
+                            let boxed_error = #{SmithyServer}::body::boxed(error);
+                            return Err(#{http}::Response::builder()
+                                .status(500)
+                                .body(boxed_error)
+                                .unwrap());
+                        }
+                    }
+                    Ok(request)
+                })
+            }
+        }
+        impl std::convert::From<pyo3::PyErr> for crate::error::InternalServerError {
+            fn from(variant: pyo3::PyErr) -> Self {
+                crate::error::InternalServerError {
+                    message: variant.to_string(),
+                }
+            }
+        }
+        """, *codegenScope)
     }
 
     private fun renderPyApplicationRustDocs(writer: RustWriter) {

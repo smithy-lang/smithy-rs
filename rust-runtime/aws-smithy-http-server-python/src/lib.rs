@@ -23,7 +23,10 @@ pub use error::Error;
 #[doc(inline)]
 pub use logging::LogLevel;
 #[doc(inline)]
-pub use middleware::{PyMiddlewareHandler, PyRequest, PyMiddlewareHandlers, PyMiddleware, middleware_wrapper};
+pub use middleware::{
+    py_middleware_wrapper, PyMiddleware, PyMiddlewareException, PyMiddlewareHandler,
+    PyMiddlewareLayer, PyRequest,
+};
 #[doc(inline)]
 pub use server::{PyApp, PyHandler};
 #[doc(inline)]

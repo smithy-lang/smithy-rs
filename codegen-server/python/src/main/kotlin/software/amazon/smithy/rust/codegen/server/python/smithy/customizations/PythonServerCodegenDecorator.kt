@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddMiddlewareErrorToAllOperationsDecorator
 
 /**
  * Configure the [lib] section of `Cargo.toml`.

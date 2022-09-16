@@ -47,6 +47,7 @@ class PythonServerModuleGenerator(
                 renderPyCodegeneratedTypes()
                 renderPyWrapperTypes()
                 renderPySocketType()
+                renderPyMiddlewareTypes()
                 renderPyApplicationType()
             }
         }
@@ -122,6 +123,22 @@ class PythonServerModuleGenerator(
             m.add_submodule(socket)?;
             """,
             *codegenScope,
+        )
+    }
+
+    private fun RustWriter.renderPyMiddlewareTypes() {
+        rustTemplate(
+            """
+            let middleware = #{pyo3}::types::PyModule::new(py, "middleware")?;
+            middleware.add_class::<#{SmithyPython}::PyRequest>()?;
+            pyo3::py_run!(
+                py,
+                middleware,
+                "import sys; sys.modules['libpokemon_service_server_sdk.middleware'] = middleware"
+            );
+            m.add_submodule(middleware)?;
+            """,
+        *codegenScope
         )
     }
 

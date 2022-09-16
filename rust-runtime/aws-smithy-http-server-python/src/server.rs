@@ -13,7 +13,7 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
 
-use crate::{PyMiddlewareHandlers, PySocket, PyMiddlewareHandler};
+use crate::{PySocket, PyMiddlewareHandler};
 
 /// A Python handler function representation.
 ///
@@ -218,7 +218,6 @@ event_loop.add_signal_handler(signal.SIGINT,
         // Register signals on the Python event loop.
         self.register_python_signals(py, event_loop.to_object(py))?;
 
-        let middlewares = PyMiddlewareHandlers(self.middlewares().clone());
         // Spawn a new background [std::thread] to run the application.
         tracing::debug!("Start the Tokio runtime in a background task");
         thread::spawn(move || {
