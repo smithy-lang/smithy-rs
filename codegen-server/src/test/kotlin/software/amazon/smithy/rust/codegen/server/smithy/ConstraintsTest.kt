@@ -15,7 +15,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.requiresNewtype
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
@@ -134,21 +133,5 @@ class ConstraintsTest {
         testInputOutput.canReachConstrainedShape(model, symbolProvider) shouldBe true
         mapB.canReachConstrainedShape(model, symbolProvider) shouldBe true
         recursiveShape.canReachConstrainedShape(model, symbolProvider) shouldBe true
-    }
-
-    @Test
-    fun `only some constraint traits on member shapes should warrant a newtype`() {
-        structAInt.requiresNewtype() shouldBe true
-        structAString.requiresNewtype() shouldBe false
-
-        val structBPatternString = model.lookup<MemberShape>("test#StructureB\$patternString")
-        val structBRequiredString = model.lookup<MemberShape>("test#StructureB\$requiredString")
-        val structBMapA = model.lookup<MemberShape>("test#StructureB\$mapA")
-        val structBMapAPrecedence = model.lookup<MemberShape>("test#StructureB\$mapAPrecedence")
-
-        structBPatternString.requiresNewtype() shouldBe true
-        structBRequiredString.requiresNewtype() shouldBe false
-        structBMapA.requiresNewtype() shouldBe false
-        structBMapAPrecedence.requiresNewtype() shouldBe true
     }
 }

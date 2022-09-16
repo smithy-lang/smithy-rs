@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.containsNonPublicType
+import software.amazon.smithy.rust.codegen.client.smithy.typeNameContainsNonPublicType
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.isTransitivelyButNotDirectlyConstrained
 
@@ -125,7 +125,7 @@ class PubCrateConstrainedCollectionGenerator(
                     *codegenScope,
                 )
             } else {
-                val innerNeedsConversion = innerShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+                val innerNeedsConversion = innerShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
 
                 rustTemplate(
                     """

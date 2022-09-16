@@ -18,13 +18,15 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.model.traits.PatternTrait
-import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
-// TODO Move this file to `core` or `server`.
+/**
+ * This file contains utilities to work with constrained shapes.
+ *
+ * TODO Move this file to `core` or `server`.
+ */
 
 /**
  * We say a shape is _directly_ constrained if:
@@ -68,6 +70,9 @@ fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(
 
 /**
  * Helper function to determine whether a shape will map to a _public_ constrained wrapper tuple type.
+ *
+ * This function is used in core code generators, so it takes in a [CoreCodegenContext] that is downcast
+ * to [ServerCodegenContext] when generating servers.
  */
 fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, coreCodegenContext: CoreCodegenContext) =
     coreCodegenContext.target == CodegenTarget.SERVER &&
@@ -87,13 +92,13 @@ fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, coreCodegenContex
  * Note how we short-circuit on `publicConstrainedTypes = true`, but we still require it to be passed in instead of laying
  * the responsibility on the caller, for API safety usage.
  */
-fun Shape.containsNonPublicType(
+fun Shape.typeNameContainsNonPublicType(
     model: Model,
     symbolProvider: SymbolProvider,
     publicConstrainedTypes: Boolean,
 ): Boolean = !publicConstrainedTypes && when (this) {
     is SimpleShape -> wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)
-    is MemberShape -> model.expectShape(this.target).containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+    is MemberShape -> model.expectShape(this.target).typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
     is CollectionShape -> this.canReachConstrainedShape(model, symbolProvider)
     is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
     is StructureShape, is UnionShape -> false
@@ -102,15 +107,6 @@ fun Shape.containsNonPublicType(
 
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
-
-// TODO seems unused
-fun MemberShape.requiresNewtype() =
-    // Note that member shapes whose only constraint trait is `required` do not require a newtype.
-    this.hasTrait<LengthTrait>() ||
-        this.hasTrait<RangeTrait>() ||
-        // `uniqueItems` is deprecated, so we ignore it.
-        // this.hasTrait<UniqueItemsTrait>() ||
-        this.hasTrait<PatternTrait>()
 
 fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider) =
     this.isDirectlyConstrained(symbolProvider) || (model.expectShape(this.target).isDirectlyConstrained(symbolProvider))

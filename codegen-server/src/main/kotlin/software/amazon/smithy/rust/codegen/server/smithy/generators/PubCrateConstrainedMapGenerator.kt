@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.containsNonPublicType
+import software.amazon.smithy.rust.codegen.client.smithy.typeNameContainsNonPublicType
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.isTransitivelyButNotDirectlyConstrained
 
@@ -116,8 +116,8 @@ class PubCrateConstrainedMapGenerator(
                     *codegenScope,
                 )
             } else {
-                val keyNeedsConversion = keyShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
-                val valueNeedsConversion = valueShape.containsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+                val keyNeedsConversion = keyShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+                val valueNeedsConversion = valueShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
 
                 rustTemplate(
                     """
