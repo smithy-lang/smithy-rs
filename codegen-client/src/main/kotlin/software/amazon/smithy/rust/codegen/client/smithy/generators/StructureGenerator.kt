@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -55,24 +54,7 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     }
 }
 
-/**
- * The name of the builder's setter the deserializer should use.
- * Setter names will never hit a reserved word and therefore never need escaping.
- */
-fun MemberShape.deserializerBuilderSetterName(codegenTarget: CodegenTarget) =
-    when (codegenTarget) {
-        // TODO Both these arms return the same result.
-        CodegenTarget.CLIENT -> this.setterName()
-        CodegenTarget.SERVER -> "set_${this.memberName.toSnakeCase()}"
-    }
-
-// TODO Cleanup (old implementation of above extension function).
-//    return if (this.targetCanReachConstrainedShape(model, symbolProvider)) {
-//        "set_${this.memberName.toSnakeCase()}"
-//    } else {
-//        this.memberName.toSnakeCase()
-//    }
-
+// TODO Move this to `core`.
 fun StructureShape.builderSymbol(
     coreCodegenContext: CoreCodegenContext,
     symbolProvider: RustSymbolProvider,

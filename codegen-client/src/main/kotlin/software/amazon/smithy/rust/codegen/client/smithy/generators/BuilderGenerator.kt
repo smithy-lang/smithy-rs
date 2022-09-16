@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
+// TODO Move this to `core`.
 fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
     val structureSymbol = symbolProvider.toSymbol(this)
     val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
@@ -47,7 +48,7 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
         .build()
 }
 
-// TODO Place in a server file.
+// TODO Move this to `core`.
 fun StructureShape.serverBuilderSymbol(symbolProvider: RustSymbolProvider, pubCrate: Boolean): Symbol {
     val structureSymbol = symbolProvider.toSymbol(this)
     val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase()) +

@@ -44,8 +44,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarge
 import software.amazon.smithy.rust.codegen.client.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingResolver
@@ -220,7 +220,7 @@ class JsonParserGenerator(
                             CodegenTarget.CLIENT -> {
                                 withBlock(
                                     "builder = builder.${
-                                    member.deserializerBuilderSetterName(codegenTarget)
+                                        member.setterName()
                                     }(",
                                     ");",
                                 ) {
@@ -231,7 +231,7 @@ class JsonParserGenerator(
                                 if (symbolProvider.toSymbol(member).isOptional()) {
                                     withBlock(
                                         "builder = builder.${
-                                        member.deserializerBuilderSetterName(codegenTarget)
+                                            member.setterName()
                                         }(",
                                         ");",
                                     ) {
@@ -244,7 +244,7 @@ class JsonParserGenerator(
                                         """
                                         {
                                             builder = builder.${
-                                        member.deserializerBuilderSetterName(codegenTarget)
+                                            member.setterName()
                                         }(v);
                                         }
                                         """,

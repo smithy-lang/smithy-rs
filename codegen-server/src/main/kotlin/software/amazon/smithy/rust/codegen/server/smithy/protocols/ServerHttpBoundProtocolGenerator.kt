@@ -48,13 +48,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCust
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.TypeConversionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.serverBuilderSymbol
+import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingDescriptor
@@ -777,12 +777,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rust(
                     """
                     {
-                        input = input.${member.deserializerBuilderSetterName(codegenContext.target)}(${
-                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                        "Some(value)"
-                    } else {
-                        "value"
-                    }
+                        input = input.${member.setterName()}(${
+                        if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                            "Some(value)"
+                        } else {
+                            "value"
+                        }
                     });
                     }
                     """,
@@ -939,7 +939,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         val deserializer = generateParseStrFn(binding, true)
                         rustTemplate(
                             """
-                            input = input.${binding.member.deserializerBuilderSetterName(codegenContext.target)}(
+                            input = input.${binding.member.setterName()}(
                                 #{deserializer}(m$index)?
                             );
                             """,
@@ -1032,7 +1032,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     rustTemplate(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
-                            input = input.${it.member.deserializerBuilderSetterName(codegenContext.target)}(
+                            input = input.${it.member.setterName()}(
                                 #{deserializer}(&v)?
                             );
                             seen_$memberName = true;
@@ -1123,7 +1123,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             }
             if (queryParamsBinding != null) {
                 val isOptional = unconstrainedShapeSymbolProvider.toSymbol(queryParamsBinding.member).isOptional()
-                withBlock("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(codegenContext.target)}(", ");") {
+                withBlock("input = input.${queryParamsBinding.member.setterName()}(", ");") {
                     conditionalBlock("Some(", ")", conditional = isOptional) {
                         write("query_params")
                     }
@@ -1139,7 +1139,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
                         "input = input.${
-                        binding.member.deserializerBuilderSetterName(codegenContext.target)
+                            binding.member.setterName()
                         }(",
                         ");",
                     ) {
