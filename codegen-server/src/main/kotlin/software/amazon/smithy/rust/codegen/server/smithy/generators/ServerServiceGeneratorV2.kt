@@ -64,6 +64,7 @@ class ServerServiceGeneratorV2(
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
+        val pluginType = listOf("Pl")
         for ((index, pair) in builderFieldNames.zip(operationStructNames).withIndex()) {
             val (fieldName, structName) = pair
 
@@ -128,16 +129,17 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics).joinToString(", ")}>
+                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics + pluginType).joinToString(", ")}>
                 {
                     $builderName {
                         ${switchedFields.joinToString(", ")},
-                        _exts: std::marker::PhantomData
+                        _exts: std::marker::PhantomData,
+                        plugin: self.plugin,
                     }
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "HandlerSetterGenerics" to (replacedOpServiceGenerics + (replacedExtGenerics.map { writable(it) })).join(", "),
+                "HandlerSetterGenerics" to (replacedOpServiceGenerics + ((replacedExtGenerics + pluginType).map { writable(it) })).join(", "),
                 *codegenScope,
             )
 
@@ -159,6 +161,7 @@ class ServerServiceGeneratorV2(
                     crate::operation_shape::${symbolProvider.toSymbol(operation).name.toPascalCase()},
                     $exts,
                     B,
+                    Pl,
                 >,
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
@@ -174,18 +177,26 @@ class ServerServiceGeneratorV2(
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
         val extensionTypesDefault = extensionTypes.map { "$it = ()" }
-        val structGenerics = (builderOps + extensionTypesDefault).joinToString(", ")
-        val builderGenerics = (builderOps + extensionTypes).joinToString(", ")
+        val pluginName = "Pl"
+        val pluginTypeList = listOf(pluginName)
+        val newPluginType = "New$pluginName"
+        val pluginTypeDefault = listOf("$pluginName = #{SmithyHttpServer}::plugin::IdentityPlugin")
+        val structGenerics = (builderOps + extensionTypesDefault + pluginTypeDefault).joinToString(", ")
+        val builderGenerics = (builderOps + extensionTypes + pluginTypeList).joinToString(", ")
+        val builderGenericsNoPlugin = (builderOps + extensionTypes).joinToString(", ")
 
         // Generate router construction block.
         val router = protocol
             .routerConstruction(
                 builderFieldNames
                     .map {
-                        writable { rustTemplate("self.$it.upgrade()") }
+                        writable { rustTemplate("self.$it.upgrade(&self.plugin)") }
                     }
                     .asIterable(),
             )
+        val setterFields = builderFieldNames.map { item ->
+            "$item: self.$item"
+        }.joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
@@ -194,7 +205,8 @@ class ServerServiceGeneratorV2(
             pub struct $builderName<$structGenerics> {
                 ${builderFields.joinToString(", ")},
                 ##[allow(unused_parens)]
-                _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>
+                _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>,
+                plugin: $pluginName,
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -210,6 +222,17 @@ class ServerServiceGeneratorV2(
                     let router = #{Router:W};
                     $serviceName {
                         router: #{SmithyHttpServer}::routing::routers::RoutingService::new(router),
+                    }
+                }
+            }
+
+            impl<$builderGenerics, $newPluginType> #{SmithyHttpServer}::plugin::Pluggable<$newPluginType> for $builderName<$builderGenerics> {
+                type Output = $builderName<$builderGenericsNoPlugin, #{SmithyHttpServer}::plugin::PluginStack<$pluginName, $newPluginType>>;
+                fn apply(self, plugin: $newPluginType) -> Self::Output {
+                    $builderName {
+                        $setterFields,
+                        _exts: self._exts,
+                        plugin: #{SmithyHttpServer}::plugin::PluginStack::new(self.plugin, plugin),
                     }
                 }
             }
@@ -265,7 +288,8 @@ class ServerServiceGeneratorV2(
                 pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
                     $builderName {
                         #{NotSetFields:W},
-                        _exts: std::marker::PhantomData
+                        _exts: std::marker::PhantomData,
+                        plugin: #{SmithyHttpServer}::plugin::IdentityPlugin
                     }
                 }
 
@@ -276,7 +300,8 @@ class ServerServiceGeneratorV2(
                 pub fn unchecked_builder() -> $builderName<#{InternalFailureGenerics:W}> {
                     $builderName {
                         #{InternalFailureFields:W},
-                        _exts: std::marker::PhantomData
+                        _exts: std::marker::PhantomData,
+                        plugin: #{SmithyHttpServer}::plugin::IdentityPlugin
                     }
                 }
             }
