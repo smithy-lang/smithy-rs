@@ -8,7 +8,6 @@
 use aws_smithy_http_server::protocols::Protocol;
 use aws_smithy_http_server::{body::to_boxed, response::Response};
 use aws_smithy_types::date_time::{ConversionError, DateTimeParseError};
-use http::{header::ToStrError, status::InvalidStatusCode, Error as HttpError};
 use pyo3::{create_exception, exceptions::PyException as BasePyException, prelude::*, PyErr};
 use thiserror::Error;
 
@@ -21,14 +20,6 @@ pub enum PyError {
     /// Implements `From<aws_smithy_types::date_time::ConversionError>`.
     #[error("DateTimeParse: {0}")]
     DateTimeParse(#[from] DateTimeParseError),
-    /// Http errors
-    #[error("HTTP error: {0}")]
-    Http(#[from] HttpError),
-    /// Status code error
-    #[error("{0}")]
-    HttpStatusCode(#[from] InvalidStatusCode),
-    #[error("{0}")]
-    StrConversion(#[from] ToStrError),
 }
 
 create_exception!(smithy, PyException, BasePyException);
