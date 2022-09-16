@@ -23,7 +23,7 @@ pub use error::{PyError, PyMiddlewareException};
 #[doc(inline)]
 pub use logging::LogLevel;
 #[doc(inline)]
-pub use middleware::{PyMiddlewareHandlers, PyMiddlewareLayer, PyRequest, PyResponse};
+pub use middleware::{PyMiddlewareHandlers, PyMiddlewareLayer, PyRequest, PyResponse, PyHttpVersion};
 #[doc(inline)]
 pub use server::{PyApp, PyHandler};
 #[doc(inline)]

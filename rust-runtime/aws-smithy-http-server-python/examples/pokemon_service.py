@@ -17,7 +17,8 @@ from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
     EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
     HealthCheckOperationInput, StreamPokemonRadioOperationInput)
-from libpokemon_service_server_sdk.middleware import Request, MiddlewareException
+from libpokemon_service_server_sdk.middleware import (MiddlewareException,
+                                                      Request)
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
     EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
@@ -116,35 +117,56 @@ app.context(Context())
 
 ###########################################################
 # Middleware
-###########################################################
+############################################################
+# Middlewares are sync or async function decorated by `@app.middleware`.
+# They are executed in order and take as input the HTTP request object.
+# A middleware can return multiple values, following these rules:
+# * Middleware not returning will let the execution continue without
+#   changing the original request.
+# * Middleware returning a modified Request will update the original
+#   request before continuing the execution.
+# * Middleware returnign a Response will immediately terminate the request
+#   handling and return the response constructed from Python.
+# * Middleware raising MiddlewareException will immediately terminate the
+#   request handling and return a protocol specific error, with the option of
+#   setting the HTTP return code.
+# * Middleware raising any other exception will immediately terminate the
+#   request handling and return a protocol specific error, with HTTP status
+#   code 500.
 @app.middleware
 def check_content_type_header(request: Request):
-    content_type = request.headers.get("content-type")
+    content_type = request.get_header("content-type")
     if content_type == "application/json":
         logging.debug("Found valid `application/json` content type")
     else:
         logging.error(f"Invalid content type: {content_type}")
-    raise MiddlewareException("cmon", 404)
+        # Return an HTTP 401 Unauthorized if the content type is not JSON.
+        raise MiddlewareException("Invalid content type", 401)
+    # Check that `x-amzn-answer` header is not set.
+    assert request.get_header("x-amzn-answer") is None
 
 
+# This middleware adds a new header called `x-amazon-answer` to the
+# request. We expect to see this header to be populated in the next
+# middleware.
 @app.middleware
-def modify_request(request: Request):
-    request.headers["x-amzn-stuff"] = "42"
+def add_x_amzn_stuff_header(request: Request):
+    request.set_header("x-amzn-answer", "42")
     logging.debug("Setting `x-amzn-stuff` header")
     return request
 
 
 @app.middleware
 async def check_method_and_content_length(request: Request):
-    content_length = request.headers.get("content-length")
+    content_length = request.get_header("content-length")
     logging.debug(f"Request method: {request.method}")
     if content_length is not None:
         content_length = int(content_length)
-        logging.debug(
-            "Request content length: {content_length}"
-        )
+        logging.debug("Request content length: {content_length}")
     else:
-        logging.error(f"Invalid content length. Dumping headers: {request.headers}")
+        logging.error(f"Invalid content length. Dumping headers: {request.headers()}")
+    # Check that `x-amzn-answer` is 42.
+    assert request.get_header("x-amzn-answer") == "42"
 
 
 ###########################################################

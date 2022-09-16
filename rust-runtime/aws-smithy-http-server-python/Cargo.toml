@@ -17,6 +17,7 @@ aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.2"
 futures = "0.3"
 futures-core = "0.3"

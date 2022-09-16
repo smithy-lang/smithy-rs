@@ -36,10 +36,8 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
     override val name: String = "AddInternalServerErrorToInfallibleOperations"
     override val order: Byte = 0
 
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        val errorShape = internalServerError(service.id.namespace)
-        return addErrorShapeToModelOperations(errorShape, model) { shape -> shape.allErrors(model).isEmpty() }
-    }
+    override fun transformModel(service: ServiceShape, model: Model): Model =
+        addErrorShapeToModelOperations(service, model) { shape -> shape.allErrors(model).isEmpty() }
 
     override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
@@ -67,33 +65,19 @@ class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<Serv
     override val name: String = "AddInternalServerErrorToAllOperations"
     override val order: Byte = 0
 
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        val errorShape = internalServerError(service.id.namespace)
-        return addErrorShapeToModelOperations(errorShape, model) { true }
-    }
+    override fun transformModel(service: ServiceShape, model: Model): Model =
+        addErrorShapeToModelOperations(service, model) { true }
 
     override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
-class AddMiddlewareErrorToAllOperationsDecorator : RustCodegenDecorator<ServerCodegenContext> {
-    override val name: String = "AddMiddlewareErrorToAllOperations"
-    override val order: Byte = 0
-
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        val errorShape = middlwareError(service.id.namespace)
-        return addErrorShapeToModelOperations(errorShape, model) { true }
-    }
-
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
-}
-
-fun addErrorShapeToModelOperations(error: StructureShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
-    val modelShapes = model.toBuilder().addShapes(listOf(error)).build()
+fun addErrorShapeToModelOperations(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
+    val errorShape = internalServerError(service.id.namespace)
+    val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
     return ModelTransformer.create().mapShapes(modelShapes) { shape ->
         if (shape is OperationShape && opSelector(shape)) {
-            shape.toBuilder().addError(error).build()
+            shape.toBuilder().addError(errorShape).build()
         } else {
             shape
         }
@@ -107,25 +91,6 @@ private fun internalServerError(namespace: String): StructureShape =
             MemberShape.builder()
                 .id("$namespace#InternalServerError\$message")
                 .target("smithy.api#String")
-                .addTrait(RequiredTrait())
-                .build(),
-        ).build()
-
-
-private fun middlwareError(namespace: String): StructureShape =
-    StructureShape.builder().id("$namespace#MiddlewareError")
-        .addTrait(ErrorTrait("server"))
-        .addMember(
-            MemberShape.builder()
-                .id("$namespace#MiddlewareError\$message")
-                .target("smithy.api#String")
-                .addTrait(RequiredTrait())
-                .build(),
-        )
-        .addMember(
-            MemberShape.builder()
-                .id("$namespace#MiddlewareError\$code")
-                .target("smithy.api#Integer")
                 .addTrait(RequiredTrait())
                 .build(),
         ).build()

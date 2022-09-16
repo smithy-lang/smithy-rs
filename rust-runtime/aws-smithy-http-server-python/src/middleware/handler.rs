@@ -52,7 +52,6 @@ impl PyMiddlewareHandlers {
                 Ok(output.into_py(py))
             })
         };
-        // Catch and record a Python traceback.
         Python::with_gil(|py| match handle {
             Ok(result) => {
                 if let Ok(request) = result.extract::<PyRequest>(py) {
@@ -97,7 +96,9 @@ where
         let handlers = self.0.clone();
         Box::pin(async move {
             // Run all Python handlers in a loop.
+            tracing::debug!("Executing Python middleware stack");
             for handler in handlers {
+                let name = handler.name.clone();
                 let pyrequest = PyRequest::new(&request);
                 let loop_locals = locals.clone();
                 let result = pyo3_asyncio::tokio::scope(
@@ -109,16 +110,22 @@ where
                     Ok((pyrequest, pyresponse)) => {
                         if let Some(pyrequest) = pyrequest {
                             if let Ok(headers) = (&pyrequest.headers).try_into() {
+                                tracing::debug!("Middleware `{name}` returned an HTTP request, override headers with middleware's one");
                                 *request.headers_mut() = headers;
                             }
                         }
                         if let Some(pyresponse) = pyresponse {
+                            tracing::debug!("Middleware `{name}` returned a HTTP response, exit middleware loop");
                             return Err(pyresponse.into());
                         }
                     }
-                    Err(e) => return Err(e.into_response(protocol)),
+                    Err(e) => {
+                        tracing::debug!("Middleware `{name}` returned an error, exit middleware loop");
+                        return Err(e.into_response(protocol));
+                    }
                 }
             }
+            tracing::debug!("Returning original request to operation handler");
             Ok(request)
         })
     }

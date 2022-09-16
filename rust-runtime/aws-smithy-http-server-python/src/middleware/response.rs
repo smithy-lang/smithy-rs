@@ -11,7 +11,6 @@ pub struct PyResponse {
     status: u16,
     #[pyo3(get, set)]
     body: Vec<u8>,
-    #[pyo3(get, set)]
     headers: HashMap<String, String>,
 }
 
@@ -25,17 +24,30 @@ impl PyResponse {
             headers: headers.unwrap_or_default(),
         }
     }
+
+    fn headers(&self) -> HashMap<String, String> {
+        self.headers.clone()
+    }
+
+    fn set_header(&mut self, key: &str, value: &str) {
+        self.headers.insert(key.to_string(), value.to_string());
+    }
+
+    fn get_header(&self, key: &str) -> Option<&String> {
+        self.headers.get(key)
+    }
 }
 
 impl From<PyResponse> for Response<BoxBody> {
-    fn from(val: PyResponse) -> Self {
+    fn from(pyresponse: PyResponse) -> Self {
         let mut response = Response::builder()
-            .status(StatusCode::from_u16(val.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
-            .body(to_boxed(val.body))
+            .status(StatusCode::from_u16(pyresponse.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
+            .body(to_boxed(pyresponse.body))
             .unwrap_or_default();
-        if let Ok(headers) = (&val.headers).try_into() {
-            *response.headers_mut() = headers;
-        }
+        match (&pyresponse.headers).try_into() {
+            Ok(headers) => *response.headers_mut() = headers,
+            Err(e) => tracing::error!("Error extracting HTTP headers from PyResponse: {e}")
+        };
         response
     }
 }

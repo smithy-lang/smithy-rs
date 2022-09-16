@@ -5,12 +5,12 @@
 
 //! Python error definition.
 
-use aws_smithy_http_server::{response::Response, body::to_boxed};
 use aws_smithy_http_server::protocols::Protocol;
+use aws_smithy_http_server::{body::to_boxed, response::Response};
 use aws_smithy_types::date_time::{ConversionError, DateTimeParseError};
-use pyo3::{exceptions::PyException as BasePyException, PyErr, create_exception, prelude::*};
+use http::{header::ToStrError, status::InvalidStatusCode, Error as HttpError};
+use pyo3::{create_exception, exceptions::PyException as BasePyException, prelude::*, PyErr};
 use thiserror::Error;
-use http::{Error as HttpError, status::InvalidStatusCode, header::ToStrError};
 
 /// Python error that implements foreign errors.
 #[derive(Error, Debug)]
@@ -28,13 +28,13 @@ pub enum PyError {
     #[error("{0}")]
     HttpStatusCode(#[from] InvalidStatusCode),
     #[error("{0}")]
-    StrConversion(#[from] ToStrError )
+    StrConversion(#[from] ToStrError),
 }
 
 create_exception!(smithy, PyException, BasePyException);
 
 impl From<PyError> for PyErr {
-    fn from(other: PyError ) -> PyErr {
+    fn from(other: PyError) -> PyErr {
         PyException::new_err(other.to_string())
     }
 }
@@ -75,7 +75,20 @@ impl PyMiddlewareException {
     }
 
     fn xml_body(&self) -> String {
-        "".to_string()
+        let mut out = String::new();
+        {
+            let mut writer = aws_smithy_xml::encode::XmlWriter::new(&mut out);
+            let root = writer
+                .start_el("Error")
+                .write_ns("http://s3.amazonaws.com/doc/2006-03-01/", None);
+            let mut scope = root.finish();
+            {
+                let mut inner_writer = scope.start_el("Message").finish();
+                inner_writer.data(self.message.as_ref());
+            }
+            scope.finish();
+        }
+        out
     }
 
     pub fn into_response(self, protocol: Protocol) -> Response {
@@ -98,10 +111,14 @@ impl PyMiddlewareException {
                     .header("X-Amzn-Errortype", "MiddlewareException");
             }
             Protocol::RestXml => builder = builder.header("Content-Type", "application/xml"),
-            Protocol::AwsJson10 => builder = builder.header("Content-Type", "application/x-amz-json-1.0"),
-            Protocol::AwsJson11 => builder = builder.header("Content-Type", "application/x-amz-json-1.1"),
+            Protocol::AwsJson10 => {
+                builder = builder.header("Content-Type", "application/x-amz-json-1.0")
+            }
+            Protocol::AwsJson11 => {
+                builder = builder.header("Content-Type", "application/x-amz-json-1.1")
+            }
         }
 
-        builder.body(body).expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+        builder.body(body).expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }
 }

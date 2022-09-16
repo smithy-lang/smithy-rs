@@ -10,7 +10,7 @@ use pyo3_asyncio::TaskLocals;
 
 pub use self::handler::{PyMiddlewareHandler, PyMiddlewareHandlers};
 pub use self::layer::PyMiddlewareLayer;
-pub use self::request::PyRequest;
+pub use self::request::{PyRequest, PyHttpVersion};
 pub use self::response::PyResponse;
 
 pub trait PyMiddlewareTrait<B> {
