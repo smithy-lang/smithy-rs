@@ -64,7 +64,7 @@ class ServerServiceGeneratorV2(
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
-        val pluginType = listOf("Plugin")
+        val pluginType = listOf("Pl")
         for ((index, pair) in builderFieldNames.zip(operationStructNames).withIndex()) {
             val (fieldName, structName) = pair
 
@@ -161,7 +161,7 @@ class ServerServiceGeneratorV2(
                     crate::operation_shape::${symbolProvider.toSymbol(operation).name.toPascalCase()},
                     $exts,
                     B,
-                    Plugin,
+                    Pl,
                 >,
                 $type::Service: Clone + Send + 'static,
                 <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
@@ -177,8 +177,9 @@ class ServerServiceGeneratorV2(
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
         val extensionTypesDefault = extensionTypes.map { "$it = ()" }
-        val pluginName = "Plugin"
+        val pluginName = "Pl"
         val pluginTypeList = listOf(pluginName)
+        val newPluginType = "New$pluginName"
         val pluginTypeDefault = listOf("$pluginName = #{SmithyHttpServer}::plugin::IdentityPlugin")
         val structGenerics = (builderOps + extensionTypesDefault + pluginTypeDefault).joinToString(", ")
         val builderGenerics = (builderOps + extensionTypes + pluginTypeList).joinToString(", ")
@@ -205,7 +206,7 @@ class ServerServiceGeneratorV2(
                 ${builderFields.joinToString(", ")},
                 ##[allow(unused_parens)]
                 _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>,
-                plugin: Plugin,
+                plugin: $pluginName,
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -225,9 +226,9 @@ class ServerServiceGeneratorV2(
                 }
             }
 
-            impl<$builderGenerics, NewPlugin> #{SmithyHttpServer}::plugin::Pluggable<NewPlugin> for $builderName<$builderGenerics> {
-                type Output = $builderName<$builderGenericsNoPlugin, aws_smithy_http_server::plugin::PluginStack<$pluginName, NewPlugin>>;
-                fn apply(self, plugin: NewPlugin) -> Self::Output {
+            impl<$builderGenerics, $newPluginType> #{SmithyHttpServer}::plugin::Pluggable<$newPluginType> for $builderName<$builderGenerics> {
+                type Output = $builderName<$builderGenericsNoPlugin, #{SmithyHttpServer}::plugin::PluginStack<$pluginName, $newPluginType>>;
+                fn apply(self, plugin: $newPluginType) -> Self::Output {
                     $builderName {
                         $setterFields,
                         _exts: self._exts,

@@ -13,7 +13,7 @@ use crate::operation::Operation;
 ///
 /// ```
 /// # struct PrintPlugin;
-/// # use crate::plugin::Pluggable;
+/// # use aws_smithy_http_server::plugin::Pluggable;
 /// trait PrintExt: Pluggable<PrintPlugin> {
 ///     fn print(self) -> Self::Output {
 ///         self.apply(&PrintPlugin);
@@ -29,7 +29,7 @@ pub trait Pluggable<NewPlugin> {
 }
 
 /// Maps one [`Operation`] to another,
-/// parameterised by the protocol P and operation shape Op to allow for plugin behaviour to be specialised accordingly.
+/// parameterised by the protocol `P` and operation shape `Op` to allow for plugin behaviour to be specialised accordingly.
 ///
 /// This is passed to [`Pluggable::apply`] to modify the behaviour of the builder.
 pub trait Plugin<P, Op, S, L> {

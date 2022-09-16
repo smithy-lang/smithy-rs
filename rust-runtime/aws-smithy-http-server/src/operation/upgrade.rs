@@ -279,13 +279,13 @@ pub struct MissingOperation;
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
 pub struct FailOnMissingOperation;
 
-impl<P, Op, Exts, B, Plugin> Upgradable<P, Op, Exts, B, Plugin> for FailOnMissingOperation
+impl<P, Op, Exts, B, Pl> Upgradable<P, Op, Exts, B, Pl> for FailOnMissingOperation
 where
     InternalFailureException: IntoResponse<P>,
 {
     type Service = MissingFailure<P>;
 
-    fn upgrade(self, _plugin: &Plugin) -> Self::Service {
+    fn upgrade(self, _plugin: &Pl) -> Self::Service {
         MissingFailure { _protocol: PhantomData }
     }
 }
