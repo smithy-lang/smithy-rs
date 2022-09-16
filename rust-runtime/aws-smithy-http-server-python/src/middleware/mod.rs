@@ -20,17 +20,3 @@ pub trait PyMiddlewareTrait<B> {
 
     fn run(&mut self, request: Request<B>, protocol: Protocol, locals: TaskLocals) -> Self::Future;
 }
-
-impl<B, F, Fut, ReqBody, ResBody> PyMiddlewareTrait<B> for F
-where
-    F: FnMut(Request<B>) -> Fut,
-    Fut: Future<Output = Result<Request<ReqBody>, Response<ResBody>>>,
-{
-    type RequestBody = ReqBody;
-    type ResponseBody = ResBody;
-    type Future = Fut;
-
-    fn run(&mut self, request: Request<B>, _protocol: Protocol, _locals: TaskLocals) -> Self::Future {
-        self(request)
-    }
-}

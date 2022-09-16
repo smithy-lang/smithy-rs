@@ -13,7 +13,7 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
 
-use crate::{PySocket, middleware::PyMiddlewareHandler, PyMiddlewareHandlers};
+use crate::{middleware::PyMiddlewareHandler, PyMiddlewareHandlers, PySocket};
 
 /// A Python handler function representation.
 ///
@@ -233,9 +233,8 @@ event_loop.add_signal_handler(signal.SIGINT,
             // all inside a [tokio] blocking function.
             rt.block_on(async move {
                 tracing::debug!("Add middlewares to Rust Python router");
-                let service = ServiceBuilder::new()
-                    .layer(AddExtensionLayer::new(context));
-                let app = router.layer(service);
+                let app =
+                    router.layer(ServiceBuilder::new().layer(AddExtensionLayer::new(context)));
                 let server = hyper::Server::from_tcp(
                     raw_socket
                         .try_into()
@@ -257,15 +256,23 @@ event_loop.add_signal_handler(signal.SIGINT,
         Ok(())
     }
 
-    fn register_middleware(&mut self, py: Python, func: PyObject) -> PyResult<()> {
+    fn is_coroutine(&self, py: Python, func: &PyObject) -> PyResult<bool> {
         let inspect = py.import("inspect")?;
         // Check if the function is a coroutine.
         // NOTE: that `asyncio.iscoroutine()` doesn't work here.
-        let is_coroutine = inspect
-            .call_method1("iscoroutinefunction", (&func,))?
-            .extract::<bool>()?;
+        inspect
+            .call_method1("iscoroutinefunction", (func,))?
+            .extract::<bool>()
+    }
+
+    /// Register a Python function to be executed inside a Tower middleware layer.
+    ///
+    /// There are some information needed to execute the Python code from a Rust handler,
+    /// such has if the registered function needs to be awaited (if it is a coroutine)..
+    fn register_middleware(&mut self, py: Python, func: PyObject) -> PyResult<()> {
         let name = func.getattr(py, "__name__")?.extract::<String>(py)?;
-        // Find number of expected methods (a Pythzzon implementation could not accept the context).
+        let is_coroutine = self.is_coroutine(py, &func)?;
+        // Find number of expected methods (a Python implementation could not accept the context).
         let handler = PyMiddlewareHandler {
             name,
             func,
@@ -286,14 +293,11 @@ event_loop.add_signal_handler(signal.SIGINT,
     /// such has if the registered function needs to be awaited (if it is a coroutine) and
     /// the number of arguments available, which tells us if the handler wants the state to be
     /// passed or not.
-    fn register_operation(&mut self, py: Python, name: &str, func: PyObject) -> PyResult<()> {
-        let inspect = py.import("inspect")?;
-        // Check if the function is a coroutine.
-        // NOTE: that `asyncio.iscoroutine()` doesn't work here.
-        let is_coroutine = inspect
-            .call_method1("iscoroutinefunction", (&func,))?
-            .extract::<bool>()?;
+    fn register_operation(&mut self, py: Python, func: PyObject) -> PyResult<()> {
+        let name = func.getattr(py, "__name__")?.extract::<String>(py)?;
+        let is_coroutine = self.is_coroutine(py, &func)?;
         // Find number of expected methods (a Pythzzon implementation could not accept the context).
+        let inspect = py.import("inspect")?;
         let func_args = inspect
             .call_method1("getargs", (func.getattr(py, "__code__")?,))?
             .getattr("args")?
@@ -309,7 +313,7 @@ event_loop.add_signal_handler(signal.SIGINT,
             handler.args,
         );
         // Insert the handler in the handlers map.
-        self.handlers().insert(String::from(name), handler);
+        self.handlers().insert(name, handler);
         Ok(())
     }
 

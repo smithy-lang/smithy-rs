@@ -88,7 +88,7 @@ where
         let run = self.handler.run(req, self.protocol, self.locals.clone());
 
         ResponseFuture {
-            middleware: State::Run { run },
+            middleware: State::Running { run },
             service: inner,
         }
     }
@@ -109,7 +109,7 @@ pin_project! {
 pin_project! {
     #[project = StateProj]
     enum State<A, Fut> {
-        Run {
+        Running {
             #[pin]
             run: A,
         },
@@ -131,7 +131,7 @@ where
         let mut this = self.project();
         loop {
             match this.middleware.as_mut().project() {
-                StateProj::Run { run } => {
+                StateProj::Running { run } => {
                     let run = ready!(run.poll(cx));
                     match run {
                         Ok(req) => {

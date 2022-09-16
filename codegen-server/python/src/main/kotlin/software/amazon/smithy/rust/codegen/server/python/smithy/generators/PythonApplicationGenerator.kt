@@ -281,7 +281,7 @@ class PythonApplicationGenerator(
                     ##[pyo3(text_signature = "(${'$'}self, func)")]
                     pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                         use #{SmithyPython}::PyApp;
-                        self.register_operation(py, "$name", func)
+                        self.register_operation(py, func)
                     }
                     """,
                     *codegenScope,
