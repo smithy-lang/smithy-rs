@@ -34,9 +34,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
-import software.amazon.smithy.rust.codegen.client.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import kotlin.io.path.readText
 
 class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {

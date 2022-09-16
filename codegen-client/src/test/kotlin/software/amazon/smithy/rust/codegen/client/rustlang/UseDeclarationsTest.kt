@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.lang
+package software.amazon.smithy.rust.codegen.client.rustlang
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.rustlang.UseDeclarations
 import software.amazon.smithy.rust.codegen.client.testutil.shouldCompile
 
 class UseDeclarationsTest {

@@ -9,7 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.util.dq
+import software.amazon.smithy.rust.codegen.core.util.dq
 import java.nio.file.Path
 
 sealed class DependencyScope {

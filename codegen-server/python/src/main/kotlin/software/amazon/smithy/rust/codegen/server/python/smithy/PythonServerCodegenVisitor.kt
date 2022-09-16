@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDe
 import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.client.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator

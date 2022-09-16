@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.AddRustTestsDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.client.util.runCommand
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 // If any of these tests fail, and you want to understand why, run them with logging:
 // ```

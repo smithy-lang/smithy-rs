@@ -12,7 +12,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.utils.StringUtils
 
 class Ec2QuerySerializerGenerator(coreCodegenContext: CoreCodegenContext) : QuerySerializerGenerator(coreCodegenContext) {

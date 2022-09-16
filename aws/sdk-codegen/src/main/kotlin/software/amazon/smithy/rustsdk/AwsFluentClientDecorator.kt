@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
@@ -74,7 +74,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override val bounds = writable { }
 
     /** Bounds for generated `send()` functions */
-    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryPolicy: Writable): Writable = writable { }
+    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable = writable { }
 
     override fun toGenericsGenerator(): GenericsGenerator {
         return GenericsGenerator()
@@ -98,7 +98,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
-            retryPolicy = runtimeConfig.awsHttp().asType().member("retry::AwsErrorRetryPolicy").writable,
+            retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
         rustCrate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
             renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
@@ -282,7 +282,7 @@ private fun renderCustomizableOperationSendMethod(
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
         "SdkSuccess" to smithyHttp.member("result::SdkSuccess"),
-        "ClassifyResponse" to smithyHttp.member("retry::ClassifyResponse"),
+        "ClassifyRetry" to smithyHttp.member("retry::ClassifyRetry"),
         "ParseHttpResponse" to smithyHttp.member("response::ParseHttpResponse"),
     )
 
@@ -297,7 +297,7 @@ private fun renderCustomizableOperationSendMethod(
             where
                 E: std::error::Error,
                 O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyResponse}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
+                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
             {
                 self.handle.client.call(self.operation).await
             }

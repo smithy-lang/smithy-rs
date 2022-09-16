@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 
 /**

@@ -16,8 +16,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.util.PANIC
-import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 fun RustSymbolProvider.lensName(prefix: String, root: Shape, path: List<MemberShape>): String {
     val base = shapeFunctionName("${prefix}lens", root)

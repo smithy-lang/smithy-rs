@@ -32,10 +32,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorG
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
