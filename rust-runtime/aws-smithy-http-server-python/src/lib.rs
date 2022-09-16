@@ -24,8 +24,8 @@ pub use error::Error;
 pub use logging::LogLevel;
 #[doc(inline)]
 pub use middleware::{
-    py_middleware_wrapper, PyMiddleware, PyMiddlewareException, PyMiddlewareHandler,
-    PyMiddlewareLayer, PyRequest,
+    execute_middleware, PyMiddleware, PyMiddlewareException, PyMiddlewareHandler,
+    PyMiddlewareLayer, PyRequest, PyResponse,
 };
 #[doc(inline)]
 pub use server::{PyApp, PyHandler};

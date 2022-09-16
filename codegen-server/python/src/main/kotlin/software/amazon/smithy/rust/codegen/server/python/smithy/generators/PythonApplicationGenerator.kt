@@ -309,37 +309,46 @@ class PythonApplicationGenerator(
                 Result<#{http}::Request<B>, #{http}::Response<Self::ResponseBody>>,
             >;
 
-            fn run(&mut self, request: http::Request<B>) -> Self::Future {
+            fn run(&mut self, mut request: #{http}::Request<B>) -> Self::Future {
                 let handlers = self.handlers.clone();
                 let locals = self.locals.clone();
                 Box::pin(async move {
                     // Run all Python handlers in a loop.
                     for handler in handlers {
-                        let pyrequest = if handler.with_body {
-                            #{SmithyPython}::PyRequest::new_with_body(&request).await
-                        } else {
-                            #{SmithyPython}::PyRequest::new(&request)
-                        };
+                        let pyrequest = #{SmithyPython}::PyRequest::new(&request);
                         let loop_locals = locals.clone();
                         let result = #{pyo3_asyncio}::tokio::scope(
                             loop_locals,
-                            #{SmithyPython}::py_middleware_wrapper(pyrequest, handler),
-                        );
-                        if let Err(e) = result.await {
-                            let error = crate::operation_ser::serialize_structure_crate_error_internal_server_error(
-                                        &e.into()
-                                    ).unwrap();
-                            let boxed_error = #{SmithyServer}::body::boxed(error);
-                            return Err(#{http}::Response::builder()
-                                .status(500)
-                                .body(boxed_error)
-                                .unwrap());
+                            #{SmithyPython}::execute_middleware(pyrequest, handler),
+                        ).await;
+                        match result {
+                            Ok((pyrequest, pyresponse)) => {
+                                if let Some(pyrequest) = pyrequest {
+                                    if let Ok(headers) = (&pyrequest.headers).try_into() {
+                                        *request.headers_mut() = headers;
+                                    }
+                                }
+                                if let Some(pyresponse) = pyresponse {
+                                    return Err(pyresponse.try_into().unwrap());
+                                }
+                            },
+                            Err(e) => {
+                                let error = crate::operation_ser::serialize_structure_crate_error_internal_server_error(
+                                                &e.into()
+                                            ).unwrap();
+                                let boxed_error = aws_smithy_http_server::body::boxed(error);
+                                return Err(http::Response::builder()
+                                    .status(500)
+                                    .body(boxed_error)
+                                    .unwrap());
+                            }
                         }
                     }
                     Ok(request)
                 })
             }
         }
+
         impl std::convert::From<pyo3::PyErr> for crate::error::InternalServerError {
             fn from(variant: pyo3::PyErr) -> Self {
                 crate::error::InternalServerError {
