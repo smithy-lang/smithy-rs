@@ -74,7 +74,8 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                     ///
                     /// ## Examples
                     /// ```no_run
-                    /// use $moduleUseName::config::{Config, RetryConfig};
+                    /// use $moduleUseName::config::Config;
+                    /// use $moduleUseName::config::retry::RetryConfig;
                     ///
                     /// let retry_config = RetryConfig::standard().with_max_attempts(5);
                     /// let config = Config::builder().retry_config(retry_config).build();
@@ -88,7 +89,8 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                     ///
                     /// ## Examples
                     /// ```no_run
-                    /// use $moduleUseName::config::{Builder, Config, RetryConfig};
+                    /// use $moduleUseName::config::{Builder, Config};
+                    /// use $moduleUseName::config::retry::RetryConfig;
                     ///
                     /// fn disable_retries(builder: &mut Builder) {
                     ///     let retry_config = RetryConfig::standard().with_max_attempts(1);
@@ -164,7 +166,8 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                     ///
                     /// ```no_run
                     /// ## use std::time::Duration;
-                    /// use $moduleUseName::config::{Config, TimeoutConfig};
+                    /// use $moduleUseName::config::Config;
+                    /// use $moduleUseName::config::timeout::TimeoutConfig;
                     ///
                     /// let timeout_config = TimeoutConfig::builder()
                     ///     .operation_attempt_timeout(Duration::from_secs(1))
@@ -182,7 +185,8 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                     ///
                     /// ```no_run
                     /// ## use std::time::Duration;
-                    /// use $moduleUseName::config::{Builder, Config, TimeoutConfig};
+                    /// use $moduleUseName::config::{Builder, Config};
+                    /// use $moduleUseName::config::timeout::TimeoutConfig;
                     ///
                     /// fn set_request_timeout(builder: &mut Builder) {
                     ///     let timeout_config = TimeoutConfig::builder()
@@ -221,13 +225,14 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
             writer.rustTemplate(
                 """
                 pub use #{sleep}::{AsyncSleep, Sleep};
-                pub use #{types_retry}::{RetryConfig, RetryConfigBuilder};
-                /// Config structs required by [`RetryConfig`]
+                /// Retry configuration
                 pub mod retry {
-                    pub use #{types_retry}::RetryMode;
-                    pub use #{types_retry}::RetryKind;
+                    pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};
                 }
-                pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
+                /// Timeout configuration
+                pub mod timeout {
+                    pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
+                }
                 """,
                 "types_retry" to smithyTypesRetry(runtimeConfig),
                 "sleep" to smithyAsyncRtSleep(runtimeConfig),

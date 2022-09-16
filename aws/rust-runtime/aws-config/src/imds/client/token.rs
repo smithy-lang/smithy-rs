@@ -38,7 +38,7 @@ use http::{HeaderValue, Uri};
 
 use crate::cache::ExpiringCache;
 use crate::imds::client::{ImdsError, ImdsResponseRetryClassifier, TokenError};
-use aws_sdk_sso::config::TimeoutConfig;
+use aws_sdk_sso::config::timeout::TimeoutConfig;
 
 /// Token Refresh Buffer
 ///

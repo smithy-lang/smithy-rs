@@ -30,6 +30,9 @@ class CustomizableOperationGenerator(
         const val CUSTOMIZE_MODULE = "crate::operation::customize"
     }
 
+    private val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
+    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
+
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.Operation) { writer ->
             writer.docs("Operation customization and supporting types")
@@ -37,6 +40,16 @@ class CustomizableOperationGenerator(
         }
 
         crate.withNonRootModule(CUSTOMIZE_MODULE) { writer ->
+            writer.rustTemplate(
+                """
+                pub use #{Operation};
+                pub use #{ClassifyRetry};
+                pub use #{RetryKind};
+                """,
+                "Operation" to smithyHttp.member("operation::Operation"),
+                "ClassifyRetry" to smithyHttp.member("retry::ClassifyRetry"),
+                "RetryKind" to smithyTypes.member("retry::RetryKind"),
+            )
             renderCustomizableOperationModule(writer)
 
             if (includeFluentClient) {
@@ -46,8 +59,6 @@ class CustomizableOperationGenerator(
     }
 
     private fun renderCustomizableOperationModule(writer: RustWriter) {
-        val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
-
         val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
         val handleGenerics = generics.toGenericsGenerator()
         val combinedGenerics = operationGenerics + handleGenerics
@@ -56,7 +67,6 @@ class CustomizableOperationGenerator(
             // SDK Types
             "http_result" to smithyHttp.member("result"),
             "http_body" to smithyHttp.member("body"),
-            "http_operation" to smithyHttp.member("operation"),
             "HttpRequest" to CargoDependency.Http.asType().member("Request"),
             "handle_generics_decl" to handleGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
@@ -69,7 +79,6 @@ class CustomizableOperationGenerator(
             use crate::client::Handle;
 
             use #{http_body}::SdkBody;
-            use #{http_operation}::Operation;
             use #{http_result}::SdkError;
 
             use std::convert::Infallible;

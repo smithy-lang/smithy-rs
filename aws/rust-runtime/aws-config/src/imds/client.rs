@@ -40,7 +40,7 @@ use crate::imds::client::token::TokenMiddleware;
 use crate::profile::ProfileParseError;
 use crate::provider_config::ProviderConfig;
 use crate::{profile, PKG_VERSION};
-use aws_sdk_sso::config::TimeoutConfig;
+use aws_sdk_sso::config::timeout::TimeoutConfig;
 use aws_smithy_client::http_connector::HttpSettings;
 
 mod token;
