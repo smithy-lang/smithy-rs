@@ -1,13 +1,8 @@
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto}, str::FromStr,
-};
+use std::{collections::HashMap, convert::TryInto};
 
 use aws_smithy_http_server::body::{to_boxed, BoxBody};
-use http::{HeaderMap, HeaderValue, Response, StatusCode, header::HeaderName};
+use http::{Response, StatusCode};
 use pyo3::prelude::*;
-
-use crate::error::PyError;
 
 #[pyclass(name = "Response")]
 #[derive(Debug, Clone)]

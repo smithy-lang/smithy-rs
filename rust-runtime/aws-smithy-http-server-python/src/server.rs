@@ -13,7 +13,7 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
 
-use crate::{PySocket, PyMiddlewareHandler};
+use crate::{PySocket, middleware::PyMiddlewareHandler, PyMiddlewareHandlers};
 
 /// A Python handler function representation.
 ///
@@ -61,7 +61,9 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
     /// Mapping between operation names and their `PyHandler` representation.
     fn handlers(&mut self) -> &mut HashMap<String, PyHandler>;
 
-    fn middlewares(&mut self) -> &mut Vec<PyMiddlewareHandler>;
+    fn middlewares(&mut self) -> &mut PyMiddlewareHandlers;
+
+    fn protocol(&self) -> &'static str;
 
     /// Handle the graceful termination of Python workers by looping through all the
     /// active workers and calling `terminate()` on them. If termination fails, this
@@ -255,7 +257,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         Ok(())
     }
 
-    fn register_middleware(&mut self, py: Python, func: PyObject, with_body: bool) -> PyResult<()> {
+    fn register_middleware(&mut self, py: Python, func: PyObject) -> PyResult<()> {
         let inspect = py.import("inspect")?;
         // Check if the function is a coroutine.
         // NOTE: that `asyncio.iscoroutine()` doesn't work here.
@@ -268,13 +270,11 @@ event_loop.add_signal_handler(signal.SIGINT,
             name,
             func,
             is_coroutine,
-            with_body,
         };
         tracing::info!(
-            "Registering middleware function `{}`, coroutine: {}, with_body: {}",
+            "Registering middleware function `{}`, coroutine: {}",
             handler.name,
             handler.is_coroutine,
-            handler.with_body,
         );
         self.middlewares().push(handler);
         Ok(())

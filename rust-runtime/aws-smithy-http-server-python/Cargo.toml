@@ -13,9 +13,10 @@ Python server runtime for Smithy Rust Server Framework.
 publish = true
 
 [dependencies]
-aws-smithy-http-server = { path = "../aws-smithy-http-server" }
-aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+aws-smithy-json = { path = "../aws-smithy-json" }
+aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1.2"
 futures = "0.3"
 futures-core = "0.3"

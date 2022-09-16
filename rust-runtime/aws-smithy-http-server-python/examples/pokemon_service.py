@@ -17,7 +17,7 @@ from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
     EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
     HealthCheckOperationInput, StreamPokemonRadioOperationInput)
-from libpokemon_service_server_sdk.middleware import Request
+from libpokemon_service_server_sdk.middleware import Request, MiddlewareException
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
     EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
@@ -124,6 +124,7 @@ def check_content_type_header(request: Request):
         logging.debug("Found valid `application/json` content type")
     else:
         logging.error(f"Invalid content type: {content_type}")
+    raise MiddlewareException("cmon", 404)
 
 
 @app.middleware
