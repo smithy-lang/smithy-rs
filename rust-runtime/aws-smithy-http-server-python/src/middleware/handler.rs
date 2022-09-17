@@ -153,7 +153,7 @@ def first_middleware(request: Request):
     request.set_header("x-amzn-answer", "42")
     return request
 
-async def second_middleware(request: Request):
+def second_middleware(request: Request):
     if request.get_header("x-amzn-answer") != "42":
         raise MiddlewareException("wrong answer", 401)
 "#;
