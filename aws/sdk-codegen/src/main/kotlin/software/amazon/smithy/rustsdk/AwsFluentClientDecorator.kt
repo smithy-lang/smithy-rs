@@ -49,8 +49,9 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val defaultMiddleware = runtimeConfig.defaultMiddleware()
     val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
     val dynMiddleware = RuntimeType("DynMiddleware", smithyClientDep, "aws_smithy_client::erase")
-    val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
+    val httpSettings = RuntimeType("HttpSettings", smithyClientDep, "aws_smithy_client::http_connector")
     val retryConfig = RuntimeType("RetryConfig", smithyTypesDep, "aws_smithy_types::retry")
+    val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
     val timeoutConfig = RuntimeType("TimeoutConfig", smithyTypesDep, "aws_smithy_types::timeout")
 
     val connectorError = RuntimeType("ConnectorError", smithyHttpDep, "aws_smithy_http::result")
@@ -137,10 +138,11 @@ private class AwsFluentClientExtensions(types: Types) {
         "ConnectorError" to types.connectorError,
         "DynConnector" to types.dynConnector,
         "DynMiddleware" to types.dynMiddleware,
+        "HttpSettings" to types.httpSettings,
         "Middleware" to types.defaultMiddleware,
         "RetryConfig" to types.retryConfig,
-        "TimeoutConfig" to types.timeoutConfig,
         "SmithyConnector" to types.smithyConnector,
+        "TimeoutConfig" to types.timeoutConfig,
         "aws_smithy_client" to types.awsSmithyClient,
         "aws_types" to types.awsTypes,
         "retry" to types.smithyClientRetry,
@@ -162,7 +164,7 @@ private class AwsFluentClientExtensions(types: Types) {
                         .connector(#{DynConnector}::new(conn))
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
                         .retry_config(retry_config.into())
-                        .timeout_config(timeout_config);
+                        .operation_timeout_config(timeout_config.into());
                     builder.set_sleep_impl(conf.sleep_impl());
                     let client = builder.build();
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
@@ -184,10 +186,11 @@ private class AwsFluentClientExtensions(types: Types) {
                         panic!("An async sleep implementation is required for retries or timeouts to work. \
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");
                     }
-                    let mut builder = #{aws_smithy_client}::Builder::dyn_https()
+                    let mut builder = #{aws_smithy_client}::Builder::new()
+                        .dyn_https_connector(#{HttpSettings}::from_timeout_config(&timeout_config))
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
                         .retry_config(retry_config.into())
-                        .timeout_config(timeout_config);
+                        .operation_timeout_config(timeout_config.into());
                     builder.set_sleep_impl(sleep_impl);
                     let client = builder.build();
 

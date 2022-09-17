@@ -92,7 +92,7 @@ impl TokenMiddleware {
             .connector(connector)
             .middleware(MapRequestLayer::<UserAgentStage>::default())
             .retry_config(retry_config)
-            .timeout_config(timeout_config);
+            .operation_timeout_config(timeout_config.into());
         inner_builder.set_sleep_impl(sleep_impl);
         let inner_client = inner_builder.build();
         let client = Arc::new(inner_client);

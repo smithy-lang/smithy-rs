@@ -14,7 +14,7 @@ use crate::SdkError;
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_http::operation::Operation;
-use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_types::timeout::OperationTimeoutConfig;
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
@@ -64,25 +64,26 @@ pub(crate) struct ClientTimeoutParams {
 }
 
 impl ClientTimeoutParams {
-    pub fn new(timeout_config: &TimeoutConfig, async_sleep: Option<Arc<dyn AsyncSleep>>) -> Self {
+    pub fn new(
+        timeout_config: &OperationTimeoutConfig,
+        async_sleep: Option<Arc<dyn AsyncSleep>>,
+    ) -> Self {
         if let Some(async_sleep) = async_sleep {
             Self {
-                operation_timeout: timeout_config
-                    .operation_timeout()
-                    .map(|duration| TimeoutServiceParams {
+                operation_timeout: timeout_config.operation_timeout().map(|duration| {
+                    TimeoutServiceParams {
                         duration,
                         kind: "operation timeout (all attempts including retries)",
                         async_sleep: async_sleep.clone(),
-                    })
-                    .into(),
-                operation_attempt_timeout: timeout_config
-                    .operation_attempt_timeout()
-                    .map(|duration| TimeoutServiceParams {
+                    }
+                }),
+                operation_attempt_timeout: timeout_config.operation_attempt_timeout().map(
+                    |duration| TimeoutServiceParams {
                         duration,
                         kind: "operation attempt timeout (single attempt)",
                         async_sleep: async_sleep.clone(),
-                    })
-                    .into(),
+                    },
+                ),
             }
         } else {
             Default::default()
@@ -249,9 +250,11 @@ mod test {
         let req = Request::new(http::Request::new(SdkBody::empty()));
         let op = Operation::new(req, ());
         let never_service: NeverService<_, (), _> = NeverService::new();
-        let timeout_config = TimeoutConfig::builder()
-            .operation_timeout(Duration::from_secs_f32(0.25))
-            .build();
+        let timeout_config = OperationTimeoutConfig::from(
+            TimeoutConfig::builder()
+                .operation_timeout(Duration::from_secs_f32(0.25))
+                .build(),
+        );
         let sleep_impl: Arc<dyn AsyncSleep> = Arc::new(TokioSleep::new());
         let timeout_service_params = ClientTimeoutParams::new(&timeout_config, Some(sleep_impl));
         let mut svc = ServiceBuilder::new()

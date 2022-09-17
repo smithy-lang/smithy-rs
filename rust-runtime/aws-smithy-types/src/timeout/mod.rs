@@ -9,5 +9,5 @@
 mod config;
 mod error;
 
-pub use config::{TimeoutConfig, TimeoutConfigBuilder};
+pub use config::{OperationTimeoutConfig, TimeoutConfig, TimeoutConfigBuilder};
 pub use error::ConfigError;

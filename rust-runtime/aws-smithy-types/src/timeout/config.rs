@@ -271,3 +271,51 @@ impl TimeoutConfig {
             || self.operation_attempt_timeout.is_some()
     }
 }
+
+/// Configuration subset of [`TimeoutConfig`] for operation timeouts
+#[non_exhaustive]
+#[derive(Clone, PartialEq, Debug)]
+pub struct OperationTimeoutConfig {
+    operation_timeout: Option<Duration>,
+    operation_attempt_timeout: Option<Duration>,
+}
+
+impl OperationTimeoutConfig {
+    /// Returns this config's operation timeout.
+    ///
+    /// An operation represents the full request/response lifecycle of a call to a service.
+    /// The operation timeout is a limit on the total amount of time it takes for an operation to be
+    /// fully serviced, including the time for all retries that may have been attempted for it.
+    pub fn operation_timeout(&self) -> Option<Duration> {
+        self.operation_timeout
+    }
+
+    /// Returns this config's operation attempt timeout.
+    ///
+    /// An operation represents the full request/response lifecycle of a call to a service.
+    /// When retries are enabled, then this setting makes it possible to set a timeout for individual
+    /// retry attempts (including the initial attempt) for an operation.
+    pub fn operation_attempt_timeout(&self) -> Option<Duration> {
+        self.operation_attempt_timeout
+    }
+
+    /// Returns true if any of the possible timeouts are set.
+    pub fn has_timeouts(&self) -> bool {
+        self.operation_timeout.is_some() || self.operation_attempt_timeout.is_some()
+    }
+}
+
+impl From<&TimeoutConfig> for OperationTimeoutConfig {
+    fn from(cfg: &TimeoutConfig) -> Self {
+        OperationTimeoutConfig {
+            operation_timeout: cfg.operation_timeout,
+            operation_attempt_timeout: cfg.operation_attempt_timeout,
+        }
+    }
+}
+
+impl From<TimeoutConfig> for OperationTimeoutConfig {
+    fn from(cfg: TimeoutConfig) -> Self {
+        OperationTimeoutConfig::from(&cfg)
+    }
+}

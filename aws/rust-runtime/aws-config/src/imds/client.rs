@@ -582,7 +582,7 @@ impl Builder {
             .connector(connector.clone())
             .middleware(middleware)
             .retry_config(retry_config)
-            .timeout_config(timeout_config);
+            .operation_timeout_config(timeout_config.into());
         smithy_builder.set_sleep_impl(config.sleep());
         let smithy_client = smithy_builder.build();
 

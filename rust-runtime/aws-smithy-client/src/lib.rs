@@ -62,7 +62,12 @@ pub mod conns {
     #[cfg(feature = "rustls")]
     lazy_static::lazy_static! {
         static ref HTTPS_NATIVE_ROOTS: Https = {
-            hyper_rustls::HttpsConnector::with_native_roots()
+            hyper_rustls::HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .https_or_http()
+                .enable_http1()
+                .enable_http2()
+                .build()
         };
     }
 
@@ -93,7 +98,7 @@ use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
-use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_types::timeout::OperationTimeoutConfig;
 use std::error::Error;
 use std::sync::Arc;
 use timeout::ClientTimeoutParams;
@@ -127,7 +132,7 @@ pub struct Client<
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
-    timeout_config: TimeoutConfig,
+    operation_timeout_config: OperationTimeoutConfig,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
@@ -203,7 +208,7 @@ where
         let connector = self.connector.clone();
 
         let timeout_params =
-            ClientTimeoutParams::new(&self.timeout_config, self.sleep_impl.clone());
+            ClientTimeoutParams::new(&self.operation_timeout_config, self.sleep_impl.clone());
 
         let svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(timeout_params.operation_timeout))
