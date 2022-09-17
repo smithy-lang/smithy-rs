@@ -26,7 +26,7 @@ class Ec2Decorator : RustCodegenDecorator<ClientCodegenContext> {
         // need to be boxed for the API to work properly
         return model.letIf(
             applies(service),
-            BoxPrimitiveShapes::processModel,
+            EC2MakePrimitivesOptional::processModel,
         )
     }
 
