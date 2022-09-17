@@ -77,6 +77,7 @@ class PythonApplicationGenerator(
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),
             "tracing" to PythonServerCargoDependency.Tracing.asType(),
+            "tracing_appender" to PythonServerCargoDependency.TracingAppender.asType(),
             "tower" to PythonServerCargoDependency.Tower.asType(),
             "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
             "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
@@ -104,6 +105,8 @@ class PythonApplicationGenerator(
                 middlewares: #{SmithyPython}::PyMiddlewares,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
+                _tracing_guard: Option<#{tracing_appender}::non_blocking::WorkerGuard>,
+                logfile: Option<std::path::PathBuf>
             }
             """,
             *codegenScope,
@@ -120,6 +123,8 @@ class PythonApplicationGenerator(
                         middlewares: self.middlewares.clone(),
                         context: self.context.clone(),
                         workers: #{parking_lot}::Mutex::new(vec![]),
+                        _tracing_guard: None,
+                        logfile: self.logfile.clone()
                     }
                 }
             }
@@ -223,10 +228,14 @@ class PythonApplicationGenerator(
                 """
                 /// Create a new [App].
                 ##[new]
-                pub fn new(py: #{pyo3}::Python, log_level: Option<#{SmithyPython}::LogLevel>) -> #{pyo3}::PyResult<Self> {
-                    let log_level = log_level.unwrap_or(#{SmithyPython}::LogLevel::Info);
-                    #{SmithyPython}::logging::setup(py, log_level)?;
-                    Ok(Self::default())
+                pub fn new(py: #{pyo3}::Python, logfile: Option<&#{pyo3}::PyAny>) -> #{pyo3}::PyResult<Self> {
+                    let logfile = if let Some(logfile) = logfile {
+                        let logfile = logfile.extract::<&str>()?;
+                        Some(std::path::Path::new(logfile).to_path_buf())
+                    } else {
+                        None
+                    };
+                    Ok(Self { logfile, ..Default::default() })
                 }
                 /// Register a context object that will be shared between handlers.
                 ##[pyo3(text_signature = "(${'$'}self, context)")]
@@ -257,10 +266,11 @@ class PythonApplicationGenerator(
                 pub fn start_worker(
                     &mut self,
                     py: pyo3::Python,
-                    socket: &pyo3::PyCell<aws_smithy_http_server_python::PySocket>,
+                    socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
                     worker_number: isize,
                 ) -> pyo3::PyResult<()> {
                     use #{SmithyPython}::PyApp;
+                    self._tracing_guard = #{SmithyPython}::logging::setup_tracing(py, self.logfile.as_ref())?;
                     let event_loop = self.configure_python_event_loop(py)?;
                     let router = self.build_router(event_loop)?;
                     self.start_hyper_worker(py, socket, event_loop, router, worker_number)

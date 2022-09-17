@@ -11,12 +11,12 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import aiohttp
-
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
     EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
     HealthCheckOperationInput, StreamPokemonRadioOperationInput)
+from libpokemon_service_server_sdk.logging import TracingHandler
 from libpokemon_service_server_sdk.middleware import (MiddlewareException,
                                                       Request)
 from libpokemon_service_server_sdk.model import FlavorText, Language
@@ -24,6 +24,10 @@ from libpokemon_service_server_sdk.output import (
     EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
     HealthCheckOperationOutput, StreamPokemonRadioOperationOutput)
 from libpokemon_service_server_sdk.types import ByteStream
+
+# Logging can bee setup using standard Python tooling. We provide
+# fast logging handler, Tracingandler based on Rust tracing crate.
+logging.basicConfig(level=logging.INFO, handlers=[TracingHandler.handle()])
 
 
 # A slightly more atomic counter using a threading lock.
@@ -185,7 +189,7 @@ def get_pokemon_species(
     context.increment_calls_count()
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:
-        logging.debug("Total requests executed: %s", context.get_calls_count())
+        logging.error("Total requests executed: %s", context.get_calls_count())
         logging.info("Found description for Pokémon %s", input.name)
         return GetPokemonSpeciesOutput(
             name=input.name, flavor_text_entries=flavor_text_entries
@@ -226,4 +230,4 @@ async def stream_pokemon_radio(_: StreamPokemonRadioOperationInput, context: Con
 ###########################################################
 # Run the server.
 ###########################################################
-app.run(workers=1)
+app.run(workers=3)

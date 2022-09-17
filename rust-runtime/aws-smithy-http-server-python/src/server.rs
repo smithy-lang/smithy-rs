@@ -12,8 +12,9 @@ use pyo3::{prelude::*, types::IntoPyDict};
 use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
+use tracing_appender::non_blocking::WorkerGuard;
 
-use crate::{middleware::PyMiddlewareHandler, PyMiddlewares, PySocket};
+use crate::{logging::setup_tracing, middleware::PyMiddlewareHandler, PyMiddlewares, PySocket};
 
 /// A Python handler function representation.
 ///
@@ -77,17 +78,15 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                     .getattr(py, "pid")
                     .map(|pid| pid.extract(py).unwrap_or(-1))
                     .unwrap_or(-1);
-                tracing::debug!("Terminating worker {idx}, PID: {pid}");
+                println!("Terminating worker {idx}, PID: {pid}");
                 match worker.call_method0(py, "terminate") {
                     Ok(_) => {}
                     Err(e) => {
-                        tracing::error!("Error terminating worker {idx}, PID: {pid}: {e}");
+                        eprintln!("Error terminating worker {idx}, PID: {pid}: {e}");
                         worker
                             .call_method0(py, "kill")
                             .map_err(|e| {
-                                tracing::error!(
-                                    "Unable to kill kill worker {idx}, PID: {pid}: {e}"
-                                );
+                                eprintln!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
                             })
                             .unwrap();
                     }
@@ -108,11 +107,11 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                     .getattr(py, "pid")
                     .map(|pid| pid.extract(py).unwrap_or(-1))
                     .unwrap_or(-1);
-                tracing::debug!("Killing worker {idx}, PID: {pid}");
+                println!("Killing worker {idx}, PID: {pid}");
                 worker
                     .call_method0(py, "kill")
                     .map_err(|e| {
-                        tracing::error!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
+                        eprintln!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
                     })
                     .unwrap();
             });
@@ -135,20 +134,20 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
         for sig in signals.forever() {
             match sig {
                 SIGINT => {
-                    tracing::info!(
+                    println!(
                         "Termination signal {sig:?} received, all workers will be immediately terminated"
                     );
 
                     self.immediate_termination(self.workers());
                 }
                 SIGTERM | SIGQUIT => {
-                    tracing::info!(
+                    println!(
                         "Termination signal {sig:?} received, all workers will be gracefully terminated"
                     );
                     self.graceful_termination(self.workers());
                 }
                 _ => {
-                    tracing::warn!("Signal {sig:?} is ignored by this application");
+                    println!("Signal {sig:?} is ignored by this application");
                 }
             }
         }
@@ -161,10 +160,12 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
         py.run(
             r#"
 import asyncio
+import logging
 import functools
 import signal
 
 async def shutdown(sig, event_loop):
+    import asyncio
     import logging
     logging.info(f"Caught signal {sig.name}, cancelling tasks registered on this loop")
     tasks = [task for task in asyncio.all_tasks() if task is not
@@ -278,10 +279,9 @@ event_loop.add_signal_handler(signal.SIGINT,
             func,
             is_coroutine,
         };
-        tracing::info!(
+        println!(
             "Registering middleware function `{}`, coroutine: {}",
-            handler.name,
-            handler.is_coroutine,
+            handler.name, handler.is_coroutine,
         );
         self.middlewares().push(handler);
         Ok(())
@@ -306,10 +306,9 @@ event_loop.add_signal_handler(signal.SIGINT,
             is_coroutine,
             args: func_args.len(),
         };
-        tracing::info!(
+        println!(
             "Registering handler function `{name}`, coroutine: {}, arguments: {}",
-            handler.is_coroutine,
-            handler.args,
+            handler.is_coroutine, handler.args,
         );
         // Insert the handler in the handlers map.
         self.handlers().insert(name.to_string(), handler);
@@ -438,7 +437,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         }
         // Unlock the workers mutex.
         drop(active_workers);
-        tracing::info!("Rust Python server started successfully");
+        println!("Rust Python server started successfully");
         self.block_on_rust_signals();
         Ok(())
     }

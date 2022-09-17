@@ -47,6 +47,7 @@ class PythonServerModuleGenerator(
                 renderPyCodegeneratedTypes()
                 renderPyWrapperTypes()
                 renderPySocketType()
+                renderPyLogging()
                 renderPyMiddlewareTypes()
                 renderPyApplicationType()
             }
@@ -121,6 +122,24 @@ class PythonServerModuleGenerator(
                 "import sys; sys.modules['$libName.socket'] = socket"
             );
             m.add_submodule(socket)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    // Render Python shared socket type.
+    private fun RustWriter.renderPyLogging() {
+        rustTemplate(
+            """
+            let logging = #{pyo3}::types::PyModule::new(py, "logging")?;
+            logging.add_function(#{pyo3}::wrap_pyfunction!(#{SmithyPython}::py_tracing_event, m)?)?;
+            logging.add_class::<#{SmithyPython}::PyTracingHandler>()?;
+            #{pyo3}::py_run!(
+                py,
+                logging,
+                "import sys; sys.modules['$libName.logging'] = logging"
+            );
+            m.add_submodule(logging)?;
             """,
             *codegenScope,
         )

@@ -69,11 +69,20 @@ class PythonServerOperationHandlerGenerator(
                     handler: #{SmithyPython}::PyHandler,
                 ) -> std::result::Result<$output, $error> {
                     // Async block used to run the handler and catch any Python error.
+                    let span = #{tracing}::span!(
+                        #{tracing}::Level::TRACE, "python",
+                        pid = #{tracing}::field::Empty,
+                        module = #{tracing}::field::Empty,
+                        filename = #{tracing}::field::Empty,
+                        lineno = #{tracing}::field::Empty
+                    );
+                    let guard = span.enter();
                     let result = if handler.is_coroutine {
                         #{PyCoroutine:W}
                     } else {
                         #{PyFunction:W}
                     };
+                    drop(guard);
                     #{PyError:W}
                 }
                 """,
