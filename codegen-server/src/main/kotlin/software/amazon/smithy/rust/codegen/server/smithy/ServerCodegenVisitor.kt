@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -69,8 +70,8 @@ open class ServerCodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
-                handleRequired = true,
                 handleRustBoxing = true,
+                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
