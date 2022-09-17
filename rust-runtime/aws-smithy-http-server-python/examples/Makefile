@@ -24,6 +24,9 @@ codegen:
 	cp -av $(SERVER_SDK_SRC)/* $(SERVER_SDK_DST)/
 	cp -av $(CLIENT_SDK_SRC)/* $(CLIENT_SDK_DST)/
 
+clippy: codegen
+	cargo clippy
+
 build: codegen
 	cargo build
 	ln -sf $(DEBUG_SHARED_LIBRARY_SRC) $(SHARED_LIBRARY_DST)
