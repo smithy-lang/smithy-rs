@@ -79,10 +79,6 @@ impl<S> PyMiddlewareService<S> {
             locals,
         }
     }
-
-    pub fn layer(handlers: PyMiddlewares, protocol: &str, locals: TaskLocals) -> PyMiddlewareLayer {
-        PyMiddlewareLayer::new(handlers, protocol, locals)
-    }
 }
 
 impl<S> Service<Request<Body>> for PyMiddlewareService<S>
@@ -156,5 +152,76 @@ where
                 StateProj::Done { fut } => return fut.poll(cx),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use super::*;
+
+    use aws_smithy_http_server::body::to_boxed;
+    use pyo3::prelude::*;
+    use tower::{Service, ServiceBuilder, ServiceExt};
+
+    use crate::middleware::PyMiddlewareHandler;
+    use crate::{PyMiddlewareException, PyRequest};
+
+    async fn echo(req: Request<Body>) -> Result<Response<BoxBody>, Box<dyn Error + Send + Sync>> {
+        Ok(Response::new(to_boxed(req.into_body())))
+    }
+
+    #[tokio::test]
+    async fn test_middlewares_are_chained_inside_layer() -> PyResult<()> {
+        let locals = crate::tests::initialize();
+        let mut middlewares = PyMiddlewares(vec![]);
+
+        Python::with_gil(|py| {
+            let middleware = PyModule::new(py, "middleware").unwrap();
+            middleware.add_class::<PyRequest>().unwrap();
+            middleware.add_class::<PyMiddlewareException>().unwrap();
+            let pycode = r#"
+def first_middleware(request: Request):
+    request.set_header("x-amzn-answer", "42")
+    return request
+
+def second_middleware(request: Request):
+    if request.get_header("x-amzn-answer") != "42":
+        raise MiddlewareException("wrong answer", 401)
+"#;
+            py.run(pycode, Some(middleware.dict()), None)?;
+            let all = middleware.index()?;
+            let first_middleware = PyMiddlewareHandler {
+                func: middleware.getattr("first_middleware")?.into_py(py),
+                is_coroutine: false,
+                name: "first".to_string(),
+            };
+            all.append("first_middleware")?;
+            middlewares.push(first_middleware);
+            let second_middleware = PyMiddlewareHandler {
+                func: middleware.getattr("second_middleware")?.into_py(py),
+                is_coroutine: false,
+                name: "second".to_string(),
+            };
+            all.append("second_middleware")?;
+            middlewares.push(second_middleware);
+            Ok::<(), PyErr>(())
+        })?;
+
+        let mut service = ServiceBuilder::new()
+            .layer(PyMiddlewareLayer::new(
+                middlewares,
+                "aws.protocols#restJson1",
+                locals,
+            ))
+            .service_fn(echo);
+
+        let request = Request::get("/").body(Body::empty()).unwrap();
+
+        let res = service.ready().await.unwrap().call(request).await.unwrap();
+
+        assert_eq!(res.status(), 200);
+        Ok(())
     }
 }

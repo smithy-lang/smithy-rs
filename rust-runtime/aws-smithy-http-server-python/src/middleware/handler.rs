@@ -23,7 +23,7 @@ pub struct PyMiddlewareHandler {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PyMiddlewares(Vec<PyMiddlewareHandler>);
+pub struct PyMiddlewares(pub Vec<PyMiddlewareHandler>);
 
 impl PyMiddlewares {
     pub fn new(handlers: Vec<PyMiddlewareHandler>) -> Self {

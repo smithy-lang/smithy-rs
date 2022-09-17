@@ -33,7 +33,7 @@ socket2 = { version = "0.4.4", features = ["all"] }
 thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = "0.1"
-tower = "0.4.13"
+tower = { version = "0.4.13", features = ["util"] }
 tracing = "0.1.36"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 

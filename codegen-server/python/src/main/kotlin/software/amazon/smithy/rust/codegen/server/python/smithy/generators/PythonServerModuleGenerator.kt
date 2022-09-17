@@ -141,7 +141,7 @@ class PythonServerModuleGenerator(
             );
             m.add_submodule(middleware)?;
             """,
-        *codegenScope
+            *codegenScope,
         )
     }
 
