@@ -141,7 +141,7 @@ class TracingHandler(Handler):
 }
 
 /// Consumes a Python `logging.LogRecord` and emits a Rust [tracing::Event] instead.
-// #[cfg(not(test))]
+#[cfg(not(test))]
 #[pyfunction]
 #[pyo3(text_signature = "(level, record, message, module, filename, line, pid)")]
 pub fn py_tracing_event(
@@ -167,20 +167,20 @@ pub fn py_tracing_event(
     Ok(())
 }
 
-// #[cfg(test)]
-// #[pyfunction]
-// #[pyo3(text_signature = "(level, record, message, module, filename, line, pid)")]
-// pub fn py_tracing_event(
-//     level: u8,
-//     message: &str,
-//     module: &str,
-//     filename: &str,
-//     line: usize,
-//     pid: usize,
-// ) -> PyResult<()> {
-//     pretty_assertions::assert_eq!(message.to_string(), "a message");
-//     Ok(())
-// }
+#[cfg(test)]
+#[pyfunction]
+#[pyo3(text_signature = "(level, record, message, module, filename, line, pid)")]
+pub fn py_tracing_event(
+    level: u8,
+    message: &str,
+    module: &str,
+    filename: &str,
+    line: usize,
+    pid: usize,
+) -> PyResult<()> {
+    pretty_assertions::assert_eq!(message.to_string(), "a message");
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
