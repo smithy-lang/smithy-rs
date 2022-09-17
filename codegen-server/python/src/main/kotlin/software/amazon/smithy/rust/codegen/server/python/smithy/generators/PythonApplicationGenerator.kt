@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
@@ -74,7 +73,6 @@ class PythonApplicationGenerator(
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
             "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "http" to CargoDependency.Http.asType(),
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),
