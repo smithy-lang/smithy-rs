@@ -1,16 +1,24 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use std::{
     pin::Pin,
     task::{Context, Poll},
 };
 
-use aws_smithy_http_server::{body::{Body, BoxBody}, protocols::Protocol};
+use aws_smithy_http_server::{
+    body::{Body, BoxBody},
+    protocols::Protocol,
+};
 use futures::{ready, Future};
 use http::{Request, Response};
 use pin_project_lite::pin_project;
 use pyo3_asyncio::TaskLocals;
 use tower::{Layer, Service};
 
-use crate::{PyMiddlewares, middleware::PyFuture};
+use crate::{middleware::PyFuture, PyMiddlewares};
 
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareLayer {

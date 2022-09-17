@@ -13,7 +13,7 @@
 
 mod error;
 pub mod logging;
-mod middleware;
+pub mod middleware;
 mod server;
 mod socket;
 pub mod types;
@@ -23,7 +23,7 @@ pub use error::{PyError, PyMiddlewareException};
 #[doc(inline)]
 pub use logging::LogLevel;
 #[doc(inline)]
-pub use middleware::{PyMiddlewares, PyMiddlewareLayer, PyRequest, PyResponse, PyHttpVersion};
+pub use middleware::{PyHttpVersion, PyMiddlewareLayer, PyMiddlewares, PyRequest, PyResponse};
 #[doc(inline)]
 pub use server::{PyApp, PyHandler};
 #[doc(inline)]
@@ -33,11 +33,22 @@ pub use socket::PySocket;
 mod tests {
     use std::sync::Once;
 
+    use pyo3::{PyErr, Python};
+    use pyo3_asyncio::TaskLocals;
+
     static INIT: Once = Once::new();
 
-    pub(crate) fn initialize() {
+    pub(crate) fn initialize() -> TaskLocals {
         INIT.call_once(|| {
             pyo3::prepare_freethreaded_python();
         });
+
+        Python::with_gil(|py| {
+            let asyncio = py.import("asyncio")?;
+            let event_loop = asyncio.call_method0("new_event_loop")?;
+            asyncio.call_method1("set_event_loop", (event_loop,))?;
+            Ok::<TaskLocals, PyErr>(TaskLocals::new(event_loop))
+        })
+        .unwrap()
     }
 }

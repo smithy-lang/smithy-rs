@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use std::{collections::HashMap, convert::TryInto};
 
 use aws_smithy_http_server::body::{to_boxed, BoxBody};
@@ -41,12 +46,15 @@ impl PyResponse {
 impl From<PyResponse> for Response<BoxBody> {
     fn from(pyresponse: PyResponse) -> Self {
         let mut response = Response::builder()
-            .status(StatusCode::from_u16(pyresponse.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
+            .status(
+                StatusCode::from_u16(pyresponse.status)
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            )
             .body(to_boxed(pyresponse.body))
             .unwrap_or_default();
         match (&pyresponse.headers).try_into() {
             Ok(headers) => *response.headers_mut() = headers,
-            Err(e) => tracing::error!("Error extracting HTTP headers from PyResponse: {e}")
+            Err(e) => tracing::error!("Error extracting HTTP headers from PyResponse: {e}"),
         };
         response
     }

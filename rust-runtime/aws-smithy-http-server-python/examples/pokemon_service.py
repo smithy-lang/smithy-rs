@@ -139,11 +139,7 @@ def check_content_type_header(request: Request):
     if content_type == "application/json":
         logging.debug("Found valid `application/json` content type")
     else:
-        logging.error(f"Invalid content type: {content_type}")
-        # Return an HTTP 401 Unauthorized if the content type is not JSON.
-        raise MiddlewareException("Invalid content type", 401)
-    # Check that `x-amzn-answer` header is not set.
-    assert request.get_header("x-amzn-answer") is None
+        logging.warning(f"Invalid content type: {content_type}")
 
 
 # This middleware adds a new header called `x-amazon-answer` to the
@@ -164,9 +160,11 @@ async def check_method_and_content_length(request: Request):
         content_length = int(content_length)
         logging.debug("Request content length: {content_length}")
     else:
-        logging.error(f"Invalid content length. Dumping headers: {request.headers()}")
+        logging.warning(f"Invalid content length. Dumping headers: {request.headers()}")
     # Check that `x-amzn-answer` is 42.
-    assert request.get_header("x-amzn-answer") == "42"
+    if request.get_header("x-amzn-answer") != "42":
+        # Return an HTTP 401 Unauthorized if the content type is not JSON.
+        raise MiddlewareException("Invalid answer", 401)
 
 
 ###########################################################

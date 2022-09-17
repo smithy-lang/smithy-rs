@@ -293,10 +293,9 @@ event_loop.add_signal_handler(signal.SIGINT,
     /// such has if the registered function needs to be awaited (if it is a coroutine) and
     /// the number of arguments available, which tells us if the handler wants the state to be
     /// passed or not.
-    fn register_operation(&mut self, py: Python, func: PyObject) -> PyResult<()> {
-        let name = func.getattr(py, "__name__")?.extract::<String>(py)?;
+    fn register_operation(&mut self, py: Python, name: &str, func: PyObject) -> PyResult<()> {
         let is_coroutine = self.is_coroutine(py, &func)?;
-        // Find number of expected methods (a Pythzzon implementation could not accept the context).
+        // Find number of expected methods (a Python implementation could not accept the context).
         let inspect = py.import("inspect")?;
         let func_args = inspect
             .call_method1("getargs", (func.getattr(py, "__code__")?,))?
@@ -313,7 +312,7 @@ event_loop.add_signal_handler(signal.SIGINT,
             handler.args,
         );
         // Insert the handler in the handlers map.
-        self.handlers().insert(name, handler);
+        self.handlers().insert(name.to_string(), handler);
         Ok(())
     }
 
@@ -358,7 +357,7 @@ event_loop.add_signal_handler(signal.SIGINT,
     /// ```no_run
     ///     use std::collections::HashMap;
     ///     use pyo3::prelude::*;
-    ///     use aws_smithy_http_server_python::{PyApp, PyHandler};
+    ///     use aws_smithy_http_server_python::{PyApp, PyHandler, PyMiddlewares};
     ///     use parking_lot::Mutex;
     ///
     ///     #[pyclass]
@@ -373,6 +372,8 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///         fn workers(&self) -> &Mutex<Vec<PyObject>> { todo!() }
     ///         fn context(&self) -> &Option<PyObject> { todo!() }
     ///         fn handlers(&mut self) -> &mut HashMap<String, PyHandler> { todo!() }
+    ///         fn middlewares(&mut self) -> &mut PyMiddlewares { todo!() }
+    ///         fn protocol(&self) -> &'static str { "proto1" }
     ///     }
     ///
     ///     #[pymethods]
