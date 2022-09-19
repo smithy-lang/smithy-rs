@@ -70,7 +70,8 @@ class ConstrainedStringGenerator(
             visibility = constrainedTypeVisibility,
         )
 
-        // TODO Display impl does not honor `sensitive` trait.
+        // TODO Display impl does not honor `sensitive` trait. Implement it on top of https://github.com/awslabs/smithy-rs/pull/1746
+
         // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
         // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
         // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
