@@ -84,7 +84,7 @@ class ConstrainedMapGenerator(
             "ConstraintViolation" to constraintViolation,
         )
 
-        // TODO Display impl missing; it should honor `sensitive` trait.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1744): If we end up implementing `Display`, it should honor `sensitive`.
 
         writer.documentShape(shape, model, note = rustDocsNote(name))
         constrainedTypeMetadata.render(writer)
