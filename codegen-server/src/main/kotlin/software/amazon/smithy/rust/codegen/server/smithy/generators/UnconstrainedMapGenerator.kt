@@ -95,7 +95,6 @@ class UnconstrainedMapGenerator(
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
                 if (isKeyConstrained(keyShape, symbolProvider) || isValueConstrained(valueShape, model, symbolProvider)) {
-                    // TODO I think this breaks if the value shape is a constrained enum (?) Add protocol test.
                     val resolveToNonPublicConstrainedValueType =
                         isValueConstrained(valueShape, model, symbolProvider) &&
                             !valueShape.isDirectlyConstrained(symbolProvider) &&
