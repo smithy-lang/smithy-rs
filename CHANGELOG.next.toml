@@ -242,3 +242,9 @@ renamed to `with_retry_classifier` and `retry_classifier` respectively. Public m
 references = ["smithy-rs#1715", "smithy-rs#1717"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Correctly determine nullability of members in IDLv2 models"
+references = ["smithy-rs#1725"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+author = "sugmanue"
