@@ -16,7 +16,17 @@ import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShap
 import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 
-// TODO Docs
+/**
+ * Generates a Rust type for a constrained collection shape that is able to hold values for the corresponding
+ * _unconstrained_ shape. This type is a [RustType.Opaque] wrapper tuple newtype holding a `Vec`. Upon request parsing,
+ * server deserializers use this type to store the incoming values without enforcing the modeled constraints. Only after
+ * the full request has been parsed are constraints enforced, via the `impl TryFrom<UnconstrainedSymbol> for
+ * ConstrainedSymbol`.
+ *
+ * This type is never exposed to the user; it is always `pub(crate)`. Only the deserializers use it.
+ *
+ * Consult [UnconstrainedShapeSymbolProvider] for more details and for an example.
+ */
 class UnconstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
     private val unconstrainedModuleWriter: RustWriter,

@@ -32,7 +32,17 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 
-// TODO Docs
+/**
+ * Generates a Rust type for a constrained union shape that is able to hold values for the corresponding _unconstrained_
+ * shape. This type is a [RustType.Opaque] enum newtype, with each variant holding the corresponding unconstrained type.
+ * Upon request parsing, server deserializers use this type to store the incoming values without enforcing the modeled
+ * constraints. Only after the full request has been parsed are constraints enforced, via the `impl
+ * TryFrom<UnconstrainedSymbol> for ConstrainedSymbol`.
+ *
+ * This type is never exposed to the user; it is always `pub(crate)`. Only the deserializers use it.
+ *
+ * Consult [UnconstrainedShapeSymbolProvider] for more details and for an example.
+ */
 class UnconstrainedUnionGenerator(
     val codegenContext: ServerCodegenContext,
     private val unconstrainedModuleWriter: RustWriter,
