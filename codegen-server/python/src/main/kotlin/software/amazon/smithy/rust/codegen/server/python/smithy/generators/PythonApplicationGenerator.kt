@@ -228,7 +228,7 @@ class PythonApplicationGenerator(
                 """
                 /// Create a new [App].
                 ##[new]
-                pub fn new(py: #{pyo3}::Python, logfile: Option<&#{pyo3}::PyAny>) -> #{pyo3}::PyResult<Self> {
+                pub fn new(logfile: Option<&#{pyo3}::PyAny>) -> #{pyo3}::PyResult<Self> {
                     let logfile = if let Some(logfile) = logfile {
                         let logfile = logfile.extract::<&str>()?;
                         Some(std::path::Path::new(logfile).to_path_buf())
