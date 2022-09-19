@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use pyo3::prelude::*;
-use tracing::{Level, Span};
+use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     fmt::{self, writer::MakeWriterExt},
@@ -171,12 +171,12 @@ pub fn py_tracing_event(
 #[pyfunction]
 #[pyo3(text_signature = "(level, record, message, module, filename, line, pid)")]
 pub fn py_tracing_event(
-    level: u8,
+    _level: u8,
     message: &str,
-    module: &str,
-    filename: &str,
-    line: usize,
-    pid: usize,
+    _module: &str,
+    _filename: &str,
+    _line: usize,
+    _pid: usize,
 ) -> PyResult<()> {
     pretty_assertions::assert_eq!(message.to_string(), "a message");
     Ok(())
