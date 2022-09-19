@@ -59,9 +59,6 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
-// TODO: Separate commit: Make all functions pub(crate). If the functions have in their type signature a pub(crate) type,
-//  and the function is declared `pub`, Rust will complain, even if the json_deser module is not `pub`.
-
 class JsonParserGenerator(
     private val coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,

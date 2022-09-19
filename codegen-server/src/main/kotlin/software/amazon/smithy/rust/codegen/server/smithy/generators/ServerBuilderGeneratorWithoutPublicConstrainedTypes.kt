@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.deprecatedShape
@@ -19,8 +18,6 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
@@ -31,27 +28,33 @@ import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 
 /**
- * TODO Docs
- * This builder only enforces the `required` trait.
+ * Generates a builder for the Rust type associated with the [StructureShape].
  *
- * This builder is always public.
+ * This builder is similar in design to [ServerBuilderGenerator], so consult its documentation in that regard. However,
+ * this builder has a few differences.
+ *
+ * Unlike [ServerBuilderGenerator], this builder only enforces constraints that are baked into the type system _when
+ * `publicConstrainedTypes` is false_. So in terms of honoring the Smithy spec, this builder only enforces enums
+ * and the `required` trait.
+ *
+ * Unlike [ServerBuilderGenerator], this builder is always public. It is the only builder type the user is exposed to
+ * when `publicConstrainedTypes` is false.
  */
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     codegenContext: ServerCodegenContext,
-    private val shape: StructureShape,
+    shape: StructureShape,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    private val constraintViolationSymbolProvider =
-        ConstraintViolationSymbolProvider(codegenContext.symbolProvider, model, codegenContext.serviceShape)
-    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
 
-    // TODO moduleName
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
     private val moduleName = builderSymbol.namespace.split("::").last()
-    private val isBuilderFallible = StructureGenerator.serverHasFallibleBuilderWithoutPublicConstrainedTypes(shape, symbolProvider)
+    private val isBuilderFallible =
+        StructureGenerator.serverHasFallibleBuilderWithoutPublicConstrainedTypes(shape, symbolProvider)
+    private val serverBuilderConstraintViolations =
+        ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
@@ -70,24 +73,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
-            writer.docs("Holds one variant for each of the ways the builder can fail.")
-            val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
-            writer.rustBlock("pub enum $constraintViolationSymbolName") {
-                constraintViolations().forEach {
-                    renderConstraintViolation(
-                        this,
-                        it,
-                        model,
-                        constraintViolationSymbolProvider,
-                        symbolProvider,
-                        structureSymbol,
-                    )
-                }
-            }
-
-            renderImplDisplayConstraintViolation(writer)
-            writer.rust("impl #T for ConstraintViolation { }", RuntimeType.StdError)
+            serverBuilderConstraintViolations.render(writer, nonExhaustive = false)
 
             renderTryFromBuilderImpl(writer)
         } else {
@@ -95,8 +81,8 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         }
 
         writer.docs("A builder for #D.", structureSymbol)
-        // Matching derives to the main structure, - `PartialEq`, + `Default` since we are a builder and everything is optional.
-        // TODO Manually implement `Default` so that we can add custom docs.
+        // Matching derives to the main structure, - `PartialEq` (to be consistent with [ServerBuilderGenerator]), + `Default`
+        // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
         val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
         baseDerives.copy(derives = derives).render(writer)
@@ -112,34 +98,6 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         }
     }
 
-    // TODO Extract
-    // TODO This impl does not take into account sensitive trait.
-    private fun renderImplDisplayConstraintViolation(writer: RustWriter) {
-        writer.rustBlock("impl #T for ConstraintViolation", RuntimeType.Display) {
-            rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                rustBlock("match self") {
-                    constraintViolations().forEach {
-                        val arm = if (it.hasInner()) {
-                            "ConstraintViolation::${it.name()}(_)"
-                        } else {
-                            "ConstraintViolation::${it.name()}"
-                        }
-                        rust("""$arm => write!(f, "${constraintViolationMessage(it, symbolProvider, structureSymbol)}"),""")
-                    }
-                }
-            }
-        }
-    }
-
-    // TODO Extract
-    private fun buildFnReturnType() = writable {
-        if (isBuilderFallible) {
-            rust("Result<#T, ConstraintViolation>", structureSymbol)
-        } else {
-            rust("#T", structureSymbol)
-        }
-    }
-
     private fun renderBuildFn(implBlockWriter: RustWriter) {
         implBlockWriter.docs("""Consumes the builder and constructs a #D.""", structureSymbol)
         if (isBuilderFallible) {
@@ -150,15 +108,22 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 structureSymbol,
             )
         }
-        // TODO Could be single block
-        implBlockWriter.rustBlockTemplate("pub fn build(self) -> #{ReturnType:W}", "ReturnType" to buildFnReturnType()) {
-            rust("self.build_enforcing_required_and_enum_traits()")
-        }
+        implBlockWriter.rustTemplate(
+            """
+            pub fn build(self) -> #{ReturnType:W} {
+                self.build_enforcing_required_and_enum_traits()
+            }
+            """,
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
+        )
         renderBuildEnforcingRequiredAndEnumTraitsFn(implBlockWriter)
     }
 
     private fun renderBuildEnforcingRequiredAndEnumTraitsFn(implBlockWriter: RustWriter) {
-        implBlockWriter.rustBlockTemplate("fn build_enforcing_required_and_enum_traits(self) -> #{ReturnType:W}", "ReturnType" to buildFnReturnType()) {
+        implBlockWriter.rustBlockTemplate(
+            "fn build_enforcing_required_and_enum_traits(self) -> #{ReturnType:W}",
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
+        ) {
             conditionalBlock("Ok(", ")", conditional = isBuilderFallible) {
                 coreBuilder(this)
             }
@@ -171,7 +136,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 val memberName = symbolProvider.toMemberName(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
-                    builderMissingFieldConstraintViolationForMember(member, symbolProvider)?.also {
+                    serverBuilderConstraintViolations.forMember(member)?.also {
                         rust(".ok_or(ConstraintViolation::${it.name()})?")
                     }
                 }
@@ -214,10 +179,6 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 }
             }
         }
-    }
-
-    private fun constraintViolations() = members.flatMap { member ->
-        listOfNotNull(builderMissingFieldConstraintViolationForMember(member, symbolProvider))
     }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {

@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -31,8 +29,6 @@ import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.RustBoxTrait
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
@@ -51,9 +47,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
-import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 
 /**
@@ -97,21 +91,16 @@ class ServerBuilderGenerator(
     private val model = codegenContext.model
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val symbolProvider = codegenContext.symbolProvider
-    private val constraintViolationSymbolProvider =
-        with(codegenContext.constraintViolationSymbolProvider) {
-            if (publicConstrainedTypes) {
-                this
-            } else {
-                PubCrateConstraintViolationSymbolProvider(this)
-            }
-        }
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
     private val moduleName = builderSymbol.namespace.split(builderSymbol.namespaceDelimiter).last()
-    private val isBuilderFallible = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
+    private val isBuilderFallible =
+        StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
+    private val serverBuilderConstraintViolations =
+        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
@@ -136,25 +125,7 @@ class ServerBuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
-            writer.docs("Holds one variant for each of the ways the builder can fail.")
-            Attribute.NonExhaustive.render(writer)
-            val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
-            writer.rustBlock("pub enum $constraintViolationSymbolName") {
-                constraintViolations().forEach {
-                    renderConstraintViolation(
-                        this,
-                        it,
-                        model,
-                        constraintViolationSymbolProvider,
-                        symbolProvider,
-                        structureSymbol,
-                    )
-                }
-            }
-
-            renderImplDisplayConstraintViolation(writer)
-            writer.rust("impl #T for ConstraintViolation { }", RuntimeType.StdError)
+            serverBuilderConstraintViolations.render(writer, nonExhaustive = true)
 
             // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
             // an operation input shape.
@@ -195,24 +166,6 @@ class ServerBuilderGenerator(
         }
     }
 
-    // TODO This impl does not take into account the `sensitive` trait.
-    private fun renderImplDisplayConstraintViolation(writer: RustWriter) {
-        writer.rustBlock("impl #T for ConstraintViolation", RuntimeType.Display) {
-            rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                rustBlock("match self") {
-                    constraintViolations().forEach {
-                        val arm = if (it.hasInner()) {
-                            "ConstraintViolation::${it.name()}(_)"
-                        } else {
-                            "ConstraintViolation::${it.name()}"
-                        }
-                        rust("""$arm => write!(f, "${constraintViolationMessage(it, symbolProvider, structureSymbol)}"),""")
-                    }
-                }
-            }
-        }
-    }
-
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
         writer.rustTemplate(
             """
@@ -240,14 +193,6 @@ class ServerBuilderGenerator(
         )
     }
 
-    private fun buildFnReturnType() = writable {
-        if (isBuilderFallible) {
-            rust("Result<#T, ConstraintViolation>", structureSymbol)
-        } else {
-            rust("#T", structureSymbol)
-        }
-    }
-
     private fun renderBuildFn(implBlockWriter: RustWriter) {
         implBlockWriter.docs("""Consumes the builder and constructs a #D.""", structureSymbol)
         if (isBuilderFallible) {
@@ -258,7 +203,7 @@ class ServerBuilderGenerator(
                 structureSymbol,
             )
 
-            if (constraintViolations().size > 1) {
+            if (serverBuilderConstraintViolations.all.size > 1) {
                 implBlockWriter.docs("If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].")
             }
         }
@@ -268,13 +213,16 @@ class ServerBuilderGenerator(
                 self.build_enforcing_all_constraints()
             }
             """,
-            "ReturnType" to buildFnReturnType(),
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
         )
         renderBuildEnforcingAllConstraintsFn(implBlockWriter)
     }
 
     private fun renderBuildEnforcingAllConstraintsFn(implBlockWriter: RustWriter) {
-        implBlockWriter.rustBlockTemplate("fn build_enforcing_all_constraints(self) -> #{ReturnType:W}", "ReturnType" to buildFnReturnType()) {
+        implBlockWriter.rustBlockTemplate(
+            "fn build_enforcing_all_constraints(self) -> #{ReturnType:W}",
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
+        ) {
             conditionalBlock("Ok(", ")", conditional = isBuilderFallible) {
                 coreBuilder(this)
             }
@@ -414,23 +362,6 @@ class ServerBuilderGenerator(
         }
     }
 
-    private fun constraintViolations() = members.flatMap { member ->
-        listOfNotNull(
-            builderMissingFieldConstraintViolationForMember(member, symbolProvider),
-            builderConstraintViolationForMember(member),
-        )
-    }
-
-    /**
-     * Returns the builder failure associated with the `member` field if its target is constrained.
-     */
-    private fun builderConstraintViolationForMember(member: MemberShape) =
-        if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
-            ConstraintViolation(member, ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE)
-        } else {
-            null
-        }
-
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
@@ -516,7 +447,7 @@ class ServerBuilderGenerator(
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
-                    builderConstraintViolationForMember(member)?.also { constraintViolation ->
+                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)?.also { constraintViolation ->
                         val hasBox = builderMemberSymbol(member)
                             .mapRustType { it.stripOuter<RustType.Option>() }
                             .isRustBoxed()
@@ -564,7 +495,7 @@ class ServerBuilderGenerator(
                             }
                         }
                     }
-                    builderMissingFieldConstraintViolationForMember(member, symbolProvider)?.also {
+                    serverBuilderConstraintViolations.forMember(member)?.also {
                         rust(".ok_or(ConstraintViolation::${it.name()})?")
                     }
                 }
@@ -573,89 +504,10 @@ class ServerBuilderGenerator(
     }
 }
 
-/**
- * The kinds of constraint violations that can occur when building the builder.
- */
-enum class ConstraintViolationKind {
-    // A field is required but was not provided.
-    MISSING_MEMBER,
-
-    // An unconstrained type was provided for a field targeting a constrained shape, but it failed to convert into the constrained type.
-    CONSTRAINED_SHAPE_FAILURE,
-}
-
-data class ConstraintViolation(val forMember: MemberShape, val kind: ConstraintViolationKind) {
-    fun name() = when (kind) {
-        ConstraintViolationKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
-        ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> forMember.memberName.toPascalCase()
-    }
-
-    /**
-     * Whether the constraint violation is a Rust tuple struct with one element.
-     */
-    fun hasInner() = kind == ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE
-}
-
-/**
- * A message for a `ConstraintViolation` variant. This is used in both Rust documentation and the `Display` trait implementation.
- */
-fun constraintViolationMessage(
-    constraintViolation: ConstraintViolation,
-    symbolProvider: RustSymbolProvider,
-    structureSymbol: Symbol,
-): String {
-    val memberName = symbolProvider.toMemberName(constraintViolation.forMember)
-    return when (constraintViolation.kind) {
-        ConstraintViolationKind.MISSING_MEMBER -> "`$memberName` was not provided but it is required when building `${structureSymbol.name}`"
-        // TODO Nest errors.
-        ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "constraint violation occurred building member `$memberName` when building `${structureSymbol.name}`"
-    }
-}
-
-/**
- * Returns the builder failure associated with the [member] field if it is `required`.
- */
-fun builderMissingFieldConstraintViolationForMember(member: MemberShape, symbolProvider: RustSymbolProvider) =
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
-    if (symbolProvider.toSymbol(member).isOptional()) {
-        null
+fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol) = writable {
+    if (isBuilderFallible) {
+        rust("Result<#T, ConstraintViolation>", structureSymbol)
     } else {
-        ConstraintViolation(member, ConstraintViolationKind.MISSING_MEMBER)
+        rust("#T", structureSymbol)
     }
-
-fun renderConstraintViolation(
-    writer: RustWriter,
-    constraintViolation: ConstraintViolation,
-    model: Model,
-    constraintViolationSymbolProvider: SymbolProvider,
-    symbolProvider: RustSymbolProvider,
-    structureSymbol: Symbol,
-) =
-    when (constraintViolation.kind) {
-        ConstraintViolationKind.MISSING_MEMBER -> {
-            writer.docs(
-                "${constraintViolationMessage(
-                    constraintViolation,
-                    symbolProvider,
-                    structureSymbol,
-                ).replaceFirstChar { it.uppercase() }}.",
-            )
-            writer.rust("${constraintViolation.name()},")
-        }
-        ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> {
-            val targetShape = model.expectShape(constraintViolation.forMember.target)
-
-            val constraintViolationSymbol =
-                constraintViolationSymbolProvider.toSymbol(targetShape)
-                    // If the corresponding structure's member is boxed, box this constraint violation symbol too.
-                    .letIf(constraintViolation.forMember.hasTrait<RustBoxTrait>()) {
-                        it.makeRustBoxed()
-                    }
-
-            // Note we cannot express the inner constraint violation as `<T as TryFrom<T>>::Error`, because `T` might
-            // be `pub(crate)` and that would leak `T` in a public interface.
-            writer.docs("${constraintViolationMessage(constraintViolation, symbolProvider, structureSymbol)}.")
-            Attribute.DocHidden.render(writer)
-            writer.rust("${constraintViolation.name()}(#T),", constraintViolationSymbol)
-        }
-    }
+}
