@@ -18,6 +18,8 @@ pub mod logging;
 #[doc(hidden)]
 pub mod operation;
 #[doc(hidden)]
+pub mod plugin;
+#[doc(hidden)]
 pub mod protocols;
 #[doc(hidden)]
 pub mod rejection;
