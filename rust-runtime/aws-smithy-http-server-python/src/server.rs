@@ -12,9 +12,8 @@ use pyo3::{prelude::*, types::IntoPyDict};
 use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
-use tracing_appender::non_blocking::WorkerGuard;
 
-use crate::{logging::setup_tracing, middleware::PyMiddlewareHandler, PyMiddlewares, PySocket};
+use crate::{middleware::PyMiddlewareHandler, PyMiddlewares, PySocket};
 
 /// A Python handler function representation.
 ///
@@ -165,6 +164,8 @@ import functools
 import signal
 
 async def shutdown(sig, event_loop):
+    # reimport asyncio and logging to be sure they are available when
+    # this handler runs on signal catching.
     import asyncio
     import logging
     logging.info(f"Caught signal {sig.name}, cancelling tasks registered on this loop")
