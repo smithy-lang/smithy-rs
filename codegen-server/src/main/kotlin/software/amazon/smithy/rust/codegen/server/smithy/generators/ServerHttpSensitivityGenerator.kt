@@ -6,10 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.RelationshipDirection
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.pattern.UriPattern
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -18,10 +15,8 @@ import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.HttpQueryParamsTrait
 import software.amazon.smithy.model.traits.HttpQueryTrait
-import software.amazon.smithy.model.traits.HttpResponseCodeTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
-import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
@@ -33,6 +28,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import java.util.*
 
@@ -116,7 +112,7 @@ class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedy
 
 /** Models the ways headers can be bound and sensitive */
 sealed class HeaderSensitivity(
-    // The values of [trait|sensitive] ~> [trait|httpHeader]
+    /** The values of the sensitive `httpHeaders`. */
     val headerKeys: List<String>,
     runtimeConfig: RuntimeConfig,
 ) {
@@ -125,20 +121,20 @@ sealed class HeaderSensitivity(
         "Http" to CargoDependency.Http.asType(),
     )
 
-    // The case where map[trait|httpPrefixHeaders] > [id|member = value] is not sensitive
+    /** The case where `prefixHeaders` value is not sensitive. */
     class NotSensitiveMapValue(
         headerKeys: List<String>,
-        // The value of map[trait|httpPrefixHeaders] > [id|member = key], null if it's not sensitive
+        /** The value of `prefixHeaders`, null if it's not sensitive. */
         val prefixHeader: String?,
         runtimeConfig: RuntimeConfig,
     ) : HeaderSensitivity(headerKeys, runtimeConfig)
 
-    // The case where map[trait|httpPrefixHeaders] > [id|member = value] is sensitive
+    /** The case where `prefixHeaders` value is sensitive. */
     class SensitiveMapValue(
         headerKeys: List<String>,
-        // Is map[trait|httpQueryParams] > [id|member = key] sensitive?
+        /** Is the `prefixHeaders` key sensitive? */
         val keySensitive: Boolean,
-        // What is the value of map[trait|httpQueryParams]?
+        /** The value of `prefixHeaders`. */
         val prefixHeader: String,
         runtimeConfig: RuntimeConfig,
     ) : HeaderSensitivity(headerKeys, runtimeConfig)
@@ -221,30 +217,26 @@ sealed class HeaderSensitivity(
 
 /** Models the ways query strings can be bound and sensitive. */
 sealed class QuerySensitivity(
-    // Are all keys sensitive?
+    /** Are all keys sensitive? */
     val allKeysSensitive: Boolean,
     runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType())
 
-    // The case where map[trait|httpQueryParams] > [id|member = value] is not sensitive
+    /** The case where the `httpQueryParams` value is not sensitive. */
     class NotSensitiveMapValue(
-        // The values of [trait|sensitive] ~> [trait|httpQuery]
+        /** The values of `httpQuery`. */
         val queryKeys: List<String>,
         allKeysSensitive: Boolean, runtimeConfig: RuntimeConfig,
     ) : QuerySensitivity(allKeysSensitive, runtimeConfig)
 
-    // The case where map[trait|httpQueryParams] > [id|member = value] is sensitive
+    /** The case where `httpQueryParams` value is sensitive. */
     class SensitiveMapValue(allKeysSensitive: Boolean, runtimeConfig: RuntimeConfig) : QuerySensitivity(allKeysSensitive, runtimeConfig)
 
     /** Is there anything to redact? */
     internal fun hasRedactions(): Boolean = when (this) {
-        is NotSensitiveMapValue -> {
-            allKeysSensitive || queryKeys.isNotEmpty()
-        }
-        is SensitiveMapValue -> {
-            true
-        }
+        is NotSensitiveMapValue -> allKeysSensitive || queryKeys.isNotEmpty()
+        is SensitiveMapValue -> true
     }
 
     /** Returns the type of the `MakeFmt`. */
@@ -323,190 +315,123 @@ class ServerHttpSensitivityGenerator(
 
     /** Constructs `StatusCodeSensitivity` of a `Shape` */
     private fun findStatusCodeSensitivity(rootShape: Shape): StatusCodeSensitivity {
-        val isSensitive = findSensitiveBoundTrait<HttpResponseCodeTrait>(rootShape).isNotEmpty()
+        // Find all sensitive `httpResponseCode` bindings in the `rootShape`.
+        val isSensitive = rootShape
+            .members()
+            .filter { member -> member.hasTrait<HttpHeaderTrait>() }
+            .any { member -> member.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+
         return StatusCodeSensitivity(isSensitive, runtimeConfig)
     }
 
     /** Constructs `HeaderSensitivity` of a `Shape` */
     internal fun findHeaderSensitivity(rootShape: Shape): HeaderSensitivity {
-        // httpHeader bindings
-        // [trait|sensitive] ~> [trait|httpHeader]
-        val headerKeys = findSensitiveBoundTrait<HttpHeaderTrait>(rootShape).map { it.value }.distinct()
+        // Find all `httpHeader` bindings in the `rootShape`.
+        val headerKeys = rootShape.members().mapNotNull { member -> member.getTrait<HttpHeaderTrait>()?.let { trait -> Pair(member, trait.value) } }.distinct()
 
-        // httpPrefixHeaders bindings
-        // [trait|sensitive] ~> [trait|httpPrefixHeaders]
-        // All prefix keys and values are sensitive
-        val prefixSuffixA = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(rootShape).map { it.value }.singleOrNull()
-        if (prefixSuffixA != null) {
-            return HeaderSensitivity.SensitiveMapValue(headerKeys, true, prefixSuffixA, runtimeConfig)
-        }
+        // Find `httpPrefixHeaders` trait.
+        val prefixHeader = rootShape.members().mapNotNull { member -> member.getTrait<HttpPrefixHeadersTrait>()?.let { trait -> Pair(member, trait.value) } }.singleOrNull()
 
-        // Find httpPrefixHeaders trait
-        // member[trait|httpPrefixHeaders]
-        val httpPrefixMember: MemberShape = Walker(model)
-            .walkShapes(rootShape) {
-                // Do not traverse upwards or beyond a httpPrefixHeaders trait
-                it.direction == RelationshipDirection.DIRECTED && !it.shape.hasTrait<HttpPrefixHeadersTrait>()
-            }
-            .filter {
-                it.hasTrait<HttpPrefixHeadersTrait>()
-            }
-            .map { it as? MemberShape }
-            .singleOrNull() ?: return HeaderSensitivity.NotSensitiveMapValue(headerKeys, null, runtimeConfig)
-
-        // Find map[trait|httpPrefixHeaders] > member[trait|sensitive]
-        val mapMembers: List<MemberShape> =
-            Walker(model)
-                .walkShapes(httpPrefixMember) {
-                    // Do not traverse upwards
-                    it.direction == RelationshipDirection.DIRECTED
-                }
-                .filter {
-                    isDirectedRelationshipSensitive<SensitiveTrait>(it)
-                }.mapNotNull {
-                    it as? MemberShape
-                }
-
-        // httpPrefixHeaders name
-        val httpPrefixTrait = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()
-        val httpPrefixName = checkNotNull(httpPrefixTrait) { "httpPrefixTrait shouldn't be null as it was checked above" }.value
-
-        // Are key/value of the httpPrefixHeaders map sensitive?
-        val (keySensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
-            Pair(
-                key || it.memberName == "key",
-                value || it.memberName == "value",
+        // Is `rootShape` sensitive and does `httpPrefixHeaders` exist?
+        if (rootShape.hasTrait<SensitiveTrait>()) if (prefixHeader != null) {
+            return HeaderSensitivity.SensitiveMapValue(
+                headerKeys.map { it.second }, true,
+                prefixHeader.second, runtimeConfig,
             )
         }
 
-        return if (valuesSensitive) {
-            // All values are sensitive
-            HeaderSensitivity.SensitiveMapValue(headerKeys, keySensitive, httpPrefixName, runtimeConfig)
-        } else if (keySensitive) {
-            // Only keys are sensitive
-            HeaderSensitivity.NotSensitiveMapValue(headerKeys, httpPrefixName, runtimeConfig)
+        // Which headers are sensitive?
+        val sensitiveHeaders = headerKeys.mapNotNull { (member, name) -> member.getMemberTrait(model, SensitiveTrait::class.java).orNull()?.let { name } }
+
+        return if (prefixHeader != null) {
+            // Get the `httpPrefixHeader` map.
+            val prefixHeaderMap = model.getShape(prefixHeader.first.target).orNull()?.asMapShape()?.orNull()
+
+            // Check whether key and value are sensitive.
+            val isKeySensitive = prefixHeaderMap?.key?.getMemberTrait(model, SensitiveTrait::class.java)?.orNull() != null
+            val isValueSensitive = prefixHeaderMap?.value?.getMemberTrait(model, SensitiveTrait::class.java)?.orNull() != null
+
+            if (isValueSensitive) {
+                HeaderSensitivity.SensitiveMapValue(sensitiveHeaders, isKeySensitive, prefixHeader.second, runtimeConfig)
+            } else if (isKeySensitive) {
+                HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, prefixHeader.second, runtimeConfig)
+            } else {
+                HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, null, runtimeConfig)
+            }
         } else {
-            // No values are sensitive
-            HeaderSensitivity.NotSensitiveMapValue(headerKeys, null, runtimeConfig)
+            HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, null, runtimeConfig)
         }
     }
 
     /** Constructs `QuerySensitivity` of a `Shape` */
     internal fun findQuerySensitivity(rootShape: Shape): QuerySensitivity {
-        // httpQueryParams bindings
-        // [trait|sensitive] ~> [trait|httpQueryParams]
-        // Both keys/values are sensitive
-        val allSensitive = findSensitiveBoundTrait<HttpQueryParamsTrait>(rootShape).isNotEmpty()
+        // Find `httpQueryParams` trait.
+        val queryParams = rootShape.members().singleOrNull { member -> member.hasTrait<HttpQueryParamsTrait>() }
 
-        if (allSensitive) {
+        // Is `rootShape` sensitive and does `httpQueryParams` exist?
+        if (rootShape.hasTrait<SensitiveTrait>()) if (queryParams != null) {
             return QuerySensitivity.SensitiveMapValue(true, runtimeConfig)
         }
 
-        // Sensitive trait can exist within the httpQueryParams map
-        // [trait|httpQueryParams] ~> map > member [trait|sensitive]
-        // Keys/values may be sensitive
-        val mapMembers = findTraitInterval<HttpQueryParamsTrait, SensitiveTrait>(rootShape)
-        val (keysSensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
-            Pair(
-                key || it.memberName == "key",
-                value || it.memberName == "value",
-            )
+        // Find all `httpQuery` bindings in the `rootShape`.
+        val queryKeys = rootShape.members().mapNotNull { member -> member.getTrait<HttpQueryTrait>()?.let { trait -> Pair(member, trait.value) } }.distinct()
+
+        // Which queries are sensitive?
+        val sensitiveQueries = queryKeys.mapNotNull { (member, name) -> member.getMemberTrait(model, SensitiveTrait::class.java).orNull()?.let { name } }
+
+        return if (queryParams != null) {
+            // Get the `httpQueryParams` map.
+            val queryParamsMap = model.getShape(queryParams.target).orNull()?.asMapShape()?.orNull()
+
+            // Check whether key and value are sensitive.
+            val isKeySensitive = queryParamsMap?.key?.getMemberTrait(model, SensitiveTrait::class.java)?.orNull() != null
+            val isValueSensitive = queryParamsMap?.value?.getMemberTrait(model, SensitiveTrait::class.java)?.orNull() != null
+
+            if (isValueSensitive) {
+                QuerySensitivity.SensitiveMapValue(isKeySensitive, runtimeConfig)
+            } else {
+                QuerySensitivity.NotSensitiveMapValue(sensitiveQueries, isKeySensitive, runtimeConfig)
+            }
+        } else {
+            QuerySensitivity.NotSensitiveMapValue(sensitiveQueries, false, runtimeConfig)
         }
-
-        if (valuesSensitive) {
-            return QuerySensitivity.SensitiveMapValue(keysSensitive, runtimeConfig)
-        }
-
-        // httpQuery bindings
-        // [trait|sensitive] ~> [trait|httpQuery]
-        val queries = findSensitiveBoundTrait<HttpQueryTrait>(rootShape).map { it.value }.distinct()
-
-        return QuerySensitivity.NotSensitiveMapValue(queries, keysSensitive, runtimeConfig)
     }
 
     /** Constructs `LabelSensitivity` of a `Shape` */
     internal fun findLabelSensitivity(uriPattern: UriPattern, rootShape: Shape): LabelSensitivity {
-        val sensitiveLabels = findSensitiveBound<HttpLabelTrait>(rootShape)
+        // Find `httpLabel` trait.
+        val httpLabels = rootShape
+            .members()
+            .filter { it.hasTrait<HttpLabelTrait>() }
+            .filter { it.getMemberTrait(model, SensitiveTrait::class.java).orNull() != null }
 
-        val labelMap: Map<String, Int> = uriPattern
-            .segments
-            .withIndex()
-            .filter { (_, segment) -> segment.isLabel && !segment.isGreedyLabel }.associate { (index, segment) -> Pair(segment.content, index) }
-        val labelsIndex = sensitiveLabels.mapNotNull { labelMap[it.memberName] }
-
-        val greedyLabel = uriPattern
-            .segments
-            .asIterable()
-            .withIndex()
-            .find { (_, segment) ->
-                segment.isGreedyLabel
-            }?.let { (index, segment) ->
-                // Check if sensitive
-                if (sensitiveLabels.find { it.memberName == segment.content } != null) {
-                    index
-                } else {
-                    null
-                }
-            }?.let { index ->
-                val remainingSegments = uriPattern.segments.asIterable().drop(index + 1)
-                val suffix = if (remainingSegments.isNotEmpty()) {
-                    remainingSegments.joinToString(prefix = "/", separator = "/")
-                } else {
-                    ""
-                }
-                GreedyLabel(index, suffix.length)
-            }
-
-        return LabelSensitivity(labelsIndex, greedyLabel, runtimeConfig)
-    }
-
-    // Find member shapes with trait `B` contained in a shape enjoying `A`.
-    // [trait|A] ~> [trait|B]
-    internal inline fun <reified A : Trait, reified B : Trait> findTraitInterval(rootShape: Shape): List<MemberShape> {
-        return Walker(model)
-            .walkShapes(rootShape) {
-                // Do not traverse upwards or beyond A trait
-                it.direction == RelationshipDirection.DIRECTED && !it.shape.hasTrait<A>()
-            }
-            .filter {
-                isDirectedRelationshipSensitive<A>(it)
-            }
-            .flatMap {
-                Walker(model)
-                    .walkShapes(it) {
-                        // Do not traverse upwards
-                        it.direction == RelationshipDirection.DIRECTED
-                    }
-                    .filter {
-                        isDirectedRelationshipSensitive<B>(it)
-                    }.mapNotNull {
-                        it as? MemberShape
+        val labelIndexes = httpLabels
+            .mapNotNull { member ->
+                uriPattern
+                    .segments
+                    .withIndex()
+                    .find { (_, segment) ->
+                        segment.isLabel && !segment.isGreedyLabel && segment.content == member.memberName
                     }
             }
-    }
+            .map { (index, _) -> index }
 
-    internal inline fun <reified A : Trait> isDirectedRelationshipSensitive(partnerShape: Shape): Boolean {
-        return partnerShape.hasTrait<A>() || (
-            partnerShape.asMemberShape().isPresent &&
-                model.expectShape(partnerShape.asMemberShape().get().target).hasTrait<A>()
-            )
-    }
-
-    /**
-     * Find member shapes with trait `T` contained in a shape enjoying `SensitiveTrait`.
-     *
-     * [trait|sensitive] ~> [trait|T]
-     */
-    internal inline fun <reified T : Trait> findSensitiveBound(rootShape: Shape): List<MemberShape> {
-        return findTraitInterval<SensitiveTrait, T>(rootShape)
-    }
-
-    /** Find trait `T` contained in a shape enjoying `SensitiveTrait`. */
-    private inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
-        return findSensitiveBound<T>(rootShape).map {
-            val trait = it.getTrait<T>()
-            checkNotNull(trait) { "trait shouldn't be null because of the null checked previously" }
+        val greedyLabel = httpLabels.mapNotNull { member ->
+            uriPattern
+                .segments
+                .withIndex()
+                .find { (_, segment) -> segment.isGreedyLabel && segment.content == member.memberName }
         }
+            .singleOrNull()
+            ?.let { (index, _) ->
+                val remainder = uriPattern
+                    .segments
+                    .drop(index + 1)
+                    .sumOf { it.content.length + 1 }
+                GreedyLabel(index, remainder)
+            }
+
+        return LabelSensitivity(labelIndexes, greedyLabel, runtimeConfig)
     }
 
     private fun getShape(shape: Optional<ShapeId>): Shape? {
