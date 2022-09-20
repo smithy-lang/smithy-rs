@@ -34,8 +34,10 @@ where
 
 /// An extension trait for applying [`InstrumentLayer`] to all operations.
 pub trait InstrumentExt: Pluggable<InstrumentPlugin> {
-    /// Applies [`InstrumentLayer`] to all operations. See [`InstrumentOperation`](super::InstrumentOperation) for more
-    /// information.
+    /// Applies an [`InstrumentLayer`] to all operations which respects the [@sensitive] trait given on the input and
+    /// output models. See [`InstrumentOperation`](super::InstrumentOperation) for more information.
+    ///
+    /// [@sensitive]: https://awslabs.github.io/smithy/2.0/spec/documentation-traits.html#sensitive-trait
     fn instrument(self) -> Self::Output
     where
         Self: Sized,

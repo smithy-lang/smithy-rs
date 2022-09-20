@@ -30,7 +30,7 @@ pub const REDACTED: &str = "{redacted}";
 pub trait Sensitivity {
     /// The [`MakeDebug`] and [`MakeDisplay`] for the request [`HeaderMap`] and [`Uri`].
     type RequestFmt: for<'a> MakeDebug<&'a HeaderMap> + for<'a> MakeDisplay<&'a Uri>;
-    /// The [`MakeDebug`] and [`MakeDisplay`] for the response [`HeaderMap`] and [`Uri`].
+    /// The [`MakeDebug`] and [`MakeDisplay`] for the response [`HeaderMap`] and [`StatusCode`].
     type ResponseFmt: for<'a> MakeDebug<&'a HeaderMap> + MakeDisplay<StatusCode>;
 
     /// Returns the [`RequestFmt`](Sensitivity::RequestFmt).
