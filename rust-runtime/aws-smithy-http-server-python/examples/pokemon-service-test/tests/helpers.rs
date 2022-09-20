@@ -4,7 +4,7 @@
  */
 
 use command_group::{CommandGroup, GroupChild};
-use pokemon_service_client::{Builder, Client, Config};
+use pokemon_service_client::{Client, Config};
 use std::{process::Command, thread, time::Duration};
 
 pub(crate) struct PokemonService {
@@ -43,8 +43,8 @@ pub fn client() -> Client<
     aws_smithy_client::erase::DynConnector,
     aws_smithy_client::erase::DynMiddleware<aws_smithy_client::erase::DynConnector>,
 > {
-    let raw_client = Builder::new()
-        .rustls()
+    let raw_client = Client::builder()
+        .rustls_connector(Default::default())
         .middleware_fn(|mut req| {
             let http_req = req.http_mut();
             let uri = format!("http://localhost:13734{}", http_req.uri().path());

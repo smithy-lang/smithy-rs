@@ -5,7 +5,6 @@
 
 use crate::erase::DynConnector;
 use crate::http_connector::HttpSettings;
-use crate::hyper_ext::Adapter as HyperAdapter;
 use crate::{bounds, erase, retry, Client};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
@@ -82,6 +81,9 @@ where
         Self::default()
     }
 }
+
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+use crate::hyper_ext::Adapter as HyperAdapter;
 
 #[cfg(feature = "rustls")]
 impl<M, R> Builder<(), M, R> {
@@ -211,7 +213,7 @@ impl<C, R> Builder<C, (), R> {
     /// use aws_smithy_client::never::NeverConnector;
     /// use aws_smithy_http::body::SdkBody;
     /// let my_connector = DynConnector::new(
-    ///     // Your own connector here or use `dyn_https()`
+    ///     // Your own connector here or use `dyn_https_connector()`
     ///     # NeverConnector::new()
     /// );
     /// let client = Builder::new()

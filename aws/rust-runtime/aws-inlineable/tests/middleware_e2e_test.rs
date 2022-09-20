@@ -20,6 +20,7 @@ use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
 
+use aws_smithy_client::http_connector::HttpSettings;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::ResolveEndpoint;
@@ -117,7 +118,10 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 #[test]
 fn test_default_client() {
-    let client = Client::dyn_https();
+    let client = Client::builder()
+        .dyn_https_connector(HttpSettings::default())
+        .middleware_fn(|r| r)
+        .build();
     let _ = client.call(test_operation());
 }
 
