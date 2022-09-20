@@ -116,7 +116,6 @@ class Context:
 app = App()
 # Register the context.
 app.context(Context())
-# Register a middleware.
 
 
 ###########################################################
@@ -129,7 +128,7 @@ app.context(Context())
 #   changing the original request.
 # * Middleware returning a modified Request will update the original
 #   request before continuing the execution.
-# * Middleware returnign a Response will immediately terminate the request
+# * Middleware returning a Response will immediately terminate the request
 #   handling and return the response constructed from Python.
 # * Middleware raising MiddlewareException will immediately terminate the
 #   request handling and return a protocol specific error, with the option of
@@ -146,7 +145,7 @@ def check_content_type_header(request: Request):
         logging.warning(f"Invalid content type {content_type}, dumping headers: {request.headers()}")
 
 
-# This middleware adds a new header called `x-amazon-answer` to the
+# This middleware adds a new header called `x-amzn-answer` to the
 # request. We expect to see this header to be populated in the next
 # middleware.
 @app.middleware
@@ -156,6 +155,8 @@ def add_x_amzn_answer_header(request: Request):
     return request
 
 
+# This middleware checks if the header `x-amzn-answer` is correctly set
+# to 42.
 @app.middleware
 async def check_x_amzn_answer_header(request: Request):
     # Check that `x-amzn-answer` is 42.

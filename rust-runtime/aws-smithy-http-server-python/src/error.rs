@@ -30,17 +30,23 @@ impl From<PyError> for PyErr {
     }
 }
 
+/// Exception that can be thrown from a Python middleware.
+///
+/// It allows to specify a message and HTTP status code and implementing protocol specific capabilities
+/// to build a [aws_smithy_http_server::response::Response] from it.
 #[pyclass(name = "MiddlewareException", extends = BasePyException)]
+#[pyo3(text_signature = "(message, status_code)")]
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareException {
     #[pyo3(get, set)]
-    pub message: String,
+    message: String,
     #[pyo3(get, set)]
-    pub status_code: u16,
+    status_code: u16,
 }
 
 #[pymethods]
 impl PyMiddlewareException {
+    /// Create a new [PyMiddlewareException].
     #[new]
     fn newpy(message: String, status_code: Option<u16>) -> Self {
         Self {
@@ -57,32 +63,8 @@ impl From<PyErr> for PyMiddlewareException {
 }
 
 impl PyMiddlewareException {
-    fn json_body(&self) -> String {
-        let mut out = String::new();
-        let mut object = aws_smithy_json::serialize::JsonObjectWriter::new(&mut out);
-        object.key("message").string(self.message.as_str());
-        object.finish();
-        out
-    }
-
-    fn xml_body(&self) -> String {
-        let mut out = String::new();
-        {
-            let mut writer = aws_smithy_xml::encode::XmlWriter::new(&mut out);
-            let root = writer
-                .start_el("Error")
-                .write_ns("http://s3.amazonaws.com/doc/2006-03-01/", None);
-            let mut scope = root.finish();
-            {
-                let mut inner_writer = scope.start_el("Message").finish();
-                inner_writer.data(self.message.as_ref());
-            }
-            scope.finish();
-        }
-        out
-    }
-
-    pub fn into_response(self, protocol: Protocol) -> Response {
+    /// Convert the exception into a [Response], following the [Protocol] specification.
+    pub(crate) fn into_response(self, protocol: Protocol) -> Response {
         let body = to_boxed(match protocol {
             Protocol::RestJson1 => self.json_body(),
             Protocol::RestXml => self.xml_body(),
@@ -111,5 +93,32 @@ impl PyMiddlewareException {
         }
 
         builder.body(body).expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+    }
+
+    /// Serialize the body into a JSON object.
+    fn json_body(&self) -> String {
+        let mut out = String::new();
+        let mut object = aws_smithy_json::serialize::JsonObjectWriter::new(&mut out);
+        object.key("message").string(self.message.as_str());
+        object.finish();
+        out
+    }
+
+    /// Serialize the body into a XML object.
+    fn xml_body(&self) -> String {
+        let mut out = String::new();
+        {
+            let mut writer = aws_smithy_xml::encode::XmlWriter::new(&mut out);
+            let root = writer
+                .start_el("Error")
+                .write_ns("http://s3.amazonaws.com/doc/2006-03-01/", None);
+            let mut scope = root.finish();
+            {
+                let mut inner_writer = scope.start_el("Message").finish();
+                inner_writer.data(self.message.as_ref());
+            }
+            scope.finish();
+        }
+        out
     }
 }

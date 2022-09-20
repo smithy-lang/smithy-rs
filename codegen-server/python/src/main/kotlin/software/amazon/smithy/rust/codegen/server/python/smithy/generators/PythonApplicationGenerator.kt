@@ -176,7 +176,7 @@ class PythonApplicationGenerator(
                             self.middlewares.clone(),
                             self.protocol(),
                             middleware_locals
-                        ),
+                        )?,
                     );
                     let router: #{SmithyServer}::Router = router
                         .build()
@@ -312,21 +312,17 @@ class PythonApplicationGenerator(
             """.trimIndent(),
         )
         writer.rust(
-            if (operations.any { it.errors.isNotEmpty() }) {
-                """
-                /// from $libName import ${Inputs.namespace}
-                /// from $libName import ${Outputs.namespace}
-                /// from $libName import ${Errors.namespace}
-                """.trimIndent()
-            } else {
-                """
-                /// from $libName import ${Inputs.namespace}
-                /// from $libName import ${Outputs.namespace}
-                """.trimIndent()
-            },
+            """
+            /// from $libName import ${Inputs.namespace}
+            /// from $libName import ${Outputs.namespace}
+            """.trimIndent()
         )
+        if (operations.any { it.errors.isNotEmpty() }) {
+            writer.rust("""/// from $libName import ${Errors.namespace}""".trimIndent())
+        }
         writer.rust(
             """
+            /// from $libName import middleware
             /// from $libName import App
             ///
             /// @dataclass
@@ -335,6 +331,11 @@ class PythonApplicationGenerator(
             ///
             /// app = App()
             /// app.context(Context())
+            ///
+            /// @app.middleware
+            /// def middleware(request: middleware::Request):
+            ///     if request.get_header("x-amzn-id") != "secret":
+            ///         raise middleware.MiddlewareException("Unsupported `x-amz-id` header", 401)
             ///
             """.trimIndent(),
         )

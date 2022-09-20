@@ -4,7 +4,6 @@
  */
 
 //! Rust `tracing` and Python `logging` setup and utilities.
-
 use std::path::PathBuf;
 
 use pyo3::prelude::*;
@@ -39,6 +38,7 @@ pub fn setup_tracing(py: Python, logfile: Option<&PathBuf>) -> PyResult<Option<W
     Ok(None)
 }
 
+/// Setup tracing-subscriber to log on console or to a hourly rolling file.
 fn setup_tracing_subscriber(
     py: Python,
     logfile: Option<&PathBuf>,
@@ -103,13 +103,9 @@ fn setup_tracing_subscriber(
 /// Modifies the Python `logging` module to deliver its log messages using [tracing::Subscriber] events.
 ///
 /// To achieve this goal, the following changes are made to the module:
-/// - A new builtin function `logging.python_tracing` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
+/// - A new builtin function `logging.py_tracing_event` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
 ///   is not exported in `logging.__all__`, as it is not intended to be called directly.
-/// - A new class `logging.RustTracing` provides a `logging.Handler` that delivers all records to `python_tracing`.
-/// - `logging.basicConfig` is changed to use `logging.HostHandler` by default.
-///
-/// Since any call like `logging.warn(...)` sets up logging via `logging.basicConfig`, all log messages are now
-/// delivered to `crate::logging`, which will send them to `tracing::event!`.
+/// - A new class `logging.TracingHandler` provides a `logging.Handler` that delivers all records to `python_tracing`.
 #[pyclass(name = "TracingHandler")]
 #[derive(Debug, Clone)]
 pub struct PyTracingHandler;

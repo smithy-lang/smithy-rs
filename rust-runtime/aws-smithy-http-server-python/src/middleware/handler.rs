@@ -15,6 +15,10 @@ use crate::{PyMiddlewareException, PyRequest, PyResponse};
 
 use super::PyFuture;
 
+/// A Python middleware handler function representation.
+///
+/// The Python business logic implementation needs to carry some information
+/// to be executed properly like if it is a coroutine.
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareHandler {
     pub name: String,
@@ -22,20 +26,27 @@ pub struct PyMiddlewareHandler {
     pub is_coroutine: bool,
 }
 
+/// Structure holding the list of Python middlewares that will be executed by this server.
+///
+/// Middlewares are executed one after each other inside the [crate::PyMiddlewareLayer] Tower layer.
 #[derive(Debug, Clone, Default)]
-pub struct PyMiddlewares(pub Vec<PyMiddlewareHandler>);
+pub struct PyMiddlewares(Vec<PyMiddlewareHandler>);
 
 impl PyMiddlewares {
+    /// Create a new instance of `PyMiddlewareHandlers` from a list of heandlers.
     pub fn new(handlers: Vec<PyMiddlewareHandler>) -> Self {
         Self(handlers)
     }
 
+    /// Add a new handler to the list.
     pub fn push(&mut self, handler: PyMiddlewareHandler) {
         self.0.push(handler);
     }
 
-    // Our request handler. This is where we would implement the application logic
-    // for responding to HTTP requests...
+    /// Execute a single middleware handler.
+    ///
+    /// The handler is scheduled on the Python interpreter syncronously or asynchronously,
+    /// dependening on the handler signature.
     async fn execute_middleware(
         request: PyRequest,
         handler: PyMiddlewareHandler,
@@ -83,6 +94,19 @@ impl PyMiddlewares {
         })
     }
 
+    /// Execute all the available Python middlewares in order of registration.
+    ///
+    /// Once the response is returned by the Python interpreter, different scenarios can happen:
+    /// * Middleware not returning will let the execution continue to the next middleware without
+    ///   changing the original request.
+    /// * Middleware returning a modified [PyRequest] will update the original request before
+    ///   continuing the execution of the next middleware.
+    /// * Middleware returning a [PyResponse] will immediately terminate the request handling and
+    ///   return the response constructed from Python.
+    /// * Middleware raising [PyMiddlewareException] will immediately terminate the request handling
+    ///   and return a protocol specific error, with the option of setting the HTTP return code.
+    /// * Middleware raising any other exception will immediately terminate the request handling and
+    ///   return a protocol specific error, with HTTP status code 500.
     pub fn run(
         &mut self,
         mut request: Request<Body>,
@@ -106,13 +130,13 @@ impl PyMiddlewares {
                     Ok((pyrequest, pyresponse)) => {
                         if let Some(pyrequest) = pyrequest {
                             if let Ok(headers) = (&pyrequest.headers).try_into() {
-                                tracing::debug!("Middleware `{name}` returned an HTTP request, override headers with middleware's one");
+                                tracing::debug!("Python middleware `{name}` returned an HTTP request, override headers with middleware's one");
                                 *request.headers_mut() = headers;
                             }
                         }
                         if let Some(pyresponse) = pyresponse {
                             tracing::debug!(
-                            "Middleware `{name}` returned a HTTP response, exit middleware loop"
+                            "Python middleware `{name}` returned a HTTP response, exit middleware loop"
                         );
                             return Err(pyresponse.into());
                         }
@@ -125,7 +149,9 @@ impl PyMiddlewares {
                     }
                 }
             }
-            tracing::debug!("Returning original request to operation handler");
+            tracing::debug!(
+                "Python middleware execution finised, returning the request to operation handler"
+            );
             Ok(request)
         })
     }

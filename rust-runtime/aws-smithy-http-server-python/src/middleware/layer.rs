@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Tower layer implementation of Python middleware handling.
 use std::{
     pin::Pin,
     task::{Context, Poll},
@@ -15,10 +16,11 @@ use aws_smithy_http_server::{
 use futures::{ready, Future};
 use http::{Request, Response};
 use pin_project_lite::pin_project;
+use pyo3::PyResult;
 use pyo3_asyncio::TaskLocals;
 use tower::{Layer, Service};
 
-use crate::{middleware::PyFuture, PyMiddlewares};
+use crate::{error::PyException, middleware::PyFuture, PyMiddlewares};
 
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareLayer {
@@ -28,19 +30,27 @@ pub struct PyMiddlewareLayer {
 }
 
 impl PyMiddlewareLayer {
-    pub fn new(handlers: PyMiddlewares, protocol: &str, locals: TaskLocals) -> PyMiddlewareLayer {
+    pub fn new(
+        handlers: PyMiddlewares,
+        protocol: &str,
+        locals: TaskLocals,
+    ) -> PyResult<PyMiddlewareLayer> {
         let protocol = match protocol {
             "aws.protocols#restJson1" => Protocol::RestJson1,
             "aws.protocols#restXml" => Protocol::RestXml,
             "aws.protocols#awsjson10" => Protocol::AwsJson10,
             "aws.protocols#awsjson11" => Protocol::AwsJson11,
-            _ => panic!(),
+            _ => {
+                return Err(PyException::new_err(format!(
+                    "Protocol {protocol} is not supported"
+                )))
+            }
         };
-        Self {
+        Ok(Self {
             handlers,
             protocol,
             locals,
-        }
+        })
     }
 }
 

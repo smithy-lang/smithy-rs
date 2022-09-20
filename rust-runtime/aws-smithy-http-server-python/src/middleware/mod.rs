@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Schedule pure Python middlewares as `Tower` layers.
 mod handler;
 mod layer;
 mod request;
@@ -17,4 +18,5 @@ pub use self::layer::PyMiddlewareLayer;
 pub use self::request::{PyHttpVersion, PyRequest};
 pub use self::response::PyResponse;
 
-pub type PyFuture = BoxFuture<'static, Result<Request<Body>, Response<BoxBody>>>;
+/// Future type returned by the Python middleware handler.
+pub(crate) type PyFuture = BoxFuture<'static, Result<Request<Body>, Response<BoxBody>>>;

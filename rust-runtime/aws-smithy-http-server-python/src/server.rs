@@ -258,9 +258,10 @@ event_loop.add_signal_handler(signal.SIGINT,
         Ok(())
     }
 
+    // Check if a Python function is a coroutine. Since the function has not run yet,
+    // we cannot use `asyncio.iscoroutine()`, we need to use `inspect.iscoroutinefunction()`.
     fn is_coroutine(&self, py: Python, func: &PyObject) -> PyResult<bool> {
         let inspect = py.import("inspect")?;
-        // Check if the function is a coroutine.
         // NOTE: that `asyncio.iscoroutine()` doesn't work here.
         inspect
             .call_method1("iscoroutinefunction", (func,))?
