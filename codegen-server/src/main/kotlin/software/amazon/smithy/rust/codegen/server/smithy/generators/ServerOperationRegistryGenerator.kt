@@ -339,10 +339,10 @@ ${operationImplementationStubs(operations)}
                                 let request_fmt = #{RequestFmt:W};
                                 let response_fmt = #{ResponseFmt:W};
                                 let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, "$operationName").request_fmt(request_fmt).response_fmt(response_fmt);
-                                (#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)"
+                                (#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)
                                 """,
-                                "RequestFmt" to sensitivityGen.requestFmt(),
-                                "ResponseFmt" to sensitivityGen.responseFmt(),
+                                "RequestFmt" to sensitivityGen.requestFmt().value,
+                                "ResponseFmt" to sensitivityGen.responseFmt().value,
                                 *codegenScope,
                             )
                         }
