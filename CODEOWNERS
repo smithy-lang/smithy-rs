@@ -5,6 +5,7 @@
 /codegen-server-test/                           @awslabs/smithy-rs-server
 /rust-runtime/aws-smithy-http-server/           @awslabs/smithy-rs-server
 /rust-runtime/aws-smithy-http-server-python/    @awslabs/smithy-rs-server
+/CHANGELOG.next.toml                            @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
 
 # Either team is able to modify this file to release new smithy-rs versions.
 gradle.properties                               @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
