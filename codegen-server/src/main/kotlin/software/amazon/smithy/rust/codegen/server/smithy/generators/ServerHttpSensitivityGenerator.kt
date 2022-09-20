@@ -336,7 +336,8 @@ class ServerHttpSensitivityGenerator(
         val prefixHeader = rootShape.members().mapNotNull { member -> member.getTrait<HttpPrefixHeadersTrait>()?.let { trait -> Pair(member, trait.value) } }.singleOrNull()
 
         // Is `rootShape` sensitive and does `httpPrefixHeaders` exist?
-        if (rootShape.hasTrait<SensitiveTrait>()) if (prefixHeader != null) {
+        val rootSensitive = rootShape.hasTrait<SensitiveTrait>()
+        if (rootSensitive) if (prefixHeader != null) {
             return HeaderSensitivity.SensitiveMapValue(
                 headerKeys.map { it.second }, true,
                 prefixHeader.second, runtimeConfig,
@@ -344,7 +345,9 @@ class ServerHttpSensitivityGenerator(
         }
 
         // Which headers are sensitive?
-        val sensitiveHeaders = headerKeys.mapNotNull { (member, name) -> member.getMemberTrait(model, SensitiveTrait::class.java).orNull()?.let { name } }
+        val sensitiveHeaders = headerKeys
+            .filter { (member, _) -> rootSensitive || member.getMemberTrait(model, SensitiveTrait::class.java).orNull() != null }
+            .map { (_, name) -> name }
 
         return if (prefixHeader != null) {
             // Get the `httpPrefixHeader` map.
@@ -372,7 +375,8 @@ class ServerHttpSensitivityGenerator(
         val queryParams = rootShape.members().singleOrNull { member -> member.hasTrait<HttpQueryParamsTrait>() }
 
         // Is `rootShape` sensitive and does `httpQueryParams` exist?
-        if (rootShape.hasTrait<SensitiveTrait>()) if (queryParams != null) {
+        val rootSensitive = rootShape.hasTrait<SensitiveTrait>()
+        if (rootSensitive) if (queryParams != null) {
             return QuerySensitivity.SensitiveMapValue(true, runtimeConfig)
         }
 
@@ -380,7 +384,9 @@ class ServerHttpSensitivityGenerator(
         val queryKeys = rootShape.members().mapNotNull { member -> member.getTrait<HttpQueryTrait>()?.let { trait -> Pair(member, trait.value) } }.distinct()
 
         // Which queries are sensitive?
-        val sensitiveQueries = queryKeys.mapNotNull { (member, name) -> member.getMemberTrait(model, SensitiveTrait::class.java).orNull()?.let { name } }
+        val sensitiveQueries = queryKeys
+            .filter { (member, _) -> rootSensitive || member.getMemberTrait(model, SensitiveTrait::class.java).orNull() != null }
+            .map { (_, name) -> name }
 
         return if (queryParams != null) {
             // Get the `httpQueryParams` map.
