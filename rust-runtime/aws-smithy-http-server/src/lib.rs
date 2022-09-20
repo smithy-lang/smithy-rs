@@ -31,13 +31,16 @@ pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
 
+pub mod routers;
+
 #[doc(inline)]
 pub(crate) use self::error::Error;
 pub use self::extension::Extension;
-#[doc(inline)]
-pub use self::routing::Router;
 #[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]
 mod test_helpers;
+
+#[doc(hidden)]
+pub mod proto;

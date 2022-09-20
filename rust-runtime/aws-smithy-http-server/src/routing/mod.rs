@@ -13,10 +13,14 @@ use std::{
 };
 
 use self::request_spec::RequestSpec;
-use self::routers::{aws_json::AwsJsonRouter, rest::RestRouter, RoutingService};
-use crate::body::{boxed, Body, BoxBody, HttpBody};
-use crate::error::BoxError;
-use crate::protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml};
+use crate::{
+    body::{boxed, Body, BoxBody, HttpBody},
+    proto::{
+        aws_json::{aws_json_10::AwsJson10, aws_json_11::AwsJson11, router::AwsJsonRouter},
+        rest::{rest_json_1::AwsRestJson1, rest_xml::AwsRestXml, router::RestRouter},
+    },
+};
+use crate::{error::BoxError, routers::RoutingService};
 
 use http::{Request, Response};
 use tower::layer::Layer;
@@ -31,9 +35,8 @@ mod lambda_handler;
 pub mod request_spec;
 
 mod route;
-#[doc(hidden)]
-pub mod routers;
-mod tiny_map;
+
+pub(crate) mod tiny_map;
 
 pub use self::lambda_handler::LambdaHandler;
 pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};

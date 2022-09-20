@@ -5,65 +5,14 @@
 
 use std::convert::Infallible;
 
-use thiserror::Error;
-use tower::{Layer, Service};
-
-use crate::{
-    body::{empty, BoxBody},
-    extension::RuntimeErrorExtension,
-    protocols::{AwsRestJson1, AwsRestXml},
-    response::IntoResponse,
-    routing::{
-        request_spec::{Match, RequestSpec},
-        Route,
-    },
-};
-
-use super::Router;
-
-/// An AWS REST routing error.
-#[derive(Debug, Error)]
-pub enum Error {
-    /// Operation not found.
-    #[error("operation not found")]
-    NotFound,
-    /// Method was not allowed.
-    #[error("method was not allowed")]
-    MethodNotAllowed,
-}
-
-impl IntoResponse<AwsRestJson1> for Error {
-    fn into_response(self) -> http::Response<BoxBody> {
-        match self {
-            Error::NotFound => http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/json")
-                .header("X-Amzn-Errortype", super::UNKNOWN_OPERATION_EXCEPTION)
-                .extension(RuntimeErrorExtension::new(
-                    super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
-                ))
-                .body(crate::body::to_boxed("{}"))
-                .expect("invalid HTTP response for REST JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
-            Error::MethodNotAllowed => super::method_disallowed(),
-        }
-    }
-}
-
-impl IntoResponse<AwsRestXml> for Error {
-    fn into_response(self) -> http::Response<BoxBody> {
-        match self {
-            Error::NotFound => http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/xml")
-                .extension(RuntimeErrorExtension::new(
-                    super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
-                ))
-                .body(empty())
-                .expect("invalid HTTP response for REST JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
-            Error::MethodNotAllowed => super::method_disallowed(),
-        }
-    }
-}
+use crate::body::BoxBody;
+use crate::proto::rest::error::Error;
+use crate::routers::Router;
+use crate::routing::request_spec::Match;
+use crate::routing::request_spec::RequestSpec;
+use crate::routing::Route;
+use tower::Layer;
+use tower::Service;
 
 /// A [`Router`] supporting [`AWS REST JSON 1.0`] and [`AWS REST XML`] protocols.
 ///

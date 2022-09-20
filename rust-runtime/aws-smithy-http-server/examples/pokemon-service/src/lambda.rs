@@ -6,7 +6,7 @@
 // This program is exported as a binary named `pokemon-service-lambda`.
 use std::sync::Arc;
 
-use aws_smithy_http_server::{routing::LambdaHandler, AddExtensionLayer, Router};
+use aws_smithy_http_server::{routing::LambdaHandler, routing::Router, AddExtensionLayer};
 use pokemon_service::{
     capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
     setup_tracing, State,

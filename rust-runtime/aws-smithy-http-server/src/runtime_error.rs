@@ -21,8 +21,12 @@
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
 //! [`RuntimeError::into_response`] method to render and send a response.
 
+use crate::protocols::Protocol;
 use crate::{
-    protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml, Protocol},
+    proto::{
+        aws_json::{aws_json_10::AwsJson10, aws_json_11::AwsJson11},
+        rest::{rest_json_1::AwsRestJson1, rest_xml::AwsRestXml},
+    },
     response::{IntoResponse, Response},
 };
 
