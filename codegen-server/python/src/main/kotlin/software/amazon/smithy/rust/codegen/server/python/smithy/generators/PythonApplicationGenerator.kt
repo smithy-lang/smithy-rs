@@ -315,7 +315,7 @@ class PythonApplicationGenerator(
             """
             /// from $libName import ${Inputs.namespace}
             /// from $libName import ${Outputs.namespace}
-            """.trimIndent()
+            """.trimIndent(),
         )
         if (operations.any { it.errors.isNotEmpty() }) {
             writer.rust("""/// from $libName import ${Errors.namespace}""".trimIndent())
