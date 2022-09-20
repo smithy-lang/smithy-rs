@@ -185,7 +185,7 @@ mod tests {
     #[tokio::test]
     async fn test_middlewares_are_chained_inside_layer() -> PyResult<()> {
         let locals = crate::tests::initialize();
-        let mut middlewares = PyMiddlewares(vec![]);
+        let mut middlewares = PyMiddlewares::new(vec![]);
 
         Python::with_gil(|py| {
             let middleware = PyModule::new(py, "middleware").unwrap();
@@ -224,7 +224,7 @@ def second_middleware(request: Request):
                 middlewares,
                 "aws.protocols#restJson1",
                 locals,
-            ))
+            )?)
             .service_fn(echo);
 
         let request = Request::get("/").body(Body::empty()).unwrap();
