@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
  * Example:
  *     from pool import DatabasePool
  *     from my_library import App, OperationInput, OperationOutput
-
+ *
  *     @dataclass
  *     class Context:
  *         db = DatabasePool()
@@ -57,8 +57,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
  *   the model has one operation called `RegisterServer`, it will codegenerate a method
  *   of `App` called `register_service()` that can be used to decorate the Python implementation
  *   of this operation.
+ * * `request_middleware()`: register Python middleware handlers that are scheduled as Tower middleware.
  *
- * This class also renders the implementation of the `aws_smity_http_server_python::PyServer` trait,
+ * This class also renders the implementation of the `aws_smity_http_server_python::PyApp` trait,
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
