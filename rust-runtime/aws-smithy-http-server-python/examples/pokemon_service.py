@@ -143,28 +143,21 @@ def check_content_type_header(request: Request):
     if content_type == "application/json":
         logging.debug("Found valid `application/json` content type")
     else:
-        logging.warning(f"Invalid content type: {content_type}")
+        logging.warning(f"Invalid content type {content_type}, dumping headers: {request.headers()}")
 
 
 # This middleware adds a new header called `x-amazon-answer` to the
 # request. We expect to see this header to be populated in the next
 # middleware.
 @app.middleware
-def add_x_amzn_stuff_header(request: Request):
+def add_x_amzn_answer_header(request: Request):
     request.set_header("x-amzn-answer", "42")
-    logging.debug("Setting `x-amzn-stuff` header")
+    logging.debug("Setting `x-amzn-answer` header to 42")
     return request
 
 
 @app.middleware
-async def check_method_and_content_length(request: Request):
-    content_length = request.get_header("content-length")
-    logging.debug(f"Request method: {request.method}")
-    if content_length is not None:
-        content_length = int(content_length)
-        logging.debug("Request content length: {content_length}")
-    else:
-        logging.warning(f"Invalid content length. Dumping headers: {request.headers()}")
+async def check_x_amzn_answer_header(request: Request):
     # Check that `x-amzn-answer` is 42.
     if request.get_header("x-amzn-answer") != "42":
         # Return an HTTP 401 Unauthorized if the content type is not JSON.
@@ -230,4 +223,4 @@ async def stream_pokemon_radio(_: StreamPokemonRadioOperationInput, context: Con
 ###########################################################
 # Run the server.
 ###########################################################
-app.run(workers=3)
+app.run(workers=1)
