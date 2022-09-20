@@ -27,9 +27,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.plus
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -80,12 +78,12 @@ class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedy
                 """
                 {
                     |index: usize| matches!(index, ${labelIndexes.joinToString("|")})
-                } as fn(_) -> _
+                } as fn(usize) -> bool
                 """,
                 *codegenScope,
             )
         } else {
-            rust("{ |_index: usize| false }  as fn(_) -> _")
+            rust("{ |_index: usize| false }  as fn(usize) -> bool")
         }
     }
     private fun hasRedactions(): Boolean = labelIndexes.isNotEmpty() || greedyLabel != null
@@ -162,45 +160,54 @@ sealed class HeaderSensitivity(
 
     /** Returns the closure used during construction. */
     internal fun closure(): Writable {
-        val this2 = this
-        return writable {
-            withBlock("{", "} as fn(&_) -> _") {
-                rustBlockTemplate("|name: &#{Http}::header::HeaderName|", *codegenScope) {
-                    rust("##[allow(unused_variables)]")
-                    rust("let name = name.as_str();")
+        val nameMatch = if (headerKeys.isEmpty()) writable {
+            rust("false")
+        } else writable {
+            val matches = headerKeys.joinToString("|") { it.dq() }
+            rust("matches!(name, $matches)")
+        }
 
-                    if (headerKeys.isEmpty()) {
-                        rust("let name_match = false;")
-                    } else {
-                        val matches = headerKeys.joinToString("|") { it.dq() }
-                        rust("let name_match = matches!(name, $matches);")
-                    }
-
-                    when (this2) {
-                        is NotSensitiveMapValue -> {
-                            this2.prefixHeader?.let {
-                                rust("let starts_with = name.starts_with(${it.dq()});")
-                                rust("let key_suffix = if starts_with { Some(${it.length}) } else { None };")
-                            } ?: rust("let key_suffix = None;")
-                            rust("let value = name_match;")
-                        }
-                        is SensitiveMapValue -> {
-                            val prefixHeader = this2.prefixHeader
-                            rust("let starts_with = name.starts_with(${prefixHeader.dq()});")
-                            if (this2.keySensitive) {
-                                rust("let key_suffix = if starts_with { Some(${prefixHeader.length}) } else { None };")
-                            } else {
-                                rust("let key_suffix = None;")
-                            }
-                            rust("let value = name_match || starts_with;")
-                        }
-                    }
-
-                    rustBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker", *codegenScope) {
-                        rust("value, key_suffix")
-                    }
-                }
+        val suffixAndValue = when (this) {
+            is NotSensitiveMapValue -> writable {
+                prefixHeader?.let {
+                    rust(
+                        """
+                        let starts_with = name.starts_with("$it");
+                        let key_suffix = if starts_with { Some(${it.length}) } else { None };
+                        """,
+                    )
+                } ?: rust("let key_suffix = None;")
+                rust("let value = name_match;")
             }
+            is SensitiveMapValue -> writable {
+                rust("let starts_with = name.starts_with(${prefixHeader.dq()});")
+                if (keySensitive) {
+                    rust("let key_suffix = if starts_with { Some(${prefixHeader.length}) } else { None };")
+                } else {
+                    rust("let key_suffix = None;")
+                }
+                rust("let value = name_match || starts_with;")
+            }
+        }
+
+        return writable {
+            rustTemplate(
+                """
+                {
+                    |name: &#{Http}::header::HeaderName| {
+                        ##[allow(unused_variables)]
+                        let name = name.as_str();
+                        let name_match = #{NameMatch:W};
+
+                        #{SuffixAndValue:W}
+                        #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { key_suffix, value }
+                    }
+                } as fn(&_) -> _
+                """,
+                "NameMatch" to nameMatch,
+                "SuffixAndValue" to suffixAndValue,
+                *codegenScope,
+            )
         }
     }
 
@@ -251,33 +258,32 @@ sealed class QuerySensitivity(
 
     /** Returns the closure used during construction. */
     internal fun closure(): Writable {
-        val this2 = this
+        val value = when (this) {
+            is SensitiveMapValue -> writable {
+                rust("true")
+            }
+            is NotSensitiveMapValue -> if (queryKeys.isEmpty()) writable {
+                rust("false;")
+            } else writable {
+                val matches = queryKeys.joinToString("|") { it.dq() }
+                rust("matches!(name, $matches);")
+            }
+        }
 
         return writable {
-            withBlock("{", "} as fn(&_) -> _") {
-                rustBlockTemplate("|name: &str|", *codegenScope) {
-                    rust("let key = ${this2.allKeysSensitive};")
-
-                    when (this2) {
-                        is SensitiveMapValue -> {
-                            rust("let value = true;")
-                        }
-
-                        is NotSensitiveMapValue -> {
-                            if (this2.queryKeys.isEmpty()) {
-                                rust("let value = false;")
-                            } else {
-                                val matches = this2.queryKeys.joinToString("|") { it.dq() }
-                                rust("let value = matches!(name, $matches);")
-                            }
-                        }
+            rustTemplate(
+                """
+                {
+                    |name: &str| {
+                        let key = $allKeysSensitive;
+                        let value = #{Value:W};
+                        #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key, value }
                     }
-                    rustTemplate(
-                        "#{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key, value }",
-                        *codegenScope,
-                    )
-                }
-            }
+                } as fn(&_) -> _
+                """,
+                "Value" to value,
+                *codegenScope,
+            )
         }
     }
 
