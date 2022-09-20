@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use pyo3::prelude::*;
 use tracing::Level;
+#[cfg(not(test))]
+use tracing::Span;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     fmt::{self, writer::MakeWriterExt},
