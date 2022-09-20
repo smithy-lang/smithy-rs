@@ -315,11 +315,14 @@ class ServerHttpSensitivityGenerator(
 
     /** Constructs `StatusCodeSensitivity` of a `Shape` */
     private fun findStatusCodeSensitivity(rootShape: Shape): StatusCodeSensitivity {
+        // Is root shape sensitive?
+        val rootSensitive = rootShape.hasTrait<SensitiveTrait>()
+
         // Find all sensitive `httpResponseCode` bindings in the `rootShape`.
         val isSensitive = rootShape
             .members()
-            .filter { member -> member.hasTrait<HttpHeaderTrait>() }
-            .any { member -> member.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+            .filter { it.hasTrait<HttpHeaderTrait>() }
+            .any { rootSensitive || it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
 
         return StatusCodeSensitivity(isSensitive, runtimeConfig)
     }
@@ -399,11 +402,14 @@ class ServerHttpSensitivityGenerator(
 
     /** Constructs `LabelSensitivity` of a `Shape` */
     internal fun findLabelSensitivity(uriPattern: UriPattern, rootShape: Shape): LabelSensitivity {
-        // Find `httpLabel` trait.
+        // Is root shape sensitive?
+        val rootSensitive = rootShape.hasTrait<SensitiveTrait>()
+
+        // Find `httpLabel` trait which are also sensitive.
         val httpLabels = rootShape
             .members()
             .filter { it.hasTrait<HttpLabelTrait>() }
-            .filter { it.getMemberTrait(model, SensitiveTrait::class.java).orNull() != null }
+            .filter { rootSensitive || it.getMemberTrait(model, SensitiveTrait::class.java).orNull() != null }
 
         val labelIndexes = httpLabels
             .mapNotNull { member ->
