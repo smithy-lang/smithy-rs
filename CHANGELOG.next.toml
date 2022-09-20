@@ -11,6 +11,12 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[smithy-rs]]
+message = "Lower log level of two info-level log messages."
+references = ["smithy-rs#1735"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "vojtechkral"
+
 [[aws-sdk-rust]]
 message = "`aws_config::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`."
 references = ["smithy-rs#1603", "aws-sdk-rust#586"]
