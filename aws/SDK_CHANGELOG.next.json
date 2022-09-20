@@ -16,7 +16,8 @@
       "references": [
         "smithy-rs#1641"
       ],
-      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
+      "age": 1
     },
     {
       "message": "Service configs are now generated with new accessors for:\n- `Config::retry_config()` - Returns a reference to the inner retry configuration.\n- `Config::timeout_config()` - Returns a reference to the inner timeout configuration.\n- `Config::sleep_impl()` - Returns a clone of the inner async sleep implementation.\n\nPreviously, these were only accessible through `SdkConfig`.\n",
@@ -29,7 +30,8 @@
       "references": [
         "smithy-rs#1598"
       ],
-      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
+      "age": 1
     },
     {
       "message": "Lossy converters into integer types for `aws_smithy_types::Number` have been\nremoved. Lossy converters into floating point types for\n`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were\ndirectly using the integer lossy converters, we recommend you use the safe\nconverters.\n_Before:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    let foo: f32 = n.to_f32(); // Lossy conversion!\n    let bar: u32 = n.to_u32(); // Lossy conversion!\n}\n```\n_After:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.\n    let foo: f32 = n.try_into().expect(\"lossy conversion detected\"); // Or handle the error instead of panicking.\n    // You can still do lossy conversions, but only into floating point types.\n    let foo: f32 = n.to_f32_lossy();\n    // To lossily convert into integer types, use an `as` cast directly.\n    let bar: u32 = n as u32; // Lossy conversion!\n}\n```\n",
@@ -42,7 +44,8 @@
       "references": [
         "smithy-rs#1274"
       ],
-      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
+      "age": 1
     },
     {
       "message": "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy.",
@@ -55,7 +58,8 @@
       "references": [
         "smithy-rs#1699"
       ],
-      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
+      "age": 1
     },
     {
       "message": "The AWS S3 `GetObjectAttributes` operation will no longer fail with an XML error.",
@@ -68,7 +72,128 @@
       "references": [
         "aws-sdk-rust#609"
       ],
-      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780"
+      "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
+      "age": 1
+    },
+    {
+      "message": "`aws_config::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1603",
+        "aws-sdk-rust#586"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
+    },
+    {
+      "message": "Direct configuration of `aws_config::SdkConfig` now defaults to retries being disabled.\nIf you're using `aws_config::load_from_env()` or `aws_config::from_env()` to configure\nthe SDK, then you are NOT affected by this change. If you use `SdkConfig::builder()` to\nconfigure the SDK, then you ARE affected by this change and should set the retry config\non that builder.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1603",
+        "aws-sdk-rust#586"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
+    },
+    {
+      "message": "Client creation now panics if retries or timeouts are enabled without an async sleep\nimplementation set on the SDK config.\nIf you're using the Tokio runtime and have the `rt-tokio` feature enabled (which is enabled by default),\nthen you shouldn't notice this change at all.\nOtherwise, if using something other than Tokio as the async runtime, the `AsyncSleep` trait must be implemented,\nand that implementation given to the config builder via the `sleep_impl` method. Alternatively, retry can be\nexplicitly turned off by setting the retry config to `RetryConfig::disabled()`, which will result in successful\nclient creation without an async sleep implementation.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1603",
+        "aws-sdk-rust#586"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
+    },
+    {
+      "message": "Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).\n\nBefore this change, modifying operations before sending them required using lower-level APIs:\n\n```rust\nlet input = SomeOperationInput::builder().some_value(5).build()?;\n\nlet operation = {\n    let op = input.make_operation(&service_config).await?;\n    let (request, response) = op.into_request_response();\n\n    let request = request.augment(|req, _props| {\n        req.headers_mut().insert(\n            HeaderName::from_static(\"x-some-header\"),\n            HeaderValue::from_static(\"some-value\")\n        );\n        Result::<_, Infallible>::Ok(req)\n    })?;\n\n    Operation::from_parts(request, response)\n};\n\nlet response = smithy_client.call(operation).await?;\n```\n\nNow, users may easily modify operations before sending with the `customize` method:\n\n```rust\nlet response = client.some_operation()\n    .some_value(5)\n    .customize()\n    .await?\n    .mutate_request(|mut req| {\n        req.headers_mut().insert(\n            HeaderName::from_static(\"x-some-header\"),\n            HeaderValue::from_static(\"some-value\")\n        );\n    })\n    .send()\n    .await?;\n```\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1647",
+        "smithy-rs#1112"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
+    },
+    {
+      "message": "The AWS STS SDK now automatically retries `IDPCommunicationError` when calling `AssumeRoleWithWebIdentity`",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#966",
+        "smithy-rs#1718"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
+    },
+    {
+      "message": "The `SdkError::ResponseError`, typically caused by a connection terminating before the full response is received, is now treated as a transient failure and retried.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "aws-sdk-rust#303",
+        "smithy-rs#1717"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
+    },
+    {
+      "message": "`ClassifyResponse` was renamed to `ClassifyRetry` and is no longer implemented for the unit type.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1715",
+        "smithy-rs#1717"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
+    },
+    {
+      "message": "The `with_retry_policy` and `retry_policy` functions on `aws_smithy_http::operation::Operation` have been\nrenamed to `with_retry_classifier` and `retry_classifier` respectively. Public member `retry_policy` on\n`aws_smithy_http::operation::Parts` has been renamed to `retry_classifier`.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1715",
+        "smithy-rs#1717"
+      ],
+      "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
+      "age": 1
     }
   ],
   "aws-sdk-model": []
