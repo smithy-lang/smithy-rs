@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::erase::DynConnector;
-use crate::http_connector::HttpSettings;
 use crate::{bounds, erase, retry, Client};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
@@ -82,6 +80,10 @@ where
     }
 }
 
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+use crate::erase::DynConnector;
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+use crate::http_connector::HttpSettings;
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
 use crate::hyper_ext::Adapter as HyperAdapter;
 
