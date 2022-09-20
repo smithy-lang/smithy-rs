@@ -136,7 +136,7 @@ app.context(Context())
 # * Middleware raising any other exception will immediately terminate the
 #   request handling and return a protocol specific error, with HTTP status
 #   code 500.
-@app.middleware
+@app.request_middleware
 def check_content_type_header(request: Request):
     content_type = request.get_header("content-type")
     if content_type == "application/json":
@@ -148,7 +148,7 @@ def check_content_type_header(request: Request):
 # This middleware adds a new header called `x-amzn-answer` to the
 # request. We expect to see this header to be populated in the next
 # middleware.
-@app.middleware
+@app.request_middleware
 def add_x_amzn_answer_header(request: Request):
     request.set_header("x-amzn-answer", "42")
     logging.debug("Setting `x-amzn-answer` header to 42")
@@ -157,7 +157,7 @@ def add_x_amzn_answer_header(request: Request):
 
 # This middleware checks if the header `x-amzn-answer` is correctly set
 # to 42.
-@app.middleware
+@app.request_middleware
 async def check_x_amzn_answer_header(request: Request):
     # Check that `x-amzn-answer` is 42.
     if request.get_header("x-amzn-answer") != "42":

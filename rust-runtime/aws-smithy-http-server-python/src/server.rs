@@ -13,7 +13,7 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
 
-use crate::{middleware::PyMiddlewareHandler, PyMiddlewares, PySocket};
+use crate::{middleware::PyMiddlewareHandler, PyMiddlewareType, PyMiddlewares, PySocket};
 
 /// A Python handler function representation.
 ///
@@ -272,7 +272,12 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///
     /// There are some information needed to execute the Python code from a Rust handler,
     /// such has if the registered function needs to be awaited (if it is a coroutine)..
-    fn register_middleware(&mut self, py: Python, func: PyObject) -> PyResult<()> {
+    fn register_middleware(
+        &mut self,
+        py: Python,
+        func: PyObject,
+        _type: PyMiddlewareType,
+    ) -> PyResult<()> {
         let name = func.getattr(py, "__name__")?.extract::<String>(py)?;
         let is_coroutine = self.is_coroutine(py, &func)?;
         // Find number of expected methods (a Python implementation could not accept the context).
@@ -280,10 +285,11 @@ event_loop.add_signal_handler(signal.SIGINT,
             name,
             func,
             is_coroutine,
+            _type,
         };
         println!(
-            "Registering middleware function `{}`, coroutine: {}",
-            handler.name, handler.is_coroutine,
+            "Registering middleware function `{}`, coroutine: {}, type: {:?}",
+            handler.name, handler.is_coroutine, handler._type
         );
         self.middlewares().push(handler);
         Ok(())

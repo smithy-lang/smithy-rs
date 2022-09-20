@@ -22,6 +22,10 @@ use tower::{Layer, Service};
 
 use crate::{error::PyException, middleware::PyFuture, PyMiddlewares};
 
+/// Tower [Layer] implementation of Python middleware handling.
+///
+/// Middleware stored in the `handlers` attribute will be executed, in order,
+/// inside an async Tower middleware.
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareLayer {
     handlers: PyMiddlewares,
@@ -67,6 +71,7 @@ impl<S> Layer<S> for PyMiddlewareLayer {
     }
 }
 
+// Tower [Service] wrapping the Python middleware [Layer].
 #[derive(Clone, Debug)]
 pub struct PyMiddlewareService<S> {
     inner: S,
@@ -115,6 +120,7 @@ where
 }
 
 pin_project! {
+    /// Response future handling the state transition between a running and a done future.
     pub struct ResponseFuture<S>
     where
         S: Service<Request<Body>>,
@@ -126,6 +132,7 @@ pin_project! {
 }
 
 pin_project! {
+    /// Representation of the result of the middleware execution.
     #[project = StateProj]
     enum State<A, Fut> {
         Running {
@@ -149,6 +156,7 @@ where
         let mut this = self.project();
         loop {
             match this.middleware.as_mut().project() {
+                // Run the handler and store the future inside the inner state.
                 StateProj::Running { run } => {
                     let run = ready!(run.poll(cx));
                     match run {
@@ -159,6 +167,7 @@ where
                         Err(res) => return Poll::Ready(Ok(res)),
                     }
                 }
+                // Execute the future returned by the layer.
                 StateProj::Done { fut } => return fut.poll(cx),
             }
         }
@@ -176,14 +185,14 @@ mod tests {
     use tower::{Service, ServiceBuilder, ServiceExt};
 
     use crate::middleware::PyMiddlewareHandler;
-    use crate::{PyMiddlewareException, PyRequest};
+    use crate::{PyMiddlewareException, PyMiddlewareType, PyRequest};
 
     async fn echo(req: Request<Body>) -> Result<Response<BoxBody>, Box<dyn Error + Send + Sync>> {
         Ok(Response::new(to_boxed(req.into_body())))
     }
 
     #[tokio::test]
-    async fn test_middlewares_are_chained_inside_layer() -> PyResult<()> {
+    async fn request_middlewares_are_chained_inside_layer() -> PyResult<()> {
         let locals = crate::tests::initialize();
         let mut middlewares = PyMiddlewares::new(vec![]);
 
@@ -206,6 +215,7 @@ def second_middleware(request: Request):
                 func: middleware.getattr("first_middleware")?.into_py(py),
                 is_coroutine: false,
                 name: "first".to_string(),
+                _type: PyMiddlewareType::Request,
             };
             all.append("first_middleware")?;
             middlewares.push(first_middleware);
@@ -213,6 +223,7 @@ def second_middleware(request: Request):
                 func: middleware.getattr("second_middleware")?.into_py(py),
                 is_coroutine: false,
                 name: "second".to_string(),
+                _type: PyMiddlewareType::Request,
             };
             all.append("second_middleware")?;
             middlewares.push(second_middleware);

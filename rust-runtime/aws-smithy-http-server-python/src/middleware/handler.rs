@@ -15,6 +15,12 @@ use crate::{PyMiddlewareException, PyRequest, PyResponse};
 
 use super::PyFuture;
 
+#[derive(Debug, Clone, Copy)]
+pub enum PyMiddlewareType {
+    Request,
+    Response,
+}
+
 /// A Python middleware handler function representation.
 ///
 /// The Python business logic implementation needs to carry some information
@@ -24,6 +30,7 @@ pub struct PyMiddlewareHandler {
     pub name: String,
     pub func: PyObject,
     pub is_coroutine: bool,
+    pub _type: PyMiddlewareType,
 }
 
 /// Structure holding the list of Python middlewares that will be executed by this server.
@@ -166,7 +173,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn middleware_chain_keeps_headers_changes() -> PyResult<()> {
+    async fn request_middleware_chain_keeps_headers_changes() -> PyResult<()> {
         let locals = crate::tests::initialize();
         let mut middlewares = PyMiddlewares(vec![]);
 
@@ -189,6 +196,7 @@ def second_middleware(request: Request):
                 func: middleware.getattr("first_middleware")?.into_py(py),
                 is_coroutine: false,
                 name: "first".to_string(),
+                _type: PyMiddlewareType::Request,
             };
             all.append("first_middleware")?;
             middlewares.push(first_middleware);
@@ -196,6 +204,7 @@ def second_middleware(request: Request):
                 func: middleware.getattr("second_middleware")?.into_py(py),
                 is_coroutine: false,
                 name: "second".to_string(),
+                _type: PyMiddlewareType::Request,
             };
             all.append("second_middleware")?;
             middlewares.push(second_middleware);
@@ -218,7 +227,7 @@ def second_middleware(request: Request):
     }
 
     #[tokio::test]
-    async fn middleware_return_response() -> PyResult<()> {
+    async fn request_middleware_return_response() -> PyResult<()> {
         let locals = crate::tests::initialize();
         let mut middlewares = PyMiddlewares(vec![]);
 
@@ -235,6 +244,7 @@ def middleware(request: Request):
                 func: middleware.getattr("middleware")?.into_py(py),
                 is_coroutine: false,
                 name: "middleware".to_string(),
+                _type: PyMiddlewareType::Request,
             };
             all.append("middleware")?;
             middlewares.push(middleware);
@@ -256,7 +266,7 @@ def middleware(request: Request):
     }
 
     #[tokio::test]
-    async fn middleware_raise_middleware_exception() -> PyResult<()> {
+    async fn request_middleware_raise_middleware_exception() -> PyResult<()> {
         let locals = crate::tests::initialize();
         let mut middlewares = PyMiddlewares(vec![]);
 
@@ -273,6 +283,7 @@ def middleware(request: Request):
                 func: middleware.getattr("middleware")?.into_py(py),
                 is_coroutine: false,
                 name: "middleware".to_string(),
+                _type: PyMiddlewareType::Request,
             };
             all.append("middleware")?;
             middlewares.push(middleware);
@@ -298,7 +309,7 @@ def middleware(request: Request):
     }
 
     #[tokio::test]
-    async fn middleware_raise_python_exception() -> PyResult<()> {
+    async fn request_middleware_raise_python_exception() -> PyResult<()> {
         let locals = crate::tests::initialize();
         let mut middlewares = PyMiddlewares(vec![]);
 
@@ -315,6 +326,7 @@ def middleware(request):
                 func: middleware.getattr("middleware")?.into_py(py),
                 is_coroutine: false,
                 name: "middleware".to_string(),
+                _type: PyMiddlewareType::Request,
             };
             middlewares.push(middleware);
             Ok::<(), PyErr>(())

@@ -242,11 +242,11 @@ class PythonApplicationGenerator(
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
                    self.context = Some(context);
                 }
-                /// Register a middleware function that will be run inside a Tower layer, without cloning the body.
+                /// Register a request middleware function that will be run inside a Tower layer, without cloning the body.
                 ##[pyo3(text_signature = "(${'$'}self, func)")]
-                pub fn middleware(&mut self, py: pyo3::Python, func: pyo3::PyObject) -> pyo3::PyResult<()> {
+                pub fn request_middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
-                    self.register_middleware(py, func)
+                    self.register_middleware(py, func, #{SmithyPython}::PyMiddlewareType::Request)
                 }
                 /// Main entrypoint: start the server on multiple workers.
                 ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]
@@ -332,8 +332,8 @@ class PythonApplicationGenerator(
             /// app = App()
             /// app.context(Context())
             ///
-            /// @app.middleware
-            /// def middleware(request: middleware::Request):
+            /// @app.request_middleware
+            /// def request_middleware(request: middleware::Request):
             ///     if request.get_header("x-amzn-id") != "secret":
             ///         raise middleware.MiddlewareException("Unsupported `x-amz-id` header", 401)
             ///
