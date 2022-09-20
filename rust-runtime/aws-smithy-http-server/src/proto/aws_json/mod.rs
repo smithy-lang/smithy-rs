@@ -5,5 +5,4 @@
 
 pub mod aws_json_10;
 pub mod aws_json_11;
-pub mod error;
 pub mod router;

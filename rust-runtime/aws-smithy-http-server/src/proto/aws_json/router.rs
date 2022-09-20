@@ -9,10 +9,32 @@ use tower::Layer;
 use tower::Service;
 
 use crate::body::BoxBody;
-use crate::proto::aws_json::error::Error;
 use crate::routers::Router;
 use crate::routing::tiny_map::TinyMap;
 use crate::routing::Route;
+
+use http::header::ToStrError;
+use thiserror::Error;
+
+/// An AWS JSON routing error.
+#[derive(Debug, Error)]
+pub enum Error {
+    /// Relative URI was not "/".
+    #[error("relative URI is not \"/\"")]
+    NotRootUrl,
+    /// Method was not `POST`.
+    #[error("method not POST")]
+    MethodNotAllowed,
+    /// Missing the `x-amz-target` header.
+    #[error("missing the \"x-amz-target\" header")]
+    MissingHeader,
+    /// Unable to parse header into UTF-8.
+    #[error("failed to parse header: {0}")]
+    InvalidHeader(ToStrError),
+    /// Operation not found.
+    #[error("operation not found")]
+    NotFound,
+}
 
 // This constant determines when the `TinyMap` implementation switches from being a `Vec` to a
 // `HashMap`. This is chosen to be 15 as a result of the discussion around

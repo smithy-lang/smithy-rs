@@ -6,13 +6,25 @@
 use std::convert::Infallible;
 
 use crate::body::BoxBody;
-use crate::proto::rest::error::Error;
 use crate::routers::Router;
 use crate::routing::request_spec::Match;
 use crate::routing::request_spec::RequestSpec;
 use crate::routing::Route;
 use tower::Layer;
 use tower::Service;
+
+use thiserror::Error;
+
+/// An AWS REST routing error.
+#[derive(Debug, Error)]
+pub enum Error {
+    /// Operation not found.
+    #[error("operation not found")]
+    NotFound,
+    /// Method was not allowed.
+    #[error("method was not allowed")]
+    MethodNotAllowed,
+}
 
 /// A [`Router`] supporting [`AWS REST JSON 1.0`] and [`AWS REST XML`] protocols.
 ///
