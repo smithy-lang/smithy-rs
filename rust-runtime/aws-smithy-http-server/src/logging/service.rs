@@ -92,7 +92,7 @@ where
 /// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }
 /// # let mut svc = service_fn(f);
 /// let request_fmt = RequestFmt::new()
-///     .label(|index| index == 1)
+///     .label(|index| index == 1, None)
 ///     .query(|_| QueryMarker { key: false, value: true });
 /// let response_fmt = ResponseFmt::new().status_code();
 /// let mut svc = InstrumentOperation::new(svc, "foo-operation")

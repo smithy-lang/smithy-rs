@@ -31,7 +31,7 @@
 //!        key_suffix: None,
 //!     })
 //!     .query(|name| QueryMarker { key: false, value: name == "bar" })
-//!     .label(|index| index % 2 == 0);
+//!     .label(|index| index % 2 == 0, None);
 //! let response_fmt = ResponseFmt::new()
 //!     .header(|name| {
 //!         if name.as_str().starts_with("prefix-") {
