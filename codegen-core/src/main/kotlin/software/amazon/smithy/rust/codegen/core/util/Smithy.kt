@@ -82,14 +82,14 @@ fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.an
     model.expectShape(id, OperationShape::class.java).isEventStream(model)
 }
 
-fun MemberShape.redactIfNecessary(model: Model, safeToPrint: String) =
-    model.expectShape(this.target).redactIfNecessary(safeToPrint)
-
-fun Shape.redactIfNecessary(safeToPrint: String) =
-    if (this.hasTrait<SensitiveTrait>()) {
-        "*** Sensitive Data Redacted ***".dq()
-    } else {
-        safeToPrint
+fun Shape.redactIfNecessary(model: Model, safeToPrint: String): String =
+    when (this) {
+        is MemberShape -> model.expectShape(this.target).redactIfNecessary(model, safeToPrint)
+        else -> if (this.hasTrait<SensitiveTrait>()) {
+            "*** Sensitive Data Redacted ***".dq()
+        } else {
+            safeToPrint
+        }
     }
 
 /*
