@@ -334,7 +334,7 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///     pub struct App {};
     ///
     ///     impl App {
-    ///         pub fn build_router(&mut self, event_loop: &PyAny) -> PyResult<aws_smithy_http_server::Router> { todo!() }
+    ///         pub fn build_router(&mut self, event_loop: &PyAny) -> PyResult<aws_smithy_http_server::routing::Router> { todo!() }
     ///     }
     ///
     ///     impl PyApp for App {
