@@ -156,7 +156,7 @@ class PythonServerModuleGenerator(
             pyo3::py_run!(
                 py,
                 middleware,
-                "import sys; sys.modules['libpokemon_service_server_sdk.middleware'] = middleware"
+                "import sys; sys.modules['$libName.middleware'] = middleware"
             );
             m.add_submodule(middleware)?;
             """,

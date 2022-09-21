@@ -160,7 +160,7 @@ pub fn py_tracing_event(
         30 => tracing::warn!("{message}"),
         20 => tracing::info!("{message}"),
         10 => tracing::debug!("{message}"),
-        _ => tracing::event!(Level::TRACE, %pid, %module, %filename, %line, "{message}"),
+        _ => tracing::trace!("{message}"),
     };
     Ok(())
 }
