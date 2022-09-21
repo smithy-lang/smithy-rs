@@ -10,8 +10,8 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-[[smithy-rs]]
-message = "Implement support for pure Python request middleware. Improve idiomatic logging support over tracing."
-references = ["smithy-rs#1734"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
-author = "crisidev"
+[[rust-runtime]]
+message = "Pokémon Service example code now runs clippy during build."
+references = ["smithy-rs#1727"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "GeneralSwiss"
