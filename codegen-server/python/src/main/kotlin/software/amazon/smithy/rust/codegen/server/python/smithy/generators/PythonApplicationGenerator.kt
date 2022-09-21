@@ -136,7 +136,7 @@ class PythonApplicationGenerator(
             rustBlockTemplate(
                 """
                 /// Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::Router].
-                pub fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::Router>
+                pub fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::routing::Router>
                 """,
                 *codegenScope,
             ) {
@@ -162,7 +162,7 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let router: #{SmithyServer}::Router = router
+                    let router: #{SmithyServer}::routing::Router = router
                         .build()
                         .expect("Unable to build operation registry")
                         .into();
