@@ -139,7 +139,13 @@ open class RustCrate(
     }
 
     /**
-     * Create a new non-root module directly.
+     * Create a new non-root module directly. For example, if given the namespace `crate::foo::bar`,
+     * this will create `src/foo/bar.rs` with the contents from the given `moduleWriter`.
+     * Multiple calls to this with the same namespace are additive, so new code can be added
+     * by various customizations.
+     *
+     * Caution: this does not automatically add the required Rust `mod` statements to make this
+     * file an official part of the generated crate. This step needs to be done manually.
      */
     fun withNonRootModule(
         namespace: String,

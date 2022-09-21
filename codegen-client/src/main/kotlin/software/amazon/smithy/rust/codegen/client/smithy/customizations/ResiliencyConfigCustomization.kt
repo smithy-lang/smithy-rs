@@ -225,11 +225,16 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
             writer.rustTemplate(
                 """
                 pub use #{sleep}::{AsyncSleep, Sleep};
+
                 /// Retry configuration
+                ///
+                /// These are re-exported from `aws-smithy-types` for convenience.
                 pub mod retry {
                     pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};
                 }
                 /// Timeout configuration
+                ///
+                /// These are re-exported from `aws-smithy-types` for convenience.
                 pub mod timeout {
                     pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
                 }
