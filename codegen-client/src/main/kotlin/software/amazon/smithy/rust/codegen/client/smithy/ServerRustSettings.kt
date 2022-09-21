@@ -72,6 +72,7 @@ data class ServerRustSettings(
 
 /**
  * [publicConstrainedTypes]: Generate constrained wrapper newtypes for constrained shapes
+ * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
@@ -79,11 +80,13 @@ data class ServerCodegenConfig(
     override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
     // TODO Unit test that we don't generate public constrained types when this setting is false.
     val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
+    val ignoreUnsupportedConstraints: Boolean = defaultIgnoreUnsupportedConstraints,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList,
 ) {
     companion object {
         private const val defaultPublicConstrainedTypes = true
+        private const val defaultIgnoreUnsupportedConstraints = false
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -92,6 +95,7 @@ data class ServerCodegenConfig(
                     debugMode = coreCodegenConfig.debugMode,
                     eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
                     publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
+                    ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", defaultIgnoreUnsupportedConstraints),
                 )
             } else {
                 ServerCodegenConfig(

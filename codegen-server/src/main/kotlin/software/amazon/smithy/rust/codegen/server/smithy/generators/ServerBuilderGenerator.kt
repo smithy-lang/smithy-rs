@@ -287,7 +287,6 @@ class ServerBuilderGenerator(
                     if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
 
                     if (wrapInMaybeConstrained) {
-                        // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                         conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
                             conditionalBlock("Box::new(", ")", conditional = hasBox) {
                                 rust("$maybeConstrainedVariant($varExpr)")

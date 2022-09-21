@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -66,6 +67,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
@@ -136,11 +138,6 @@ open class ServerCodegenVisitor(
 
         rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
-
-        // TODO Traverse the model and error out if:
-        //  * constraint traits on event streams are used.
-        //  * constraint traits on streaming blob are used.
-        //  * constraint trait precedence is used.
     }
 
     /**
@@ -183,9 +180,19 @@ open class ServerCodegenVisitor(
      */
     fun execute() {
         val service = settings.getService(model)
-        logger.info(
+        logger.warning(
             "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}",
         )
+
+        val validationResult = validateUnsupportedConstraintsAreNotUsed(model, service, codegenContext.settings.codegenConfig)
+        for (logMessage in validationResult.messages) {
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1756): These are getting duplicated.
+            logger.log(logMessage.level, logMessage.message)
+        }
+        if (validationResult.shouldAbort) {
+            throw CodegenException("Unsupported constraints used")
+        }
+
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
@@ -203,7 +210,7 @@ open class ServerCodegenVisitor(
                 timeout = settings.codegenConfig.formatTimeoutSeconds.toLong(),
             )
         } catch (err: CommandFailed) {
-            logger.warning(
+            logger.info(
                 "[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}",
             )
         }
@@ -362,7 +369,7 @@ open class ServerCodegenVisitor(
                 IDL v1 spec, but it's unclear what the semantics are. In any case, the Smithy core libraries should enforce the
                 constraints (which it currently does not), not each code generator.
                 See https://github.com/awslabs/smithy/issues/1121f for more information.
-                """.trimIndent(),
+                """.trimIndent().replace("\n", " "),
             )
         } else if (!shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
