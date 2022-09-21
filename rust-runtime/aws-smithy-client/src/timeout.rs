@@ -4,11 +4,6 @@
  */
 
 //! Timeout Configuration
-//!
-//! While timeout configuration is unstable, this module is in aws-smithy-client.
-//!
-//! As timeout and HTTP configuration stabilizes, this will move to aws-types and become a part of
-//! HttpSettings.
 
 use crate::SdkError;
 use aws_smithy_async::future::timeout::Timeout;

@@ -9,7 +9,6 @@ use aws_sdk_sts::error::AssumeRoleErrorKind;
 use aws_sdk_sts::middleware::DefaultMiddleware;
 use aws_sdk_sts::operation::AssumeRole;
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::http_connector::HttpSettings;
 use aws_smithy_http::result::SdkError;
 use aws_types::credentials::{
     self, future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
@@ -173,7 +172,7 @@ impl AssumeRoleProviderBuilder {
             .build();
 
         let conn = conf
-            .connector(&HttpSettings::default())
+            .connector(&Default::default())
             .expect("A connector must be provided");
         let mut client_builder = aws_smithy_client::Client::builder()
             .connector(conn)

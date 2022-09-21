@@ -61,7 +61,7 @@ use tower::{Service, ServiceExt};
 
 use crate::http_credential_provider::HttpCredentialProvider;
 use crate::provider_config::ProviderConfig;
-use aws_smithy_client::http_connector::HttpSettings;
+use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_types::os_shim_internal::Env;
 use http::header::InvalidHeaderValue;
 use std::time::Duration;
@@ -168,8 +168,8 @@ impl Provider {
         };
         let http_provider = HttpCredentialProvider::builder()
             .configure(&provider_config)
-            .http_settings(
-                HttpSettings::builder()
+            .connector_settings(
+                ConnectorSettings::builder()
                     .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
                     .read_timeout(DEFAULT_READ_TIMEOUT)
                     .build(),

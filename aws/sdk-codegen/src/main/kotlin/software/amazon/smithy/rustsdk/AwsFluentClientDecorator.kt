@@ -46,10 +46,10 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
     val awsSmithyClient = smithyClientDep.asType()
 
+    val connectorSettings = RuntimeType("ConnectorSettings", smithyClientDep, "aws_smithy_client::http_connector")
     val defaultMiddleware = runtimeConfig.defaultMiddleware()
     val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
     val dynMiddleware = RuntimeType("DynMiddleware", smithyClientDep, "aws_smithy_client::erase")
-    val httpSettings = RuntimeType("HttpSettings", smithyClientDep, "aws_smithy_client::http_connector")
     val retryConfig = RuntimeType("RetryConfig", smithyTypesDep, "aws_smithy_types::retry")
     val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
     val timeoutConfig = RuntimeType("TimeoutConfig", smithyTypesDep, "aws_smithy_types::timeout")
@@ -138,7 +138,7 @@ private class AwsFluentClientExtensions(types: Types) {
         "ConnectorError" to types.connectorError,
         "DynConnector" to types.dynConnector,
         "DynMiddleware" to types.dynMiddleware,
-        "HttpSettings" to types.httpSettings,
+        "ConnectorSettings" to types.connectorSettings,
         "Middleware" to types.defaultMiddleware,
         "RetryConfig" to types.retryConfig,
         "SmithyConnector" to types.smithyConnector,
@@ -187,7 +187,7 @@ private class AwsFluentClientExtensions(types: Types) {
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");
                     }
                     let mut builder = #{aws_smithy_client}::Builder::new()
-                        .dyn_https_connector(#{HttpSettings}::from_timeout_config(&timeout_config))
+                        .dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
                         .retry_config(retry_config.into())
                         .operation_timeout_config(timeout_config.into());

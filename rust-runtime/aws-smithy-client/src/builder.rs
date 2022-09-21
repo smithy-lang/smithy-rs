@@ -83,17 +83,20 @@ where
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
 use crate::erase::DynConnector;
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
-use crate::http_connector::HttpSettings;
+use crate::http_connector::ConnectorSettings;
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
 use crate::hyper_ext::Adapter as HyperAdapter;
 
 #[cfg(feature = "rustls")]
 impl<M, R> Builder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls using dynamic dispatch.
-    pub fn rustls_connector(self, http_settings: HttpSettings) -> Builder<DynConnector, M, R> {
+    pub fn rustls_connector(
+        self,
+        connector_settings: ConnectorSettings,
+    ) -> Builder<DynConnector, M, R> {
         self.connector(DynConnector::new(
             HyperAdapter::builder()
-                .http_settings(http_settings)
+                .connector_settings(connector_settings)
                 .build(crate::conns::https()),
         ))
     }
@@ -103,10 +106,13 @@ impl<M, R> Builder<(), M, R> {
 impl<M, R> Builder<(), M, R> {
     /// Connect to the service over HTTPS using the native TLS library on your
     /// platform using dynamic dispatch.
-    pub fn native_tls_connector(self, http_settings: HttpSettings) -> Builder<DynConnector, M, R> {
+    pub fn native_tls_connector(
+        self,
+        connector_settings: ConnectorSettings,
+    ) -> Builder<DynConnector, M, R> {
         self.connector(DynConnector::new(
             HyperAdapter::builder()
-                .http_settings(http_settings)
+                .connector_settings(connector_settings)
                 .build(crate::conns::native_tls()),
         ))
     }
@@ -121,9 +127,12 @@ impl<M, R> Builder<(), M, R> {
     /// dynamic dispatch. This comes at a slight runtime performance cost. See
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
     /// [`Builder::rustls_connector`] or [`Builder::native_tls_connector`] instead.
-    pub fn dyn_https_connector(self, http_settings: HttpSettings) -> Builder<DynConnector, M, R> {
+    pub fn dyn_https_connector(
+        self,
+        connector_settings: ConnectorSettings,
+    ) -> Builder<DynConnector, M, R> {
         #[cfg(feature = "rustls")]
-        let with_https = |b: Builder<_, M, R>| b.rustls_connector(http_settings);
+        let with_https = |b: Builder<_, M, R>| b.rustls_connector(connector_settings);
         // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
         #[cfg(not(feature = "rustls"))]
         let with_https = |b: Builder<_, M, R>| b.native_tls_connector();
@@ -509,9 +518,9 @@ mod tests {
     fn builder_connection_helpers_are_dyn() {
         #[cfg(feature = "rustls")]
         let _builder: Builder<DynConnector, (), _> =
-            Builder::new().rustls_connector(HttpSettings::default());
+            Builder::new().rustls_connector(Default::default());
         #[cfg(feature = "native-tls")]
         let _builder: Builder<DynConnector, (), _> =
-            Builder::new().native_tls_connector(HttpSettings::default());
+            Builder::new().native_tls_connector(Default::default());
     }
 }

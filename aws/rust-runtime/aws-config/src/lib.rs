@@ -170,7 +170,7 @@ mod loader {
 
     use crate::connector::default_connector;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
-    use aws_smithy_client::http_connector::{HttpConnector, HttpSettings};
+    use aws_smithy_client::http_connector::{ConnectorSettings, HttpConnector};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
@@ -413,7 +413,7 @@ mod loader {
                 http_connector
             } else {
                 HttpConnector::Prebuilt(default_connector(
-                    &HttpSettings::from_timeout_config(&timeout_config),
+                    &ConnectorSettings::from_timeout_config(&timeout_config),
                     sleep_impl.clone(),
                 ))
             };

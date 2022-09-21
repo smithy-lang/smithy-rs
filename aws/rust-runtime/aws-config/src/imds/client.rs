@@ -41,7 +41,7 @@ use crate::profile::ProfileParseError;
 use crate::provider_config::ProviderConfig;
 use crate::{profile, PKG_VERSION};
 use aws_sdk_sso::config::timeout::TimeoutConfig;
-use aws_smithy_client::http_connector::HttpSettings;
+use aws_smithy_client::http_connector::ConnectorSettings;
 
 mod token;
 
@@ -559,8 +559,8 @@ impl Builder {
             .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
             .read_timeout(DEFAULT_READ_TIMEOUT)
             .build();
-        let http_settings = HttpSettings::from_timeout_config(&timeout_config);
-        let connector = expect_connector(config.connector(&http_settings));
+        let connector_settings = ConnectorSettings::from_timeout_config(&timeout_config);
+        let connector = expect_connector(config.connector(&connector_settings));
         let endpoint_source = self
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));

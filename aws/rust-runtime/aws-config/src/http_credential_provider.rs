@@ -9,7 +9,7 @@
 //! Future work will stabilize this interface and enable it to be used directly.
 
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::http_connector::HttpSettings;
+use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::{Operation, Request};
 use aws_smithy_http::response::ParseStrictResponse;
@@ -78,7 +78,7 @@ impl HttpCredentialProvider {
 #[derive(Default)]
 pub(crate) struct Builder {
     provider_config: Option<ProviderConfig>,
-    http_settings: Option<HttpSettings>,
+    connector_settings: Option<ConnectorSettings>,
 }
 
 impl Builder {
@@ -87,20 +87,20 @@ impl Builder {
         self
     }
 
-    pub(crate) fn http_settings(mut self, http_settings: HttpSettings) -> Self {
-        self.http_settings = Some(http_settings);
+    pub(crate) fn connector_settings(mut self, connector_settings: ConnectorSettings) -> Self {
+        self.connector_settings = Some(connector_settings);
         self
     }
 
     pub(crate) fn build(self, provider_name: &'static str, uri: Uri) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let http_settings = self.http_settings.unwrap_or_else(|| {
-            HttpSettings::builder()
+        let connector_settings = self.connector_settings.unwrap_or_else(|| {
+            ConnectorSettings::builder()
                 .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
                 .read_timeout(DEFAULT_READ_TIMEOUT)
                 .build()
         });
-        let connector = expect_connector(provider_config.connector(&http_settings));
+        let connector = expect_connector(provider_config.connector(&connector_settings));
         let mut client_builder = aws_smithy_client::Client::builder()
             .connector(connector)
             .middleware(Identity::new());

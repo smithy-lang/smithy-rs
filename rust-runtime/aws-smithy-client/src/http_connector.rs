@@ -14,7 +14,7 @@ use std::{fmt::Debug, sync::Arc};
 
 /// Type alias for a Connector factory function.
 pub type MakeConnectorFn =
-    dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
+    dyn Fn(&ConnectorSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
 
 /// Enum for describing the two "kinds" of HTTP Connectors in smithy-rs.
 #[derive(Clone)]
@@ -46,7 +46,7 @@ impl HttpConnector {
     /// If `HttpConnector` is `ConnectorFn`, generate a new connector from settings and return it.
     pub fn connector(
         &self,
-        settings: &HttpSettings,
+        settings: &ConnectorSettings,
         sleep: Option<Arc<dyn AsyncSleep>>,
     ) -> Option<DynConnector> {
         match self {
@@ -56,15 +56,15 @@ impl HttpConnector {
     }
 }
 
-/// Builder for [`HttpSettings`].
+/// Builder for [`ConnectorSettings`].
 #[non_exhaustive]
 #[derive(Default, Debug)]
-pub struct HttpSettingsBuilder {
+pub struct ConnectorSettingsBuilder {
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
 }
 
-impl HttpSettingsBuilder {
+impl ConnectorSettingsBuilder {
     /// Creates a new builder.
     pub fn new() -> Self {
         Default::default()
@@ -104,9 +104,9 @@ impl HttpSettingsBuilder {
         self
     }
 
-    /// Builds the [`HttpSettings`].
-    pub fn build(self) -> HttpSettings {
-        HttpSettings {
+    /// Builds the [`ConnectorSettings`].
+    pub fn build(self) -> ConnectorSettings {
+        ConnectorSettings {
             connect_timeout: self.connect_timeout,
             read_timeout: self.read_timeout,
         }
@@ -116,14 +116,14 @@ impl HttpSettingsBuilder {
 /// Settings for HTTP Connectors
 #[non_exhaustive]
 #[derive(Clone, Default, Debug)]
-pub struct HttpSettings {
+pub struct ConnectorSettings {
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
 }
 
-impl HttpSettings {
-    /// Returns a builder for `HttpSettings`.
-    pub fn builder() -> HttpSettingsBuilder {
+impl ConnectorSettings {
+    /// Returns a builder for `ConnectorSettings`.
+    pub fn builder() -> ConnectorSettingsBuilder {
         Default::default()
     }
 
@@ -143,7 +143,7 @@ impl HttpSettings {
     }
 
     // This function may be removed/refactored in the future if other non-timeout
-    // properties are added to the `HttpSettings` struct.
+    // properties are added to the `ConnectorSettings` struct.
     #[doc(hidden)]
     pub fn from_timeout_config(timeout_config: &TimeoutConfig) -> Self {
         Self {
