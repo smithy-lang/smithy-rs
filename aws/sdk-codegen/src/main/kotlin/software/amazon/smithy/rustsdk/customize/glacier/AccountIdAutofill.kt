@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 class AccountIdAutofill() : OperationCustomization() {
     override fun mutSelf(): Boolean = true

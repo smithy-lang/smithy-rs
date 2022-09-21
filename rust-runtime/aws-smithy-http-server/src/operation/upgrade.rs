@@ -4,7 +4,8 @@
  */
 
 use std::{
-    future::Future,
+    convert::Infallible,
+    future::{Future, Ready},
     marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
@@ -12,14 +13,18 @@ use std::{
 
 use futures_util::ready;
 use pin_project_lite::pin_project;
-use tower::{Layer, Service};
+use tower::{layer::util::Stack, Layer, Service};
+use tracing::error;
 
 use crate::{
+    body::BoxBody,
+    plugin::Plugin,
     request::{FromParts, FromRequest},
     response::IntoResponse,
+    runtime_error::InternalFailureException,
 };
 
-use super::{OperationError, OperationShape};
+use super::{Operation, OperationError, OperationShape};
 
 /// A [`Layer`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
@@ -203,11 +208,113 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let clone = self.inner.clone();
+        let service = std::mem::replace(&mut self.inner, clone);
         UpgradeFuture {
-            service: self.inner.clone(),
+            service,
             inner: Inner::FromRequest {
                 inner: <(Op::Input, Exts) as FromRequest<P, B>>::from_request(req),
             },
         }
+    }
+}
+
+/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
+/// canonical associated types.
+pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
+    type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
+
+    /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
+    fn upgrade(self, plugin: &Plugin) -> Self::Service;
+}
+
+impl<P, Op, Exts, B, Pl, S, L, PollError> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
+where
+    // `Op` is used to specify the operation shape
+    Op: OperationShape,
+
+    // Smithy input must convert from a HTTP request
+    Op::Input: FromRequest<P, B>,
+    // Smithy output must convert into a HTTP response
+    Op::Output: IntoResponse<P>,
+    // Smithy error must convert into a HTTP response
+    Op::Error: IntoResponse<P>,
+
+    // Must be able to convert extensions
+    Exts: FromParts<P>,
+
+    // The signature of the inner service is correct
+    S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
+
+    // The plugin takes this operation as input
+    Pl: Plugin<P, Op, S, L>,
+
+    // The modified Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
+    Pl::Layer: Layer<Upgrade<P, Op, Exts, B, Pl::Service>>,
+
+    // The signature of the output is correct
+    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service:
+        Service<http::Request<B>, Response = http::Response<BoxBody>>,
+{
+    type Service = <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service;
+
+    /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
+    /// the modified `S`, then finally applies the modified `L`.
+    ///
+    /// The composition is made explicit in the method constraints and return type.
+    fn upgrade(self, plugin: &Pl) -> Self::Service {
+        let mapped = plugin.map(self);
+        let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
+        layer.layer(mapped.inner)
+    }
+}
+
+/// A marker struct indicating an [`Operation`] has not been set in a builder.
+///
+/// This does _not_ implement [`Upgradable`] purposely.
+pub struct MissingOperation;
+
+/// A marker struct indicating an [`Operation`] has not been set in a builder.
+///
+/// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
+pub struct FailOnMissingOperation;
+
+impl<P, Op, Exts, B, Pl> Upgradable<P, Op, Exts, B, Pl> for FailOnMissingOperation
+where
+    InternalFailureException: IntoResponse<P>,
+{
+    type Service = MissingFailure<P>;
+
+    fn upgrade(self, _plugin: &Pl) -> Self::Service {
+        MissingFailure { _protocol: PhantomData }
+    }
+}
+
+/// A [`Service`] which always returns an internal failure message and logs an error.
+pub struct MissingFailure<P> {
+    _protocol: PhantomData<P>,
+}
+
+impl<P> Clone for MissingFailure<P> {
+    fn clone(&self) -> Self {
+        MissingFailure { _protocol: PhantomData }
+    }
+}
+
+impl<R, P> Service<R> for MissingFailure<P>
+where
+    InternalFailureException: IntoResponse<P>,
+{
+    type Response = http::Response<BoxBody>;
+    type Error = Infallible;
+    type Future = Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _request: R) -> Self::Future {
+        error!("the operation has not been set");
+        std::future::ready(Ok(InternalFailureException.into_response()))
     }
 }

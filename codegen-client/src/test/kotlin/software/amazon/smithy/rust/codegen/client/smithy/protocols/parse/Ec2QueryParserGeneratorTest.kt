@@ -20,8 +20,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilde
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
-import software.amazon.smithy.rust.codegen.client.util.lookup
-import software.amazon.smithy.rust.codegen.client.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class Ec2QueryParserGeneratorTest {
     private val baseModel = """

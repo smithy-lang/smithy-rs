@@ -26,6 +26,13 @@ fun Writable.isEmpty(): Boolean {
     return writer.toString() == RustWriter.root().toString()
 }
 
+operator fun Writable.plus(other: Writable): Writable {
+    val first = this
+    return writable {
+        rustTemplate("#{First:W}#{Second:W}", "First" to first, "Second" to other)
+    }
+}
+
 /**
  * Helper allowing a `Iterable<Writable>` to be joined together using a `String` separator.
  */

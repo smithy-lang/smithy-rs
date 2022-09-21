@@ -39,13 +39,14 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.client.smithy.traits.SyntheticOutputTrait
-import software.amazon.smithy.rust.codegen.client.util.PANIC
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.orNull
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
-import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import kotlin.reflect.KClass
 
 /** Map from Smithy Shapes to Rust Types */
@@ -64,7 +65,7 @@ data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
     val handleRustBoxing: Boolean,
-    val handleRequired: Boolean,
+    val nullabilityCheckMode: NullableIndex.CheckMode,
 )
 
 /**
@@ -209,13 +210,7 @@ open class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
-        if (config.handleRequired && member.isRequired) {
-            symbol
-        } else if (nullableIndex.isNullable(member)) {
-            symbol.makeOptional()
-        } else {
-            symbol
-        }
+        symbol.letIf(nullableIndex.isMemberNullable(member, config.nullabilityCheckMode)) { symbol.makeOptional() }
 
     /**
      * Produce `Box<T>` when the shape has the `RustBoxTrait`
@@ -409,12 +404,3 @@ fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is 
 // Symbols should _always_ be created with a Rust type & shape attached
 fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
-
-/**
- * Utility function similar to `let` that conditionally applies [f] only if [cond] is true.
- */
-fun <T> T.letIf(cond: Boolean, f: (T) -> T): T {
-    return if (cond) {
-        f(this)
-    } else this
-}

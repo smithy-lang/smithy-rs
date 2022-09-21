@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class AdditionalErrorsDecoratorTest {
     private val baseModel = """

@@ -27,11 +27,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXmlFactory
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import java.util.logging.Logger
 

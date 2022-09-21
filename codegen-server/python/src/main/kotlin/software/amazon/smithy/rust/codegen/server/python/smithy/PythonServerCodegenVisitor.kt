@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -21,11 +22,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDe
 import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.client.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 
 /**
@@ -45,8 +47,8 @@ class PythonServerCodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
-                handleRequired = true,
                 handleRustBoxing = true,
+                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -136,7 +138,7 @@ class PythonServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext),
+            ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(codegenContext)),
             codegenContext,
         )
             .render()

@@ -29,13 +29,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
-import software.amazon.smithy.rust.codegen.client.util.PANIC
-import software.amazon.smithy.rust.codegen.client.util.findMemberWithTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
-import software.amazon.smithy.rust.codegen.client.util.orNull
-import software.amazon.smithy.rust.codegen.client.util.outputShape
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1013) Support pagination when the idempotency trait is present
 fun OperationShape.isPaginated(model: Model) =
@@ -48,14 +48,14 @@ class PaginatorGenerator private constructor(
     service: ServiceShape,
     operation: OperationShape,
     private val generics: FluentClientGenerics,
-    retryPolicy: Writable = RustType.Unit.writable,
+    retryClassifier: RuntimeType,
 ) {
     companion object {
         fun paginatorType(
             coreCodegenContext: CoreCodegenContext,
             generics: FluentClientGenerics,
             operationShape: OperationShape,
-            retryPolicy: Writable = RustType.Unit.writable,
+            retryClassifier: RuntimeType,
         ): RuntimeType? {
             return if (operationShape.isPaginated(coreCodegenContext.model)) {
                 PaginatorGenerator(
@@ -64,7 +64,7 @@ class PaginatorGenerator private constructor(
                     coreCodegenContext.serviceShape,
                     operationShape,
                     generics,
-                    retryPolicy,
+                    retryClassifier,
                 ).paginatorType()
             } else {
                 null
@@ -98,7 +98,7 @@ class PaginatorGenerator private constructor(
         "generics" to generics.decl,
         "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
-        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryPolicy),
+        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryClassifier),
 
         // Operation Types
         "operation" to symbolProvider.toSymbol(operation),

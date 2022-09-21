@@ -12,7 +12,7 @@ import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 class AwsQuerySerializerGenerator(coreCodegenContext: CoreCodegenContext) : QuerySerializerGenerator(coreCodegenContext) {
     override val protocolName: String get() = "AWS Query"

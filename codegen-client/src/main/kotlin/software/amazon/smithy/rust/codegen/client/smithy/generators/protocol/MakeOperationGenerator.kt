@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.docs
@@ -26,13 +25,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSect
 import software.amazon.smithy.rust.codegen.client.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.findStreamingMember
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /** Generates the `make_operation` function on input structs */
 open class MakeOperationGenerator(
@@ -48,6 +47,8 @@ open class MakeOperationGenerator(
     protected val runtimeConfig = coreCodegenContext.runtimeConfig
     protected val symbolProvider = coreCodegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
+    private val defaultClassifier = CargoDependency.SmithyHttp(runtimeConfig)
+        .asType().member("retry::DefaultResponseRetryClassifier")
 
     private val sdkId =
         coreCodegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
@@ -152,7 +153,7 @@ open class MakeOperationGenerator(
         writer.format(symbolProvider.toSymbol(shape))
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        (customizations.firstNotNullOfOrNull { it.retryType() } ?: RustType.Unit).let { writer.format(it) }
+        (customizations.firstNotNullOfOrNull { it.retryType() } ?: defaultClassifier).let { writer.format(it) }
 
     private fun needsContentLength(operationShape: OperationShape): Boolean {
         return protocol.httpBindingResolver.requestBindings(operationShape)

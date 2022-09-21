@@ -51,12 +51,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.deserializeFunctionName
-import software.amazon.smithy.rust.codegen.client.util.PANIC
-import software.amazon.smithy.rust.codegen.client.util.dq
-import software.amazon.smithy.rust.codegen.client.util.expectMember
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.inputShape
-import software.amazon.smithy.rust.codegen.client.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 // The string argument is the name of the XML ScopedDecoder to continue parsing from
 typealias OperationInnerWriteable = RustWriter.(String) -> Unit

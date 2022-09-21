@@ -16,21 +16,19 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.hasTrait
-import software.amazon.smithy.rust.codegen.client.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = RestJson(codegenContext)
@@ -87,7 +85,7 @@ class RestJsonHttpBindingResolver(
     }
 }
 
-class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
+open class RestJson(val coreCodegenContext: CoreCodegenContext) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -141,15 +139,6 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
                 *errorScope,
             )
         }
-
-    override fun serverRouterRequestSpec(
-        operationShape: OperationShape,
-        operationName: String,
-        serviceName: String,
-        requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
-
-    override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 }
 
 fun restJsonFieldName(member: MemberShape): String {

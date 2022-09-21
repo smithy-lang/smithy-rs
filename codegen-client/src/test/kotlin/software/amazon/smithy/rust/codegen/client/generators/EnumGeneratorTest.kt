@@ -18,9 +18,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.EnumMemberMo
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.client.util.expectTrait
-import software.amazon.smithy.rust.codegen.client.util.lookup
-import software.amazon.smithy.rust.codegen.client.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 class EnumGeneratorTest {
     @Nested

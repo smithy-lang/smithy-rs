@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGener
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 /**
  * Payload Body Generator.

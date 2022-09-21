@@ -15,9 +15,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.util.PANIC
-import software.amazon.smithy.rust.codegen.client.util.orNull
-import software.amazon.smithy.rust.codegen.client.util.toPascalCase
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 internal class RustReservedWordSymbolProviderTest {
     class Stub : RustSymbolProvider {

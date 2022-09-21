@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class Ec2Decorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Ec2"
@@ -26,7 +26,7 @@ class Ec2Decorator : RustCodegenDecorator<ClientCodegenContext> {
         // need to be boxed for the API to work properly
         return model.letIf(
             applies(service),
-            BoxPrimitiveShapes::processModel,
+            EC2MakePrimitivesOptional::processModel,
         )
     }
 

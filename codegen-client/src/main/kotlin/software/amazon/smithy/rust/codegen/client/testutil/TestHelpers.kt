@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.testutil
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -27,8 +28,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGener
 import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.client.smithy.letIf
-import software.amazon.smithy.rust.codegen.client.util.dq
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.io.File
 
 val TestRuntimeConfig =
@@ -37,7 +38,7 @@ val TestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
     handleRustBoxing = true,
-    handleRequired = false,
+    nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
 )
 
 fun testRustSettings(

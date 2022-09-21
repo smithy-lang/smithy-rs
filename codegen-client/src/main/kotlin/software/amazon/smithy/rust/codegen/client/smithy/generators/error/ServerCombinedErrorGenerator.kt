@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,

@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.client.util.dq
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 class ApiVersionHeader(
     /**

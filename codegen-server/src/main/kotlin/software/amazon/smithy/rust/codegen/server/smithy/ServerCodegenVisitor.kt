@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -35,11 +36,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStrea
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.client.util.CommandFailed
-import software.amazon.smithy.rust.codegen.client.util.getTrait
-import software.amazon.smithy.rust.codegen.client.util.runCommand
+import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import java.util.logging.Logger
 
@@ -68,8 +70,8 @@ open class ServerCodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
-                handleRequired = true,
                 handleRustBoxing = true,
+                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -229,7 +231,7 @@ open class ServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext),
+            ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(codegenContext)),
             codegenContext,
         )
             .render()

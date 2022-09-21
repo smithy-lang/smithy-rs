@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
@@ -28,7 +27,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.JsonPar
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.client.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -129,8 +128,8 @@ class AwsJsonSerializerGenerator(
 }
 
 open class AwsJson(
-    private val coreCodegenContext: CoreCodegenContext,
-    private val awsJsonVersion: AwsJsonVersion,
+    val coreCodegenContext: CoreCodegenContext,
+    val awsJsonVersion: AwsJsonVersion,
 ) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
@@ -142,6 +141,8 @@ open class AwsJson(
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
     private val jsonDeserModule = RustModule.private("json_deser")
+
+    val version: AwsJsonVersion get() = awsJsonVersion
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsJsonHttpBindingResolver(coreCodegenContext.model, awsJsonVersion)
@@ -181,23 +182,6 @@ open class AwsJson(
                 *errorScope,
             )
         }
-
-    /**
-     * Returns the operation name as required by the awsJson1.x protocols.
-     */
-    override fun serverRouterRequestSpec(
-        operationShape: OperationShape,
-        operationName: String,
-        serviceName: String,
-        requestSpecModule: RuntimeType,
-    ) = writable {
-        rust("""String::from("$serviceName.$operationName")""")
-    }
-
-    override fun serverRouterRuntimeConstructor() = when (awsJsonVersion) {
-        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
-        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
-    }
 }
 
 fun awsJsonFieldName(member: MemberShape): String = member.memberName
