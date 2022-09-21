@@ -107,7 +107,7 @@ class ServerAwsJsonProtocol(
         }
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
+    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
         val allOperationShapes = allOperations(coreCodegenContext)
@@ -168,8 +168,8 @@ private fun restRouterConstruction(
     val operations = allOperations(coreCodegenContext)
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol visitor
-    // should not be invoked in service shapes"
-    // val serviceName = symbolProvider.toSymbol(service).name
+    //  should not be invoked in service shapes"
+    //  val serviceName = symbolProvider.toSymbol(service).name
     val serviceName = coreCodegenContext.serviceShape.id.name
     val pairs = writable {
         for ((operationShape, operationValue) in operations.zip(operationValues)) {
