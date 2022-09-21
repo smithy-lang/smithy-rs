@@ -49,7 +49,7 @@ private sealed class MessageKind {
         return when (this) {
             is UnsupportedConstraintOnMemberShape -> LogMessage(
                 level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, constraintTrait, constraintTraitsUberIssue)
+                buildMessageShapeHasUnsupportedConstraintTrait(shape, constraintTrait, constraintTraitsUberIssue),
             )
             is UnsupportedConstraintOnShapeReachableViaAnEventStream -> LogMessage(
                 level,
@@ -75,25 +75,25 @@ private sealed class MessageKind {
             )
             is UnsupportedLengthTraitOnCollectionOrOnBlobShape -> LogMessage(
                 level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, lengthTrait, constraintTraitsUberIssue)
+                buildMessageShapeHasUnsupportedConstraintTrait(shape, lengthTrait, constraintTraitsUberIssue),
             )
             is UnsupportedPatternTraitOnStringShape -> LogMessage(
                 level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, patternTrait, constraintTraitsUberIssue)
+                buildMessageShapeHasUnsupportedConstraintTrait(shape, patternTrait, constraintTraitsUberIssue),
             )
             is UnsupportedRangeTraitOnShape -> LogMessage(
                 level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, rangeTrait, constraintTraitsUberIssue)
+                buildMessageShapeHasUnsupportedConstraintTrait(shape, rangeTrait, constraintTraitsUberIssue),
             )
         }
     }
 }
-private data class UnsupportedConstraintOnMemberShape(val shape: MemberShape, val constraintTrait: Trait): MessageKind()
-private data class UnsupportedConstraintOnShapeReachableViaAnEventStream(val shape: Shape, val constraintTrait: Trait): MessageKind()
-private data class UnsupportedLengthTraitOnStreamingBlobShape(val shape: BlobShape, val lengthTrait: LengthTrait, val streamingTrait: StreamingTrait): MessageKind()
-private data class UnsupportedLengthTraitOnCollectionOrOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait): MessageKind()
-private data class UnsupportedPatternTraitOnStringShape(val shape: Shape, val patternTrait: PatternTrait): MessageKind()
-private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait): MessageKind()
+private data class UnsupportedConstraintOnMemberShape(val shape: MemberShape, val constraintTrait: Trait) : MessageKind()
+private data class UnsupportedConstraintOnShapeReachableViaAnEventStream(val shape: Shape, val constraintTrait: Trait) : MessageKind()
+private data class UnsupportedLengthTraitOnStreamingBlobShape(val shape: BlobShape, val lengthTrait: LengthTrait, val streamingTrait: StreamingTrait) : MessageKind()
+private data class UnsupportedLengthTraitOnCollectionOrOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) : MessageKind()
+private data class UnsupportedPatternTraitOnStringShape(val shape: Shape, val patternTrait: PatternTrait) : MessageKind()
+private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) : MessageKind()
 
 data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>)
@@ -176,13 +176,13 @@ fun validateUnsupportedConstraintsAreNotUsed(model: Model, service: ServiceShape
 
     val messages =
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-        unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-        unsupportedConstraintOnShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-        unsupportedLengthTraitOnCollectionOrOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-        unsupportedPatternTraitOnStringShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-        unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
+            unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedConstraintOnShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedLengthTraitOnCollectionOrOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedPatternTraitOnStringShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 
-        return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
+    return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }
 
 /**

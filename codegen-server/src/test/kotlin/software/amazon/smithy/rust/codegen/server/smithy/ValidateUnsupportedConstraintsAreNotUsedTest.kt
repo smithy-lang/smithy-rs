@@ -89,10 +89,10 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         validationResult.messages shouldHaveSize 2
         validationResult.messages.forSome {
             it.message shouldContain
-            """
-            The blob shape `test#StreamingBlob` has both the `smithy.api#length` and `smithy.api#streaming` constraint traits attached.
-            It is unclear what the semantics for streaming blob shapes are.
-            """.trimIndent().replace("\n", " ")
+                """
+                The blob shape `test#StreamingBlob` has both the `smithy.api#length` and `smithy.api#streaming` constraint traits attached.
+                It is unclear what the semantics for streaming blob shapes are.
+                """.trimIndent().replace("\n", " ")
         }
     }
 
