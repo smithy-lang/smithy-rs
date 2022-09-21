@@ -160,7 +160,7 @@ sealed class HeaderSensitivity(
             rust("false")
         } else writable {
             val matches = headerKeys.joinToString("|") { it.dq() }
-            rust("matches!(name, $matches)")
+            rust("matches!(name.as_str(), $matches)")
         }
 
         val suffixAndValue = when (this) {
@@ -168,7 +168,7 @@ sealed class HeaderSensitivity(
                 prefixHeader?.let {
                     rust(
                         """
-                        let starts_with = name.starts_with("$it");
+                        let starts_with = name.as_str().starts_with("$it");
                         let key_suffix = if starts_with { Some(${it.length}) } else { None };
                         """,
                     )
@@ -176,7 +176,7 @@ sealed class HeaderSensitivity(
                 rust("let value = name_match;")
             }
             is SensitiveMapValue -> writable {
-                rust("let starts_with = name.starts_with(${prefixHeader.dq()});")
+                rust("let starts_with = name.as_str().starts_with(${prefixHeader.dq()});")
                 if (keySensitive) {
                     rust("let key_suffix = if starts_with { Some(${prefixHeader.length}) } else { None };")
                 } else {
@@ -191,8 +191,6 @@ sealed class HeaderSensitivity(
                 """
                 {
                     |name: &#{Http}::header::HeaderName| {
-                        ##[allow(unused_variables)]
-                        let name = name.as_str();
                         let name_match = #{NameMatch:W};
 
                         #{SuffixAndValue:W}
