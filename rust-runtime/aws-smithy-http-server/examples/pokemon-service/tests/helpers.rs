@@ -11,7 +11,7 @@ use std::time::Duration;
 use assert_cmd::prelude::*;
 use aws_smithy_client::{erase::DynConnector, hyper_ext::Adapter};
 use aws_smithy_http::operation::Request;
-use pokemon_service_client::{Client, Config};
+use pokemon_service_client::{Builder, Client, Config};
 use tokio::time;
 
 const TEST_KEY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/testdata/localhost.key");
@@ -81,7 +81,7 @@ pub fn client() -> Client<
     aws_smithy_client::erase::DynMiddleware<aws_smithy_client::erase::DynConnector>,
 > {
     let base_url = PokemonServiceVariant::Http.base_url();
-    let raw_client = Config::builder()
+    let raw_client = Builder::new()
         .rustls_connector(Default::default())
         .middleware_fn(rewrite_base_url(base_url))
         .build_dyn();
