@@ -47,6 +47,10 @@ pub struct PyRequest {
     method: String,
     #[pyo3(get, set)]
     uri: String,
+    // TODO(investigate if using a PyDict can make the experience more idiomatic)
+    // I'd like to be able to do request.headers.get("my-header") and
+    // request.headers["my-header"] = 42 instead of implementing set_header() and get_header()
+    // under pymethods. The same applies to response.
     pub(crate) headers: HashMap<String, String>,
     version: Version,
 }

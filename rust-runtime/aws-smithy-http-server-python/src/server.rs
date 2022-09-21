@@ -77,15 +77,17 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                     .getattr(py, "pid")
                     .map(|pid| pid.extract(py).unwrap_or(-1))
                     .unwrap_or(-1);
-                println!("Terminating worker {idx}, PID: {pid}");
+                tracing::debug!("Terminating worker {idx}, PID: {pid}");
                 match worker.call_method0(py, "terminate") {
                     Ok(_) => {}
                     Err(e) => {
-                        eprintln!("Error terminating worker {idx}, PID: {pid}: {e}");
+                        tracing::error!("Error terminating worker {idx}, PID: {pid}: {e}");
                         worker
                             .call_method0(py, "kill")
                             .map_err(|e| {
-                                eprintln!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
+                                tracing::error!(
+                                    "Unable to kill kill worker {idx}, PID: {pid}: {e}"
+                                );
                             })
                             .unwrap();
                     }
@@ -106,11 +108,11 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                     .getattr(py, "pid")
                     .map(|pid| pid.extract(py).unwrap_or(-1))
                     .unwrap_or(-1);
-                println!("Killing worker {idx}, PID: {pid}");
+                tracing::debug!("Killing worker {idx}, PID: {pid}");
                 worker
                     .call_method0(py, "kill")
                     .map_err(|e| {
-                        eprintln!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
+                        tracing::error!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
                     })
                     .unwrap();
             });
@@ -133,20 +135,20 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
         for sig in signals.forever() {
             match sig {
                 SIGINT => {
-                    println!(
+                    tracing::info!(
                         "Termination signal {sig:?} received, all workers will be immediately terminated"
                     );
 
                     self.immediate_termination(self.workers());
                 }
                 SIGTERM | SIGQUIT => {
-                    println!(
+                    tracing::info!(
                         "Termination signal {sig:?} received, all workers will be gracefully terminated"
                     );
                     self.graceful_termination(self.workers());
                 }
                 _ => {
-                    println!("Signal {sig:?} is ignored by this application");
+                    tracing::debug!("Signal {sig:?} is ignored by this application");
                 }
             }
         }
@@ -287,9 +289,11 @@ event_loop.add_signal_handler(signal.SIGINT,
             is_coroutine,
             _type,
         };
-        println!(
+        tracing::info!(
             "Registering middleware function `{}`, coroutine: {}, type: {:?}",
-            handler.name, handler.is_coroutine, handler._type
+            handler.name,
+            handler.is_coroutine,
+            handler._type
         );
         self.middlewares().push(handler);
         Ok(())
@@ -314,9 +318,10 @@ event_loop.add_signal_handler(signal.SIGINT,
             is_coroutine,
             args: func_args.len(),
         };
-        println!(
+        tracing::info!(
             "Registering handler function `{name}`, coroutine: {}, arguments: {}",
-            handler.is_coroutine, handler.args,
+            handler.is_coroutine,
+            handler.args,
         );
         // Insert the handler in the handlers map.
         self.handlers().insert(name.to_string(), handler);
@@ -445,7 +450,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         }
         // Unlock the workers mutex.
         drop(active_workers);
-        println!("Rust Python server started successfully");
+        tracing::info!("Rust Python server started successfully");
         self.block_on_rust_signals();
         Ok(())
     }

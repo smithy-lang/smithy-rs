@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import aiohttp
+
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
@@ -27,7 +28,7 @@ from libpokemon_service_server_sdk.types import ByteStream
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.
-logging.basicConfig(level=logging.INFO, handlers=[TracingHandler.handle()])
+logging.basicConfig(handlers=[TracingHandler(level=logging.DEBUG).handler()])
 
 
 # A slightly more atomic counter using a threading lock.
@@ -142,7 +143,9 @@ def check_content_type_header(request: Request):
     if content_type == "application/json":
         logging.debug("Found valid `application/json` content type")
     else:
-        logging.warning(f"Invalid content type {content_type}, dumping headers: {request.headers()}")
+        logging.warning(
+            f"Invalid content type {content_type}, dumping headers: {request.headers()}"
+        )
 
 
 # This middleware adds a new header called `x-amzn-answer` to the
@@ -183,8 +186,9 @@ def get_pokemon_species(
     context.increment_calls_count()
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:
-        logging.error("Total requests executed: %s", context.get_calls_count())
+        logging.debug("Total requests executed: %s", context.get_calls_count())
         logging.info("Found description for Pokémon %s", input.name)
+        logging.error("Found some stuff")
         return GetPokemonSpeciesOutput(
             name=input.name, flavor_text_entries=flavor_text_entries
         )

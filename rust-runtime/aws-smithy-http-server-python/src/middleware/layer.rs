@@ -109,7 +109,10 @@ where
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let inner = self.inner.clone();
+        // TODO(Should we make this clone less expensive by wrapping inner in a Arc?)
+        let clone = self.inner.clone();
+        // See https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
+        let inner = std::mem::replace(&mut self.inner, clone);
         let run = self.handlers.run(req, self.protocol, self.locals.clone());
 
         ResponseFuture {

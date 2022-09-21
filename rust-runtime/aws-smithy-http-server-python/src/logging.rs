@@ -7,9 +7,9 @@
 use std::path::PathBuf;
 
 use pyo3::prelude::*;
-use tracing::Level;
 #[cfg(not(test))]
-use tracing::Span;
+use tracing::span;
+use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     fmt::{self, writer::MakeWriterExt},
@@ -19,29 +19,10 @@ use tracing_subscriber::{
 
 use crate::error::PyException;
 
-/// Setup `tracing::subscriber` reading the log level from RUST_LOG environment variable.
-/// If the variable is not set, the logging for both Python and Rust will be set at the
-/// level used by Python logging module.
-pub fn setup_tracing(py: Python, logfile: Option<&PathBuf>) -> PyResult<Option<WorkerGuard>> {
-    let logging = py.import("logging")?;
-    let root = logging.getattr("root")?;
-    let handlers = root.getattr("handlers")?;
-    let handlers = handlers.extract::<Vec<PyObject>>()?;
-    for handler in handlers.iter() {
-        let name = handler.getattr(py, "__name__")?;
-        if let Ok(name) = name.extract::<&str>(py) {
-            if name == "SmithyRsTracingHandler" {
-                return setup_tracing_subscriber(py, logfile);
-            }
-        }
-    }
-    Ok(None)
-}
-
 /// Setup tracing-subscriber to log on console or to a hourly rolling file.
 fn setup_tracing_subscriber(
-    py: Python,
-    logfile: Option<&PathBuf>,
+    level: Option<u8>,
+    logfile: Option<PathBuf>,
 ) -> PyResult<Option<WorkerGuard>> {
     let appender = match logfile {
         Some(logfile) => {
@@ -64,21 +45,20 @@ fn setup_tracing_subscriber(
         None => None,
     };
 
-    let logging = py.import("logging")?;
-    let root = logging.getattr("root")?;
-    let level: u8 = root.getattr("level")?.extract()?;
-    let level = match level {
-        40u8 => Level::ERROR,
-        30u8 => Level::WARN,
-        20u8 => Level::INFO,
-        10u8 => Level::DEBUG,
+    let tracing_level = match level {
+        Some(40u8) => Level::ERROR,
+        Some(30u8) => Level::WARN,
+        Some(20u8) => Level::INFO,
+        Some(10u8) => Level::DEBUG,
+        None => Level::INFO,
         _ => Level::TRACE,
     };
+
     match appender {
         Some((appender, guard)) => {
             let layer = Some(
                 fmt::Layer::new()
-                    .with_writer(appender.with_max_level(level))
+                    .with_writer(appender.with_max_level(tracing_level))
                     .with_ansi(true)
                     .with_line_number(true)
                     .with_level(true),
@@ -89,7 +69,7 @@ fn setup_tracing_subscriber(
         None => {
             let layer = Some(
                 fmt::Layer::new()
-                    .with_writer(std::io::stdout.with_max_level(level))
+                    .with_writer(std::io::stdout.with_max_level(tracing_level))
                     .with_ansi(true)
                     .with_line_number(true)
                     .with_level(true),
@@ -107,13 +87,24 @@ fn setup_tracing_subscriber(
 ///   is not exported in `logging.__all__`, as it is not intended to be called directly.
 /// - A new class `logging.TracingHandler` provides a `logging.Handler` that delivers all records to `python_tracing`.
 #[pyclass(name = "TracingHandler")]
-#[derive(Debug, Clone)]
-pub struct PyTracingHandler;
+#[derive(Debug)]
+pub struct PyTracingHandler {
+    _guard: Option<WorkerGuard>,
+}
 
 #[pymethods]
 impl PyTracingHandler {
-    #[staticmethod]
-    fn handle(py: Python) -> PyResult<Py<PyAny>> {
+    #[new]
+    fn newpy(py: Python, level: Option<u8>, logfile: Option<PathBuf>) -> PyResult<Self> {
+        let _guard = setup_tracing_subscriber(level, logfile)?;
+        let logging = py.import("logging")?;
+        let root = logging.getattr("root")?;
+        root.setattr("level", level)?;
+        // TODO(Investigate why the file appender just create the file and does not write anything, event after holding the guard)
+        Ok(Self { _guard })
+    }
+
+    fn handler(&self, py: Python) -> PyResult<Py<PyAny>> {
         let logging = py.import("logging")?;
         logging.setattr(
             "py_tracing_event",
@@ -122,7 +113,6 @@ impl PyTracingHandler {
 
         let pycode = r#"
 class TracingHandler(Handler):
-    __name__ = "SmithyRsTracingHandler"
     """ Python logging to Rust tracing handler. """
     def emit(self, record):
         py_tracing_event(
@@ -147,14 +137,19 @@ pub fn py_tracing_event(
     message: &str,
     module: &str,
     filename: &str,
-    line: usize,
+    lineno: usize,
     pid: usize,
 ) -> PyResult<()> {
-    let span = Span::current();
-    span.record("pid", pid);
-    span.record("module", module);
-    span.record("filename", filename);
-    span.record("lineno", line);
+    let span = span!(
+        Level::TRACE,
+        "python",
+        pid = pid,
+        module = module,
+        filename = filename,
+        lineno = lineno
+    );
+    println!("message2: {message}");
+    let _guard = span.enter();
     match level {
         40 => tracing::error!("{message}"),
         30 => tracing::warn!("{message}"),
@@ -182,14 +177,22 @@ pub fn py_tracing_event(
 
 #[cfg(test)]
 mod tests {
+    use pyo3::types::PyDict;
+
     use super::*;
 
     #[test]
     fn tracing_handler_is_injected_in_python() {
         crate::tests::initialize();
         Python::with_gil(|py| {
-            setup_tracing(py, None).unwrap();
+            let handler = PyTracingHandler::newpy(py, Some(10), None).unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs
+                .set_item("handlers", vec![handler.handler(py).unwrap()])
+                .unwrap();
             let logging = py.import("logging").unwrap();
+            let basic_config = logging.getattr("basicConfig").unwrap();
+            basic_config.call((), Some(kwargs)).unwrap();
             logging.call_method1("info", ("a message",)).unwrap();
         });
     }
