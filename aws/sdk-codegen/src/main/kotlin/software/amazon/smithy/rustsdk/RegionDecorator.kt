@@ -107,7 +107,15 @@ class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCusto
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> rustTemplate(
+                """
+                /// Returns the AWS region, if it was provided.
+                pub fn region(&self) -> Option<&#{Region}> {
+                    self.region.as_ref()
+                }
+                """,
+                *codegenScope,
+            )
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("region: Option<#{Region}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
