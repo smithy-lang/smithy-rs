@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, ops::Deref, process, thread};
 
-use aws_smithy_http_server::{AddExtensionLayer, Router};
+use aws_smithy_http_server::{routing::Router, AddExtensionLayer};
 use parking_lot::Mutex;
 use pyo3::{prelude::*, types::IntoPyDict};
 use signal_hook::{consts::*, iterator::Signals};
