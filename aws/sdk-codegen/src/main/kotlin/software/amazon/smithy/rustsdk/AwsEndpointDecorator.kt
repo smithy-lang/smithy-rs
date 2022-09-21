@@ -114,7 +114,15 @@ class EndpointConfigCustomization(
                 "pub (crate) endpoint_resolver: std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> rustTemplate(
+                """
+                /// Returns the endpoint resolver.
+                pub fn endpoint_resolver(&self) -> std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>> {
+                    self.endpoint_resolver.clone()
+                }
+                """,
+                *codegenScope,
+            )
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("endpoint_resolver: Option<std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
