@@ -125,17 +125,13 @@ class SymbolBuilderTest {
         "PrimitiveBoolean, false, bool",
     )
     fun `creates primitives`(primitiveType: String, optional: Boolean, rustName: String) {
-        val memberBuilder = MemberShape.builder().id("foo.bar#MyStruct\$quux").target("smithy.api#$primitiveType")
-        val member = memberBuilder.build()
-        val struct = StructureShape.builder()
-            .id("foo.bar#MyStruct")
-            .addMember(member)
-            .build()
-        val model = Model.assembler()
-            .addShapes(struct, member)
-            .assemble()
-            .unwrap()
-
+        val model = """
+    namespace foo.bar
+    structure MyStruct {
+        quux: $primitiveType
+    }
+""".asSmithyModel()
+        val member = model.expectShape(ShapeId.from("foo.bar#MyStruct\$quux"))
         val provider: SymbolProvider = testSymbolProvider(model)
         val memberSymbol = provider.toSymbol(member)
         // builtins should not have a namespace set

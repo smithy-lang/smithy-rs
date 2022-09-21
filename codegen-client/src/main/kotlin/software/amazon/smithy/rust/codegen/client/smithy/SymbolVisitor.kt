@@ -65,7 +65,7 @@ data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
     val handleRustBoxing: Boolean,
-    val handleRequired: Boolean,
+    val nullabilityCheckMode: NullableIndex.CheckMode,
 )
 
 /**
@@ -209,13 +209,7 @@ open class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
-        if (config.handleRequired && member.isRequired) {
-            symbol
-        } else if (nullableIndex.isNullable(member)) {
-            symbol.makeOptional()
-        } else {
-            symbol
-        }
+        symbol.letIf(nullableIndex.isMemberNullable(member, config.nullabilityCheckMode)) { symbol.makeOptional() }
 
     /**
      * Produce `Box<T>` when the shape has the `RustBoxTrait`
