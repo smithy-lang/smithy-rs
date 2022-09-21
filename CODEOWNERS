@@ -1,9 +1,18 @@
 *                                               @awslabs/rust-sdk-owners
-/codegen/                                       @awslabs/rust-sdk-owners @crisidev @david-perez
-/codegen-server/                                @awslabs/smithy-rs-server
-/codegen-server-test/                           @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-http-server/           @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-http-server-python/    @awslabs/smithy-rs-server
 
-# Either team is able to modify this file to release new smithy-rs versions.
-gradle.properties                               @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+# Server
+/codegen-server-test/                           @awslabs/smithy-rs-server
+/codegen-server/                                @awslabs/smithy-rs-server
+/rust-runtime/aws-smithy-http-server-python/    @awslabs/smithy-rs-server
+/rust-runtime/aws-smithy-http-server/           @awslabs/smithy-rs-server
+
+# Shared ownership
+/CHANGELOG.md                                   @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/CHANGELOG.next.toml                            @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/README.md                                      @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/build.gradle.kts                               @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/buildSrc/                                      @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/codegen-core/                                  @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/design/                                        @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/gradle.properties                              @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/tools/                                         @awslabs/rust-sdk-owners @awslabs/smithy-rs-server

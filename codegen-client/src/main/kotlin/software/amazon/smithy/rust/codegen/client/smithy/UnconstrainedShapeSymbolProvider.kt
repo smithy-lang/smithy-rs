@@ -135,7 +135,7 @@ class UnconstrainedShapeSymbolProvider(
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)
                     // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
+                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config().nullabilityCheckMode)
                 } else {
                     base.toSymbol(shape)
                 }

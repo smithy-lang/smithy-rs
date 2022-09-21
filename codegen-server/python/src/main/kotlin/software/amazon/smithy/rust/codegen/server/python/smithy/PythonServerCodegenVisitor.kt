@@ -9,6 +9,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -46,8 +47,8 @@ class PythonServerCodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
-                handleRequired = true,
                 handleRustBoxing = true,
+                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)

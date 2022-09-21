@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.knowledge.NullableIndex.CheckMode
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
@@ -65,7 +66,7 @@ data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
     val handleRustBoxing: Boolean,
-    val handleRequired: Boolean,
+    val nullabilityCheckMode: NullableIndex.CheckMode,
 )
 
 /**
@@ -244,6 +245,21 @@ open class SymbolVisitor(
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
+    /**
+     * Produce `Box<T>` when the shape has the `RustBoxTrait`
+     */
+    private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
+        return if (shape.hasTrait<RustBoxTrait>()) {
+            val rustType = RustType.Box(symbol.rustType())
+            with(Symbol.builder()) {
+                rustType(rustType)
+                addReference(symbol)
+                name(rustType.name)
+                build()
+            }
+        } else symbol
+    }
+
     private fun simpleShape(shape: SimpleShape): Symbol {
         return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
     }
@@ -351,28 +367,12 @@ open class SymbolVisitor(
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }.let {
-            handleOptionality(it, shape, nullableIndex, config)
+            handleOptionality(it, shape, nullableIndex, config.nullabilityCheckMode)
         }
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {
         return RuntimeType.DateTime(config.runtimeConfig).toSymbol()
-    }
-}
-
-fun handleOptionality(
-    symbol: Symbol,
-    member: MemberShape,
-    nullableIndex: NullableIndex,
-    config: SymbolVisitorConfig? = null,
-): Symbol {
-    val handleRequired = config?.handleRequired ?: true
-    return if (handleRequired && member.isRequired) {
-        symbol
-    } else if (nullableIndex.isNullable(member)) {
-        symbol.makeOptional()
-    } else {
-        symbol
     }
 }
 
@@ -395,6 +395,9 @@ fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
         // If we ever generate a `thisisabug.rs`, there is a bug in our symbol generation
         .definitionFile("thisisabug.rs")
 }
+
+fun handleOptionality(symbol: Symbol, member: MemberShape, nullableIndex: NullableIndex, nullabilityCheckMode: CheckMode): Symbol =
+    symbol.letIf(nullableIndex.isMemberNullable(member, nullabilityCheckMode)) { symbol.makeOptional() }
 
 // TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"

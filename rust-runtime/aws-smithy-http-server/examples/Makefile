@@ -20,6 +20,12 @@ build: codegen
 run: codegen
 	cargo run
 
+clippy: codegen
+	cargo clippy
+
+test: codegen
+	cargo test
+
 doc-open: codegen
 	cargo doc --no-deps --open
 

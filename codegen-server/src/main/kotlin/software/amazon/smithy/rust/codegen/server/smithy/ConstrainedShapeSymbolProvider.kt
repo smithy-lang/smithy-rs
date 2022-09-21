@@ -70,7 +70,7 @@ class ConstrainedShapeSymbolProvider(
                 val target = model.expectShape(shape.target)
                 val targetSymbol = this.toSymbol(target)
                 // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
+                handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config().nullabilityCheckMode)
             }
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {
