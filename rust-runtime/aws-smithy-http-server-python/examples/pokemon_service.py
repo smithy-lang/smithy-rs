@@ -159,7 +159,7 @@ def add_x_amzn_answer_header(request: Request):
 
 
 # This middleware checks if the header `x-amzn-answer` is correctly set
-# to 42.
+# to 42, otherwise it returns an exception with a set status code.
 @app.request_middleware
 async def check_x_amzn_answer_header(request: Request):
     # Check that `x-amzn-answer` is 42.
