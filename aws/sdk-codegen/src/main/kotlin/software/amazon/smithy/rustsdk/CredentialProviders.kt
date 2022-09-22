@@ -69,7 +69,15 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> rustTemplate(
+                """
+                /// Returns the credentials provider.
+                pub fn credentials_provider(&self) -> #{credentials}::SharedCredentialsProvider {
+                    self.credentials_provider.as_ref()
+                }
+                """,
+                *codegenScope,
+            )
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,", *codegenScope)
             ServiceConfig.BuilderImpl -> {
