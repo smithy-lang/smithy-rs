@@ -22,7 +22,7 @@ use pyo3::{
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
-use crate::Error;
+use crate::PyError;
 
 /// Python Wrapper for [aws_smithy_types::Blob].
 #[pyclass]
@@ -152,7 +152,7 @@ impl DateTime {
     pub fn from_nanos(epoch_nanos: i128) -> PyResult<Self> {
         Ok(Self(
             aws_smithy_types::date_time::DateTime::from_nanos(epoch_nanos)
-                .map_err(Error::DateTimeConversion)?,
+                .map_err(PyError::DateTimeConversion)?,
         ))
     }
 
@@ -160,7 +160,7 @@ impl DateTime {
     #[staticmethod]
     pub fn read(s: &str, format: Format, delim: char) -> PyResult<(Self, &str)> {
         let (self_, next) = aws_smithy_types::date_time::DateTime::read(s, format.into(), delim)
-            .map_err(Error::DateTimeParse)?;
+            .map_err(PyError::DateTimeParse)?;
         Ok((Self(self_), next))
     }
 
@@ -195,7 +195,7 @@ impl DateTime {
     pub fn from_str(s: &str, format: Format) -> PyResult<Self> {
         Ok(Self(
             aws_smithy_types::date_time::DateTime::from_str(s, format.into())
-                .map_err(Error::DateTimeParse)?,
+                .map_err(PyError::DateTimeParse)?,
         ))
     }
 
@@ -226,7 +226,7 @@ impl DateTime {
 
     /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.
     pub fn to_millis(&self) -> PyResult<i64> {
-        Ok(self.0.to_millis().map_err(Error::DateTimeConversion)?)
+        Ok(self.0.to_millis().map_err(PyError::DateTimeConversion)?)
     }
 }
 

@@ -37,18 +37,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
         block(this)
-    }
-}
-
-fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): String {
-    return if (member.getMemberTrait(model, SensitiveTrait::class.java).isPresent) {
-        "*** Sensitive Data Redacted ***".dq()
-    } else {
-        safeToPrint
     }
 }
 
@@ -115,9 +108,7 @@ open class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = redactIfNecessary(
-                        member, model, "self.$memberName",
-                    )
+                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )

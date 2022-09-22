@@ -11,16 +11,24 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import aiohttp
+
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
     EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
     HealthCheckOperationInput, StreamPokemonRadioOperationInput)
+from libpokemon_service_server_sdk.logging import TracingHandler
+from libpokemon_service_server_sdk.middleware import (MiddlewareException,
+                                                      Request)
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
     EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
     HealthCheckOperationOutput, StreamPokemonRadioOperationOutput)
 from libpokemon_service_server_sdk.types import ByteStream
+
+# Logging can bee setup using standard Python tooling. We provide
+# fast logging handler, Tracingandler based on Rust tracing crate.
+logging.basicConfig(handlers=[TracingHandler(level=logging.DEBUG).handler()])
 
 
 # A slightly more atomic counter using a threading lock.
@@ -112,6 +120,55 @@ app.context(Context())
 
 
 ###########################################################
+# Middleware
+############################################################
+# Middlewares are sync or async function decorated by `@app.middleware`.
+# They are executed in order and take as input the HTTP request object.
+# A middleware can return multiple values, following these rules:
+# * Middleware not returning will let the execution continue without
+#   changing the original request.
+# * Middleware returning a modified Request will update the original
+#   request before continuing the execution.
+# * Middleware returning a Response will immediately terminate the request
+#   handling and return the response constructed from Python.
+# * Middleware raising MiddlewareException will immediately terminate the
+#   request handling and return a protocol specific error, with the option of
+#   setting the HTTP return code.
+# * Middleware raising any other exception will immediately terminate the
+#   request handling and return a protocol specific error, with HTTP status
+#   code 500.
+@app.request_middleware
+def check_content_type_header(request: Request):
+    content_type = request.get_header("content-type")
+    if content_type == "application/json":
+        logging.debug("Found valid `application/json` content type")
+    else:
+        logging.warning(
+            f"Invalid content type {content_type}, dumping headers: {request.headers()}"
+        )
+
+
+# This middleware adds a new header called `x-amzn-answer` to the
+# request. We expect to see this header to be populated in the next
+# middleware.
+@app.request_middleware
+def add_x_amzn_answer_header(request: Request):
+    request.set_header("x-amzn-answer", "42")
+    logging.debug("Setting `x-amzn-answer` header to 42")
+    return request
+
+
+# This middleware checks if the header `x-amzn-answer` is correctly set
+# to 42, otherwise it returns an exception with a set status code.
+@app.request_middleware
+async def check_x_amzn_answer_header(request: Request):
+    # Check that `x-amzn-answer` is 42.
+    if request.get_header("x-amzn-answer") != "42":
+        # Return an HTTP 401 Unauthorized if the content type is not JSON.
+        raise MiddlewareException("Invalid answer", 401)
+
+
+###########################################################
 # App handlers definition
 ###########################################################
 # Empty operation used for raw benchmarking.
@@ -131,6 +188,7 @@ def get_pokemon_species(
     if flavor_text_entries:
         logging.debug("Total requests executed: %s", context.get_calls_count())
         logging.info("Found description for Pokémon %s", input.name)
+        logging.error("Found some stuff")
         return GetPokemonSpeciesOutput(
             name=input.name, flavor_text_entries=flavor_text_entries
         )

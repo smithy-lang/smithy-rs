@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.core.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
@@ -54,6 +53,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isPrimitive
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
@@ -492,11 +492,7 @@ class HttpBindingGenerator(
                         let header_value = $safeName;
                         let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                             #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header value: {}", &${
-                        redactIfNecessary(
-                            memberShape,
-                            model,
-                            "header_value",
-                        )
+                        memberShape.redactIfNecessary(model, "header_value")
                         }, err)}
                         })?;
                         builder = builder.header("${httpBinding.locationName}", header_value);
@@ -532,11 +528,7 @@ class HttpBindingGenerator(
                         #{build_error}::InvalidField {
                             field: "$memberName",
                             details: format!("`{}` cannot be used as a header value: {}", ${
-                redactIfNecessary(
-                    memberShape,
-                    model,
-                    "v",
-                )
+                memberShape.redactIfNecessary(model, "v")
                 }, err)}
                     })?;
                     builder = builder.header(header_name, header_value);

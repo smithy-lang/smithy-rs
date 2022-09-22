@@ -90,16 +90,14 @@ class PythonServerOperationHandlerGenerator(
             rustTemplate(
                 """
                 #{tracing}::debug!("Executing Python handler function `$name()`");
-                #{tokio}::task::block_in_place(move || {
-                    #{pyo3}::Python::with_gil(|py| {
-                        let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
-                        let output = if handler.args == 1 {
-                            pyhandler.call1((input,))?
-                        } else {
-                            pyhandler.call1((input, state.0))?
-                        };
-                        output.extract::<$output>()
-                    })
+                #{pyo3}::Python::with_gil(|py| {
+                    let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
+                    let output = if handler.args == 1 {
+                        pyhandler.call1((input,))?
+                    } else {
+                        pyhandler.call1((input, state.0))?
+                    };
+                    output.extract::<$output>()
                 })
                 """,
                 *codegenScope,

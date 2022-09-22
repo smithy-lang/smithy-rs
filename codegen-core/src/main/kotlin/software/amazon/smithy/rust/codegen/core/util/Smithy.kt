@@ -16,6 +16,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -82,6 +83,16 @@ fun OperationShape.isEventStream(model: Model): Boolean {
 fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.any { id ->
     model.expectShape(id, OperationShape::class.java).isEventStream(model)
 }
+
+fun Shape.redactIfNecessary(model: Model, safeToPrint: String): String =
+    when (this) {
+        is MemberShape -> model.expectShape(this.target).redactIfNecessary(model, safeToPrint)
+        else -> if (this.hasTrait<SensitiveTrait>()) {
+            "*** Sensitive Data Redacted ***".dq()
+        } else {
+            safeToPrint
+        }
+    }
 
 /*
  * Returns the member of this structure targeted with streaming trait (if it exists).
