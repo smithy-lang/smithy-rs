@@ -28,13 +28,10 @@ use crate::{
     response::IntoResponse,
 };
 
-pub mod aws_json;
-pub mod rest;
-
-const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";
+pub(crate) const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";
 
 /// Constructs common response to method disallowed.
-fn method_disallowed() -> http::Response<BoxBody> {
+pub(crate) fn method_disallowed() -> http::Response<BoxBody> {
     let mut responses = http::Response::default();
     *responses.status_mut() = http::StatusCode::METHOD_NOT_ALLOWED;
     responses
