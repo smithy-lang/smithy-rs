@@ -19,7 +19,6 @@ object PythonServerCargoDependency {
     val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.16"), features = setOf("attributes", "tokio-runtime"))
     val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
-    val TracingAppender: CargoDependency = CargoDependency("tracing-appender", CratesIo("0.2"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TowerHttp: CargoDependency = CargoDependency("tower-http", CratesIo("0.3"), features = setOf("trace"))
     val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), features = setOf("server", "http1", "http2", "tcp", "stream"))
