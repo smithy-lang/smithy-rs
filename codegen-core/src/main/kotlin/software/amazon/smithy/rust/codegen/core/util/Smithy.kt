@@ -41,6 +41,8 @@ fun StructureShape.expectMember(member: String): MemberShape =
 fun UnionShape.expectMember(member: String): MemberShape =
     this.getMember(member).orElseThrow { CodegenException("$member did not exist on $this") }
 
+fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or { this.getMember("Message") }.orNull()
+
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
 fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
 fun MemberShape.isStreaming(model: Model) = this.getMemberTrait(model, StreamingTrait::class.java).isPresent

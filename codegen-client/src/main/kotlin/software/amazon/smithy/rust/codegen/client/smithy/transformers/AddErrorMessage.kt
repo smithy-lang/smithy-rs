@@ -3,21 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.transformers
+package software.amazon.smithy.rust.codegen.client.smithy.transformers
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.logging.Logger
-
-// TODO This file should be in the client module, since the transformer is only used by the client generator.
-//  However, this extension function is used by the server too, so this should probably be moved to `Smithy.kt`.
-fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or { this.getMember("Message") }.orNull()
 
 /**
  * Ensure that all errors have error messages.
