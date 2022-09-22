@@ -6,7 +6,7 @@
 // This program is exported as a binary named `pokemon-service`.
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::{AddExtensionLayer, Router};
+use aws_smithy_http_server::{routing::Router, AddExtensionLayer};
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
