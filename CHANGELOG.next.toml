@@ -11,6 +11,12 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[rust-runtime]]
+message = "Pokémon Service example code now runs clippy during build."
+references = ["smithy-rs#1727"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "GeneralSwiss"
+
 [[aws-sdk-rust]]
 message = """
 The SDK, by default, now times out if socket connect or time to first byte read takes longer than
