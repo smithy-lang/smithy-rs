@@ -97,18 +97,17 @@ class ServerAwsJsonProtocol(
     }
 
     override fun markerStruct(): RuntimeType {
-        val name = when (version) {
+        return when (version) {
             is AwsJsonVersion.Json10 -> {
-                "AwsJson10"
+                ServerRuntimeType.Protocol("AwsJson10", "aws_json_10", runtimeConfig)
             }
             is AwsJsonVersion.Json11 -> {
-                "AwsJson11"
+                ServerRuntimeType.Protocol("AwsJson11", "aws_json_11", runtimeConfig)
             }
         }
-        return ServerRuntimeType.Protocol(name, runtimeConfig)
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
+    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
         val allOperationShapes = allOperations(coreCodegenContext)
@@ -159,7 +158,7 @@ class ServerAwsJsonProtocol(
     }
 }
 
-private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::rest")
+private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::rest::router")
 
 private fun restRouterConstruction(
     protocol: ServerProtocol,
@@ -169,8 +168,8 @@ private fun restRouterConstruction(
     val operations = allOperations(coreCodegenContext)
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol visitor
-    // should not be invoked in service shapes"
-    // val serviceName = symbolProvider.toSymbol(service).name
+    //  should not be invoked in service shapes"
+    //  val serviceName = symbolProvider.toSymbol(service).name
     val serviceName = coreCodegenContext.serviceShape.id.name
     val pairs = writable {
         for ((operationShape, operationValue) in operations.zip(operationValues)) {
@@ -212,7 +211,7 @@ class ServerRestJsonProtocol(
         fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.coreCodegenContext)
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", "rest_json_1", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -241,7 +240,7 @@ class ServerRestXmlProtocol(
         }
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestXml", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestXml", "rest_xml", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
