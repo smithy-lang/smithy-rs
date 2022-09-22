@@ -6,14 +6,14 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
 /**
  * PythonServerServiceGenerator
@@ -23,9 +23,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  */
 class PythonServerServiceGenerator(
     private val rustCrate: RustCrate,
-    protocolGenerator: ProtocolGenerator,
+    protocolGenerator: ServerProtocolGenerator,
     protocolSupport: ProtocolSupport,
-    private val protocol: ServerProtocol,
+    protocol: ServerProtocol,
     private val context: CoreCodegenContext,
 ) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, protocol, context) {
 

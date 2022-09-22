@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerSymbolVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestSymbolVisitorConfig
 
 internal class PythonServerSymbolProviderTest {

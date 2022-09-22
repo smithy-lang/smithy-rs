@@ -6,11 +6,11 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
