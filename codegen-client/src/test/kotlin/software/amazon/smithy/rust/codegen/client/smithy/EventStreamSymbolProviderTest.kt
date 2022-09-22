@@ -16,6 +16,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNor
 import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.client.testutil.TestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 
 class EventStreamSymbolProviderTest {
     @Test

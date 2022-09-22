@@ -11,27 +11,28 @@ import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.escape
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -97,7 +98,7 @@ private class TestProtocolGenerator(
     httpRequestBuilder: String,
     body: String,
     correctResponse: String,
-) : ProtocolGenerator(
+) : ClientProtocolGenerator(
     coreCodegenContext,
     protocol,
     TestProtocolMakeOperationGenerator(coreCodegenContext, protocol, body, httpRequestBuilder),
@@ -108,12 +109,12 @@ private class TestProtocolFactory(
     private val httpRequestBuilder: String,
     private val body: String,
     private val correctResponse: String,
-) : ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext> {
+) : ProtocolGeneratorFactory<ClientProtocolGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol {
         return RestJson(codegenContext)
     }
 
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): ProtocolGenerator {
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): ClientProtocolGenerator {
         return TestProtocolGenerator(
             codegenContext,
             protocol(codegenContext),
@@ -225,21 +226,22 @@ class ProtocolTestGeneratorTest {
         correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())""",
     ): Path {
         val (pluginContext, testDir) = generatePluginContext(model)
+        val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+            override val name: String = "mock"
+            override val order: Byte = 0
+            override fun protocols(
+                serviceId: ShapeId,
+                currentProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>,
+            ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> =
+                // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
+                mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
+
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
+        }
         val visitor = CodegenVisitor(
             pluginContext,
-            object : RustCodegenDecorator<ClientCodegenContext> {
-                override val name: String = "mock"
-                override val order: Byte = 0
-                override fun protocols(
-                    serviceId: ShapeId,
-                    currentProtocols: ProtocolMap<ProtocolGenerator, ClientCodegenContext>,
-                ): ProtocolMap<ProtocolGenerator, ClientCodegenContext> =
-                    // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
-                    mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
-
-                override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-                    clazz.isAssignableFrom(ClientCodegenContext::class.java)
-            },
+            codegenDecorator,
         )
         visitor.execute()
         println("file:///$testDir/src/operation.rs")

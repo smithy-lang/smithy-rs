@@ -11,6 +11,8 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.Default
+import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class StreamingShapeSymbolProviderTest {

@@ -8,17 +8,7 @@ package software.amazon.smithy.rust.codegen.client.generators.http
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.generators.http.ResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpTraitHttpBindingResolver
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
@@ -26,6 +16,16 @@ import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilde
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class ResponseBindingGeneratorTest {

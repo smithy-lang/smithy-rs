@@ -203,7 +203,7 @@ private fun CargoDependency.mergeWith(other: CargoDependency): CargoDependency {
     )
 }
 
-internal fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<CargoDependency> =
+fun mergeDependencyFeatures(cargoDependencies: List<CargoDependency>): List<CargoDependency> =
     cargoDependencies.groupBy { it.key }
         .mapValues { group -> group.value.reduce { acc, next -> acc.mergeWith(next) } }
         .values
