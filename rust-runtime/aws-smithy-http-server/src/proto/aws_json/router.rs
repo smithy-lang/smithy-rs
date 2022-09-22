@@ -5,19 +5,16 @@
 
 use std::convert::Infallible;
 
+use tower::Layer;
+use tower::Service;
+
+use crate::body::BoxBody;
+use crate::routers::Router;
+use crate::routing::tiny_map::TinyMap;
+use crate::routing::Route;
+
 use http::header::ToStrError;
 use thiserror::Error;
-use tower::{Layer, Service};
-
-use crate::{
-    body::{empty, BoxBody},
-    extension::RuntimeErrorExtension,
-    protocols::{AwsJson10, AwsJson11},
-    response::IntoResponse,
-    routing::{tiny_map::TinyMap, Route},
-};
-
-use super::Router;
 
 /// An AWS JSON routing error.
 #[derive(Debug, Error)]
@@ -37,38 +34,6 @@ pub enum Error {
     /// Operation not found.
     #[error("operation not found")]
     NotFound,
-}
-
-impl IntoResponse<AwsJson10> for Error {
-    fn into_response(self) -> http::Response<BoxBody> {
-        match self {
-            Error::MethodNotAllowed => super::method_disallowed(),
-            _ => http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.0")
-                .extension(RuntimeErrorExtension::new(
-                    super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
-                ))
-                .body(empty())
-                .expect("invalid HTTP response for AWS JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
-        }
-    }
-}
-
-impl IntoResponse<AwsJson11> for Error {
-    fn into_response(self) -> http::Response<BoxBody> {
-        match self {
-            Error::MethodNotAllowed => super::method_disallowed(),
-            _ => http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.1")
-                .extension(RuntimeErrorExtension::new(
-                    super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
-                ))
-                .body(empty())
-                .expect("invalid HTTP response for AWS JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
-        }
-    }
 }
 
 // This constant determines when the `TinyMap` implementation switches from being a `Vec` to a
