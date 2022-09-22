@@ -31,6 +31,7 @@ pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
 
+#[doc(hidden)]
 pub mod routers;
 
 #[doc(inline)]
