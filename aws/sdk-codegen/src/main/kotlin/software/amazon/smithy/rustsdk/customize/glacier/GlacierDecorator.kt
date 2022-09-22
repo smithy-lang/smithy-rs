@@ -8,13 +8,14 @@ package software.amazon.smithy.rustsdk.customize.glacier
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 
 val Glacier: ShapeId = ShapeId.from("com.amazonaws.glacier#Glacier")
 
-class GlacierDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class GlacierDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "Glacier"
     override val order: Byte = 0
 

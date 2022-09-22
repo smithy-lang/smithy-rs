@@ -5,8 +5,8 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.client.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 
 object InlineAwsDependency {
