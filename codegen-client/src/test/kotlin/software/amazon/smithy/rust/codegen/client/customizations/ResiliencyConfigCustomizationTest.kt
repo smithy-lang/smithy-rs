@@ -7,8 +7,8 @@ package software.amazon.smithy.rust.codegen.client.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.rustSettings

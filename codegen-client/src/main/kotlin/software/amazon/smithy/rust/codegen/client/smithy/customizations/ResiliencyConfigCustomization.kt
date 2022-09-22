@@ -5,14 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 
@@ -28,19 +28,21 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
         "TimeoutConfig" to timeoutModule.member("Config"),
     )
 
-    override fun section(section: ServiceConfig) = writable {
-        when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate(
-                """
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                is ServiceConfig.ConfigStruct -> rustTemplate(
+                    """
                 retry_config: Option<#{RetryConfig}>,
                 sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,
                 timeout_config: Option<#{TimeoutConfig}>,
                 """,
-                *codegenScope,
-            )
-            is ServiceConfig.ConfigImpl -> {
-                rustTemplate(
-                    """
+                    *codegenScope,
+                )
+
+                is ServiceConfig.ConfigImpl -> {
+                    rustTemplate(
+                        """
                     /// Return a reference to the retry configuration contained in this config, if any.
                     pub fn retry_config(&self) -> Option<&#{RetryConfig}> {
                         self.retry_config.as_ref()
@@ -56,21 +58,23 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                         self.timeout_config.as_ref()
                     }
                     """,
-                    *codegenScope,
-                )
-            }
-            is ServiceConfig.BuilderStruct ->
-                rustTemplate(
-                    """
+                        *codegenScope,
+                    )
+                }
+
+                is ServiceConfig.BuilderStruct ->
+                    rustTemplate(
+                        """
                     retry_config: Option<#{RetryConfig}>,
                     sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,
                     timeout_config: Option<#{TimeoutConfig}>,
                     """,
-                    *codegenScope,
-                )
-            ServiceConfig.BuilderImpl ->
-                rustTemplate(
-                    """
+                        *codegenScope,
+                    )
+
+                ServiceConfig.BuilderImpl ->
+                    rustTemplate(
+                        """
                     /// Set the retry_config for the builder
                     ///
                     /// ## Examples
@@ -211,19 +215,21 @@ class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : Co
                         self
                     }
                     """,
-                    *codegenScope,
-                )
-            ServiceConfig.BuilderBuild -> rustTemplate(
-                """
+                        *codegenScope,
+                    )
+
+                ServiceConfig.BuilderBuild -> rustTemplate(
+                    """
                 retry_config: self.retry_config,
                 sleep_impl: self.sleep_impl,
                 timeout_config: self.timeout_config,
                 """,
-                *codegenScope,
-            )
-            else -> emptySection
+                    *codegenScope,
+                )
+
+                else -> emptySection
+            }
         }
-    }
 }
 
 class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {

@@ -23,27 +23,27 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.escape
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.client.testutil.TokioTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -68,7 +68,7 @@ private const val PROTOCOL_TEST_HELPER_MODULE_NAME = "protocol_test_helper"
 class ServerProtocolTestGenerator(
     private val coreCodegenContext: CoreCodegenContext,
     private val protocolSupport: ProtocolSupport,
-    private val protocolGenerator: ProtocolGenerator,
+    private val protocolGenerator: ServerProtocolGenerator,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
@@ -145,7 +145,7 @@ class ServerProtocolTestGenerator(
         renderTestHelper(writer)
 
         for (operation in operations) {
-            protocolGenerator.serverRenderOperation(writer, operation)
+            protocolGenerator.renderOperation(writer, operation)
             renderOperationTestCases(operation, writer)
         }
     }

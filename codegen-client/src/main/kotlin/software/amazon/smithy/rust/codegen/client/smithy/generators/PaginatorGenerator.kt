@@ -11,24 +11,26 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.render
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.render
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -217,12 +219,13 @@ class PaginatorGenerator private constructor(
     }
 
     /** Generate an `.items()` function to expose flattened pagination when modeled */
-    private fun itemsFn(): Writable = writable {
-        itemsPaginator()?.also { itemPaginatorType ->
-            val documentedPath =
-                paginationInfo.itemsMemberPath.joinToString(".") { symbolProvider.toMemberName(it) }
-            rustTemplate(
-                """
+    private fun itemsFn(): Writable =
+        writable {
+            itemsPaginator()?.also { itemPaginatorType ->
+                val documentedPath =
+                    paginationInfo.itemsMemberPath.joinToString(".") { symbolProvider.toMemberName(it) }
+                rustTemplate(
+                    """
                 /// Create a flattened paginator
                 ///
                 /// This paginator automatically flattens results using `$documentedPath`. Queries to the underlying service
@@ -231,10 +234,10 @@ class PaginatorGenerator private constructor(
                     #{ItemPaginator}(self)
                 }
                 """,
-                "ItemPaginator" to itemPaginatorType,
-            )
+                    "ItemPaginator" to itemPaginatorType,
+                )
+            }
         }
-    }
 
     /** Generate a struct with a `items()` method that flattens the paginator **/
     private fun itemsPaginator(): RuntimeType? = if (paginationInfo.itemsMemberPath.isEmpty()) {

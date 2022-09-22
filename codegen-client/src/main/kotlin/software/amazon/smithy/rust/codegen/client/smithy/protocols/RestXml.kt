@@ -6,24 +6,26 @@
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.AnnotationTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.RestXmlParserGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.XmlBindingTraitSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.XmlBindingTraitSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 class RestXmlFactory(
@@ -101,13 +103,4 @@ open class RestXml(val coreCodegenContext: CoreCodegenContext) : Protocol {
                 rust("#T::parse_generic_error(payload.as_ref())", restXmlErrors)
             }
         }
-}
-
-/**
- * Indicates that a service is expected to send XML where the root element name does not match the modeled member name.
- */
-class AllowInvalidXmlRoot : AnnotationTrait(ID, Node.objectNode()) {
-    companion object {
-        val ID: ShapeId = ShapeId.from("smithy.api.internal#allowInvalidXmlRoot")
-    }
 }

@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rustsdk.customize.glacier
 
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection

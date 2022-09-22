@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest

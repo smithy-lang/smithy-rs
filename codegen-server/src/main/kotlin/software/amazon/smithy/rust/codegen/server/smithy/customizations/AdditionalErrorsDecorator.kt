@@ -13,10 +13,11 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.allErrors
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
 /**
  * Add at least one error to all operations in the model.
@@ -32,7 +33,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.transformers.allErrors
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorator<ServerCodegenContext> {
+class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
     override val name: String = "AddInternalServerErrorToInfallibleOperations"
     override val order: Byte = 0
 
@@ -61,7 +62,7 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<ServerCodegenContext> {
+class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
     override val name: String = "AddInternalServerErrorToAllOperations"
     override val order: Byte = 0
 

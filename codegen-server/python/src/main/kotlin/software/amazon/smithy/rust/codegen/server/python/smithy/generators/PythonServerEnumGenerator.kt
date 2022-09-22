@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType

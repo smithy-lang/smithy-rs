@@ -9,33 +9,37 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.assignment
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.client.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTraitImplGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.errorMessageMember
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.assignment
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.errorMessageMember
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -47,7 +51,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 class HttpBoundProtocolGenerator(
     coreCodegenContext: CoreCodegenContext,
     protocol: Protocol,
-) : ProtocolGenerator(
+) : ClientProtocolGenerator(
     coreCodegenContext,
     protocol,
     MakeOperationGenerator(

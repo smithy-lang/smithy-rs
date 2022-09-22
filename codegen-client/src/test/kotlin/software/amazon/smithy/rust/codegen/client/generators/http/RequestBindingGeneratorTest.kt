@@ -16,11 +16,11 @@ import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.uriFormatString
-import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.uriFormatString
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel

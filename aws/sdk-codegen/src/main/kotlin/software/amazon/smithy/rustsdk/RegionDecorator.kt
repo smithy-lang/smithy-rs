@@ -6,19 +6,19 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 
@@ -104,15 +104,17 @@ class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCusto
     private val region = region(coreCodegenContext.runtimeConfig)
     private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
-    override fun section(section: ServiceConfig) = writable {
-        when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
-            is ServiceConfig.ConfigImpl -> emptySection
-            is ServiceConfig.BuilderStruct ->
-                rustTemplate("region: Option<#{Region}>,", *codegenScope)
-            ServiceConfig.BuilderImpl ->
-                rustTemplate(
-                    """
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
+                is ServiceConfig.ConfigImpl -> emptySection
+                is ServiceConfig.BuilderStruct ->
+                    rustTemplate("region: Option<#{Region}>,", *codegenScope)
+
+                ServiceConfig.BuilderImpl ->
+                    rustTemplate(
+                        """
                     /// Sets the AWS region to use when making requests.
                     ///
                     /// ## Examples
@@ -129,14 +131,15 @@ class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCusto
                         self
                     }
                     """,
+                        *codegenScope,
+                    )
+
+                ServiceConfig.BuilderBuild -> rustTemplate(
+                    """region: self.region,""",
                     *codegenScope,
                 )
-            ServiceConfig.BuilderBuild -> rustTemplate(
-                """region: self.region,""",
-                *codegenScope,
-            )
+            }
         }
-    }
 }
 
 class RegionConfigPlugin : OperationCustomization() {
@@ -160,7 +163,12 @@ class RegionConfigPlugin : OperationCustomization() {
 class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::Region;", region(runtimeConfig)) }
+            is LibRsSection.Body -> writable {
+                rust(
+                    "pub use #T::Region;",
+                    region(runtimeConfig)
+                )
+            }
             else -> emptySection
         }
     }

@@ -20,6 +20,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.client.smithy.setDefault
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model

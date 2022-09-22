@@ -13,13 +13,13 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
@@ -111,16 +111,16 @@ class SigV4SigningConfig(
                 rustTemplate(
                     "#{signerFn:W}",
                     "signerFn" to
-                        renderEventStreamSignerFn { propertiesName ->
-                            writable {
-                                rustTemplate(
-                                    """
+                            renderEventStreamSignerFn { propertiesName ->
+                                writable {
+                                    rustTemplate(
+                                        """
                                     #{SigV4Signer}::new($propertiesName)
                                     """,
-                                    *codegenScope,
-                                )
-                            }
-                        },
+                                        *codegenScope,
+                                    )
+                                }
+                            },
                 )
             }
         }
@@ -179,10 +179,16 @@ class SigV4SigningFeature(
                 // some operations are either unsigned or optionally signed:
                 val authSchemes = serviceIndex.getEffectiveAuthSchemes(service, operation)
                 if (!authSchemes.containsKey(SigV4Trait.ID)) {
-                    rustTemplate("signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Disabled;", *codegenScope)
+                    rustTemplate(
+                        "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Disabled;",
+                        *codegenScope
+                    )
                 } else {
                     if (operation.hasTrait<OptionalAuthTrait>()) {
-                        rustTemplate("signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Optional;", *codegenScope)
+                        rustTemplate(
+                            "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Optional;",
+                            *codegenScope
+                        )
                     }
                 }
                 rustTemplate(

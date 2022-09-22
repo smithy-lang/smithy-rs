@@ -6,7 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.rust.codegen.client.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel

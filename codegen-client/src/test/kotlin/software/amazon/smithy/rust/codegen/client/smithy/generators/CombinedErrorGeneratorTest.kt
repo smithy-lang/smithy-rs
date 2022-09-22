@@ -8,8 +8,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.CombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest

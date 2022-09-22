@@ -16,9 +16,9 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ServerCombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 
 /**

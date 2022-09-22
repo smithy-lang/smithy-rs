@@ -18,16 +18,16 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.CombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ServerCombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.client.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsQueryProtocol
@@ -35,8 +35,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.Ec2QueryProto
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStreamNormalizer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.TestWriterDelegator
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
@@ -47,7 +47,6 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.util.stream.Stream
-import kotlin.streams.toList
 
 private fun fillInBaseModel(
     protocolName: String,

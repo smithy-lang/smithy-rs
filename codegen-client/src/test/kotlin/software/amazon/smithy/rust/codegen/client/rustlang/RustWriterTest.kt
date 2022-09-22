@@ -21,6 +21,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.compileAndRun
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.client.testutil.shouldCompile
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class RustWriterTest {

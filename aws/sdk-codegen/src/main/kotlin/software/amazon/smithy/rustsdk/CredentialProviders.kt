@@ -6,20 +6,20 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 
@@ -63,18 +63,24 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
         "DefaultProvider" to defaultProvider,
     )
 
-    override fun section(section: ServiceConfig) = writable {
-        when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate(
-                """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
-                *codegenScope,
-            )
-            is ServiceConfig.ConfigImpl -> emptySection
-            is ServiceConfig.BuilderStruct ->
-                rustTemplate("credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,", *codegenScope)
-            ServiceConfig.BuilderImpl -> {
-                rustTemplate(
-                    """
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                is ServiceConfig.ConfigStruct -> rustTemplate(
+                    """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
+                    *codegenScope,
+                )
+
+                is ServiceConfig.ConfigImpl -> emptySection
+                is ServiceConfig.BuilderStruct ->
+                    rustTemplate(
+                        "credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,",
+                        *codegenScope
+                    )
+
+                ServiceConfig.BuilderImpl -> {
+                    rustTemplate(
+                        """
                     /// Sets the credentials provider for this service
                     pub fn credentials_provider(mut self, credentials_provider: impl #{credentials}::ProvideCredentials + 'static) -> Self {
                         self.credentials_provider = Some(#{credentials}::SharedCredentialsProvider::new(credentials_provider));
@@ -87,15 +93,16 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                         self
                     }
                     """,
+                        *codegenScope,
+                    )
+                }
+
+                ServiceConfig.BuilderBuild -> rustTemplate(
+                    "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
                     *codegenScope,
                 )
             }
-            ServiceConfig.BuilderBuild -> rustTemplate(
-                "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
-                *codegenScope,
-            )
         }
-    }
 }
 
 class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
@@ -117,7 +124,12 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
 class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::Credentials;", awsTypes(runtimeConfig).asType()) }
+            is LibRsSection.Body -> writable {
+                rust(
+                    "pub use #T::Credentials;",
+                    awsTypes(runtimeConfig).asType()
+                )
+            }
             else -> emptySection
         }
     }

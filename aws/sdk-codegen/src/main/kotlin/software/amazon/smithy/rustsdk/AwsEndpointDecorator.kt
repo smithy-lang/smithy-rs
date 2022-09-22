@@ -14,26 +14,26 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.client.rustlang.asType
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -108,18 +108,24 @@ class EndpointConfigCustomization(
         "aws_types" to awsTypes(runtimeConfig).asType(),
     )
 
-    override fun section(section: ServiceConfig): Writable = writable {
-        when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub (crate) endpoint_resolver: std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>,",
-                *codegenScope,
-            )
-            is ServiceConfig.ConfigImpl -> emptySection
-            is ServiceConfig.BuilderStruct ->
-                rustTemplate("endpoint_resolver: Option<std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>>,", *codegenScope)
-            ServiceConfig.BuilderImpl ->
-                rustTemplate(
-                    """
+    override fun section(section: ServiceConfig): Writable =
+        writable {
+            when (section) {
+                is ServiceConfig.ConfigStruct -> rustTemplate(
+                    "pub (crate) endpoint_resolver: std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>,",
+                    *codegenScope,
+                )
+
+                is ServiceConfig.ConfigImpl -> emptySection
+                is ServiceConfig.BuilderStruct ->
+                    rustTemplate(
+                        "endpoint_resolver: Option<std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>>,",
+                        *codegenScope
+                    )
+
+                ServiceConfig.BuilderImpl ->
+                    rustTemplate(
+                        """
                     /// Overrides the endpoint resolver to use when making requests.
                     ///
                     /// When unset, the client will used a generated endpoint resolver based on the endpoint metadata
@@ -147,22 +153,24 @@ class EndpointConfigCustomization(
                         self
                     }
                     """,
-                    *codegenScope,
-                )
-            ServiceConfig.BuilderBuild -> {
-                val resolverGenerator = EndpointResolverGenerator(coreCodegenContext, endpointData)
-                rustTemplate(
-                    """
+                        *codegenScope,
+                    )
+
+                ServiceConfig.BuilderBuild -> {
+                    val resolverGenerator = EndpointResolverGenerator(coreCodegenContext, endpointData)
+                    rustTemplate(
+                        """
                     endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
                         std::sync::Arc::new(#{EndpointShim}::from_resolver(#{Resolver}()))
                     ),
                     """,
-                    *codegenScope, "Resolver" to resolverGenerator.resolver(),
-                )
+                        *codegenScope, "Resolver" to resolverGenerator.resolver(),
+                    )
+                }
+
+                else -> emptySection
             }
-            else -> emptySection
         }
-    }
 }
 
 // This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern

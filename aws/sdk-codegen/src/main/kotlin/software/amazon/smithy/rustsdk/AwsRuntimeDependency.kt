@@ -7,7 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType

@@ -6,10 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 
 /**

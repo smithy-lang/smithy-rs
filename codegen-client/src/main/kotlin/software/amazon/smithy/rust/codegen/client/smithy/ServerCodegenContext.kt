@@ -8,7 +8,9 @@ package software.amazon.smithy.rust.codegen.client.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 
 /**
  * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustCodegenServerPlugin] plugin

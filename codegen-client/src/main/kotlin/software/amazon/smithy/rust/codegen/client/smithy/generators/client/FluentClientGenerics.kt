@@ -6,13 +6,13 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
 
 interface FluentClientGenerics {
     /** Declaration with defaults set */

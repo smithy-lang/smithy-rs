@@ -8,8 +8,9 @@ package software.amazon.smithy.rust.codegen.client.rustlang
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 
 internal class RustTypeParametersTest {
     private fun forInputExpectOutput(input: Any, expectedOutput: String) {

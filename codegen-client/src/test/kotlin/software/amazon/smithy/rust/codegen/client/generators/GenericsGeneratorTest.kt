@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
 
 class GenericsGeneratorTest {
     @Test

@@ -10,13 +10,13 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.smithy.generators.EnumGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.restJsonFieldName
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest

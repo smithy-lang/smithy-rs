@@ -6,7 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.rustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations

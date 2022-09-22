@@ -5,7 +5,7 @@
 package software.amazon.smithy.rust.codegen.client.testutil
 
 import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 

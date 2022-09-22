@@ -17,17 +17,22 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -227,8 +232,8 @@ class ProtocolTestGeneratorTest {
                 override val order: Byte = 0
                 override fun protocols(
                     serviceId: ShapeId,
-                    currentProtocols: ProtocolMap<ClientCodegenContext>,
-                ): ProtocolMap<ClientCodegenContext> =
+                    currentProtocols: ProtocolMap<ProtocolGenerator, ClientCodegenContext>,
+                ): ProtocolMap<ProtocolGenerator, ClientCodegenContext> =
                     // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
                     mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
 

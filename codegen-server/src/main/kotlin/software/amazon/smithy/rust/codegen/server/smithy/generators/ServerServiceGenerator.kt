@@ -7,17 +7,17 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.DefaultPublicModules
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 
 /**
@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  */
 open class ServerServiceGenerator(
     private val rustCrate: RustCrate,
-    private val protocolGenerator: ProtocolGenerator,
+    private val protocolGenerator: ServerProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     private val protocol: ServerProtocol,
     private val coreCodegenContext: CoreCodegenContext,
