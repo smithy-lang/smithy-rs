@@ -132,7 +132,7 @@ class S3PubUse : LibRsCustomization() {
         is LibRsSection.Body -> writable {
             rust(
                 "pub use #T::ErrorExt;",
-                AwsRuntimeType.S3Errors
+                AwsRuntimeType.S3Errors,
             )
         }
         else -> emptySection

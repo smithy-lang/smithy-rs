@@ -131,7 +131,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
     val writable = writable {
         rustInlineTemplate(
             "#{this:T}",
-            "this" to this@RuntimeType
+            "this" to this@RuntimeType,
         )
     }
 

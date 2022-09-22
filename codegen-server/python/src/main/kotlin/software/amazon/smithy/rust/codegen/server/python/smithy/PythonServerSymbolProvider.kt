@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
-import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 
 /**
  * Symbol visitor  allowing that recursively replace symbols in nested shapes.

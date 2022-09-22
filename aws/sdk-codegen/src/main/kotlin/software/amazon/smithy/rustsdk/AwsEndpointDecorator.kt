@@ -121,7 +121,7 @@ class EndpointConfigCustomization(
                 is ServiceConfig.BuilderStruct ->
                     rustTemplate(
                         "endpoint_resolver: Option<std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>>,",
-                        *codegenScope
+                        *codegenScope,
                     )
 
                 ServiceConfig.BuilderImpl ->

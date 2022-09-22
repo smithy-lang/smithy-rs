@@ -70,4 +70,3 @@ interface ProtocolGeneratorFactory<out T, C : CoreCodegenContext> {
     fun buildProtocolGenerator(codegenContext: C): T
     fun support(): ProtocolSupport
 }
-

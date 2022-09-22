@@ -30,7 +30,7 @@ open class ClientProtocolGenerator(
     private val protocol: Protocol,
     private val makeOperationGenerator: MakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
-): ProtocolGenerator(coreCodegenContext, protocol, makeOperationGenerator, traitGenerator) {
+) : ProtocolGenerator(coreCodegenContext, protocol, makeOperationGenerator, traitGenerator) {
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
      *

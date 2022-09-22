@@ -167,7 +167,7 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::Region;",
-                    region(runtimeConfig)
+                    region(runtimeConfig),
                 )
             }
             else -> emptySection

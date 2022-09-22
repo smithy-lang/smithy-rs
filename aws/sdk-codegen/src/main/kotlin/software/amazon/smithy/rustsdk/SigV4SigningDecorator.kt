@@ -112,16 +112,16 @@ class SigV4SigningConfig(
                 rustTemplate(
                     "#{signerFn:W}",
                     "signerFn" to
-                            renderEventStreamSignerFn { propertiesName ->
-                                writable {
-                                    rustTemplate(
-                                        """
+                        renderEventStreamSignerFn { propertiesName ->
+                            writable {
+                                rustTemplate(
+                                    """
                                     #{SigV4Signer}::new($propertiesName)
                                     """,
-                                        *codegenScope,
-                                    )
-                                }
-                            },
+                                    *codegenScope,
+                                )
+                            }
+                        },
                 )
             }
         }
@@ -182,13 +182,13 @@ class SigV4SigningFeature(
                 if (!authSchemes.containsKey(SigV4Trait.ID)) {
                     rustTemplate(
                         "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Disabled;",
-                        *codegenScope
+                        *codegenScope,
                     )
                 } else {
                     if (operation.hasTrait<OptionalAuthTrait>()) {
                         rustTemplate(
                             "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Optional;",
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
