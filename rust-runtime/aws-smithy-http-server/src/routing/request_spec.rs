@@ -85,7 +85,7 @@ pub struct RequestSpec {
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum Match {
+pub(crate) enum Match {
     /// The request matches the URI pattern spec.
     Yes,
     /// The request matches the URI pattern spec, but the wrong HTTP method was used. `405 Method
@@ -158,11 +158,11 @@ impl RequestSpec {
     /// updates the spec to define the behavior, update our implementation.
     ///
     /// [the TypeScript sSDK is implementing]: https://github.com/awslabs/smithy-typescript/blob/d263078b81485a6a2013d243639c0c680343ff47/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.ts#L59.
-    pub(super) fn rank(&self) -> usize {
+    pub(crate) fn rank(&self) -> usize {
         self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
     }
 
-    pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
+    pub(crate) fn matches<B>(&self, req: &Request<B>) -> Match {
         if let Some(_host_prefix) = &self.uri_spec.host_prefix {
             todo!("Look at host prefix");
         }
