@@ -74,7 +74,7 @@ data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode
+    formatTimeoutSeconds, debugMode,
 ) {
     companion object {
         // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as

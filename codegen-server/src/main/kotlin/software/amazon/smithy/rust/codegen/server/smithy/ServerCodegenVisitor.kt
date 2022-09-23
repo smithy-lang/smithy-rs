@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGener
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
