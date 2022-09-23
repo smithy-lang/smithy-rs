@@ -179,7 +179,7 @@ pub async fn get_pokemon_species(
     }
 }
 
-/// Retrieves the users storage
+/// Retrieves the users storage.
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
@@ -208,7 +208,7 @@ pub async fn get_server_statistics(
     output::GetServerStatisticsOutput { calls_count }
 }
 
-/// Attempts to capture a Pokémon
+/// Attempts to capture a Pokémon.
 pub async fn capture_pokemon(
     mut input: input::CapturePokemonInput,
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {

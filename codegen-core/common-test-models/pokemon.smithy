@@ -30,7 +30,7 @@ resource Storage {
     read: GetStorage,
 }
 
-/// Capture Pokémons via event streams
+/// Capture Pokémons via event streams.
 @http(uri: "/capture-pokemon-event/{region}", method: "POST")
 operation CapturePokemon {
     input: CapturePokemonEventsInput,
