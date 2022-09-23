@@ -276,13 +276,13 @@ pub async fn capture_pokemon(
 }
 
 /// Empty operation used to benchmark the service.
-pub async fn empty(_input: input::EmptyInput) -> output::EmptyOutput {
-    output::EmptyOutput {}
+pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutput {
+    output::DoNothingOutput {}
 }
 
 /// Operation used to show the service is running.
-pub async fn health_check(_input: input::HealthCheckInput) -> output::HealthCheckOutput {
-    output::HealthCheckOutput {}
+pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
+    output::CheckHealthOutput {}
 }
 
 #[cfg(test)]
