@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.util.stream.Stream
+import kotlin.streams.toList
 
 private fun fillInBaseModel(
     protocolName: String,
