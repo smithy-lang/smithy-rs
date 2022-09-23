@@ -73,7 +73,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 """
                 /// Returns the credentials provider.
                 pub fn credentials_provider(&self) -> #{credentials}::SharedCredentialsProvider {
-                    self.credentials_provider.as_ref()
+                    self.credentials_provider.clone()
                 }
                 """,
                 *codegenScope,
