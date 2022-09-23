@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -32,11 +32,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperat
  * To call a Python coroutine, the same happens, but scheduled in a `tokio::Future`.
  */
 class PythonServerOperationHandlerGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val operations: List<OperationShape>,
-) : ServerOperationHandlerGenerator(coreCodegenContext, operations) {
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+) : ServerOperationHandlerGenerator(codegenContext, operations) {
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),

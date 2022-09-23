@@ -15,7 +15,7 @@ import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
@@ -40,7 +40,7 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { shape -> shape.allErrors(model).isEmpty() }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
@@ -69,7 +69,7 @@ class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<Serv
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { true }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 

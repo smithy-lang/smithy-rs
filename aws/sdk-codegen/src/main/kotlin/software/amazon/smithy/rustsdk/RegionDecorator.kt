@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -97,13 +97,13 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
-    private val region = region(coreCodegenContext.runtimeConfig)
-    private val moduleUseName = coreCodegenContext.moduleUseName()
+class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
+    private val region = region(codegenContext.runtimeConfig)
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) =
         writable {

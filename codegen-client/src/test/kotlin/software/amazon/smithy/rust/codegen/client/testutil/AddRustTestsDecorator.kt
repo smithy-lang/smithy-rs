@@ -6,10 +6,10 @@ package software.amazon.smithy.rust.codegen.client.testutil
 
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
-open class AddRustTestsDecorator<T, C : CoreCodegenContext>(
+open class AddRustTestsDecorator<T, C : CodegenContext>(
     private val testsFileName: String,
     private val testWritable: Writable,
 ) : RustCodegenDecorator<T, C> {
@@ -23,5 +23,5 @@ open class AddRustTestsDecorator<T, C : CoreCodegenContext>(
     }
 
     // Don't allow this class to be discovered on the classpath; always return false
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean = false
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean = false
 }

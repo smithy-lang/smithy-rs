@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -44,7 +44,6 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
-import kotlin.streams.toList
 
 internal enum class PayloadSigningType {
     EMPTY,
@@ -118,7 +117,7 @@ class AwsPresigningDecorator internal constructor(
         return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     private fun addSyntheticOperations(model: Model): Model {
@@ -134,11 +133,11 @@ class AwsPresigningDecorator internal constructor(
 }
 
 class AwsInputPresignedMethod(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
-    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
 
     private val codegenScope = arrayOf(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
@@ -160,11 +159,11 @@ class AwsInputPresignedMethod(
         }
 
     private fun RustWriter.writeInputPresignedMethod(section: OperationSection.InputImpl) {
-        val operationError = operationShape.errorSymbol(coreCodegenContext.model, symbolProvider, coreCodegenContext.target)
+        val operationError = operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
         val makeOperationOp = if (presignableOp.hasModelTransforms()) {
-            coreCodegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
+            codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
         } else {
             section.operationShape
         }
@@ -172,9 +171,9 @@ class AwsInputPresignedMethod(
 
         val protocol = section.protocol
         MakeOperationGenerator(
-            coreCodegenContext,
+            codegenContext,
             protocol,
-            HttpBoundProtocolPayloadGenerator(coreCodegenContext, protocol),
+            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
             // Prefixed with underscore to avoid colliding with modeled functions
             functionName = makeOperationFn,
             public = false,

@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -28,15 +28,15 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBou
  * ServerOperationHandlerGenerator
  */
 open class ServerOperationHandlerGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"
-    private val service = coreCodegenContext.serviceShape
-    private val model = coreCodegenContext.model
-    private val protocol = coreCodegenContext.protocol
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val service = codegenContext.serviceShape
+    private val model = codegenContext.model
+    private val protocol = codegenContext.protocol
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),

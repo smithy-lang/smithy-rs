@@ -10,14 +10,14 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 
 /**
- * [CoreCodegenContext] contains code-generation context that is _common to all_  smithy-rs plugins.
+ * [CodegenContext] contains code-generation context that is _common to all_  smithy-rs plugins.
  *
  * Code-generation context is pervasive read-only global data that gets passed around to the generators.
  *
  * If your data is specific to the `rust-codegen` client plugin, put it in [ClientCodegenContext] instead.
  * If your data is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  */
-open class CoreCodegenContext(
+open class CodegenContext(
     /**
      * The smithy model.
      *

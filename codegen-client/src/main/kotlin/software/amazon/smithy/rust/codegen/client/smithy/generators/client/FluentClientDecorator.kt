@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
@@ -63,7 +63,7 @@ class FluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
@@ -80,9 +80,9 @@ sealed class FluentClientSection(name: String) : Section(name) {
 
 abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
-class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
-    private val moduleUseName = coreCodegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
+class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
+    private val moduleUseName = codegenContext.moduleUseName()
+    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {

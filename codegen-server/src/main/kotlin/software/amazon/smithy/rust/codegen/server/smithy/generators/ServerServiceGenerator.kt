@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
@@ -31,10 +31,10 @@ open class ServerServiceGenerator(
     private val protocolGenerator: ServerProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     private val protocol: ServerProtocol,
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
 ) {
-    private val index = TopDownIndex.of(coreCodegenContext.model)
-    protected val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+    private val index = TopDownIndex.of(codegenContext.model)
+    protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
 
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
@@ -42,7 +42,7 @@ open class ServerServiceGenerator(
      */
     fun render() {
         rustCrate.withModule(DefaultPublicModules["operation"]!!) { writer ->
-            ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, protocolGenerator).render(writer)
+            ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(writer)
         }
 
         for (operation in operations) {
@@ -81,7 +81,7 @@ open class ServerServiceGenerator(
             ),
         ) { writer ->
             for (operation in operations) {
-                ServerOperationGenerator(coreCodegenContext, operation).render(writer)
+                ServerOperationGenerator(codegenContext, operation).render(writer)
             }
         }
 
@@ -91,7 +91,7 @@ open class ServerServiceGenerator(
         ) { writer ->
             val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
             ServerServiceGeneratorV2(
-                coreCodegenContext,
+                codegenContext,
                 serverProtocol,
             ).render(writer)
         }
@@ -109,11 +109,11 @@ open class ServerServiceGenerator(
 
     // Render operations handler.
     open fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationHandlerGenerator(coreCodegenContext, operations).render(writer)
+        ServerOperationHandlerGenerator(codegenContext, operations).render(writer)
     }
 
     // Render operations registry.
     private fun renderOperationRegistry(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationRegistryGenerator(coreCodegenContext, protocol, operations).render(writer)
+        ServerOperationRegistryGenerator(codegenContext, protocol, operations).render(writer)
     }
 }

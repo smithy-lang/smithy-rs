@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
@@ -48,10 +48,10 @@ private class TestProtocolPayloadGenerator(private val body: String) : ProtocolP
 }
 
 private class TestProtocolTraitImplGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val correctResponse: String,
 ) : ProtocolTraitImplGenerator {
-    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val symbolProvider = codegenContext.symbolProvider
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         operationWriter.rustTemplate(
@@ -62,9 +62,9 @@ private class TestProtocolTraitImplGenerator(
                     ${operationWriter.escape(correctResponse)}
                 }
                     }""",
-            "parse_strict" to RuntimeType.parseStrictResponse(coreCodegenContext.runtimeConfig),
-            "output" to symbolProvider.toSymbol(operationShape.outputShape(coreCodegenContext.model)),
-            "error" to operationShape.errorSymbol(coreCodegenContext.model, symbolProvider, coreCodegenContext.target),
+            "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
+            "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
+            "error" to operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target),
             "response" to RuntimeType.Http("Response"),
             "bytes" to RuntimeType.Bytes,
         )
@@ -72,12 +72,12 @@ private class TestProtocolTraitImplGenerator(
 }
 
 private class TestProtocolMakeOperationGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     protocol: Protocol,
     body: String,
     private val httpRequestBuilder: String,
 ) : MakeOperationGenerator(
-    coreCodegenContext,
+    codegenContext,
     protocol,
     TestProtocolPayloadGenerator(body),
     public = true,
@@ -91,16 +91,16 @@ private class TestProtocolMakeOperationGenerator(
 
 // A stubbed test protocol to do enable testing intentionally broken protocols
 private class TestProtocolGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     protocol: Protocol,
     httpRequestBuilder: String,
     body: String,
     correctResponse: String,
 ) : ClientProtocolGenerator(
-    coreCodegenContext,
+    codegenContext,
     protocol,
-    TestProtocolMakeOperationGenerator(coreCodegenContext, protocol, body, httpRequestBuilder),
-    TestProtocolTraitImplGenerator(coreCodegenContext, correctResponse),
+    TestProtocolMakeOperationGenerator(codegenContext, protocol, body, httpRequestBuilder),
+    TestProtocolTraitImplGenerator(codegenContext, correctResponse),
 )
 
 private class TestProtocolFactory(
@@ -234,7 +234,7 @@ class ProtocolTestGeneratorTest {
                 // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
                 mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
 
-            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+            override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val visitor = CodegenVisitor(

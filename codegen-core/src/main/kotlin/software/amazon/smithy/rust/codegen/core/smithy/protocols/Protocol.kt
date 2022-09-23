@@ -9,7 +9,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -65,7 +65,7 @@ interface Protocol {
 
 typealias ProtocolMap<T, C> = Map<ShapeId, ProtocolGeneratorFactory<T, C>>
 
-interface ProtocolGeneratorFactory<out T, C : CoreCodegenContext> {
+interface ProtocolGeneratorFactory<out T, C : CodegenContext> {
     fun protocol(codegenContext: C): Protocol
     fun buildProtocolGenerator(codegenContext: C): T
     fun support(): ProtocolSupport

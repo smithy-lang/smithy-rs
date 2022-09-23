@@ -16,17 +16,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
 ) {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "Bytes" to CargoDependency.Bytes.asType(),
@@ -36,16 +36,16 @@ class ServerServiceGeneratorV2(
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
             "Tower" to CargoDependency.Tower.asType(),
         )
-    private val model = coreCodegenContext.model
-    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
 
-    private val service = coreCodegenContext.serviceShape
+    private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
-    private val index = TopDownIndex.of(coreCodegenContext.model)
-    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+    private val index = TopDownIndex.of(codegenContext.model)
+    private val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
 
     /** The sequence of builder generics: `Op1`, ..., `OpN`. */
     private val builderOps = (1..operations.size).map { "Op$it" }

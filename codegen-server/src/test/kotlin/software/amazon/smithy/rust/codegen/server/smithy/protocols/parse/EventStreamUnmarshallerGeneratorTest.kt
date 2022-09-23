@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.testRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.EventStreamTestTools
@@ -25,7 +25,7 @@ class EventStreamUnmarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase)
 
-        val codegenContext = CoreCodegenContext(
+        val codegenContext = CodegenContext(
             test.model,
             test.symbolProvider,
             test.serviceShape,

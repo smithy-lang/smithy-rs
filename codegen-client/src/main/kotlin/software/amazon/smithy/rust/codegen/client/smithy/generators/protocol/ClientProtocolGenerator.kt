@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -26,11 +26,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 open class ClientProtocolGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val makeOperationGenerator: MakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
-) : ProtocolGenerator(coreCodegenContext, protocol, makeOperationGenerator, traitGenerator) {
+) : ProtocolGenerator(codegenContext, protocol, makeOperationGenerator, traitGenerator) {
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
      *

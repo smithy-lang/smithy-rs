@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -47,7 +47,7 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
-    private fun applies(coreCodegenContext: CoreCodegenContext): Boolean = coreCodegenContext.serviceShape.hasTrait<SigV4Trait>()
+    private fun applies(codegenContext: CodegenContext): Boolean = codegenContext.serviceShape.hasTrait<SigV4Trait>()
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -77,7 +77,7 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 

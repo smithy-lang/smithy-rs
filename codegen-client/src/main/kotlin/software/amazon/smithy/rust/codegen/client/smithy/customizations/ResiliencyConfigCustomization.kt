@@ -10,17 +10,17 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Servi
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
-class ResiliencyConfigCustomization(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
-    private val retryConfig = smithyTypesRetry(coreCodegenContext.runtimeConfig)
-    private val sleepModule = smithyAsyncRtSleep(coreCodegenContext.runtimeConfig)
-    private val timeoutModule = smithyTypesTimeout(coreCodegenContext.runtimeConfig)
-    private val moduleUseName = coreCodegenContext.moduleUseName()
+class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCustomization() {
+    private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
+    private val sleepModule = smithyAsyncRtSleep(codegenContext.runtimeConfig)
+    private val timeoutModule = smithyTypesTimeout(codegenContext.runtimeConfig)
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         "AsyncSleep" to sleepModule.member("AsyncSleep"),
         "RetryConfig" to retryConfig.member("RetryConfig"),

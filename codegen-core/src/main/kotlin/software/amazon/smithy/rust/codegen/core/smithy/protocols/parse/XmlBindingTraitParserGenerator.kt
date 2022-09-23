@@ -27,7 +27,6 @@ import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -39,7 +38,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -69,7 +68,7 @@ data class OperationWrapperContext(
 )
 
 class XmlBindingTraitParserGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
@@ -95,12 +94,12 @@ class XmlBindingTraitParserGenerator(
      */
     data class Ctx(val tag: String, val accum: String?)
 
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val smithyXml = CargoDependency.smithyXml(coreCodegenContext.runtimeConfig).asType()
+    private val symbolProvider = codegenContext.symbolProvider
+    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).asType()
     private val xmlError = smithyXml.member("decode::XmlError")
 
     private val scopedDecoder = smithyXml.member("decode::ScopedDecoder")
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
@@ -112,10 +111,10 @@ class XmlBindingTraitParserGenerator(
         "ScopedDecoder" to scopedDecoder,
         "aws_smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType(),
     )
-    private val model = coreCodegenContext.model
+    private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
-    private val target = coreCodegenContext.target
+    private val target = codegenContext.target
     private val xmlDeserModule = RustModule.private("xml_deser")
 
     /**

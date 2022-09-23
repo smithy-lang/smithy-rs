@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -132,7 +132,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
@@ -209,17 +209,17 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
-    private val serviceName = coreCodegenContext.serviceShape.expectTrait<TitleTrait>().value
-    private val serviceShape = coreCodegenContext.serviceShape
-    private val crateName = coreCodegenContext.moduleUseName()
+private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : FluentClientCustomization() {
+    private val serviceName = codegenContext.serviceShape.expectTrait<TitleTrait>().value
+    private val serviceShape = codegenContext.serviceShape
+    private val crateName = codegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to coreCodegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
 
     // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
     // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
     private fun suppressUsageDocs(): Boolean =
-        SdkSettings.from(coreCodegenContext.settings).awsConfigVersion == null ||
+        SdkSettings.from(codegenContext.settings).awsConfigVersion == null ||
             setOf(
                 ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
                 ShapeId.from("com.amazonaws.sso#SWBPortalService"),

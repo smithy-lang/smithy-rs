@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -23,8 +23,8 @@ class ApiGatewayDecorator : RustCodegenDecorator<ClientProtocolGenerator, Client
     override val name: String = "ApiGateway"
     override val order: Byte = 0
 
-    private fun applies(coreCodegenContext: CoreCodegenContext) =
-        coreCodegenContext.serviceShape.id == ShapeId.from("com.amazonaws.apigateway#BackplaneControlService")
+    private fun applies(codegenContext: CodegenContext) =
+        codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.apigateway#BackplaneControlService")
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -36,7 +36,7 @@ class ApiGatewayDecorator : RustCodegenDecorator<ClientProtocolGenerator, Client
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 

@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
@@ -81,12 +81,12 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
  * https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
  */
 class ServerAwsJsonSerializerGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     private val awsJsonVersion: AwsJsonVersion,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
         JsonSerializerGenerator(
-            coreCodegenContext,
+            codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
             customizations = listOf(ServerAwsJsonError(awsJsonVersion)),

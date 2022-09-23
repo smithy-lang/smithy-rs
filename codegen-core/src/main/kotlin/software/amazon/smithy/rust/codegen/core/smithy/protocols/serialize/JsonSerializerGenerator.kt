@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
@@ -66,7 +66,7 @@ sealed class JsonSection(name: String) : Section(name) {
 typealias JsonCustomization = NamedSectionGenerator<JsonSection>
 
 class JsonSerializerGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
@@ -146,10 +146,10 @@ class JsonSerializerGenerator(
         val shape: StructureShape,
     )
 
-    private val model = coreCodegenContext.model
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val target = coreCodegenContext.target
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val target = codegenContext.target
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val codegenScope = arrayOf(

@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -28,7 +28,7 @@ import java.util.logging.Logger
  * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
-interface RustCodegenDecorator<T, C : CoreCodegenContext> {
+interface RustCodegenDecorator<T, C : CodegenContext> {
     /**
      * The name of this [RustCodegenDecorator], used for logging and debug information
      */
@@ -70,7 +70,7 @@ interface RustCodegenDecorator<T, C : CoreCodegenContext> {
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
 
-    fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean
+    fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean
 }
 
 /**
@@ -78,7 +78,7 @@ interface RustCodegenDecorator<T, C : CoreCodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-open class CombinedCodegenDecorator<T, C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<T, C>>) :
+open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<RustCodegenDecorator<T, C>>) :
     RustCodegenDecorator<T, C> {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
@@ -141,12 +141,12 @@ open class CombinedCodegenDecorator<T, C : CoreCodegenContext>(decorators: List<
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         // `CombinedCodegenDecorator` can work with all types of codegen context.
-        CoreCodegenContext::class.java.isAssignableFrom(clazz)
+        CodegenContext::class.java.isAssignableFrom(clazz)
 
     companion object {
-        inline fun <T, reified C : CoreCodegenContext> fromClasspath(
+        inline fun <T, reified C : CodegenContext> fromClasspath(
             context: PluginContext,
             vararg extras: RustCodegenDecorator<T, C>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader"),
@@ -166,7 +166,7 @@ open class CombinedCodegenDecorator<T, C : CoreCodegenContext>(decorators: List<
          * non-public-API declarations.
          * See https://kotlinlang.org/docs/inline-functions.html#restrictions-for-public-api-inline-functions.
          */
-        inline fun <T, reified C : CoreCodegenContext> filterDecorators(
+        inline fun <T, reified C : CodegenContext> filterDecorators(
             decorators: Iterable<RustCodegenDecorator<*, *>>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader"),
         ): Sequence<RustCodegenDecorator<T, C>> =

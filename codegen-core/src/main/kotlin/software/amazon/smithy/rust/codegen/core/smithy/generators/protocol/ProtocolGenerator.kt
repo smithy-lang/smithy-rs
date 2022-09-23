@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
@@ -65,7 +65,7 @@ interface ProtocolTraitImplGenerator {
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
 abstract class ProtocolGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     /**
      * `Protocol` contains all protocol specific information. Each smithy protocol, e.g. RestJson, RestXml, etc. will
      * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
@@ -83,6 +83,6 @@ abstract class ProtocolGenerator(
      */
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) {
-    protected val symbolProvider = coreCodegenContext.symbolProvider
-    protected val model = coreCodegenContext.model
+    protected val symbolProvider = codegenContext.symbolProvider
+    protected val model = codegenContext.model
 }

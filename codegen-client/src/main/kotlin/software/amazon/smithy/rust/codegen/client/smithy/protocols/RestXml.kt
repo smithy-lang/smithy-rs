@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
@@ -53,9 +53,9 @@ class RestXmlFactory(
     }
 }
 
-open class RestXml(val coreCodegenContext: CoreCodegenContext) : Protocol {
-    private val restXml = coreCodegenContext.serviceShape.expectTrait<RestXmlTrait>()
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+open class RestXml(val codegenContext: CodegenContext) : Protocol {
+    private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
@@ -71,17 +71,17 @@ open class RestXml(val coreCodegenContext: CoreCodegenContext) : Protocol {
     }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
+        HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return RestXmlParserGenerator(coreCodegenContext, restXmlErrors)
+        return RestXmlParserGenerator(codegenContext, restXmlErrors)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return XmlBindingTraitSerializerGenerator(coreCodegenContext, httpBindingResolver)
+        return XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
     }
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =

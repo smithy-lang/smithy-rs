@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
@@ -23,14 +23,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * of the response parsing, but it overrides [operationParser] to add the protocol differences.
  */
 class Ec2QueryParserGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     xmlErrors: RuntimeType,
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
-            coreCodegenContext,
+            codegenContext,
             xmlErrors,
         ) { context, inner ->
-            val operationName = coreCodegenContext.symbolProvider.toSymbol(context.shape).name
+            val operationName = codegenContext.symbolProvider.toSymbol(context.shape).name
             val responseWrapperName = operationName + "Response"
             rustTemplate(
                 """

@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
@@ -41,15 +41,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamE
  * }
  * ```
  */
-class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext, private val operations: List<OperationShape>) {
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val model = coreCodegenContext.model
+class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private val operations: List<OperationShape>) {
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
 
-    private val allErrors = operations.flatMap { it.allErrors(model) }.map { it.id }.distinctBy { it.getName(coreCodegenContext.serviceShape) }
-        .map { coreCodegenContext.model.expectShape(it, StructureShape::class.java) }
-        .sortedBy { it.id.getName(coreCodegenContext.serviceShape) }
+    private val allErrors = operations.flatMap { it.allErrors(model) }.map { it.id }.distinctBy { it.getName(codegenContext.serviceShape) }
+        .map { codegenContext.model.expectShape(it, StructureShape::class.java) }
+        .sortedBy { it.id.getName(codegenContext.serviceShape) }
 
-    private val sdkError = CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType().member("result::SdkError")
+    private val sdkError = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.default("error_meta", visibility = Visibility.PRIVATE)) { writer ->
             writer.renderDefinition()
@@ -57,10 +57,10 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
                 // operation errors
-                writer.renderImplFrom(operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target), operationShape.errors)
+                writer.renderImplFrom(operationShape.errorSymbol(model, symbolProvider, codegenContext.target), operationShape.errors)
             }
             // event stream errors
-            operations.map { it.eventStreamErrors(coreCodegenContext.model) }
+            operations.map { it.eventStreamErrors(codegenContext.model) }
                 .flatMap { it.entries }
                 .associate { it.key to it.value }
                 .forEach { (unionShape, errors) ->
@@ -68,7 +68,7 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
                         unionShape.eventStreamErrorSymbol(
                             model,
                             symbolProvider,
-                            coreCodegenContext.target,
+                            codegenContext.target,
                         ),
                         errors.map { it.id },
                     )
@@ -92,7 +92,7 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
     }
 
     private fun RustWriter.renderImplFrom(symbol: RuntimeType, errors: List<ShapeId>) {
-        if (errors.isNotEmpty() || CodegenTarget.CLIENT == coreCodegenContext.target) {
+        if (errors.isNotEmpty() || CodegenTarget.CLIENT == codegenContext.target) {
             rustBlock(
                 "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
                 sdkError,

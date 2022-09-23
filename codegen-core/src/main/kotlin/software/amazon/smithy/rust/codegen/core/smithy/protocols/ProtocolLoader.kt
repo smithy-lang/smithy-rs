@@ -11,9 +11,9 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 
-open class ProtocolLoader<T, C : CoreCodegenContext>(private val supportedProtocols: ProtocolMap<T, C>) {
+open class ProtocolLoader<T, C : CodegenContext>(private val supportedProtocols: ProtocolMap<T, C>) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape,
