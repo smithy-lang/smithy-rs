@@ -19,6 +19,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -30,8 +32,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -83,9 +83,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     ): Writable =
         writable { }
 
-    override fun toGenericsGenerator(): GenericsGenerator {
-        return GenericsGenerator()
-    }
+    override fun toRustGenerics() = RustGenerics()
 }
 
 class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
@@ -283,8 +281,8 @@ private fun renderCustomizableOperationSendMethod(
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toGenericsGenerator()
+    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+    val handleGenerics = generics.toRustGenerics()
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(

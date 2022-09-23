@@ -3,11 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators
+package software.amazon.smithy.rust.codegen.core.rustlang
 
-import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 data class GenericTypeArg(
@@ -54,7 +51,7 @@ data class GenericTypeArg(
  * //     }
  * ```
  */
-class GenericsGenerator(vararg genericTypeArgs: GenericTypeArg) {
+class RustGenerics(vararg genericTypeArgs: GenericTypeArg) {
     private val typeArgs: List<GenericTypeArg>
 
     init {
@@ -148,7 +145,7 @@ class GenericsGenerator(vararg genericTypeArgs: GenericTypeArg) {
      * // Writes "fn eat_fruit<A, B>()"
      *
      */
-    operator fun plus(operationGenerics: GenericsGenerator): GenericsGenerator {
-        return GenericsGenerator(*(typeArgs + operationGenerics.typeArgs).toTypedArray())
+    operator fun plus(operationGenerics: RustGenerics): RustGenerics {
+        return RustGenerics(*(typeArgs + operationGenerics.typeArgs).toTypedArray())
     }
 }

@@ -17,6 +17,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.client.smithy.generators.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -45,8 +47,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -326,7 +326,7 @@ class FluentClientGenerator(
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),
                             retryClassifier,
-                            generics.toGenericsGenerator(),
+                            generics.toRustGenerics(),
                         ),
                     )
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)?.also { paginatorType ->
@@ -377,8 +377,8 @@ private fun renderCustomizableOperationModule(
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toGenericsGenerator()
+    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+    val handleGenerics = generics.toRustGenerics()
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(
@@ -469,8 +469,8 @@ private fun renderCustomizableOperationSend(
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
     val smithyClient = CargoDependency.SmithyClient(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toGenericsGenerator()
+    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+    val handleGenerics = generics.toRustGenerics()
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(

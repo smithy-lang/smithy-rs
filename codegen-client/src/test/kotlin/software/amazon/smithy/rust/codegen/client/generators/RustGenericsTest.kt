@@ -7,16 +7,16 @@ package software.amazon.smithy.rust.codegen.client.generators
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
 
-class GenericsGeneratorTest {
+class RustGenericsTest {
     @Test
     fun `declaration is correct for no args`() {
-        val gg = GenericsGenerator()
+        val gg = RustGenerics()
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("A#{decl:W}B", "decl" to gg.declaration())
 
@@ -25,7 +25,7 @@ class GenericsGeneratorTest {
 
     @Test
     fun `declaration is correct for 1 arg`() {
-        val gg = GenericsGenerator(GenericTypeArg("T"))
+        val gg = RustGenerics(GenericTypeArg("T"))
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("#{decl:W}", "decl" to gg.declaration())
 
@@ -34,7 +34,7 @@ class GenericsGeneratorTest {
 
     @Test
     fun `declaration is correct for several args`() {
-        val gg = GenericsGenerator(GenericTypeArg("T"), GenericTypeArg("U"), GenericTypeArg("V"))
+        val gg = RustGenerics(GenericTypeArg("T"), GenericTypeArg("U"), GenericTypeArg("V"))
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("#{decl:W}", "decl" to gg.declaration())
 
@@ -43,7 +43,7 @@ class GenericsGeneratorTest {
 
     @Test
     fun `bounds is correct for no args`() {
-        val gg = GenericsGenerator()
+        val gg = RustGenerics()
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("A#{bounds:W}B", "bounds" to gg.bounds())
 
@@ -52,7 +52,7 @@ class GenericsGeneratorTest {
 
     @Test
     fun `bounds is correct for 1 arg`() {
-        val gg = GenericsGenerator(GenericTypeArg("T", testRT("Test")))
+        val gg = RustGenerics(GenericTypeArg("T", testRT("Test")))
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("#{bounds:W}", "bounds" to gg.bounds())
 
@@ -61,7 +61,7 @@ class GenericsGeneratorTest {
 
     @Test
     fun `bounds is correct for several args`() {
-        val gg = GenericsGenerator(
+        val gg = RustGenerics(
             GenericTypeArg("A", testRT("Apple")),
             GenericTypeArg("PL", testRT("Plum")),
             GenericTypeArg("PE", testRT("Pear")),
@@ -78,7 +78,7 @@ class GenericsGeneratorTest {
 
     @Test
     fun `bounds skips arg with no bounds`() {
-        val gg = GenericsGenerator(
+        val gg = RustGenerics(
             GenericTypeArg("A", testRT("Apple")),
             GenericTypeArg("PL"),
             GenericTypeArg("PE", testRT("Pear")),
@@ -94,7 +94,7 @@ class GenericsGeneratorTest {
 
     @Test
     fun `bounds generates nothing if all args are skipped`() {
-        val gg = GenericsGenerator(
+        val gg = RustGenerics(
             GenericTypeArg("A"),
             GenericTypeArg("PL"),
             GenericTypeArg("PE"),
@@ -107,10 +107,10 @@ class GenericsGeneratorTest {
 
     @Test
     fun `Adding GenericGenerators works`() {
-        val ggA = GenericsGenerator(
+        val ggA = RustGenerics(
             GenericTypeArg("A", testRT("Apple")),
         )
-        val ggB = GenericsGenerator(
+        val ggB = RustGenerics(
             GenericTypeArg("B", testRT("Banana")),
         )
         RustWriter.forModule("model").let { writer ->

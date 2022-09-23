@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
 
 typealias Writable = RustWriter.() -> Unit
 
@@ -103,7 +102,7 @@ fun rustTypeParameters(
                 when (typeParameter) {
                     is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
                     is String -> rustInlineTemplate(typeParameter)
-                    is GenericsGenerator -> rustInlineTemplate(
+                    is RustGenerics -> rustInlineTemplate(
                         "#{gg:W}",
                         "gg" to typeParameter.declaration(withAngleBrackets = false),
                     )

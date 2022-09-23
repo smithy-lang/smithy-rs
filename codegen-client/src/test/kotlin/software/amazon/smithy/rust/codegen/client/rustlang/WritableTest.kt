@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.client.rustlang
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.join
@@ -15,8 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.core.smithy.generators.GenericsGenerator
 
 internal class RustTypeParametersTest {
     private fun forInputExpectOutput(input: Any, expectedOutput: String) {
@@ -51,8 +51,8 @@ internal class RustTypeParametersTest {
     }
 
     @Test
-    fun `rustTypeParameters accepts GenericsGenerator`() {
-        forInputExpectOutput(GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")), "'<A, B>'")
+    fun `rustTypeParameters accepts RustGenerics`() {
+        forInputExpectOutput(RustGenerics(GenericTypeArg("A"), GenericTypeArg("B")), "'<A, B>'")
     }
 
     @Test
@@ -63,7 +63,7 @@ internal class RustTypeParametersTest {
             RustType.Unit,
             RuntimeType("String", namespace = "std::string", dependency = null),
             "T",
-            GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
+            RustGenerics(GenericTypeArg("A"), GenericTypeArg("B")),
         )
         writer.rustInlineTemplate("'")
         writer.rustInlineTemplate("#{tps:W}", "tps" to tps)
