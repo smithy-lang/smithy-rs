@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 
 /**
@@ -76,24 +77,28 @@ data class ClientRustSettings(
 data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
-    override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
     val renameExceptions: Boolean = defaultRenameExceptions,
     val includeFluentClient: Boolean = defaultIncludeFluentClient,
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
+    // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
+    val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode, eventStreamAllowList,
+    formatTimeoutSeconds, debugMode,
 ) {
     companion object {
         private const val defaultRenameExceptions = true
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
+        private val defaultEventStreamAllowList: Set<String> = emptySet()
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
+                    eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList")
+                        .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
+                        .orNull()?.toSet() ?: defaultEventStreamAllowList,
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
@@ -102,7 +107,7 @@ data class ClientCodegenConfig(
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
+                    eventStreamAllowList = defaultEventStreamAllowList,
                 )
             }
     }
