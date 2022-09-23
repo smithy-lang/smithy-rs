@@ -122,6 +122,7 @@ structure GetPokemonSpeciesInput {
     name: String
 }
 
+@output
 structure GetPokemonSpeciesOutput {
     /// The name for this resource.
     @required
@@ -160,7 +161,7 @@ structure GetStorageInput {
 
 /// A list of Pokémon species.
 list SpeciesCollection {
-    member: GetPokemonSpeciesOutput
+    member: String
 }
 
 /// Contents of the Pokémon storage.
