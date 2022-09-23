@@ -7,6 +7,7 @@ use com.aws.example#PokemonSpecies
 use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
 use com.aws.example#CheckHealth
+use com.aws.example#ResourceNotFoundException
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
@@ -130,6 +131,17 @@ structure CaptureEvent {
 structure UnsupportedRegionError {
     @required
     region: String,
+}
+
+@error("client")
+structure InvalidPokeballError {
+    @required
+    pokeball: String,
+}
+@error("server")
+structure MasterBallUnsuccessful {
+    @required
+    message: String,
 }
 
 @error("client")

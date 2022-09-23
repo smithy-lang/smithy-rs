@@ -11,18 +11,6 @@ resource PokemonSpecies {
     read: GetPokemonSpecies,
 }
 
-@error("client")
-structure InvalidPokeballError {
-    @required
-    pokeball: String,
-}
-@error("server")
-structure MasterBallUnsuccessful {
-    @required
-    message: String,
-}
-
-
 /// Retrieve information about a Pokémon species.
 @readonly
 @http(uri: "/pokemon-species/{name}", method: "GET")
