@@ -7,7 +7,6 @@ use com.aws.example#PokemonSpecies
 use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
 use com.aws.example#CheckHealth
-use com.aws.example#CapturePokemon
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
@@ -15,7 +14,12 @@ use com.aws.example#CapturePokemon
 service PokemonService {
     version: "2021-12-01",
     resources: [PokemonSpecies, Storage],
-    operations: [GetServerStatistics, DoNothing, CapturePokemon, CheckHealth],
+    operations: [
+        GetServerStatistics,
+        DoNothing,
+        CapturePokemon,
+        CheckHealth
+    ],
 }
 
 /// A users current Pokémon storage.
