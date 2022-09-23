@@ -10,7 +10,7 @@ use aws.protocols#restJson1
 service PokemonService {
     version: "2021-12-01",
     resources: [PokemonSpecies, Storage],
-    operations: [GetServerStatistics, EmptyOperation, CapturePokemonOperation, HealthCheckOperation],
+    operations: [GetServerStatistics, Empty, CapturePokemon, HealthCheck],
 }
 
 /// A Pokémon species forms the basis for at least one Pokémon.
@@ -32,14 +32,14 @@ resource Storage {
 
 /// Capture Pokémons via event streams
 @http(uri: "/capture-pokemon-event/{region}", method: "POST")
-operation CapturePokemonOperation {
-    input: CapturePokemonOperationEventsInput,
-    output: CapturePokemonOperationEventsOutput,
+operation CapturePokemon {
+    input: CapturePokemonEventsInput,
+    output: CapturePokemonEventsOutput,
     errors: [UnsupportedRegionError, ThrottlingError]
 }
 
 @input
-structure CapturePokemonOperationEventsInput {
+structure CapturePokemonEventsInput {
     @httpPayload
     events: AttemptCapturingPokemonEvent,
 
@@ -49,7 +49,7 @@ structure CapturePokemonOperationEventsInput {
 }
 
 @output
-structure CapturePokemonOperationEventsOutput {
+structure CapturePokemonEventsOutput {
     @httpPayload
     events: CapturePokemonEvents,
 }
@@ -230,22 +230,22 @@ string Language
 /// Empty operation, used to stress test the framework.
 @readonly
 @http(uri: "/empty-operation", method: "GET")
-operation EmptyOperation {
-    input: EmptyOperationInput,
-    output: EmptyOperationOutput,
+operation Empty {
+    input: EmptyInput,
+    output: EmptyOutput,
 }
 
 @input
-structure EmptyOperationInput { }
+structure EmptyInput { }
 
 @output
-structure EmptyOperationOutput { }
+structure EmptyOutput { }
 
 /// Health check operation, to check the service is up
 /// Not yet a deep check
 @readonly
 @http(uri: "/ping", method: "GET")
-operation HealthCheckOperation {
+operation HealthCheck {
 }
 
 @error("client")

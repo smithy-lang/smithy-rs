@@ -44,18 +44,18 @@ fn get_pokemon_to_capture() -> String {
 
 #[tokio::test]
 #[serial]
-async fn test_health_check_operation() {
+async fn test_health_check() {
     let _program = PokemonService::run().await;
 
-    let _health_check = client().health_check_operation().send().await.unwrap();
+    let _health_check = client().health_check().send().await.unwrap();
 }
 
 #[tokio::test]
 #[serial]
-async fn test_health_check_operation_http2() {
+async fn test_health_check_http2() {
     // Make sure our server can serve http2
     let _program = PokemonService::run_https().await;
-    let _health_check = client_http2_only().health_check_operation().send().await.unwrap();
+    let _health_check = client_http2_only().health_check().send().await.unwrap();
 }
 
 #[tokio::test]
@@ -151,7 +151,7 @@ async fn event_stream_test() {
 
     // Throw many!
     let mut output = client()
-        .capture_pokemon_operation()
+        .capture_pokemon()
         .region("Kanto")
         .events(input_stream.into())
         .send()
@@ -196,7 +196,7 @@ async fn event_stream_test() {
             ))
         };
         let mut output = client()
-            .capture_pokemon_operation()
+            .capture_pokemon()
             .region("Kanto")
             .events(input_stream.into())
             .send()
