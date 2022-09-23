@@ -41,28 +41,21 @@ const val CODEGEN_SETTINGS = "codegen"
 open class CoreCodegenConfig(
     open val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     open val debugMode: Boolean = defaultDebugMode,
-    // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
-    open val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) {
     companion object {
         const val defaultFormatTimeoutSeconds = 20
         const val defaultDebugMode = false
-        val defaultEventStreamAllowList: Set<String> = emptySet()
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
                     node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
                     node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
-                    node.get().getArrayMember("eventStreamAllowList")
-                        .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
-                        .orNull()?.toSet() ?: defaultEventStreamAllowList,
                 )
             } else {
                 CoreCodegenConfig(
                     formatTimeoutSeconds = defaultFormatTimeoutSeconds,
                     debugMode = defaultDebugMode,
-                    eventStreamAllowList = defaultEventStreamAllowList,
                 )
             }
     }
