@@ -24,7 +24,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
                 rust("""
                     /// Returns idempotency token provider.
                     pub fn make_token(&self) -> #T::IdempotencyTokenProvider {
-                        self.make_token.as_ref()
+                        self.make_token
                     }
                 """,
                 RuntimeType.IdempotencyToken,
