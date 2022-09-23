@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSettings
-import software.amazon.smithy.rust.codegen.client.testutil.testRustSettings
 import java.util.Optional
 
 internal class RemoveEventStreamOperationsTest {
