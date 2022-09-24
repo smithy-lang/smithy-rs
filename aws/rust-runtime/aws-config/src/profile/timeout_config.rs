@@ -105,7 +105,7 @@ impl ProfileFileTimeoutConfigProvider {
 
     /// Attempt to create a new [`timeout::Config`](aws_smithy_types::timeout::Config) from a profile file.
     pub async fn timeout_config(&self) -> Result<timeout::Config, timeout::ConfigError> {
-        let profile = match super::parser::load(&self.fs, &self.env).await {
+        let profile = match super::parser::load(&self.fs, &self.env, &Default::default()).await {
             Ok(profile) => profile,
             Err(err) => {
                 tracing::warn!(err = %err, "failed to parse profile, skipping it");
