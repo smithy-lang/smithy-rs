@@ -84,11 +84,13 @@ internal class ServiceConfigGeneratorTest {
                     ServiceConfig.ConfigStructAdditionalDocs -> emptySection
                     ServiceConfig.ConfigStruct -> writable { rust("config_field: u64,") }
                     ServiceConfig.ConfigImpl -> writable {
-                        rust("""
+                        rust(
+                            """
                             pub fn config_field(&self) -> u64 {
                                 self.config_field
                             }
-                        """)
+                            """,
+                        )
                     }
                     ServiceConfig.BuilderStruct -> writable { rust("config_field: Option<u64>") }
                     ServiceConfig.BuilderImpl -> emptySection

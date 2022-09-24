@@ -27,7 +27,7 @@ fun stubConfigCustomization(name: String): ConfigCustomization {
                     pub fn $name(&self) -> u64 {
                         self._$name
                     }
-                    """
+                    """,
                 )
                 ServiceConfig.BuilderStruct -> rust("_$name: Option<u64>,")
                 ServiceConfig.BuilderImpl -> rust(
