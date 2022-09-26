@@ -79,40 +79,62 @@ where
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if let Some(greedy_label) = &self.greedy_label {
-            let (greedy_start, hit_greedy) = self
+            // Calculate the byte index of the start of the greedy label and whether it was reached while writing the
+            // normal labels.
+            let (greedy_start, greedy_hit) = self
                 .path
                 .split('/')
+                // Skip the first segment which will always be empty.
                 .skip(1)
+                // Iterate up to the segment index given in the `GreedyLabel`.
                 .take(greedy_label.segment_index + 1)
                 .enumerate()
                 .fold(Ok((0, false)), |acc, (index, segment)| {
-                    if index == greedy_label.segment_index {
-                        // Greedy label exists.
-                        Ok((acc?.0, true))
-                    } else {
-                        // Prior to greedy segment, use label_marker and increment `greedy_start`.
-                        if (self.label_marker)(index) {
-                            write!(f, "/{}", Sensitive(segment))?;
+                    acc.and_then(|(greedy_start, _)| {
+                        if index == greedy_label.segment_index {
+                            // We've hit the greedy label, set `hit_greedy` to `true`.
+                            Ok((greedy_start, true))
                         } else {
-                            write!(f, "/{}", segment)?;
+                            // Prior to greedy segment, use `label_marker` to redact segments.
+                            if (self.label_marker)(index) {
+                                write!(f, "/{}", Sensitive(segment))?;
+                            } else {
+                                write!(f, "/{}", segment)?;
+                            }
+                            // Add the segment length and the separator to the `greedy_start`.
+                            let greedy_start = greedy_start + segment.len() + 1;
+                            Ok((greedy_start, false))
                         }
-                        Ok((acc?.0 + segment.len() + 1, false))
-                    }
+                    })
                 })?;
 
-            if hit_greedy {
+            // If we reached the greedy label segment then use the `end_offset` to redact the interval
+            // and print the remainder.
+            if greedy_hit {
                 if let Some(end_index) = self.path.len().checked_sub(greedy_label.end_offset) {
                     if greedy_start < end_index {
+                        // [greedy_start + 1 .. end_index] is a non-empty slice - redact it.
                         let greedy_redaction = Sensitive(&self.path[greedy_start + 1..end_index]);
                         let remainder = &self.path[end_index..];
                         write!(f, "/{greedy_redaction}{remainder}")?;
                     } else {
+                        // [greedy_start + 1 .. end_index] is an empty slice - don't redact it.
+                        // NOTE: This is unreachable if the greedy label is valid.
                         write!(f, "{}", &self.path[greedy_start..])?;
                     }
                 }
+            } else {
+                // NOTE: This is unreachable if the greedy label is valid.
             }
         } else {
-            for (index, segment) in self.path.split('/').skip(1).enumerate() {
+            // Use `label_marker` to redact segments.
+            for (index, segment) in self
+                .path
+                .split('/')
+                // Skip the first segment which will always be empty.
+                .skip(1)
+                .enumerate()
+            {
                 if (self.label_marker)(index) {
                     write!(f, "/{}", Sensitive(segment))?;
                 } else {
