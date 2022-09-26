@@ -290,11 +290,38 @@ mod tests {
     pub const GREEDY_EXAMPLES_OFFSET: [&str; 19] = EXAMPLES;
 
     #[test]
-    fn greedy_offset() {
+    fn greedy_offset_a() {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = GREEDY_EXAMPLES_OFFSET.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = Label::new(&original.path(), |_| false, Some(GreedyLabel::new(1, 1))).to_string();
+            assert_eq!(output, expected.path(), "original = {original}");
+        }
+    }
+
+    const EXTRA_EXAMPLES_UNREDACTED: [&str; 4] = [
+        "http://base/a/b/hello_world",
+        "http://base/a/b/c/hello_world",
+        "http://base/a",
+        "http://base/a/b/c",
+    ];
+
+    #[cfg(feature = "unredacted-logging")]
+    const EXTRA_EXAMPLES_REDACTED: [&str; 4] = EXTRA_EXAMPLES_UNREDACTED;
+    #[cfg(not(feature = "unredacted-logging"))]
+    const EXTRA_EXAMPLES_REDACTED: [&str; 4] = [
+        "http://base/a/b/{redacted}world",
+        "http://base/a/b/{redacted}world",
+        "http://base/a",
+        "http://base/a/b/c",
+    ];
+
+    #[test]
+    fn greedy_offset_b() {
+        let originals = EXTRA_EXAMPLES_UNREDACTED.into_iter().map(Uri::from_static);
+        let expecteds = EXTRA_EXAMPLES_REDACTED.into_iter().map(Uri::from_static);
+        for (original, expected) in originals.zip(expecteds) {
+            let output = Label::new(&original.path(), |_| false, Some(GreedyLabel::new(2, 5))).to_string();
             assert_eq!(output, expected.path(), "original = {original}");
         }
     }
