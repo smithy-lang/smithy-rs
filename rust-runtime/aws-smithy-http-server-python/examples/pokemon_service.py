@@ -15,15 +15,15 @@ import aiohttp
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
-    EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
-    HealthCheckOperationInput, StreamPokemonRadioOperationInput)
+    DoNothingInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
+    CheckHealthInput, StreamPokemonRadioInput)
 from libpokemon_service_server_sdk.logging import TracingHandler
 from libpokemon_service_server_sdk.middleware import (MiddlewareException,
                                                       Request)
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
-    EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
-    HealthCheckOperationOutput, StreamPokemonRadioOperationOutput)
+    DoNothingOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
+    CheckHealthOutput, StreamPokemonRadioOutput)
 from libpokemon_service_server_sdk.types import ByteStream
 
 # Logging can bee setup using standard Python tooling. We provide
@@ -171,11 +171,11 @@ async def check_x_amzn_answer_header(request: Request):
 ###########################################################
 # App handlers definition
 ###########################################################
-# Empty operation used for raw benchmarking.
-@app.empty_operation
-def empty_operation(_: EmptyOperationInput) -> EmptyOperationOutput:
-    # logging.debug("Running the empty operation")
-    return EmptyOperationOutput()
+# DoNothing operation used for raw benchmarking.
+@app.do_nothing
+def do_nothing(_: DoNothingInput) -> DoNothingOutput:
+    # logging.debug("Running the DoNothing operation")
+    return DoNothingOutput()
 
 
 # Get the translation of a Pokémon specie or an error.
@@ -207,22 +207,22 @@ def get_server_statistics(
     return GetServerStatisticsOutput(calls_count=calls_count)
 
 
-# Run a shallow healthcheck of the service.
-@app.health_check_operation
-def health_check_operation(_: HealthCheckOperationInput) -> HealthCheckOperationOutput:
-    return HealthCheckOperationOutput()
+# Run a shallow health check of the service.
+@app.check_health
+def check_health(_: CheckHealthInput) -> CheckHealthOutput:
+    return CheckHealthOutput()
 
 
 # Stream a random Pokémon song.
-@app.stream_pokemon_radio_operation
-async def stream_pokemon_radio(_: StreamPokemonRadioOperationInput, context: Context):
+@app.stream_pokemon_radio
+async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context):
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
     async with aiohttp.ClientSession() as session:
         async with session.get(radio_url) as response:
             data = ByteStream(await response.read())
         logging.debug("Successfully fetched radio url %s", radio_url)
-    return StreamPokemonRadioOperationOutput(data=data)
+    return StreamPokemonRadioOutput(data=data)
 
 
 ###########################################################

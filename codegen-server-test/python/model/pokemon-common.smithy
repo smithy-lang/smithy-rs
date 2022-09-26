@@ -1,0 +1,1 @@
+../../../codegen-core/common-test-models/pokemon-common.smithy
