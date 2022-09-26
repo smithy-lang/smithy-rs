@@ -77,9 +77,8 @@ data class ServerRustSettings(
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
-    override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode, eventStreamAllowList,
+    formatTimeoutSeconds, debugMode,
 ) {
     companion object {
         // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as
@@ -89,7 +88,6 @@ data class ServerCodegenConfig(
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
-                eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
             )
     }
 }

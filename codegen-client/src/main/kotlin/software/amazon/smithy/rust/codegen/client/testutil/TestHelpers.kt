@@ -7,9 +7,12 @@ package software.amazon.smithy.rust.codegen.client.testutil
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.RustCodegenPlugin
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -39,6 +42,32 @@ val TestSymbolVisitorConfig = SymbolVisitorConfig(
     renameExceptions = true,
     handleRustBoxing = true,
     nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+)
+
+fun clientTestRustSettings(
+    service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
+    moduleName: String = "test-module",
+    moduleVersion: String = "0.0.1",
+    moduleAuthors: List<String> = listOf("notrelevant"),
+    moduleDescription: String = "not relevant",
+    moduleRepository: String? = null,
+    runtimeConfig: RuntimeConfig = TestRuntimeConfig,
+    codegenConfig: ClientCodegenConfig = ClientCodegenConfig(),
+    license: String? = null,
+    examplesUri: String? = null,
+    customizationConfig: ObjectNode? = null,
+) = ClientRustSettings(
+    service,
+    moduleName,
+    moduleVersion,
+    moduleAuthors,
+    moduleDescription,
+    moduleRepository,
+    runtimeConfig,
+    codegenConfig,
+    license,
+    examplesUri,
+    customizationConfig,
 )
 
 fun testRustSettings(

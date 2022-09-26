@@ -48,5 +48,5 @@ async fn simple_integration_test() {
     let service_statistics_out = client().get_server_statistics().send().await.unwrap();
     assert_eq!(2, service_statistics_out.calls_count.unwrap());
 
-    let _health_check = client().health_check_operation().send().await.unwrap();
+    let _health_check = client().check_health().send().await.unwrap();
 }

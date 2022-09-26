@@ -32,8 +32,8 @@ use aws_smithy_http_server::{routing::Router, AddExtensionLayer};
 use clap::Parser;
 use futures_util::stream::StreamExt;
 use pokemon_service::{
-    capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
-    setup_tracing, State,
+    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, get_storage, setup_tracing,
+    State,
 };
 use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
 use tokio_rustls::{
@@ -71,9 +71,9 @@ pub async fn main() {
         .get_pokemon_species(get_pokemon_species)
         .get_storage(get_storage)
         .get_server_statistics(get_server_statistics)
-        .capture_pokemon_operation(capture_pokemon)
-        .empty_operation(empty_operation)
-        .health_check_operation(health_check_operation)
+        .capture_pokemon(capture_pokemon)
+        .do_nothing(do_nothing)
+        .check_health(check_health)
         .build()
         .expect("Unable to build operation registry")
         // Convert it into a router that will route requests to the matching operation
