@@ -57,11 +57,15 @@
 //!
 //! [sensitive trait]: https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html?highlight=sensitive%20trait#sensitive-trait
 
+mod layer;
+mod plugin;
 pub mod sensitivity;
 mod service;
 
 use std::fmt::{Debug, Display};
 
+pub use layer::*;
+pub use plugin::*;
 pub use service::*;
 
 /// A standard interface for taking some component of the HTTP request/response and transforming it into new struct
