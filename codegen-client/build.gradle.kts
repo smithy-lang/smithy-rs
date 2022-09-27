@@ -25,9 +25,7 @@ val kotestVersion: String by project
 dependencies {
     implementation(project(":codegen-core"))
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jsoup:jsoup:1.14.3")
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
-    api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")

@@ -9,13 +9,16 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 
 /**
  * [ClientCodegenContext] contains code-generation context that is _specific_ to the [RustCodegenPlugin] plugin
  * from the `rust-codegen` subproject.
  *
- * It inherits from [CoreCodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
+ * It inherits from [CodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
  */
 data class ClientCodegenContext(
     override val model: Model,
@@ -23,7 +26,7 @@ data class ClientCodegenContext(
     override val serviceShape: ServiceShape,
     override val protocol: ShapeId,
     override val settings: ClientRustSettings,
-    val rootDecorator: RustCodegenDecorator<ClientCodegenContext>,
-) : CoreCodegenContext(
+    val rootDecorator: RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>,
+) : CodegenContext(
     model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
 )

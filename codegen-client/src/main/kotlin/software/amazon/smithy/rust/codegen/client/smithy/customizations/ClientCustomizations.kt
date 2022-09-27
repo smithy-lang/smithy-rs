@@ -6,14 +6,15 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 
 /**
  * Customizations that apply only to generated clients.
  */
-class ClientCustomizations : RustCodegenDecorator<ClientCodegenContext> {
+class ClientCustomizations : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "ClientCustomizations"
     override val order: Byte = 0
 
@@ -22,6 +23,6 @@ class ClientCustomizations : RustCodegenDecorator<ClientCodegenContext> {
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> = baseCustomizations + ClientDocsGenerator()
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

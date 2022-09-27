@@ -8,6 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import java.util.Optional
 
 /**
@@ -73,9 +77,8 @@ data class ServerRustSettings(
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
-    override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode, eventStreamAllowList,
+    formatTimeoutSeconds, debugMode,
 ) {
     companion object {
         // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as
@@ -85,7 +88,6 @@ data class ServerCodegenConfig(
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
-                eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
             )
     }
 }

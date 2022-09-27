@@ -26,15 +26,15 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.render
-import software.amazon.smithy.rust.codegen.client.smithy.Errors
-import software.amazon.smithy.rust.codegen.client.smithy.Models
-import software.amazon.smithy.rust.codegen.client.smithy.Operations
-import software.amazon.smithy.rust.codegen.client.smithy.isOptional
-import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.render
+import software.amazon.smithy.rust.codegen.core.smithy.Errors
+import software.amazon.smithy.rust.codegen.core.smithy.Models
+import software.amazon.smithy.rust.codegen.core.smithy.Operations
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 
 class SymbolBuilderTest {
     private fun Symbol.referenceClosure(): List<Symbol> {
@@ -125,17 +125,13 @@ class SymbolBuilderTest {
         "PrimitiveBoolean, false, bool",
     )
     fun `creates primitives`(primitiveType: String, optional: Boolean, rustName: String) {
-        val memberBuilder = MemberShape.builder().id("foo.bar#MyStruct\$quux").target("smithy.api#$primitiveType")
-        val member = memberBuilder.build()
-        val struct = StructureShape.builder()
-            .id("foo.bar#MyStruct")
-            .addMember(member)
-            .build()
-        val model = Model.assembler()
-            .addShapes(struct, member)
-            .assemble()
-            .unwrap()
-
+        val model = """
+    namespace foo.bar
+    structure MyStruct {
+        quux: $primitiveType
+    }
+""".asSmithyModel()
+        val member = model.expectShape(ShapeId.from("foo.bar#MyStruct\$quux"))
         val provider: SymbolProvider = testSymbolProvider(model)
         val memberSymbol = provider.toSymbol(member)
         // builtins should not have a namespace set

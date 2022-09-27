@@ -18,6 +18,7 @@ use tracing::error;
 
 use crate::{
     body::BoxBody,
+    plugin::Plugin,
     request::{FromParts, FromRequest},
     response::IntoResponse,
     runtime_error::InternalFailureException,
@@ -220,14 +221,14 @@ where
 
 /// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
-pub trait Upgradable<Protocol, Operation, Exts, B> {
+pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
 
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
-    fn upgrade(self) -> Self::Service;
+    fn upgrade(self, plugin: &Plugin) -> Self::Service;
 }
 
-impl<P, Op, Exts, B, S, L, PollError> Upgradable<P, Op, Exts, B> for Operation<S, L>
+impl<P, Op, Exts, B, Pl, S, L, PollError> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -245,21 +246,26 @@ where
     // The signature of the inner service is correct
     S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
 
-    // Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
-    L: Layer<Upgrade<P, Op, Exts, B, S>>,
+    // The plugin takes this operation as input
+    Pl: Plugin<P, Op, S, L>,
+
+    // The modified Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
+    Pl::Layer: Layer<Upgrade<P, Op, Exts, B, Pl::Service>>,
 
     // The signature of the output is correct
-    L::Service: Service<http::Request<B>, Response = http::Response<BoxBody>>,
+    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service:
+        Service<http::Request<B>, Response = http::Response<BoxBody>>,
 {
-    type Service = L::Service;
+    type Service = <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service;
 
-    /// Takes the [`Operation<S, L>`](Operation), applies [`UpgradeLayer`] to
+    /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self) -> Self::Service {
-        let layer = Stack::new(UpgradeLayer::new(), self.layer);
-        layer.layer(self.inner)
+    fn upgrade(self, plugin: &Pl) -> Self::Service {
+        let mapped = plugin.map(self);
+        let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
+        layer.layer(mapped.inner)
     }
 }
 
@@ -273,13 +279,13 @@ pub struct MissingOperation;
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
 pub struct FailOnMissingOperation;
 
-impl<P, Op, Exts, B> Upgradable<P, Op, Exts, B> for FailOnMissingOperation
+impl<P, Op, Exts, B, Pl> Upgradable<P, Op, Exts, B, Pl> for FailOnMissingOperation
 where
     InternalFailureException: IntoResponse<P>,
 {
     type Service = MissingFailure<P>;
 
-    fn upgrade(self) -> Self::Service {
+    fn upgrade(self, _plugin: &Pl) -> Self::Service {
         MissingFailure { _protocol: PhantomData }
     }
 }

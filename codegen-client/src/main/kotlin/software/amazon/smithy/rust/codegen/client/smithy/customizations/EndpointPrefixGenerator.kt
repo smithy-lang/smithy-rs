@@ -7,24 +7,24 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.EndpointTraitBindings
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 
-class EndpointPrefixGenerator(private val coreCodegenContext: CoreCodegenContext, private val shape: OperationShape) :
+class EndpointPrefixGenerator(private val codegenContext: CodegenContext, private val shape: OperationShape) :
     OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
             shape.getTrait(EndpointTrait::class.java).map { epTrait ->
                 val endpointTraitBindings = EndpointTraitBindings(
-                    coreCodegenContext.model,
-                    coreCodegenContext.symbolProvider,
-                    coreCodegenContext.runtimeConfig,
+                    codegenContext.model,
+                    codegenContext.symbolProvider,
+                    codegenContext.runtimeConfig,
                     shape,
                     epTrait,
                 )

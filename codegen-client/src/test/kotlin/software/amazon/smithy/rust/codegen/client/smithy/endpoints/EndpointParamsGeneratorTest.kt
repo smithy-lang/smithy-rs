@@ -8,10 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoints
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.rulesengine.testutil.TestDiscovery
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import java.util.stream.Stream
 
 internal class EndpointParamsGeneratorTest {

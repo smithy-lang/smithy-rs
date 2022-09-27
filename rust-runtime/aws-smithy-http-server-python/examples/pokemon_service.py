@@ -11,16 +11,24 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import aiohttp
+
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.error import ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
-    EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
-    HealthCheckOperationInput, StreamPokemonRadioOperationInput)
+    DoNothingInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
+    CheckHealthInput, StreamPokemonRadioInput)
+from libpokemon_service_server_sdk.logging import TracingHandler
+from libpokemon_service_server_sdk.middleware import (MiddlewareException,
+                                                      Request)
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
-    EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
-    HealthCheckOperationOutput, StreamPokemonRadioOperationOutput)
+    DoNothingOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
+    CheckHealthOutput, StreamPokemonRadioOutput)
 from libpokemon_service_server_sdk.types import ByteStream
+
+# Logging can bee setup using standard Python tooling. We provide
+# fast logging handler, Tracingandler based on Rust tracing crate.
+logging.basicConfig(handlers=[TracingHandler(level=logging.DEBUG).handler()])
 
 
 # A slightly more atomic counter using a threading lock.
@@ -112,13 +120,62 @@ app.context(Context())
 
 
 ###########################################################
+# Middleware
+############################################################
+# Middlewares are sync or async function decorated by `@app.middleware`.
+# They are executed in order and take as input the HTTP request object.
+# A middleware can return multiple values, following these rules:
+# * Middleware not returning will let the execution continue without
+#   changing the original request.
+# * Middleware returning a modified Request will update the original
+#   request before continuing the execution.
+# * Middleware returning a Response will immediately terminate the request
+#   handling and return the response constructed from Python.
+# * Middleware raising MiddlewareException will immediately terminate the
+#   request handling and return a protocol specific error, with the option of
+#   setting the HTTP return code.
+# * Middleware raising any other exception will immediately terminate the
+#   request handling and return a protocol specific error, with HTTP status
+#   code 500.
+@app.request_middleware
+def check_content_type_header(request: Request):
+    content_type = request.get_header("content-type")
+    if content_type == "application/json":
+        logging.debug("Found valid `application/json` content type")
+    else:
+        logging.warning(
+            f"Invalid content type {content_type}, dumping headers: {request.headers()}"
+        )
+
+
+# This middleware adds a new header called `x-amzn-answer` to the
+# request. We expect to see this header to be populated in the next
+# middleware.
+@app.request_middleware
+def add_x_amzn_answer_header(request: Request):
+    request.set_header("x-amzn-answer", "42")
+    logging.debug("Setting `x-amzn-answer` header to 42")
+    return request
+
+
+# This middleware checks if the header `x-amzn-answer` is correctly set
+# to 42, otherwise it returns an exception with a set status code.
+@app.request_middleware
+async def check_x_amzn_answer_header(request: Request):
+    # Check that `x-amzn-answer` is 42.
+    if request.get_header("x-amzn-answer") != "42":
+        # Return an HTTP 401 Unauthorized if the content type is not JSON.
+        raise MiddlewareException("Invalid answer", 401)
+
+
+###########################################################
 # App handlers definition
 ###########################################################
-# Empty operation used for raw benchmarking.
-@app.empty_operation
-def empty_operation(_: EmptyOperationInput) -> EmptyOperationOutput:
-    # logging.debug("Running the empty operation")
-    return EmptyOperationOutput()
+# DoNothing operation used for raw benchmarking.
+@app.do_nothing
+def do_nothing(_: DoNothingInput) -> DoNothingOutput:
+    # logging.debug("Running the DoNothing operation")
+    return DoNothingOutput()
 
 
 # Get the translation of a Pokémon specie or an error.
@@ -131,6 +188,7 @@ def get_pokemon_species(
     if flavor_text_entries:
         logging.debug("Total requests executed: %s", context.get_calls_count())
         logging.info("Found description for Pokémon %s", input.name)
+        logging.error("Found some stuff")
         return GetPokemonSpeciesOutput(
             name=input.name, flavor_text_entries=flavor_text_entries
         )
@@ -149,22 +207,22 @@ def get_server_statistics(
     return GetServerStatisticsOutput(calls_count=calls_count)
 
 
-# Run a shallow healthcheck of the service.
-@app.health_check_operation
-def health_check_operation(_: HealthCheckOperationInput) -> HealthCheckOperationOutput:
-    return HealthCheckOperationOutput()
+# Run a shallow health check of the service.
+@app.check_health
+def check_health(_: CheckHealthInput) -> CheckHealthOutput:
+    return CheckHealthOutput()
 
 
 # Stream a random Pokémon song.
-@app.stream_pokemon_radio_operation
-async def stream_pokemon_radio(_: StreamPokemonRadioOperationInput, context: Context):
+@app.stream_pokemon_radio
+async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context):
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
     async with aiohttp.ClientSession() as session:
         async with session.get(radio_url) as response:
             data = ByteStream(await response.read())
         logging.debug("Successfully fetched radio url %s", radio_url)
-    return StreamPokemonRadioOperationOutput(data=data)
+    return StreamPokemonRadioOutput(data=data)
 
 
 ###########################################################

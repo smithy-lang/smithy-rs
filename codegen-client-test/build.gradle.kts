@@ -94,7 +94,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             """.trimIndent(),
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
-        CodegenTest("com.aws.example#PokemonService", "pokemon-service-client", imports = listOf("$commonModels/pokemon.smithy")),
+        CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-client", imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy")),
     )
 }
 

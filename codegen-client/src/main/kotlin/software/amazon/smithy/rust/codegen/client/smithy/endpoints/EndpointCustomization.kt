@@ -13,16 +13,17 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 /**
@@ -35,11 +36,11 @@ interface RulesEngineBuiltInResolver {
     fun defaultFor(parameter: Parameter, configRef: String): Writable?
 }
 
-class EndpointsDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "Endpoints"
     override val order: Byte = 0
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     override fun operationCustomizations(
@@ -69,7 +70,7 @@ class EndpointsDecorator : RustCodegenDecorator<ClientCodegenContext> {
  * ```
  */
 class CreateEndpointParams(
-    private val ctx: CoreCodegenContext,
+    private val ctx: CodegenContext,
     private val operationShape: OperationShape,
     private val rulesEngineBuiltInResolvers: List<RulesEngineBuiltInResolver>,
 ) :
@@ -147,9 +148,9 @@ class CreateEndpointParams(
         memberParams.forEach { (memberShape, param) ->
             rust(
                 ".${EndpointParamsGenerator.setterName(param.name)}(${section.input}.${
-                    ctx.symbolProvider.toMemberName(
-                        memberShape,
-                    )
+                ctx.symbolProvider.toMemberName(
+                    memberShape,
+                )
                 }.as_ref())",
             )
         }

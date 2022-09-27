@@ -15,10 +15,11 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
-import software.amazon.smithy.rust.codegen.client.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase

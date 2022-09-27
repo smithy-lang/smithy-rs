@@ -9,11 +9,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.smithy.generators.EnumGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
@@ -21,6 +16,12 @@ import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilde
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Ec2QuerySerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup

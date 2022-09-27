@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.client.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 
 object InlineAwsDependency {
     fun forRustFile(file: String, visibility: Visibility = Visibility.PRIVATE, vararg additionalDependency: RustDependency): InlineDependency =
