@@ -429,6 +429,8 @@ event_loop.add_signal_handler(signal.SIGINT,
         mp.call_method(
             "set_start_method",
             ("fork",),
+            // We need to pass `force=True` to prevent `context has already been set` exception,
+            // see https://github.com/pytorch/pytorch/issues/3492
             Some(vec![("force", true)].into_py_dict(py)),
         )?;
 
