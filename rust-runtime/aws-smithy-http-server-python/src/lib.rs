@@ -21,7 +21,7 @@ pub mod types;
 #[doc(inline)]
 pub use error::{PyError, PyMiddlewareException};
 #[doc(inline)]
-pub use logging::{py_tracing_event, PyTracingHandler};
+pub use instrumentation::{py_tracing_event, PyTracingHandler};
 #[doc(inline)]
 pub use middleware::{
     PyHttpVersion, PyMiddlewareLayer, PyMiddlewareType, PyMiddlewares, PyRequest, PyResponse,

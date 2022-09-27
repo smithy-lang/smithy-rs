@@ -86,7 +86,7 @@ where
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::logging::{sensitivity::{*, uri::*, headers::*}, *};
+/// # use aws_smithy_http_server::instrumentation::{sensitivity::{*, uri::*, headers::*}, *};
 /// # use tower::{Service, service_fn};
 /// # use http::{Request, Response};
 /// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }

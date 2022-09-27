@@ -61,7 +61,7 @@ class ServerOperationGenerator(
                 type Error = #{Error:W};
             }
 
-            impl #{SmithyHttpServer}::logging::sensitivity::Sensitivity for $operationName {
+            impl #{SmithyHttpServer}::instrumentation::sensitivity::Sensitivity for $operationName {
                 type RequestFmt = #{RequestType:W};
                 type ResponseFmt = #{ResponseType:W};
 

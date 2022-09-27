@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::logging::{sensitivity::Sensitive, MakeFmt};
+use crate::instrumentation::tation::{sensitivity::Sensitive, MakeFmt};
 
 /// Marks the sensitive data of a query string pair.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -27,7 +27,7 @@ pub struct QueryMarker {
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::logging::sensitivity::uri::{Query, QueryMarker};
+/// # use aws_smithy_http_server::instrumentation::tation::sensitivity::uri::{Query, QueryMarker};
 /// # let uri = "";
 /// // Query string value with key "name" is redacted
 /// let uri = Query::new(&uri, |x| QueryMarker { key: false, value: x == "name" } );
@@ -119,7 +119,7 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::logging::sensitivity::uri::tests::{
+    use crate::instrumentation::tation::sensitivity::uri::tests::{
         ALL_KEYS_QUERY_STRING_EXAMPLES, ALL_PAIRS_QUERY_STRING_EXAMPLES, ALL_VALUES_QUERY_STRING_EXAMPLES, EXAMPLES,
         QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
     };
