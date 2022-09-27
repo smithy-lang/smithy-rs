@@ -24,6 +24,7 @@ data class RustModule(val name: String, val rustMetadata: RustMetadata, val docu
             default(name, visibility = Visibility.PRIVATE, documentation = documentation)
 
         val Config = public("config", documentation = "Configuration for the service.")
-        val Error = public("error", documentation = "Errors that can occur when calling the service.")
+        val Error = public("error", documentation = "All error types that operations can return.")
+        val Operation = public("operation", documentation = "All operations that this crate can perform.")
     }
 }

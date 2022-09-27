@@ -80,7 +80,6 @@ data class SymbolLocation(val namespace: String) {
 val Models = SymbolLocation("model")
 val Errors = SymbolLocation("error")
 val Operations = SymbolLocation("operation")
-val Serializers = SymbolLocation("serializer")
 val Inputs = SymbolLocation("input")
 val Outputs = SymbolLocation("output")
 
