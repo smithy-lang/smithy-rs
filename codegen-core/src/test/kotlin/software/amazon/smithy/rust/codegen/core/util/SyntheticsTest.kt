@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.util
+package software.amazon.smithy.rust.codegen.core.util
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -11,9 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.util.cloneOperation
-import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.core.util.rename
 
 class SyntheticsTest {
     @Test
