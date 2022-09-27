@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.auth.DisabledAuthDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
@@ -48,7 +49,7 @@ val DECORATORS = listOf(
     DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true)),
 )
 
-class AwsCodegenDecorator : CombinedCodegenDecorator<ClientCodegenContext>(DECORATORS) {
+class AwsCodegenDecorator : CombinedCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>(DECORATORS) {
     override val name: String = "AwsSdkCodegenDecorator"
     override val order: Byte = -1
 }

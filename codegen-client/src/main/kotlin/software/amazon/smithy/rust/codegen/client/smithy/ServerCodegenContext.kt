@@ -8,13 +8,15 @@ package software.amazon.smithy.rust.codegen.client.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 
 /**
  * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustCodegenServerPlugin] plugin
  * from the `rust-codegen-server` subproject.
  *
- * It inherits from [CoreCodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
+ * It inherits from [CodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
  *
  * This class has to live in the `codegen` subproject because it is referenced in common generators to both client
  * and server (like [JsonParserGenerator]).
@@ -25,6 +27,6 @@ data class ServerCodegenContext(
     override val serviceShape: ServiceShape,
     override val protocol: ShapeId,
     override val settings: ServerRustSettings,
-) : CoreCodegenContext(
+) : CodegenContext(
     model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
 )

@@ -16,29 +16,30 @@ import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolPayloadGenerator
-import software.amazon.smithy.rust.codegen.client.util.cloneOperation
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
@@ -85,7 +86,7 @@ internal val PRESIGNABLE_OPERATIONS by lazy {
 
 class AwsPresigningDecorator internal constructor(
     private val presignableOperations: Map<ShapeId, PresignableOperation> = PRESIGNABLE_OPERATIONS,
-) : RustCodegenDecorator<ClientCodegenContext> {
+) : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     companion object {
         const val ORDER: Byte = 0
     }
@@ -117,7 +118,7 @@ class AwsPresigningDecorator internal constructor(
         return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     private fun addSyntheticOperations(model: Model): Model {
@@ -133,11 +134,11 @@ class AwsPresigningDecorator internal constructor(
 }
 
 class AwsInputPresignedMethod(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
-    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
 
     private val codegenScope = arrayOf(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
@@ -151,18 +152,19 @@ class AwsInputPresignedMethod(
         "Middleware" to runtimeConfig.defaultMiddleware(),
     )
 
-    override fun section(section: OperationSection): Writable = writable {
-        if (section is OperationSection.InputImpl && section.operationShape.hasTrait<PresignableTrait>()) {
-            writeInputPresignedMethod(section)
+    override fun section(section: OperationSection): Writable =
+        writable {
+            if (section is OperationSection.InputImpl && section.operationShape.hasTrait<PresignableTrait>()) {
+                writeInputPresignedMethod(section)
+            }
         }
-    }
 
     private fun RustWriter.writeInputPresignedMethod(section: OperationSection.InputImpl) {
-        val operationError = operationShape.errorSymbol(coreCodegenContext.model, symbolProvider, coreCodegenContext.target)
+        val operationError = operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
         val makeOperationOp = if (presignableOp.hasModelTransforms()) {
-            coreCodegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
+            codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
         } else {
             section.operationShape
         }
@@ -170,9 +172,9 @@ class AwsInputPresignedMethod(
 
         val protocol = section.protocol
         MakeOperationGenerator(
-            coreCodegenContext,
+            codegenContext,
             protocol,
-            HttpBoundProtocolPayloadGenerator(coreCodegenContext, protocol),
+            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
             // Prefixed with underscore to avoid colliding with modeled functions
             functionName = makeOperationFn,
             public = false,
@@ -254,29 +256,30 @@ class AwsPresignedFluentBuilderMethod(
         "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
     )
 
-    override fun section(section: FluentClientSection): Writable = writable {
-        if (section is FluentClientSection.FluentBuilderImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
-            documentPresignedMethod(hasConfigArg = false)
-            rustBlockTemplate(
-                """
+    override fun section(section: FluentClientSection): Writable =
+        writable {
+            if (section is FluentClientSection.FluentBuilderImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
+                documentPresignedMethod(hasConfigArg = false)
+                rustBlockTemplate(
+                    """
                 pub async fn presigned(
                     self,
                     presigning_config: #{PresigningConfig},
                 ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
                 """,
-                *codegenScope,
-                "OpError" to section.operationErrorType,
-            ) {
-                rustTemplate(
-                    """
+                    *codegenScope,
+                    "OpError" to section.operationErrorType,
+                ) {
+                    rustTemplate(
+                        """
                     let input = self.inner.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?;
                     input.presigned(&self.handle.conf, presigning_config).await
                     """,
-                    *codegenScope,
-                )
+                        *codegenScope,
+                    )
+                }
             }
         }
-    }
 }
 
 interface PresignModelTransform {

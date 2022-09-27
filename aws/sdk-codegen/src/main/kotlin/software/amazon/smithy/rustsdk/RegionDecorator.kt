@@ -6,21 +6,22 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
 /* Example Generated Code */
 /*
@@ -70,7 +71,7 @@ fn test_1() {
 }
  */
 
-class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "Region"
     override val order: Byte = 0
 
@@ -96,13 +97,13 @@ class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
-    private val region = region(coreCodegenContext.runtimeConfig)
-    private val moduleUseName = coreCodegenContext.moduleUseName()
+class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
+    private val region = region(codegenContext.runtimeConfig)
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
@@ -137,14 +138,15 @@ class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCusto
                         self
                     }
                     """,
+                        *codegenScope,
+                    )
+
+                ServiceConfig.BuilderBuild -> rustTemplate(
+                    """region: self.region,""",
                     *codegenScope,
                 )
-            ServiceConfig.BuilderBuild -> rustTemplate(
-                """region: self.region,""",
-                *codegenScope,
-            )
+            }
         }
-    }
 }
 
 class RegionConfigPlugin : OperationCustomization() {
@@ -168,7 +170,12 @@ class RegionConfigPlugin : OperationCustomization() {
 class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::Region;", region(runtimeConfig)) }
+            is LibRsSection.Body -> writable {
+                rust(
+                    "pub use #T::Region;",
+                    region(runtimeConfig),
+                )
+            }
             else -> emptySection
         }
     }

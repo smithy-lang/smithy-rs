@@ -7,24 +7,25 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.Feature
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
-class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class FluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
@@ -62,7 +63,7 @@ class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
@@ -79,9 +80,9 @@ sealed class FluentClientSection(name: String) : Section(name) {
 
 abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
-class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
-    private val moduleUseName = coreCodegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
+class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
+    private val moduleUseName = codegenContext.moduleUseName()
+    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
@@ -134,15 +135,16 @@ class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClient
                     ///
                     /// ```
                     /// use $moduleUseName::{Builder, Client, Config};
-                    /// let raw_client =
-                    ///     Builder::dyn_https()
+                    ///
+                    /// let smithy_client = Builder::new()
+                    ///       .dyn_https_connector(Default::default())
                     /// ##     /*
                     ///       .middleware(/* discussed below */)
                     /// ##     */
                     /// ##     .middleware_fn(|r| r)
                     ///       .build();
                     /// let config = Config::builder().build();
-                    /// let client = Client::with_config(raw_client, config);
+                    /// let client = Client::with_config(smithy_client, config);
                     /// ```
                     ///
                     /// For the middleware, you'll want to use whatever matches the

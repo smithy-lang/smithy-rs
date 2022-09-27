@@ -11,9 +11,14 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.rust.codegen.client.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.client.rustlang.DependencyLocation
-import software.amazon.smithy.rust.codegen.client.rustlang.Local
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyLocation
+import software.amazon.smithy.rust.codegen.core.rustlang.Local
+import software.amazon.smithy.rust.codegen.core.smithy.CrateVersionMap
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
+import software.amazon.smithy.rust.codegen.core.smithy.crateLocation
+import software.amazon.smithy.rust.codegen.core.smithy.defaultRuntimeCrateVersion
 import java.util.Optional
 
 class RuntimeTypesTest {
