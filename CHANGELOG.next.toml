@@ -81,3 +81,15 @@ let sdk_config = aws_config::from_env()
 references = ["aws-sdk-rust#237", "smithy-rs#1770"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Paginators now stop on encountering a duplicate token by default rather than panic. This behavior can be customized by toggling the `stop_on_duplicate_token` property on the paginator before calling `send`."
+references = ["aws-sdk-rust#620", "smithy-rs#1748"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Paginators now stop on encountering a duplicate token by default rather than panic. This behavior can be customized by toggling the `stop_on_duplicate_token` property on the paginator before calling `send`."
+references = ["aws-sdk-rust#620", "smithy-rs#1748"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "jdisanti"
