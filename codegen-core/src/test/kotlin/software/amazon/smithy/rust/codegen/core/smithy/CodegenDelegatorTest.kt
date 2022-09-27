@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy
+package software.amazon.smithy.rust.codegen.core.smithy
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope.Compile
-import software.amazon.smithy.rust.codegen.core.smithy.mergeDependencyFeatures
 
 class CodegenDelegatorTest {
     @Test

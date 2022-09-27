@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.generators
+package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
@@ -12,20 +12,18 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 

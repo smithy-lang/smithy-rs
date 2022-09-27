@@ -3,26 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.generators
+package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.rust.codegen.client.generators.StructureGeneratorTest
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model

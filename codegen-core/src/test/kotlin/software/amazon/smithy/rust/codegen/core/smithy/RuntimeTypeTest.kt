@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy
+package software.amazon.smithy.rust.codegen.core.smithy
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -14,11 +14,6 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyLocation
 import software.amazon.smithy.rust.codegen.core.rustlang.Local
-import software.amazon.smithy.rust.codegen.core.smithy.CrateVersionMap
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
-import software.amazon.smithy.rust.codegen.core.smithy.crateLocation
-import software.amazon.smithy.rust.codegen.core.smithy.defaultRuntimeCrateVersion
 import java.util.Optional
 
 class RuntimeTypesTest {
