@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.rustlang
+package software.amazon.smithy.rust.codegen.core.rustlang
 
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
@@ -12,27 +12,24 @@ import io.kotest.matchers.string.shouldContainOnlyOnce
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.isEmpty
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.core.testutil.TestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndRun
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.shouldCompile
 import software.amazon.smithy.rust.codegen.core.util.lookup
+
+private fun testSymbolProvider(model: Model): SymbolProvider = SymbolVisitor(
+    model,
+    ServiceShape.builder().version("test").id("test#Service").build(),
+    TestSymbolVisitorConfig,
+)
 
 class RustWriterTest {
     @Test
@@ -61,7 +58,7 @@ class RustWriterTest {
             .assemble()
             .unwrap()
 
-        val provider: SymbolProvider = testSymbolProvider(model)
+        val provider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
         val stringSymbol = provider.toSymbol(stringShape)
         sut.rustBlock("struct Test") {
