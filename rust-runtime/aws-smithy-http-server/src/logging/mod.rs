@@ -31,7 +31,7 @@
 //!        key_suffix: None,
 //!     })
 //!     .query(|name| QueryMarker { key: false, value: name == "bar" })
-//!     .label(|index| index % 2 == 0);
+//!     .label(|index| index % 2 == 0, None);
 //! let response_fmt = ResponseFmt::new()
 //!     .header(|name| {
 //!         if name.as_str().starts_with("prefix-") {
@@ -57,11 +57,15 @@
 //!
 //! [sensitive trait]: https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html?highlight=sensitive%20trait#sensitive-trait
 
+mod layer;
+mod plugin;
 pub mod sensitivity;
 mod service;
 
 use std::fmt::{Debug, Display};
 
+pub use layer::*;
+pub use plugin::*;
 pub use service::*;
 
 /// A standard interface for taking some component of the HTTP request/response and transforming it into new struct

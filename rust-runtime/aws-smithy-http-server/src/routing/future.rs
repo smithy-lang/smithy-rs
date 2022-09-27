@@ -34,10 +34,12 @@
 
 //! Future types.
 
+use crate::routers::RoutingFuture;
+
 use super::Route;
 pub use super::{into_make_service::IntoMakeService, route::RouteFuture};
 
 opaque_future! {
     /// Response future for [`Router`](super::Router).
-    pub type RouterFuture<B> = super::routers::RoutingFuture<Route<B>, B>;
+    pub type RouterFuture<B> = RoutingFuture<Route<B>, B>;
 }

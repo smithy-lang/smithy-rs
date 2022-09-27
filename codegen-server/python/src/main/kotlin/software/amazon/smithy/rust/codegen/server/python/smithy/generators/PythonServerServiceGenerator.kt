@@ -25,7 +25,7 @@ class PythonServerServiceGenerator(
     private val rustCrate: RustCrate,
     protocolGenerator: ProtocolGenerator,
     protocolSupport: ProtocolSupport,
-    protocol: ServerProtocol,
+    private val protocol: ServerProtocol,
     private val context: CoreCodegenContext,
 ) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, protocol, context) {
 
