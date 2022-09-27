@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::instrumentation::tation::{sensitivity::Sensitive, MakeFmt};
+use crate::instrumentation::{sensitivity::Sensitive, MakeFmt};
 
 /// Marks the sensitive data of a query string pair.
 #[derive(Debug, Default, PartialEq, Eq)]
