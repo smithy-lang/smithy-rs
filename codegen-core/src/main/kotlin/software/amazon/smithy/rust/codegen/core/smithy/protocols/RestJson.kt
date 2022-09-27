@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.protocols
+package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
@@ -14,19 +14,12 @@ import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
@@ -34,28 +27,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Struc
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-
-class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
-    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RestJson(codegenContext)
-
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
-
-    override fun support(): ProtocolSupport {
-        return ProtocolSupport(
-            /* Client support */
-            requestSerialization = true,
-            requestBodySerialization = true,
-            responseDeserialization = true,
-            errorDeserialization = true,
-            /* Server support */
-            requestDeserialization = false,
-            requestBodyDeserialization = false,
-            responseSerialization = false,
-            errorSerialization = false,
-        )
-    }
-}
 
 /**
  * This [HttpBindingResolver] implementation mostly delegates to the [HttpTraitHttpBindingResolver] class, since the

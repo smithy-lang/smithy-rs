@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.protocols
+package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -16,42 +15,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.XmlBindingTraitSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-
-class RestXmlFactory(
-    private val generator: (ClientCodegenContext) -> Protocol = { RestXml(it) },
-) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
-
-    override fun protocol(codegenContext: ClientCodegenContext): Protocol = generator(codegenContext)
-
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun support(): ProtocolSupport {
-        return ProtocolSupport(
-            /* Client support */
-            requestSerialization = true,
-            requestBodySerialization = true,
-            responseDeserialization = true,
-            errorDeserialization = true,
-            /* Server support */
-            requestDeserialization = false,
-            requestBodyDeserialization = false,
-            responseSerialization = false,
-            errorSerialization = false,
-        )
-    }
-}
 
 open class RestXml(val codegenContext: CodegenContext) : Protocol {
     private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()

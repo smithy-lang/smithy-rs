@@ -16,12 +16,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsQueryProtocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Ec2QueryProtocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -35,7 +29,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.error.Combined
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsQueryProtocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Ec2QueryProtocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace

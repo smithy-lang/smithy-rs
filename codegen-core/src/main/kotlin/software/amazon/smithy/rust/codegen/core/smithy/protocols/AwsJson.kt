@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.protocols
+package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -20,18 +19,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 sealed class AwsJsonVersion {
@@ -44,27 +36,6 @@ sealed class AwsJsonVersion {
     object Json11 : AwsJsonVersion() {
         override val value = "1.1"
     }
-}
-
-class AwsJsonFactory(private val version: AwsJsonVersion) :
-    ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
-    override fun protocol(codegenContext: ClientCodegenContext): Protocol = AwsJson(codegenContext, version)
-
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun support(): ProtocolSupport = ProtocolSupport(
-        /* Client support */
-        requestSerialization = true,
-        requestBodySerialization = true,
-        responseDeserialization = true,
-        errorDeserialization = true,
-        /* Server support */
-        requestDeserialization = false,
-        requestBodyDeserialization = false,
-        responseSerialization = false,
-        errorSerialization = false,
-    )
 }
 
 class AwsJsonHttpBindingResolver(
