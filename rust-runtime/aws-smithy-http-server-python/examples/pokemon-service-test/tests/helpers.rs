@@ -44,7 +44,7 @@ pub fn client() -> Client<
     aws_smithy_client::erase::DynMiddleware<aws_smithy_client::erase::DynConnector>,
 > {
     let raw_client = Builder::new()
-        .rustls()
+        .rustls_connector(Default::default())
         .middleware_fn(|mut req| {
             let http_req = req.http_mut();
             let uri = format!("http://localhost:13734{}", http_req.uri().path());

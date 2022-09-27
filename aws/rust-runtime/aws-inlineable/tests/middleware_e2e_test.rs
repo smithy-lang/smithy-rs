@@ -117,7 +117,10 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 #[test]
 fn test_default_client() {
-    let client = Client::dyn_https();
+    let client = Client::builder()
+        .dyn_https_connector(Default::default())
+        .middleware_fn(|r| r)
+        .build();
     let _ = client.call(test_operation());
 }
 
