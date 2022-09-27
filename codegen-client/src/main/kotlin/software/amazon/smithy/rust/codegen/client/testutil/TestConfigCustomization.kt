@@ -24,7 +24,7 @@ fun stubConfigCustomization(name: String): ConfigCustomization {
                 ServiceConfig.ConfigStruct -> rust("_$name: u64,")
                 ServiceConfig.ConfigImpl -> rust(
                     """
-                    #[allow(missing_docs)]
+                    ##[allow(missing_docs)]
                     pub fn $name(&self) -> u64 {
                         self._$name
                     }
