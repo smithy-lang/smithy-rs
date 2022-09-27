@@ -5,17 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
  * Generates the code required to add the `.customize()` function to the
@@ -59,8 +59,8 @@ class CustomizableOperationGenerator(
     }
 
     private fun renderCustomizableOperationModule(writer: RustWriter) {
-        val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-        val handleGenerics = generics.toGenericsGenerator()
+        val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+        val handleGenerics = generics.toRustGenerics()
         val combinedGenerics = operationGenerics + handleGenerics
 
         val codegenScope = arrayOf(
@@ -145,8 +145,8 @@ class CustomizableOperationGenerator(
         val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
         val smithyClient = CargoDependency.SmithyClient(runtimeConfig).asType()
 
-        val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-        val handleGenerics = generics.toGenericsGenerator()
+        val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+        val handleGenerics = generics.toRustGenerics()
         val combinedGenerics = operationGenerics + handleGenerics
 
         val codegenScope = arrayOf(

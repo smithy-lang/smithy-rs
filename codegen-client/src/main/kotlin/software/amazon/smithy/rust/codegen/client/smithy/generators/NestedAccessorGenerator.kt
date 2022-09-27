@@ -7,20 +7,20 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.isOptional
-import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
-import software.amazon.smithy.rust.codegen.client.smithy.mapRustType
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.lensName
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.lensName
 
 /** Generator for accessing nested fields through optional values **/
 class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
@@ -65,26 +65,31 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
         }
     }
 
-    private fun generateBody(path: List<MemberShape>, reference: Boolean): Writable = writable {
-        val ref = if (reference) { "&" } else { "" }
-        if (path.isEmpty()) {
-            rust("Some(input)")
-        } else {
-            val head = path.first()
-            if (symbolProvider.toSymbol(head).isOptional()) {
-                rust(
-                    """
+    private fun generateBody(path: List<MemberShape>, reference: Boolean): Writable =
+        writable {
+            val ref = if (reference) {
+                "&"
+            } else {
+                ""
+            }
+            if (path.isEmpty()) {
+                rust("Some(input)")
+            } else {
+                val head = path.first()
+                if (symbolProvider.toSymbol(head).isOptional()) {
+                    rust(
+                        """
                     let input = match ${ref}input.${symbolProvider.toMemberName(head)} {
                         None => return None,
                         Some(t) => t
                     };
                     """,
-                )
-            } else {
-                rust("let input = input.${symbolProvider.toMemberName(head)};")
+                    )
+                } else {
+                    rust("let input = input.${symbolProvider.toMemberName(head)};")
+                }
+                // Note: although _this_ function is recursive, it generates a series of `if let` statements with early returns.
+                generateBody(path.drop(1), reference)(this)
             }
-            // Note: although _this_ function is recursive, it generates a series of `if let` statements with early returns.
-            generateBody(path.drop(1), reference)(this)
         }
-    }
 }

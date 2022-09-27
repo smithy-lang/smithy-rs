@@ -5,23 +5,24 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
 /**
  * Add `PGK_VERSION` const in lib.rs to enable knowing the version of the current module
  */
 class CrateVersionGenerator : LibRsCustomization() {
-    override fun section(section: LibRsSection) = writable {
-        if (section is LibRsSection.Body) {
-            rust(
-                """
-                /// Crate version number.
-                pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-                """,
-            )
+    override fun section(section: LibRsSection) =
+        writable {
+            if (section is LibRsSection.Body) {
+                rust(
+                    """
+                    /// Crate version number.
+                    pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+                    """,
+                )
+            }
         }
-    }
 }
