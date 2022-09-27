@@ -104,7 +104,7 @@ class ConstrainedStringGenerator(
                 type Unconstrained = $inner;
             }
             
-            impl From<$inner> for #{MaybeConstrained} {
+            impl #{From}<$inner> for #{MaybeConstrained} {
                 fn from(value: $inner) -> Self {
                     Self::Unconstrained(value)
                 }
@@ -150,6 +150,12 @@ class ConstrainedStringGenerator(
                 ##[derive(Debug, PartialEq)]
                 pub enum ${constraintViolation.name} {
                     Length(usize),
+                }
+                
+                impl ${constraintViolation.name} {
+                    pub(crate) fn as_validation_exception_field_message(self, _path: &str) -> String {
+                        "Value with length 1 at '/string' failed to satisfy constraint: Member must have length between 2 and 8, inclusive".to_owned()
+                    }
                 }
                 """,
             )

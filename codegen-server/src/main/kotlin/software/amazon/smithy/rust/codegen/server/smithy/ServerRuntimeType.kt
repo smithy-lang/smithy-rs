@@ -33,6 +33,10 @@ object ServerRuntimeType {
     fun RuntimeError(runtimeConfig: RuntimeConfig) =
         RuntimeType("RuntimeError", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::runtime_error")
 
+    fun RejectionModule(runtimeConfig: RuntimeConfig) =
+        RuntimeType("rejection", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server")
+
+    // TODO Reuse above
     fun RequestRejection(runtimeConfig: RuntimeConfig) =
         RuntimeType("RequestRejection", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::rejection")
 

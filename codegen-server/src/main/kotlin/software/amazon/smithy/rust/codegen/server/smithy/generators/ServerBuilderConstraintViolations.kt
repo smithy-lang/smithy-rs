@@ -9,6 +9,8 @@ import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.docs
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
@@ -58,6 +60,9 @@ class ServerBuilderConstraintViolations(
         }
         renderImplDisplayConstraintViolation(writer)
         writer.rust("impl #T for ConstraintViolation { }", RuntimeType.StdError)
+
+        // TODO This is only needed if the structure shape is part of an operation input closure.
+        renderAsValidationExceptionFieldList(writer)
     }
 
     /**
@@ -128,6 +133,42 @@ class ServerBuilderConstraintViolations(
                 }
             }
         }
+    }
+
+    private fun renderAsValidationExceptionFieldList(writer: RustWriter) {
+        val validationExceptionFieldMessageWritable = writable {
+            rustBlock("match self") {
+                all.forEach {
+                    val arm = if (it.hasInner()) {
+                        "ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field_message(path),"
+                    } else {
+                        """ConstraintViolation::${it.name()} => format!("Value null at '{}' failed to satisfy constraint: Member must not be null", path),"""
+                    }
+                    rust(arm)
+                }
+            }
+        }
+
+        // TODO Remove `dead_code` once we address this being generated only for shapes in operation input closure.
+        writer.rustTemplate(
+            """
+            impl ConstraintViolation {
+                ##[allow(dead_code)] 
+                pub(crate) fn as_validation_exception_field_message(self, path: &str) -> String {
+                    #{ValidationExceptionFieldMessageWritable:W}
+                }
+            
+                ##[allow(dead_code)] 
+                pub(crate) fn as_validation_exception_field(self, path: &str) -> crate::model::ValidationExceptionField {
+                    crate::model::ValidationExceptionField {
+                        path: path.to_owned(),
+                        message: self.as_validation_exception_field_message(path),
+                    }
+                }
+            }
+            """,
+            "ValidationExceptionFieldMessageWritable" to validationExceptionFieldMessageWritable,
+        )
     }
 }
 

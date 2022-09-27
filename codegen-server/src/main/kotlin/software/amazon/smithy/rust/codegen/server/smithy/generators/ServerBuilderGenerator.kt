@@ -89,6 +89,7 @@ class ServerBuilderGenerator(
 ) {
     private val takeInUnconstrainedTypes = shape.isReachableFromOperationInput()
     private val model = codegenContext.model
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val symbolProvider = codegenContext.symbolProvider
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -103,7 +104,7 @@ class ServerBuilderGenerator(
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
 
     private val codegenScope = arrayOf(
-        "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
+        "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
@@ -170,8 +171,16 @@ class ServerBuilderGenerator(
         writer.rustTemplate(
             """
             impl #{From}<ConstraintViolation> for #{RequestRejection} {
-                fn from(value: ConstraintViolation) -> Self {
-                    Self::Build(value.into())
+                fn from(constraint_violation: ConstraintViolation) -> Self {
+                    let first_validation_exception_field = constraint_violation.as_validation_exception_field("/string");
+                    let validation_exception = crate::error::ValidationException {
+                        message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
+                        field_list: Some(vec![first_validation_exception_field]),
+                    };
+                    Self::ConstraintViolation(
+                        crate::operation_ser::serialize_structure_crate_error_validation_exception(&validation_exception)
+                            .expect("impossible")
+                    )
                 }
             }
             """,

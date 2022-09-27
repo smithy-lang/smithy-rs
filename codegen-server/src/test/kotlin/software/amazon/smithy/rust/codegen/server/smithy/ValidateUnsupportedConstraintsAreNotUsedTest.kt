@@ -8,6 +8,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
@@ -33,6 +34,27 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     private fun validateModel(model: Model, serverCodegenConfig: ServerCodegenConfig = ServerCodegenConfig()): ValidationResult {
         val service = model.lookup<ServiceShape>("test#TestService")
         return validateUnsupportedConstraintsAreNotUsed(model, service, serverCodegenConfig)
+    }
+
+    @Test
+    fun `foo`() {
+        val model =
+            """
+            $baseModel
+            
+            structure TestInputOutput {
+                string: String
+            }
+            
+            @length(min: 1, max: 100)
+            string LengthString
+            """.asSmithyModel()
+
+        val service = model.lookup<ServiceShape>("test#TestService")
+        val s = Walker(model).walkShapes(service).toSet()
+        for (member in s) {
+            println(member)
+        }
     }
 
     @Test

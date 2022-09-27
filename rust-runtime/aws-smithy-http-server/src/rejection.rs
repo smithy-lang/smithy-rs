@@ -179,15 +179,18 @@ pub enum RequestRejection {
     FloatParse(crate::Error),
     BoolParse(crate::Error),
 
-    /// Used when consuming the input struct builder, and a constraint violation occurs.
+    /// Used when consuming the input struct builder, and constraint violations occur.
     // Unlike the rejections above, this does not take in `crate::Error`, since it is constructed
     // directly in the code-generated SDK instead of in this crate.
-    Build(Box<dyn std::error::Error + Send + Sync>),
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1703): this will hold a type that can be
+    // rendered into a protocol-specific response later on.
+    ConstraintViolation(String),
 
+    // TODO ConstraintViolation should supersede this variant.
     /// Used by the server when the enum variant sent by a client is not known.
     // Unlike the rejections above, the inner type is code generated,
     // with each enum having its own generated error type.
-    EnumVariantNotFound(Box<dyn std::error::Error + Send + Sync>),
+    EnumVariantNotFound(crate::error::BoxError),
 }
 
 #[derive(Debug, Display)]

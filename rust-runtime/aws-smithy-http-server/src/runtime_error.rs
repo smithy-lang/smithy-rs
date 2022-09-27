@@ -21,6 +21,8 @@
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
 //! [`RuntimeError::into_response`] method to render and send a response.
 
+use std::borrow::Cow;
+
 use crate::{
     protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml, Protocol},
     response::{IntoResponse, Response},
@@ -36,6 +38,10 @@ pub enum RuntimeErrorKind {
     // TODO(https://github.com/awslabs/smithy-rs/issues/1663)
     NotAcceptable,
     UnsupportedMediaType,
+
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1703): this will hold a type that can be
+    // rendered into a protocol-specific response later on.
+    Validation(String),
 }
 
 /// String representation of the runtime error type.
@@ -48,6 +54,7 @@ impl RuntimeErrorKind {
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
             RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
             RuntimeErrorKind::UnsupportedMediaType => "UnsupportedMediaTypeException",
+            RuntimeErrorKind::Validation(_) => "ValidationException",
         }
     }
 }
@@ -104,16 +111,8 @@ impl RuntimeError {
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
             RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
             RuntimeErrorKind::UnsupportedMediaType => http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            RuntimeErrorKind::Validation(_) => http::StatusCode::BAD_REQUEST,
         };
-
-        let body = crate::body::to_boxed(match self.protocol {
-            Protocol::RestJson1 => "{}",
-            Protocol::RestXml => "",
-            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#empty-body-serialization
-            Protocol::AwsJson10 => "",
-            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
-            Protocol::AwsJson11 => "",
-        });
 
         let mut builder = http::Response::builder();
         builder = builder.status(status_code);
@@ -132,6 +131,27 @@ impl RuntimeError {
         builder = builder.extension(crate::extension::RuntimeErrorExtension::new(String::from(
             self.kind.name(),
         )));
+
+        let body = crate::body::to_boxed(match self.kind {
+            RuntimeErrorKind::Validation(reason) => Cow::Owned(match self.protocol {
+                Protocol::RestJson1 | Protocol::AwsJson10 | Protocol::AwsJson11 => {
+                    // https://docs.rs/serde_json/latest/serde_json/ser/fn.to_string.html#errors
+                    // serde_json::to_string(reason).expect("unexpected failure during serialization of constraint violation; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+                    reason
+                }
+                Protocol::RestXml => todo!(),
+            }),
+            _ => {
+                Cow::Borrowed(match self.protocol {
+                    Protocol::RestJson1 => "{}",
+                    Protocol::RestXml => "",
+                    // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#empty-body-serialization
+                    Protocol::AwsJson10 => "",
+                    // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
+                    Protocol::AwsJson11 => "",
+                })
+            }
+        });
 
         builder.body(body).expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }
@@ -153,6 +173,7 @@ impl From<crate::rejection::RequestRejection> for RuntimeErrorKind {
     fn from(err: crate::rejection::RequestRejection) -> Self {
         match err {
             crate::rejection::RequestRejection::MissingContentType(_reason) => RuntimeErrorKind::UnsupportedMediaType,
+            crate::rejection::RequestRejection::ConstraintViolation(reason) => RuntimeErrorKind::Validation(reason),
             _ => RuntimeErrorKind::Serialization(crate::Error::new(err)),
         }
     }
