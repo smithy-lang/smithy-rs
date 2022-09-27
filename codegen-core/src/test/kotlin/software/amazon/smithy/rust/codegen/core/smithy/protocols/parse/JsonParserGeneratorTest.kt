@@ -3,33 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize
+package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-class JsonSerializerGeneratorTest {
+class JsonParserGeneratorTest {
     private val baseModel = """
         namespace test
         use aws.protocols#restJson1
@@ -74,82 +73,132 @@ class JsonSerializerGeneratorTest {
             member: Choice
         }
 
+        structure EmptyStruct {
+        }
+
         structure Top {
+            @required
             choice: Choice,
             field: String,
-            extra: Long,
+            extra: Integer,
             @jsonName("rec")
-            recursive: TopList
+            recursive: TopList,
+            empty: EmptyStruct,
         }
 
         list TopList {
             member: Top
         }
 
-        structure OpInput {
+        structure OpOutput {
             @httpHeader("x-test")
             someHeader: String,
 
             top: Top
         }
 
+        @error("client")
+        structure Error {
+            message: String,
+            reason: String
+        }
+
         @http(uri: "/top", method: "POST")
         operation Op {
-            input: OpInput,
+            output: OpOutput,
+            errors: [Error]
         }
     """.asSmithyModel()
 
     @Test
-    fun `generates valid serializers`() {
+    fun `generates valid deserializers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
-        val parserSerializer = JsonSerializerGenerator(
+        val parserGenerator = JsonParserGenerator(
             testCodegenContext(model),
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
             ::restJsonFieldName,
         )
-        val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
-        val documentGenerator = parserSerializer.documentSerializer()
+        val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
+        val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
+        val errorParser = parserGenerator.errorParser(model.lookup("test#Error"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
-                "json_serializers",
+                "json_parser",
                 """
-                use model::{Top, Choice};
+                use model::Choice;
 
                 // Generate the document serializer even though it's not tested directly
-                // ${writer.format(documentGenerator)}
+                // ${writer.format(payloadGenerator)}
 
-                let input = crate::input::OpInput::builder().top(
-                    Top::builder()
-                        .field("hello!")
-                        .extra(45)
-                        .recursive(Top::builder().extra(55).build())
-                        .build()
-                ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
-                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
+                let json = br#"
+                    { "top":
+                        { "extra": 45,
+                          "field": "something",
+                          "choice": { "int": 5 },
+                          "empty": { "not_empty": true }
+                        }
+                    }
+                "#;
 
-                let input = crate::input::OpInput::builder().top(
-                    Top::builder()
-                        .choice(Choice::Unknown)
-                        .build()
-                ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
+                let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
+                let top = output.top.expect("top");
+                assert_eq!(Some(45), top.extra);
+                assert_eq!(Some("something".to_string()), top.field);
+                assert_eq!(Some(Choice::Int(5)), top.choice);
+                """,
+            )
+            writer.unitTest(
+                "empty_body",
+                """
+                // empty body
+                let output = ${writer.format(operationGenerator)}(b"", output::op_output::Builder::default()).unwrap().build();
+                assert_eq!(output.top, None);
+                """,
+            )
+            writer.unitTest(
+                "unknown_variant",
+                """
+                // unknown variant
+                let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
+                let output = ${writer.format(operationGenerator)}(input, output::op_output::Builder::default()).unwrap().build();
+                assert!(output.top.unwrap().choice.unwrap().is_unknown());
+                """,
+            )
+
+            writer.unitTest(
+                "empty_error",
+                """
+                // empty error
+                let error_output = ${writer.format(errorParser!!)}(b"", error::error::Builder::default()).unwrap().build();
+                assert_eq!(error_output.message, None);
+                """,
+            )
+
+            writer.unitTest(
+                "error_with_message",
+                """
+                // error with message
+                let error_output = ${writer.format(errorParser)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
+                assert_eq!(error_output.message.expect("message should be set"), "hello");
                 """,
             )
         }
         project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<StructureShape>("test#EmptyStruct").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
             EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
-        project.withModule(RustModule.public("input")) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+        project.withModule(RustModule.public("output")) {
+            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+        }
+        project.withModule(RustModule.public("error")) {
+            model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
         }
         project.compileAndTest()
     }

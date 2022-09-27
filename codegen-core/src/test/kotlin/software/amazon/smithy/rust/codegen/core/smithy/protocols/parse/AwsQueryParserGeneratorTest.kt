@@ -3,16 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.protocols.parse
+package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.Ec2QueryParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -20,11 +17,13 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-class Ec2QueryParserGeneratorTest {
+class AwsQueryParserGeneratorTest {
     private val baseModel = """
         namespace test
         use aws.protocols#awsQuery
@@ -45,7 +44,7 @@ class Ec2QueryParserGeneratorTest {
     fun `it modifies operation parsing to include Response and Result tags`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = Ec2QueryParserGenerator(
+        val parserGenerator = AwsQueryParserGenerator(
             testCodegenContext(model),
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
         )
@@ -54,16 +53,18 @@ class Ec2QueryParserGeneratorTest {
 
         project.lib { writer ->
             writer.unitTest(
-                "valid_input",
-                """
-                let xml = br#"
-                <SomeOperationResponse someAttribute="5">
-                    <someVal>Some value</someVal>
-                </someOperationResponse>
-                "#;
-                let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
-                assert_eq!(output.some_attribute, Some(5));
-                assert_eq!(output.some_val, Some("Some value".to_string()));
+                name = "valid_input",
+                test = """
+                    let xml = br#"
+                    <SomeOperationResponse>
+                        <SomeOperationResult someAttribute="5">
+                            <someVal>Some value</someVal>
+                        </SomeOperationResult>
+                    </someOperationResponse>
+                    "#;
+                    let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
+                    assert_eq!(output.some_attribute, Some(5));
+                    assert_eq!(output.some_val, Some("Some value".to_string()));
                 """,
             )
         }

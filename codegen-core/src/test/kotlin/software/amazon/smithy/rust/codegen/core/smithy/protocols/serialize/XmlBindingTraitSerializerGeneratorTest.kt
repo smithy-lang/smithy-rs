@@ -3,53 +3,67 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize
+package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Ec2QuerySerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
-class Ec2QuerySerializerGeneratorTest {
+internal class XmlBindingTraitSerializerGeneratorTest {
     private val baseModel = """
         namespace test
-
+        use aws.protocols#restXml
         union Choice {
-            blob: Blob,
-            boolean: Boolean,
-            date: Timestamp,
-            enum: FooEnum,
-            int: Integer,
             @xmlFlattened
-            list: SomeList,
-            long: Long,
-            map: MyMap,
-            number: Double,
+            @xmlName("Hi")
+            flatMap: MyMap,
+
+            deepMap: MyMap,
+
+            @xmlFlattened
+            flatList: SomeList,
+
+            deepList: SomeList,
+
             s: String,
+
+            enum: FooEnum,
+
+            date: Timestamp,
+
+            number: Double,
+
             top: Top,
+
+            blob: Blob
         }
 
         @enum([{name: "FOO", value: "FOO"}])
         string FooEnum
 
         map MyMap {
+            @xmlName("Name")
             key: String,
+
+            @xmlName("Setting")
             value: Choice,
         }
 
@@ -57,25 +71,29 @@ class Ec2QuerySerializerGeneratorTest {
             member: Choice
         }
 
+
         structure Top {
             choice: Choice,
+
             field: String,
+
+            @xmlAttribute
             extra: Long,
-            @xmlName("rec")
+
+            @xmlName("prefix:local")
+            renamedWithPrefix: String,
+
+            @xmlFlattened
             recursive: TopList
         }
 
         list TopList {
-            @xmlName("item")
             member: Top
         }
 
         structure OpInput {
-            @xmlName("some_bool")
-            boolean: Boolean,
-            list: SomeList,
-            map: MyMap,
-            top: Top,
+            @httpPayload
+            payload: Top
         }
 
         @http(uri: "/top", method: "POST")
@@ -88,40 +106,40 @@ class Ec2QuerySerializerGeneratorTest {
     fun `generates valid serializers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = Ec2QuerySerializerGenerator(testCodegenContext(model))
-        val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
+        val parserGenerator = XmlBindingTraitSerializerGenerator(
+            testCodegenContext(model),
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
+        )
+        val operationSerializer = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
-                "ec2query_serializer",
+                "serialize_xml",
                 """
                 use model::Top;
-
-                let input = crate::input::OpInput::builder()
-                    .top(
-                        Top::builder()
-                            .field("hello!")
-                            .extra(45)
-                            .recursive(Top::builder().extra(55).build())
-                            .build()
-                    )
-                    .boolean(true)
-                    .build()
-                    .unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
-                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                assert_eq!(
-                    output,
-                    "\
-                    Action=Op\
-                    &Version=test\
-                    &Some_bool=true\
-                    &Top.Field=hello%21\
-                    &Top.Extra=45\
-                    &Top.Rec.1.Extra=55\
-                    "
-                );
+                let inp = crate::input::OpInput::builder().payload(
+                   Top::builder()
+                       .field("hello!")
+                       .extra(45)
+                       .recursive(Top::builder().extra(55).build())
+                       .build()
+                ).build().unwrap();
+                let serialized = ${writer.format(operationSerializer)}(&inp.payload.unwrap()).unwrap();
+                let output = std::str::from_utf8(&serialized).unwrap();
+                assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
+                """,
+            )
+            writer.unitTest(
+                "unknown_variants",
+                """
+                use model::{Top, Choice};
+                let input = crate::input::OpInput::builder().payload(
+                    Top::builder()
+                        .choice(Choice::Unknown)
+                        .build()
+                ).build().unwrap();
+                ${writer.format(operationSerializer)}(&input.payload.unwrap()).expect_err("cannot serialize unknown variant");
                 """,
             )
         }
