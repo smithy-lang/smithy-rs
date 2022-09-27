@@ -7,16 +7,16 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 
@@ -70,19 +70,21 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
 }
 
 class SmithyTypesPubUseGenerator(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
-    override fun section(section: LibRsSection) = writable {
-        when (section) {
-            is LibRsSection.Body -> {
-                val types = pubUseTypes(runtimeConfig, section.model)
-                if (types.isNotEmpty()) {
-                    docs("Re-exported types from supporting crates.")
-                    rustBlock("pub mod types") {
-                        types.forEach { type -> rust("pub use #T;", type) }
+    override fun section(section: LibRsSection) =
+        writable {
+            when (section) {
+                is LibRsSection.Body -> {
+                    val types = pubUseTypes(runtimeConfig, section.model)
+                    if (types.isNotEmpty()) {
+                        docs("Re-exported types from supporting crates.")
+                        rustBlock("pub mod types") {
+                            types.forEach { type -> rust("pub use #T;", type) }
+                        }
                     }
                 }
-            }
-            else -> {
+
+                else -> {
+                }
             }
         }
-    }
 }

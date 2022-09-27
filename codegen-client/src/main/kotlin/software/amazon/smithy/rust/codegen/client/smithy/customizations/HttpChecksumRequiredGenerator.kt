@@ -8,29 +8,29 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpChecksumRequiredTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 class HttpChecksumRequiredGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         if (!operationShape.hasTrait<HttpChecksumRequiredTrait>()) {
             return emptySection
         }
-        if (operationShape.inputShape(coreCodegenContext.model).hasStreamingMember(coreCodegenContext.model)) {
+        if (operationShape.inputShape(codegenContext.model).hasStreamingMember(codegenContext.model)) {
             throw CodegenException("HttpChecksum required cannot be applied to a streaming shape")
         }
         return when (section) {
@@ -52,8 +52,8 @@ class HttpChecksumRequiredGenerator(
                     """,
                     "md5" to CargoDependency.Md5.asType(),
                     "http" to CargoDependency.Http.asType(),
-                    "base64_encode" to RuntimeType.Base64Encode(coreCodegenContext.runtimeConfig),
-                    "BuildError" to coreCodegenContext.runtimeConfig.operationBuildError(),
+                    "base64_encode" to RuntimeType.Base64Encode(codegenContext.runtimeConfig),
+                    "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
                 )
             }
             else -> emptySection

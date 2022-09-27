@@ -7,15 +7,15 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.asArgument
-import software.amazon.smithy.rust.codegen.client.rustlang.deprecatedShape
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
+import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 
 class FluentClientCore(private val model: Model) {
     /** Generate and write Rust code for a builder method that sets a Vec<T> */

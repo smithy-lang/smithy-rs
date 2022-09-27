@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.rust.codegen.client.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
  * Object used *exclusively* in the runtime of the server, for separation concerns.

@@ -6,13 +6,13 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 interface FluentClientGenerics {
     /** Declaration with defaults set */
@@ -30,8 +30,8 @@ interface FluentClientGenerics {
     /** Bounds for generated `send()` functions */
     fun sendBounds(operation: Symbol, output: Symbol, error: RuntimeType, retryClassifier: RuntimeType): Writable
 
-    /** Convert this `FluentClientGenerics` into the more general `GenericsGenerator` */
-    fun toGenericsGenerator(): GenericsGenerator
+    /** Convert this `FluentClientGenerics` into the more general `RustGenerics` */
+    fun toRustGenerics(): RustGenerics
 }
 
 data class FlexibleClientGenerics(
@@ -89,7 +89,7 @@ data class FlexibleClientGenerics(
         )
     }
 
-    override fun toGenericsGenerator(): GenericsGenerator = GenericsGenerator(
+    override fun toRustGenerics(): RustGenerics = RustGenerics(
         GenericTypeArg("C", client.member("bounds::SmithyConnector")),
         GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
         GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
