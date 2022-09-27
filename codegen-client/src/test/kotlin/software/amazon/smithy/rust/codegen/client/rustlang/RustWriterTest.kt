@@ -15,10 +15,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndRun
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.shouldCompile
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -32,6 +28,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndRun
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.shouldCompile
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class RustWriterTest {

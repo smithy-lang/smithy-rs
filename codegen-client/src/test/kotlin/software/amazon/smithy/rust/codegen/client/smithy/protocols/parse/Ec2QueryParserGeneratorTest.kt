@@ -8,19 +8,19 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols.parse
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.Ec2QueryParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 

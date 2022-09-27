@@ -9,7 +9,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class EC2MakePrimitivesOptionalTest {

@@ -14,9 +14,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.AddRustTestsDecorator
-import software.amazon.smithy.rust.codegen.client.testutil.TokioTest
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -24,6 +21,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 // If any of these tests fail, and you want to understand why, run them with logging:

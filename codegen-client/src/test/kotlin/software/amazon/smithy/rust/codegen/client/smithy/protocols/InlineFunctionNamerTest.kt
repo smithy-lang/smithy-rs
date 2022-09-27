@@ -8,10 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.deserializeFunctionName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serializeFunctionName
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class InlineFunctionNamerTest {

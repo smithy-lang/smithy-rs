@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.testutil
+package software.amazon.smithy.rust.codegen.core.testutil
 
 import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language

@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.client.generators.StructureGeneratorTest
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -23,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model

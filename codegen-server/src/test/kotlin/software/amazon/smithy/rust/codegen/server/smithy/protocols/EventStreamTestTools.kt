@@ -22,10 +22,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsQueryProto
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.Ec2QueryProtocol
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.TestWriterDelegator
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -42,6 +38,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownV
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape

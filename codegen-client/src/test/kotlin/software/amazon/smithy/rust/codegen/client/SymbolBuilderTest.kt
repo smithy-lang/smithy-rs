@@ -26,7 +26,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -35,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.Models
 import software.amazon.smithy.rust.codegen.core.smithy.Operations
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class SymbolBuilderTest {
     private fun Symbol.referenceClosure(): List<Symbol> {
@@ -126,11 +126,11 @@ class SymbolBuilderTest {
     )
     fun `creates primitives`(primitiveType: String, optional: Boolean, rustName: String) {
         val model = """
-    namespace foo.bar
-    structure MyStruct {
-        quux: $primitiveType
-    }
-""".asSmithyModel()
+            namespace foo.bar
+            structure MyStruct {
+                quux: $primitiveType
+            }
+        """.asSmithyModel()
         val member = model.expectShape(ShapeId.from("foo.bar#MyStruct\$quux"))
         val provider: SymbolProvider = testSymbolProvider(model)
         val memberSymbol = provider.toSymbol(member)
