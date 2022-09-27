@@ -8,8 +8,9 @@ package software.amazon.smithy.rust.codegen.client.smithy.transformers
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.rust.codegen.client.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup

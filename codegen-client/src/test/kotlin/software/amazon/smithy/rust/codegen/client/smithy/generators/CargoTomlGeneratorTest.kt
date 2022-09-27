@@ -6,12 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.client.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.Version
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 
 class CargoTomlGeneratorTest {
     private val CargoMetadata: CargoDependency = CargoDependency("cargo_metadata", CratesIo("0.15.0"))

@@ -7,16 +7,16 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.Errors
-import software.amazon.smithy.rust.codegen.client.smithy.Inputs
-import software.amazon.smithy.rust.codegen.client.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.Errors
+import software.amazon.smithy.rust.codegen.core.smithy.Inputs
+import software.amazon.smithy.rust.codegen.core.smithy.Outputs
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -61,14 +61,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val operations: List<OperationShape>,
 ) {
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val libName = "lib${coreCodegenContext.settings.moduleName.toSnakeCase()}"
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
-    private val model = coreCodegenContext.model
-    private val protocol = coreCodegenContext.protocol
+    private val symbolProvider = codegenContext.symbolProvider
+    private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val model = codegenContext.model
+    private val protocol = codegenContext.protocol
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),

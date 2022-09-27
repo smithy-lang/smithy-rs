@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodeg
 import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import kotlin.io.path.createDirectory
 import kotlin.io.path.writeText
 
@@ -48,7 +49,7 @@ class ServerCodegenVisitorTest {
         val (ctx, testDir) = generatePluginContext(model)
         testDir.resolve("src").createDirectory()
         testDir.resolve("src/main.rs").writeText("fn main() {}")
-        val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
+        val codegenDecorator: CombinedCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, ServerRequiredCustomizations())
         val visitor = ServerCodegenVisitor(ctx, codegenDecorator)
         val baselineModel = visitor.baselineTransformInternalTest(model)

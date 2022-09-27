@@ -23,7 +23,6 @@ pub mod credentials;
 pub mod profile_file;
 pub mod region;
 pub mod retry_config;
-pub mod timeout_config;
 
 #[doc(inline)]
 pub use credentials::ProfileFileCredentialsProvider;

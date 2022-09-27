@@ -9,19 +9,23 @@ import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.Ec2QueryParserGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.Ec2QuerySerializerGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.StaticHttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.Ec2QueryParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Ec2QuerySerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
 class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = Ec2QueryProtocol(codegenContext)
@@ -45,8 +49,8 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
     }
 }
 
-class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Protocol {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val ec2QueryErrors: RuntimeType = RuntimeType.ec2QueryErrors(runtimeConfig)
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -58,7 +62,7 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
     private val xmlDeserModule = RustModule.private("xml_deser")
 
     override val httpBindingResolver: HttpBindingResolver = StaticHttpBindingResolver(
-        coreCodegenContext.model,
+        codegenContext.model,
         HttpTrait.builder()
             .code(200)
             .method("POST")
@@ -71,10 +75,10 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        Ec2QueryParserGenerator(coreCodegenContext, ec2QueryErrors)
+        Ec2QueryParserGenerator(codegenContext, ec2QueryErrors)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        Ec2QuerySerializerGenerator(coreCodegenContext)
+        Ec2QuerySerializerGenerator(codegenContext)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) { writer ->

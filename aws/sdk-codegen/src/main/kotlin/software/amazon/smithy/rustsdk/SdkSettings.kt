@@ -5,7 +5,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.client.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.nio.file.Path
 import java.nio.file.Paths
