@@ -45,6 +45,10 @@ class ServerOperationGenerator(
     fun render(writer: RustWriter) {
         writer.documentShape(operation, model)
 
+        val generator = ServerHttpSensitivityGenerator(model, operation, runtimeConfig)
+        val requestFmt = generator.requestFmt()
+        val responseFmt = generator.responseFmt()
+
         writer.rustTemplate(
             """
             pub struct $operationName;
@@ -56,8 +60,25 @@ class ServerOperationGenerator(
                 type Output = crate::output::${operationName}Output;
                 type Error = #{Error:W};
             }
+
+            impl #{SmithyHttpServer}::logging::sensitivity::Sensitivity for $operationName {
+                type RequestFmt = #{RequestType:W};
+                type ResponseFmt = #{ResponseType:W};
+
+                fn request_fmt() -> Self::RequestFmt {
+                    #{RequestValue:W}
+                }
+
+                fn response_fmt() -> Self::ResponseFmt {
+                    #{ResponseValue:W}
+                }
+            }
             """,
             "Error" to operationError(),
+            "RequestValue" to requestFmt.value,
+            "RequestType" to requestFmt.type,
+            "ResponseValue" to responseFmt.value,
+            "ResponseType" to responseFmt.type,
             *codegenScope,
         )
         // Adds newline to end of render

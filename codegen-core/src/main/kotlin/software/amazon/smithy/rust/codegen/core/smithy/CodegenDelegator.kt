@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsGenerator
@@ -95,7 +94,7 @@ open class RustCrate(
     ) {
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
-            .map { modules[it] ?: RustModule.default(it, visibility = Visibility.PRIVATE) }
+            .mapNotNull { modules[it] }
         inner.finalize(
             settings,
             model,
@@ -140,6 +139,28 @@ open class RustCrate(
     }
 
     /**
+     * Create a new non-root module directly. For example, if given the namespace `crate::foo::bar`,
+     * this will create `src/foo/bar.rs` with the contents from the given `moduleWriter`.
+     * Multiple calls to this with the same namespace are additive, so new code can be added
+     * by various customizations.
+     *
+     * Caution: this does not automatically add the required Rust `mod` statements to make this
+     * file an official part of the generated crate. This step needs to be done manually.
+     */
+    fun withNonRootModule(
+        namespace: String,
+        moduleWriter: (RustWriter) -> Unit,
+    ): RustCrate {
+        val parts = namespace.split("::")
+        require(parts.size > 2) { "Cannot create root modules using withNonRootModule" }
+        require(parts[0] == "crate") { "Namespace must start with crate::" }
+
+        val fileName = "src/" + parts.filterIndexed { index, _ -> index > 0 }.joinToString("/") + ".rs"
+        inner.useFileWriter(fileName, namespace, moduleWriter)
+        return this
+    }
+
+    /**
      * Create a new file directly
      */
     fun withFile(filename: String, fileWriter: (RustWriter) -> Unit) {
@@ -153,12 +174,12 @@ open class RustCrate(
  * Allowlist of modules that will be exposed publicly in generated crates
  */
 val DefaultPublicModules = setOf(
-    RustModule.public("error", documentation = "All error types that operations can return."),
-    RustModule.public("operation", documentation = "All operations that this crate can perform."),
+    RustModule.Error,
+    RustModule.Operation,
     RustModule.public("model", documentation = "Data structures used by operation inputs/outputs."),
     RustModule.public("input", documentation = "Input structures for operations."),
     RustModule.public("output", documentation = "Output structures for operations."),
-    RustModule.public("config", documentation = "Client configuration."),
+    RustModule.Config,
 ).associateBy { it.name }
 
 /**

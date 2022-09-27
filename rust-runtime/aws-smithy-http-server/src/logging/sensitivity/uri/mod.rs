@@ -5,7 +5,6 @@
 
 //! Wrappers around [`Uri`] and it's constituents to allow for sensitivity.
 
-mod greedy_label;
 mod label;
 mod query;
 
@@ -13,7 +12,6 @@ use std::fmt::{Debug, Display, Error, Formatter};
 
 use http::Uri;
 
-pub use greedy_label::*;
 pub use label::*;
 pub use query::*;
 
@@ -61,15 +59,11 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// Marks path segments as sensitive by providing predicate over the segment index.
     ///
     /// See [`Label`] for more info.
-    pub fn label<F>(self, marker: F) -> SensitiveUri<'a, MakeLabel<F>, Q> {
-        self.make_path(MakeLabel(marker))
-    }
-
-    /// Marks the suffix of the path as sensitive by providing a byte position.
-    ///
-    /// See [`GreedyLabel`] for more info.
-    pub fn greedy_label(self, position: usize) -> SensitiveUri<'a, MakeGreedyLabel, Q> {
-        self.make_path(MakeGreedyLabel(position))
+    pub fn label<F>(self, label_marker: F, greedy_label: Option<GreedyLabel>) -> SensitiveUri<'a, MakeLabel<F>, Q> {
+        self.make_path(MakeLabel {
+            label_marker,
+            greedy_label,
+        })
     }
 
     /// Marks specific query string values as sensitive by supplying a predicate over the query string keys.
@@ -151,7 +145,7 @@ mod tests {
 
     // https://www.w3.org/2004/04/uri-rel-test.html
     // NOTE: http::Uri's `Display` implementation trims the fragment, we mirror this behavior
-    pub const EXAMPLES: [&str; 22] = [
+    pub const EXAMPLES: [&str; 19] = [
         "g:h",
         "http://a/b/c/g",
         "http://a/b/c/g/",
@@ -169,11 +163,8 @@ mod tests {
         "http://a/b/c/",
         "http://a/b/c/",
         "http://a/b/",
-        "http://a/b/",
         "http://a/b/g",
         "http://a/",
-        "http://a/",
-        "http://a/g",
     ];
 
     pub const QUERY_STRING_EXAMPLES: [&str; 11] = [
@@ -200,7 +191,7 @@ mod tests {
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    const FIRST_PATH_EXAMPLES: [&str; 22] = [
+    const FIRST_PATH_EXAMPLES: [&str; 19] = [
         "g:h",
         "http://a/{redacted}/c/g",
         "http://a/{redacted}/c/g/",
@@ -218,27 +209,24 @@ mod tests {
         "http://a/{redacted}/c/",
         "http://a/{redacted}/c/",
         "http://a/{redacted}/",
-        "http://a/{redacted}/",
         "http://a/{redacted}/g",
-        "http://a/{redacted}",
-        "http://a/{redacted}",
         "http://a/{redacted}",
     ];
     #[cfg(feature = "unredacted-logging")]
-    const FIRST_PATH_EXAMPLES: [&str; 22] = EXAMPLES;
+    const FIRST_PATH_EXAMPLES: [&str; 19] = EXAMPLES;
 
     #[test]
     fn path_mark_first_segment() {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = FIRST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original).label(|x| x == 0).to_string();
+            let output = SensitiveUri::new(&original).label(|x| x == 0, None).to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    const LAST_PATH_EXAMPLES: [&str; 22] = [
+    const LAST_PATH_EXAMPLES: [&str; 19] = [
         "g:h",
         "http://a/b/c/{redacted}",
         "http://a/b/c/g/{redacted}",
@@ -257,13 +245,10 @@ mod tests {
         "http://a/b/c/{redacted}",
         "http://a/b/{redacted}",
         "http://a/b/{redacted}",
-        "http://a/b/{redacted}",
-        "http://a/{redacted}",
-        "http://a/{redacted}",
         "http://a/{redacted}",
     ];
     #[cfg(feature = "unredacted-logging")]
-    const LAST_PATH_EXAMPLES: [&str; 22] = EXAMPLES;
+    const LAST_PATH_EXAMPLES: [&str; 19] = EXAMPLES;
 
     #[test]
     fn path_mark_last_segment() {
@@ -271,7 +256,9 @@ mod tests {
         let expecteds = LAST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let path_len = original.path().split('/').skip(1).count();
-            let output = SensitiveUri::new(&original).label(|x| x + 1 == path_len).to_string();
+            let output = SensitiveUri::new(&original)
+                .label(|x| x + 1 == path_len, None)
+                .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }

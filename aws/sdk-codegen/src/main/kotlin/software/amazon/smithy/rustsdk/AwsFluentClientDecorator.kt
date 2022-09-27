@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
@@ -46,11 +47,13 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
     val awsSmithyClient = smithyClientDep.asType()
 
+    val connectorSettings = RuntimeType("ConnectorSettings", smithyClientDep, "aws_smithy_client::http_connector")
     val defaultMiddleware = runtimeConfig.defaultMiddleware()
     val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
     val dynMiddleware = RuntimeType("DynMiddleware", smithyClientDep, "aws_smithy_client::erase")
-    val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
     val retryConfig = RuntimeType("RetryConfig", smithyTypesDep, "aws_smithy_types::retry")
+    val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
+    val timeoutConfig = RuntimeType("TimeoutConfig", smithyTypesDep, "aws_smithy_types::timeout")
 
     val connectorError = RuntimeType("ConnectorError", smithyHttpDep, "aws_smithy_http::result")
 }
@@ -105,7 +108,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
             ),
             retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
+        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) { writer ->
             renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
         }
         rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
@@ -141,9 +144,11 @@ private class AwsFluentClientExtensions(types: Types) {
         "ConnectorError" to types.connectorError,
         "DynConnector" to types.dynConnector,
         "DynMiddleware" to types.dynMiddleware,
+        "ConnectorSettings" to types.connectorSettings,
         "Middleware" to types.defaultMiddleware,
         "RetryConfig" to types.retryConfig,
         "SmithyConnector" to types.smithyConnector,
+        "TimeoutConfig" to types.timeoutConfig,
         "aws_smithy_client" to types.awsSmithyClient,
         "aws_types" to types.awsTypes,
         "retry" to types.smithyClientRetry,
@@ -160,15 +165,13 @@ private class AwsFluentClientExtensions(types: Types) {
                     E: Into<#{ConnectorError}>,
                 {
                     let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
                     let mut builder = #{aws_smithy_client}::Builder::new()
                         .connector(#{DynConnector}::new(conn))
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    if let Some(sleep_impl) = conf.sleep_impl() {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
+                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .retry_config(retry_config.into())
+                        .operation_timeout_config(timeout_config.into());
+                    builder.set_sleep_impl(conf.sleep_impl());
                     let client = builder.build();
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
@@ -183,21 +186,18 @@ private class AwsFluentClientExtensions(types: Types) {
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
                     let sleep_impl = conf.sleep_impl();
                     if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
                         panic!("An async sleep implementation is required for retries or timeouts to work. \
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");
                     }
-                    let mut builder = #{aws_smithy_client}::Builder::dyn_https()
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
-                    // only set it if we actually have a sleep impl.
-                    if let Some(sleep_impl) = sleep_impl {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
+                    let mut builder = #{aws_smithy_client}::Builder::new()
+                        .dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
+                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .retry_config(retry_config.into())
+                        .operation_timeout_config(timeout_config.into());
+                    builder.set_sleep_impl(sleep_impl);
                     let client = builder.build();
 
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
@@ -255,7 +255,7 @@ private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : 
                         /// ```
                         /// **Constructing a client with custom configuration**
                         /// ```rust,no_run
-                        /// use #{aws_config}::RetryConfig;
+                        /// use #{aws_config}::retry::RetryConfig;
                         /// ## async fn docs() {
                         /// let shared_config = #{aws_config}::load_from_env().await;
                         /// let config = $crateName::config::Builder::from(&shared_config)

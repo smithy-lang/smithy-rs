@@ -135,15 +135,16 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     ///
                     /// ```
                     /// use $moduleUseName::{Builder, Client, Config};
-                    /// let raw_client =
-                    ///     Builder::dyn_https()
+                    ///
+                    /// let smithy_client = Builder::new()
+                    ///       .dyn_https_connector(Default::default())
                     /// ##     /*
                     ///       .middleware(/* discussed below */)
                     /// ##     */
                     /// ##     .middleware_fn(|r| r)
                     ///       .build();
                     /// let config = Config::builder().build();
-                    /// let client = Client::with_config(raw_client, config);
+                    /// let client = Client::with_config(smithy_client, config);
                     /// ```
                     ///
                     /// For the middleware, you'll want to use whatever matches the

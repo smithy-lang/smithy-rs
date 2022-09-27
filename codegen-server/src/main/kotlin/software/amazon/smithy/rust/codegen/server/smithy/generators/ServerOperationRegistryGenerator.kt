@@ -333,15 +333,18 @@ ${operationImplementationStubs(operations)}
                         val (requestSpecVarName, operationName) = inner
 
                         rustBlock("") {
-                            rustTemplate("let svc = #{ServerOperationHandler}::operation(registry.$operationName);", *codegenScope)
-                            withBlock("let request_fmt =", ";") {
-                                sensitivityGen.renderRequestFmt(writer)
-                            }
-                            withBlock("let response_fmt =", ";") {
-                                sensitivityGen.renderResponseFmt(writer)
-                            }
-                            rustTemplate("let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, \"$operationName\").request_fmt(request_fmt).response_fmt(response_fmt);", *codegenScope)
-                            rustTemplate("(#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)", *codegenScope)
+                            rustTemplate(
+                                """
+                                let svc = #{ServerOperationHandler}::operation(registry.$operationName);
+                                let request_fmt = #{RequestFmt:W};
+                                let response_fmt = #{ResponseFmt:W};
+                                let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, "$operationName").request_fmt(request_fmt).response_fmt(response_fmt);
+                                (#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)
+                                """,
+                                "RequestFmt" to sensitivityGen.requestFmt().value,
+                                "ResponseFmt" to sensitivityGen.responseFmt().value,
+                                *codegenScope,
+                            )
                         }
                         rust(",")
                     }

@@ -82,7 +82,7 @@ pub fn client() -> Client<
 > {
     let base_url = PokemonServiceVariant::Http.base_url();
     let raw_client = Builder::new()
-        .rustls()
+        .rustls_connector(Default::default())
         .middleware_fn(rewrite_base_url(base_url))
         .build_dyn();
     let config = Config::builder().build();
