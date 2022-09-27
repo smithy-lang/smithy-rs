@@ -1,11 +1,20 @@
 # Instrumentation
 
-A Smithy Rust server uses the [tracing](https://github.com/tokio-rs/tracing) crate to provide instrumentation. The customer is responsible for setting up a [Subscriber](https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html) in order to ingest and process [events](https://docs.rs/tracing/latest/tracing/struct.Event.html). Compatibility with the [log](https://crates.io/crates/log) ecosystem can be achieved using [tracing-log](https://crates.io/crates/tracing-log).
+A Smithy Rust server uses the [`tracing`](https://github.com/tokio-rs/tracing) crate to provide instrumentation. The customer is responsible for setting up a [`Subscriber`](https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html) in order to ingest and process [events](https://docs.rs/tracing/latest/tracing/struct.Event.html) - Smithy Rust makes no prescription on the choice of `Subscriber`. Common choices might include:
 
-Events are emitted and [spans](https://docs.rs/tracing/latest/tracing/struct.Span.html) are opened by the `aws-smithy-http-server` and `aws-smithy-http-server-*` crates. They use the default [target](https://docs.rs/tracing/latest/tracing/struct.Metadata.html#method.target) and therefore can be filtered using the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) and/or [Targets](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html) filters. For example,
+- [`tracing_subscriber::fmt`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/index.html) for printing to `stdout`.
+- [`tracing-log`](https://crates.io/crates/tracing-log) to providing compatibility with the [`log`](https://crates.io/crates/log).
+
+Events are emitted and [spans](https://docs.rs/tracing/latest/tracing/struct.Span.html) are opened by the `aws-smithy-http-server`, `aws-smithy-http-server-python`, and generated crate. The [default](https://docs.rs/tracing/latest/tracing/struct.Metadata.html) [target](https://docs.rs/tracing/latest/tracing/struct.Metadata.html#method.target) is always used
+
+> The tracing macros default to using the module path where the span or event originated as the target, but it may be overridden.
+
+and therefore spans and events be filtered using the [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) and/or [`Targets`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html) filters with crate and module paths.
+
+For example,
 
 ```bash
-RUST_LOG=aws_smithy_http_server=debug ./server
+RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 ```
 
 and
@@ -23,14 +32,14 @@ In general, Smithy Rust is conservative when using high-priority log levels:
 
 ## Spans over the Request/Response lifecycle
 
-Smithy Rust is built on top of [tower](https://github.com/tower-rs/tower), which means that middleware can be used to encompass different periods of the lifecycle of the request and response and identify them with a `Span`.
+Smithy Rust is built on top of [`tower`](https://github.com/tower-rs/tower), which means that middleware can be used to encompass different periods of the lifecycle of the request and response and identify them with a span.
 
-An open-source example of such a middleware is [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) provided by the [tower-http](https://docs.rs/tower-http/latest/tower_http/) crate.
+An open-source example of such a middleware is [`TraceLayer`](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) provided by the [`tower-http`](https://docs.rs/tower-http/latest/tower_http/) crate.
 
 Smithy provides an out-the-box middleware which:
 
-* Opens a DEBUG level span, prior to request handling, including the operation name and request URI and headers.
-* Emits a DEBUG level event, after to request handling, including the response headers and status code.
+- Opens a DEBUG level span, prior to request handling, including the operation name and request URI and headers.
+- Emits a DEBUG level event, after to request handling, including the response headers and status code.
 
 This is applied by default and can be enabled and disabled by filtering on `aws_smithy_http_server::logging`.
 
@@ -61,7 +70,7 @@ RUST_LOG=aws_smithy_http_server=debug,pokemon_service=debug cargo r
 
 and then using `cargo t` to run integration tests against the server, yields the following logs:
 
-```
+```text
   2022-09-27T09:13:35.372517Z DEBUG aws_smithy_http_server::logging::service: response, headers: {"content-type": "application/json", "content-length": "17"}, status_code: 200 OK
     at /smithy-rs/rust-runtime/aws-smithy-http-server/src/logging/service.rs:47
     in aws_smithy_http_server::logging::service::request with operation: get_server_statistics, method: GET, uri: /stats, headers: {"host": "localhost:13734"}
@@ -89,10 +98,10 @@ For this reason, Smithy runtime will never use `tracing` to emit events or open 
 
 The Smithy runtime will not, and cannot, prevent the customer violating the sensitive trait within the operation handlers and custom middleware. It is the responsibility of the customer to not violate the sensitive contract of their own model, care must be taken.
 
-Smithy shapes can be sensitive while being coupled to the HTTP request/responses via the [HTTP binding traits](https://awslabs.github.io/smithy/2.0/spec/http-bindings.html). This poses a risk when ingesting events which naively capture request/response information. The instrumentation middleware provided by Smithy Rust respects the sensitive trait and will replace sensitive data in its `Span` and `Event` with `{redacted}`. This feature can be seen in the [Example](#example) above. For debugging purposes these redactions can be prevented using the `aws-smithy-http-server` feature flag, `unredacted-logging`.
+Smithy shapes can be sensitive while being coupled to the HTTP request/responses via the [HTTP binding traits](https://awslabs.github.io/smithy/2.0/spec/http-bindings.html). This poses a risk when ingesting events which naively capture request/response information. The instrumentation middleware provided by Smithy Rust respects the sensitive trait and will replace sensitive data in its span and event with `{redacted}`. This feature can be seen in the [Example](#example) above. For debugging purposes these redactions can be prevented using the `aws-smithy-http-server` feature flag, `unredacted-logging`.
 
 Some examples of inadvertently leaking sensitive information:
 
-* Ingesting tracing `Event`s and `Span`s from third-party crates which do not respect sensitivity.
-  * An concrete example of this would be enabling `Event`s from `hyper` or `tokio`.
-* Applying middleware which ingests events including HTTP payloads or any other part of the HTTP request/response which can be bound.
+- Ingesting tracing events and spans from third-party crates which do not respect sensitivity.
+  - An concrete example of this would be enabling events from `hyper` or `tokio`.
+- Applying middleware which ingests events including HTTP payloads or any other part of the HTTP request/response which can be bound.
