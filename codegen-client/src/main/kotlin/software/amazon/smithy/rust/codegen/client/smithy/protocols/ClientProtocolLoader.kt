@@ -92,7 +92,7 @@ private class ClientEc2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocol
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
 }
 
-private class ClientRestXmlFactory(
+class ClientRestXmlFactory(
     private val generator: (CodegenContext) -> Protocol = { RestXml(it) },
 ) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = generator(codegenContext)
