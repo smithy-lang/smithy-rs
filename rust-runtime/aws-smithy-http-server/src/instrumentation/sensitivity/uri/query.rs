@@ -27,7 +27,7 @@ pub struct QueryMarker {
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::instrumentation::tation::sensitivity::uri::{Query, QueryMarker};
+/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::{Query, QueryMarker};
 /// # let uri = "";
 /// // Query string value with key "name" is redacted
 /// let uri = Query::new(&uri, |x| QueryMarker { key: false, value: x == "name" } );
@@ -119,7 +119,7 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::instrumentation::tation::sensitivity::uri::tests::{
+    use crate::instrumentation::sensitivity::uri::tests::{
         ALL_KEYS_QUERY_STRING_EXAMPLES, ALL_PAIRS_QUERY_STRING_EXAMPLES, ALL_VALUES_QUERY_STRING_EXAMPLES, EXAMPLES,
         QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
     };
