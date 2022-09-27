@@ -151,6 +151,10 @@ class PaginatorGenerator private constructor(
                 /// Stop paginating when the service returns the same pagination token twice in a row.
                 ///
                 /// Defaults to true.
+                ///
+                /// For certain operations, it may be useful to continue on duplicate token. For example,
+                /// if an operation is for tailing a log file in real-time, then continuing may be desired.
+                /// This option can be set to `false` to accommodate these use cases.
                 pub fn stop_on_duplicate_token(mut self, stop_on_duplicate_token: bool) -> Self {
                     self.stop_on_duplicate_token = stop_on_duplicate_token;
                     self
