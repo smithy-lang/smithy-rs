@@ -6,7 +6,7 @@
 import itertools
 import logging
 import random
-from multiprocessing import Lock
+from threading import Lock
 from dataclasses import dataclass
 from typing import List, Optional
 
