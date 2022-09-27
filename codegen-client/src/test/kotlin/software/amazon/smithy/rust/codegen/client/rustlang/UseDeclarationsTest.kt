@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.rustlang
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.shouldCompile
+import software.amazon.smithy.rust.codegen.core.rustlang.UseDeclarations
 
 class UseDeclarationsTest {
     private fun useDecl() = UseDeclarations("test")

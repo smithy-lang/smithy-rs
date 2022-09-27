@@ -12,45 +12,42 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.asArgumentType
-import software.amazon.smithy.rust.codegen.client.rustlang.asOptional
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.deprecatedShape
-import software.amazon.smithy.rust.codegen.client.rustlang.docLink
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.client.rustlang.escape
-import software.amazon.smithy.rust.codegen.client.rustlang.normalizeHtml
-import software.amazon.smithy.rust.codegen.client.rustlang.qualifiedName
-import software.amazon.smithy.rust.codegen.client.rustlang.render
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTypeParameters
-import software.amazon.smithy.rust.codegen.client.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
-import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.smithyHttp
-import software.amazon.smithy.rust.codegen.client.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
+import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.docLink
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
+import software.amazon.smithy.rust.codegen.core.rustlang.render
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -77,11 +74,6 @@ class FluentClientGenerator(
             "client",
             "Client and fluent builders for calling the service.",
         )
-
-        val customizableOperationModule = RustModule.public(
-            "customizable_operation",
-            "Wrap operations in a special type allowing for the modification of operations and the requests inside before sending them",
-        )
     }
 
     private val serviceShape = codegenContext.serviceShape
@@ -98,13 +90,11 @@ class FluentClientGenerator(
             renderFluentClient(writer)
         }
 
-        crate.withModule(customizableOperationModule) { writer ->
-            renderCustomizableOperationModule(runtimeConfig, generics, writer)
-
-            if (codegenContext.settings.codegenConfig.includeFluentClient) {
-                renderCustomizableOperationSend(runtimeConfig, generics, writer)
-            }
-        }
+        CustomizableOperationGenerator(
+            runtimeConfig,
+            generics,
+            codegenContext.settings.codegenConfig.includeFluentClient,
+        ).render(crate)
     }
 
     private fun renderFluentClient(writer: RustWriter) {
@@ -289,7 +279,7 @@ class FluentClientGenerator(
                         /// Consume this builder, creating a customizable operation that can be modified before being
                         /// sent. The operation's inner [http::Request] can be modified as well.
                         pub async fn customize(self) -> std::result::Result<
-                            crate::customizable_operation::CustomizableOperation#{customizable_op_type_params:W},
+                            crate::operation::customize::CustomizableOperation#{customizable_op_type_params:W},
                             #{SdkError}<#{OperationError}>
                         > #{send_bounds:W} {
                             let handle = self.handle.clone();
@@ -297,7 +287,7 @@ class FluentClientGenerator(
                                 .make_operation(&handle.conf)
                                 .await
                                 .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
-                            Ok(crate::customizable_operation::CustomizableOperation { handle, operation })
+                            Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
                         /// Sends the request and returns the response.
@@ -326,7 +316,7 @@ class FluentClientGenerator(
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),
                             retryClassifier,
-                            generics.toGenericsGenerator(),
+                            generics.toRustGenerics(),
                         ),
                     )
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)?.also { paginatorType ->
@@ -368,139 +358,6 @@ class FluentClientGenerator(
             }
         }
     }
-}
-
-private fun renderCustomizableOperationModule(
-    runtimeConfig: RuntimeConfig,
-    generics: FluentClientGenerics,
-    writer: RustWriter,
-) {
-    val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
-
-    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toGenericsGenerator()
-    val combinedGenerics = operationGenerics + handleGenerics
-
-    val codegenScope = arrayOf(
-        // SDK Types
-        "http_result" to smithyHttp.member("result"),
-        "http_body" to smithyHttp.member("body"),
-        "http_operation" to smithyHttp.member("operation"),
-        "HttpRequest" to CargoDependency.Http.asType().member("Request"),
-        "handle_generics_decl" to handleGenerics.declaration(),
-        "handle_generics_bounds" to handleGenerics.bounds(),
-        "operation_generics_decl" to operationGenerics.declaration(),
-        "combined_generics_decl" to combinedGenerics.declaration(),
-    )
-
-    writer.rustTemplate(
-        """
-        use crate::client::Handle;
-
-        use #{http_body}::SdkBody;
-        use #{http_operation}::Operation;
-        use #{http_result}::SdkError;
-
-        use std::convert::Infallible;
-        use std::sync::Arc;
-
-        /// A wrapper type for [`Operation`](aws_smithy_http::operation::Operation)s that allows for
-        /// customization of the operation before it is sent. A `CustomizableOperation` may be sent
-        /// by calling its [`.send()`][crate::customizable_operation::CustomizableOperation::send] method.
-        ##[derive(Debug)]
-        pub struct CustomizableOperation#{combined_generics_decl:W} {
-            pub(crate) handle: Arc<Handle#{handle_generics_decl:W}>,
-            pub(crate) operation: Operation#{operation_generics_decl:W},
-        }
-
-        impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
-        where
-            #{handle_generics_bounds:W}
-        {
-            /// Allows for customizing the operation's request
-            pub fn map_request<E>(
-                mut self,
-                f: impl FnOnce(#{HttpRequest}<SdkBody>) -> Result<#{HttpRequest}<SdkBody>, E>,
-            ) -> Result<Self, E> {
-                let (request, response) = self.operation.into_request_response();
-                let request = request.augment(|req, _props| f(req))?;
-                self.operation = Operation::from_parts(request, response);
-                Ok(self)
-            }
-
-            /// Convenience for `map_request` where infallible direct mutation of request is acceptable
-            pub fn mutate_request<E>(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
-                self.map_request(|mut req| {
-                    f(&mut req);
-                    Result::<_, Infallible>::Ok(req)
-                })
-                .expect("infallible")
-            }
-
-            /// Allows for customizing the entire operation
-            pub fn map_operation<E>(
-                mut self,
-                f: impl FnOnce(Operation#{operation_generics_decl:W}) -> Result<Operation#{operation_generics_decl:W}, E>,
-            ) -> Result<Self, E> {
-                self.operation = f(self.operation)?;
-                Ok(self)
-            }
-
-            /// Direct access to read the HTTP request
-            pub fn request(&self) -> &#{HttpRequest}<SdkBody> {
-                self.operation.request()
-            }
-
-            /// Direct access to mutate the HTTP request
-            pub fn request_mut(&mut self) -> &mut #{HttpRequest}<SdkBody> {
-                self.operation.request_mut()
-            }
-        }
-        """,
-        *codegenScope,
-    )
-}
-
-private fun renderCustomizableOperationSend(
-    runtimeConfig: RuntimeConfig,
-    generics: FluentClientGenerics,
-    writer: RustWriter,
-) {
-    val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
-    val smithyClient = CargoDependency.SmithyClient(runtimeConfig).asType()
-
-    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toGenericsGenerator()
-    val combinedGenerics = operationGenerics + handleGenerics
-
-    val codegenScope = arrayOf(
-        "combined_generics_decl" to combinedGenerics.declaration(),
-        "handle_generics_bounds" to handleGenerics.bounds(),
-        "ParseHttpResponse" to smithyHttp.member("response::ParseHttpResponse"),
-        "NewRequestPolicy" to smithyClient.member("retry::NewRequestPolicy"),
-        "SmithyRetryPolicy" to smithyClient.member("bounds::SmithyRetryPolicy"),
-    )
-
-    writer.rustTemplate(
-        """
-        impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
-        where
-            #{handle_generics_bounds:W}
-        {
-            /// Sends this operation's request
-            pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
-            where
-                E: std::error::Error,
-                O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: Send + Sync + Clone,
-                <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<O, T, E, Retry> + Clone,
-            {
-                self.handle.client.call(self.operation).await
-            }
-        }
-        """,
-        *codegenScope,
-    )
 }
 
 /**

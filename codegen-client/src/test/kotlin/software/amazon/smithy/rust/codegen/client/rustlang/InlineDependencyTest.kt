@@ -9,9 +9,14 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 
 internal class InlineDependencyTest {
-    fun makeDep(name: String) = InlineDependency(name, RustModule.private("module")) {
+    private fun makeDep(name: String) = InlineDependency(name, RustModule.private("module")) {
         it.rustBlock("fn foo()") {}
     }
 

@@ -5,23 +5,24 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency.Companion.BytesUtils
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency.Companion.TempFile
-import software.amazon.smithy.rust.codegen.client.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.BytesUtils
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TempFile
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "IntegrationTest"
     override val order: Byte = 0
 
@@ -51,7 +52,7 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
@@ -92,26 +93,28 @@ class IntegrationTestDependencies(
 }
 
 class TranscribeTestDependencies : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable = writable {
-        addDependency(AsyncStream)
-        addDependency(FuturesCore)
-        addDependency(Hound)
-    }
+    override fun section(section: LibRsSection): Writable =
+        writable {
+            addDependency(AsyncStream)
+            addDependency(FuturesCore)
+            addDependency(Hound)
+        }
 }
 
 class S3TestDependencies(
     private val runtimeConfig: RuntimeConfig,
 ) : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable = writable {
-        addDependency(AsyncStd)
-        addDependency(BytesUtils)
-        addDependency(Smol)
-        addDependency(TempFile)
-        runtimeConfig.runtimeCrate("async", scope = DependencyScope.Dev)
-        runtimeConfig.runtimeCrate("client", scope = DependencyScope.Dev)
-        runtimeConfig.runtimeCrate("http", scope = DependencyScope.Dev)
-        runtimeConfig.runtimeCrate("types", scope = DependencyScope.Dev)
-    }
+    override fun section(section: LibRsSection): Writable =
+        writable {
+            addDependency(AsyncStd)
+            addDependency(BytesUtils)
+            addDependency(Smol)
+            addDependency(TempFile)
+            runtimeConfig.runtimeCrate("async", scope = DependencyScope.Dev)
+            runtimeConfig.runtimeCrate("client", scope = DependencyScope.Dev)
+            runtimeConfig.runtimeCrate("http", scope = DependencyScope.Dev)
+            runtimeConfig.runtimeCrate("types", scope = DependencyScope.Dev)
+        }
 }
 
 private val AsyncStd = CargoDependency("async-std", CratesIo("1.12.0"), scope = DependencyScope.Dev)
