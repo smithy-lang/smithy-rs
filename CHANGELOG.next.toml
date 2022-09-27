@@ -55,6 +55,34 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = """
+It is now possible to programmatically customize the locations of the profile config/credentials files in `aws-config`:
+```rust
+use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
+use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+
+let profile_files = ProfileFiles::builder()
+    .with_file(ProfileFileKind::Credentials, "some/path/to/credentials-file")
+    .build();
+let credentials_provider = ProfileFileCredentialsProvider::builder()
+    .profile_files(profile_files.clone())
+    .build();
+let region_provider = ProfileFileRegionProvider::builder()
+    .profile_files(profile_files)
+    .build();
+
+let sdk_config = aws_config::from_env()
+    .credentials_provider(credentials_provider)
+    .region(region_provider)
+    .load()
+    .await;
+```
+"""
+references = ["aws-sdk-rust#237", "smithy-rs#1770"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = "Paginators now stop on encountering a duplicate token by default rather than panic. This behavior can be customized by toggling the `stop_on_duplicate_token` property on the paginator before calling `send`."
 references = ["aws-sdk-rust#620", "smithy-rs#1748"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
