@@ -179,7 +179,7 @@ pub async fn get_pokemon_species(
     }
 }
 
-/// Retrieves the users storage
+/// Retrieves the users storage.
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
@@ -208,12 +208,12 @@ pub async fn get_server_statistics(
     output::GetServerStatisticsOutput { calls_count }
 }
 
-/// Attempts to capture a Pokémon
+/// Attempts to capture a Pokémon.
 pub async fn capture_pokemon(
-    mut input: input::CapturePokemonOperationInput,
-) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {
+    mut input: input::CapturePokemonInput,
+) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     if input.region != "Kanto" {
-        return Err(error::CapturePokemonOperationError::UnsupportedRegionError(
+        return Err(error::CapturePokemonError::UnsupportedRegionError(
             error::UnsupportedRegionError::builder().build(),
         ));
     }
@@ -269,20 +269,20 @@ pub async fn capture_pokemon(
             }
         }
     };
-    Ok(output::CapturePokemonOperationOutput::builder()
+    Ok(output::CapturePokemonOutput::builder()
         .events(output_stream.into())
         .build()
         .unwrap())
 }
 
 /// Empty operation used to benchmark the service.
-pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::EmptyOperationOutput {
-    output::EmptyOperationOutput {}
+pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutput {
+    output::DoNothingOutput {}
 }
 
 /// Operation used to show the service is running.
-pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {
-    output::HealthCheckOperationOutput {}
+pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
+    output::CheckHealthOutput {}
 }
 
 #[cfg(test)]
