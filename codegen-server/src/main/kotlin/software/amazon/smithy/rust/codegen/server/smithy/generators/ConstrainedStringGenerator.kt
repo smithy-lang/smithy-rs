@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.client.rustlang.render
 import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
@@ -151,14 +152,32 @@ class ConstrainedStringGenerator(
                 pub enum ${constraintViolation.name} {
                     Length(usize),
                 }
-                
-                impl ${constraintViolation.name} {
-                    pub(crate) fn as_validation_exception_field_message(self, _path: &str) -> String {
-                        "Value with length 1 at '/string' failed to satisfy constraint: Member must have length between 2 and 8, inclusive".to_owned()
-                    }
-                }
                 """,
             )
+
+            rustBlock("impl ${constraintViolation.name}") {
+                rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                    rustBlock("match self") {
+                        val beginning = "Value with length {} at '{}' failed to satisfy constraint: Member must have length "
+                        val ending = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
+                            "between ${lengthTrait.min.get()} and ${lengthTrait.max.get()}, inclusive"
+                        } else if (lengthTrait.min.isPresent) (
+                            "greater than or equal to ${lengthTrait.min.get()}"
+                        ) else {
+                            check(lengthTrait.max.isPresent)
+                            "less than or equal to ${lengthTrait.max.get()}"
+                        }
+                        rust(
+                            """
+                            Self::Length(length) => crate::model::ValidationExceptionField {
+                                message: format!("$beginning$ending", length, &path),
+                                path,
+                            },
+                            """
+                        )
+                    }
+                }
+            }
         }
     }
 }

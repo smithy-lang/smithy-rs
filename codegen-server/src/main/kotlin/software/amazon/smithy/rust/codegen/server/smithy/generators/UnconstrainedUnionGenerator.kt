@@ -138,6 +138,16 @@ class UnconstrainedUnionGenerator(
             rustBlock("pub enum $constraintViolationName") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
+
+            rustBlock("impl $constraintViolationName") {
+                rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                    withBlock("match self {", "}") {
+                        for (constraintViolation in constraintViolations()) {
+                            rust("""Self::${constraintViolation.name()}(inner) => inner.as_validation_exception_field(path + "/${constraintViolation.forMember.memberName}"),""")
+                        }
+                    }
+                }
+            }
         }
     }
 

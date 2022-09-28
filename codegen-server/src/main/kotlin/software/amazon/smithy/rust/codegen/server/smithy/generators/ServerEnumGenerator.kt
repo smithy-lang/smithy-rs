@@ -40,10 +40,20 @@ open class ServerEnumGenerator(
         writer.withModule(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
         ) {
+            // TODO as_validation_exception_field message
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
                 pub struct $constraintViolationName(pub(crate) #{String});
+                
+                impl $constraintViolationName {
+                    pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField {
+                        crate::model::ValidationExceptionField {
+                            message: "unknown enum variant blah blah".to_owned(),
+                            path,
+                        }
+                    }
+                }
                 """,
                 "String" to RuntimeType.String,
             )

@@ -11,6 +11,8 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.client.rustlang.rust
+import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -76,6 +78,30 @@ class MapConstraintViolationGenerator(
                 """,
                 *constraintViolationCodegenScope,
             )
+
+            rustBlock("impl $constraintViolationName") {
+                // TODO Remove `dead_code` once we use `path`.
+                rustBlock("##[allow(dead_code)] pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                    rustBlock("match self") {
+                        if (shape.hasTrait<LengthTrait>()) {
+                            // TODO
+                            rust(
+                                """
+                                Self::Length(_length) => crate::model::ValidationExceptionField {
+                                    path,
+                                    message: "make code good".to_owned(),
+                                },
+                                """)
+                        }
+                        if (isKeyConstrained(keyShape, symbolProvider)) {
+                            rust("""Self::Key(key_constraint_violation) => key_constraint_violation.as_validation_exception_field(path + "/${shape.key.memberName}"),""")
+                        }
+                        if (isValueConstrained(valueShape, model, symbolProvider)) {
+                            rust("""Self::Value(value_constraint_violation) => value_constraint_violation.as_validation_exception_field(path + "${shape.value.memberName}"),""")
+                        }
+                    }
+                }
+            }
         }
     }
 }

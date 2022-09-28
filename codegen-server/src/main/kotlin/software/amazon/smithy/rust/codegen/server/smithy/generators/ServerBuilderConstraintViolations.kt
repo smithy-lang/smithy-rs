@@ -136,15 +136,21 @@ class ServerBuilderConstraintViolations(
     }
 
     private fun renderAsValidationExceptionFieldList(writer: RustWriter) {
-        val validationExceptionFieldMessageWritable = writable {
+        val validationExceptionFieldWritable = writable {
             rustBlock("match self") {
                 all.forEach {
-                    val arm = if (it.hasInner()) {
-                        "ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field_message(path),"
+                    if (it.hasInner()) {
+                        rust("""ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field(path + "/${it.forMember.memberName}"),""")
                     } else {
-                        """ConstraintViolation::${it.name()} => format!("Value null at '{}' failed to satisfy constraint: Member must not be null", path),"""
+                        rust(
+                            """
+                            ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
+                                path: format!("{}/${it.forMember.memberName}", path),
+                                message: format!("Value null at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                            },
+                            """
+                        )
                     }
-                    rust(arm)
                 }
             }
         }
@@ -154,20 +160,12 @@ class ServerBuilderConstraintViolations(
             """
             impl ConstraintViolation {
                 ##[allow(dead_code)] 
-                pub(crate) fn as_validation_exception_field_message(self, path: &str) -> String {
-                    #{ValidationExceptionFieldMessageWritable:W}
-                }
-            
-                ##[allow(dead_code)] 
-                pub(crate) fn as_validation_exception_field(self, path: &str) -> crate::model::ValidationExceptionField {
-                    crate::model::ValidationExceptionField {
-                        path: path.to_owned(),
-                        message: self.as_validation_exception_field_message(path),
-                    }
+                pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField {
+                    #{ValidationExceptionFieldWritable:W}
                 }
             }
             """,
-            "ValidationExceptionFieldMessageWritable" to validationExceptionFieldMessageWritable,
+            "ValidationExceptionFieldWritable" to validationExceptionFieldWritable,
         )
     }
 }

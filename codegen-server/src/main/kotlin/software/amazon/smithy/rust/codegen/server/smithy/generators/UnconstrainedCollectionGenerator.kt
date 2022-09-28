@@ -108,6 +108,12 @@ class UnconstrainedCollectionGenerator(
                 """
                 ##[derive(Debug, PartialEq)]
                 pub struct $constraintViolationName(pub(crate) #{InnerConstraintViolationSymbol});
+                
+                impl $constraintViolationName {
+                    pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField {
+                        self.0.as_validation_exception_field(path)
+                    }
+                }
                 """,
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
             )
