@@ -26,6 +26,7 @@ class MapConstraintViolationGenerator(
     val shape: MapShape,
 ) {
     private val model = codegenContext.model
+    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val symbolProvider = codegenContext.symbolProvider
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
@@ -43,18 +44,11 @@ class MapConstraintViolationGenerator(
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
-        val constraintViolationCodegenScope = listOfNotNull(
-            if (isKeyConstrained(keyShape, symbolProvider)) {
-                "KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape)
-            } else {
-                null
-            },
-            if (isValueConstrained(valueShape, model, symbolProvider)) {
-                "ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape)
-            } else {
-                null
-            },
-        ).toTypedArray()
+        val constraintViolationCodegenScope = arrayOf(
+            "KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape),
+            "ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape),
+            "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape),
+        )
 
         val constraintViolationVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
@@ -75,7 +69,7 @@ class MapConstraintViolationGenerator(
                 pub enum $constraintViolationName {
                     ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
                     ${if (isKeyConstrained(keyShape, symbolProvider)) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
-                    ${if (isValueConstrained(valueShape, model, symbolProvider)) "##[doc(hidden)] Value(#{ValueConstraintViolationSymbol})," else ""}
+                    ${if (isValueConstrained(valueShape, model, symbolProvider)) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
                 }
                 """,
                 *constraintViolationCodegenScope,
@@ -100,7 +94,8 @@ class MapConstraintViolationGenerator(
                             rust("""Self::Key(key_constraint_violation) => key_constraint_violation.as_validation_exception_field(path),""")
                         }
                         if (isValueConstrained(valueShape, model, symbolProvider)) {
-                            rust("""Self::Value(value_constraint_violation) => value_constraint_violation.as_validation_exception_field(path + "/${shape.value.memberName}"),""")
+                            // `as_str()` works with regular `String`s and constrained string shapes.
+                            rust("""Self::Value(key, value_constraint_violation) => value_constraint_violation.as_validation_exception_field(path + "/" + key.as_str()),""")
                         }
                     }
                 }

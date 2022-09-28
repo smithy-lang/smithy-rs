@@ -105,6 +105,7 @@ class UnconstrainedCollectionGenerator(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
             RustMetadata(visibility = constraintViolationVisibility),
         ) {
+            // TODO path + "/" + &self.0 instead of format!
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]

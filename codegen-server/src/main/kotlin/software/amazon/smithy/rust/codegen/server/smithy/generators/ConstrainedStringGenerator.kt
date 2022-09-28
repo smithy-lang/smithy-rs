@@ -91,6 +91,11 @@ class ConstrainedStringGenerator(
                     Self::try_from(value)
                 }
                 
+                /// Extracts a string slice containing the entire underlying `String`.
+                pub fn as_str(&self) -> &str {
+                    &self.0
+                }
+                
                 /// ${rustDocsInnerMethod(inner)}
                 pub fn inner(&self) -> &$inner {
                     &self.0

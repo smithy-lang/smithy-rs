@@ -105,13 +105,14 @@ class UnconstrainedMapGenerator(
                         constrainedShapeSymbolProvider.toSymbol(valueShape)
                     }
 
+                    // TODO Refactor to use `return` so that we don't have to clone `k`.
                     rustTemplate(
                         """
                         let res: Result<std::collections::HashMap<#{ConstrainedKeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
-                                ${if (isKeyConstrained(keyShape, symbolProvider)) "let k = k.try_into().map_err(Self::Error::Key)?;" else ""}
-                                ${if (isValueConstrained(valueShape, model, symbolProvider)) "let v = v.try_into().map_err(Self::Error::Value)?;" else ""}
+                                ${if (isKeyConstrained(keyShape, symbolProvider)) "let k: #{ConstrainedKeySymbol} = k.try_into().map_err(Self::Error::Key)?;" else ""}
+                                ${if (isValueConstrained(valueShape, model, symbolProvider)) "let v: #{ConstrainedValueSymbol} = v.try_into().map_err(|inner_violation| Self::Error::Value(k.clone(), inner_violation))?;" else ""}
                                 Ok((k, v))
                             })
                             .collect();
