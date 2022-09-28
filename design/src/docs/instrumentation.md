@@ -25,10 +25,22 @@ let filter = filter::Targets::new().with_target("aws_smithy_http_server", Level:
 
 In general, Smithy Rust is conservative when using high-priority log levels:
 
-* ERROR - unrecoverable errors, resulting in the termination of the service.
-* WARN - recoverable errors, indicative of customer misconfigurations.
-* DEBUG - recoverable errors, the result of client misconfigurations, or infrequent/important information about progress.
-* TRACE - frequent/non-important information about progress.
+- ERROR
+  - Fatal errors, resulting in the termination of the service.
+  - Requires immediate remediation.
+- WARN
+  - Non-fatal errors, resulting in incomplete operation.
+  - Indicates service misconfiguration, transient errors, or future changes in behavior.
+  - Requires inspection and remediation.
+- INFO
+  - Informative events, which occur inside normal operating limits.
+  - Used for large state transitions, e.g. startup/shutdown.
+- DEBUG
+  - Informative and sparse events, which occur inside normal operating limits.
+  - Used to debug coarse-grained progress of service.
+- TRACE
+  - Informative and frequent events, which occur inside normal operating limits.
+  - Used to debug fine-grained progress of service.
 
 ## Spans over the Request/Response lifecycle
 
