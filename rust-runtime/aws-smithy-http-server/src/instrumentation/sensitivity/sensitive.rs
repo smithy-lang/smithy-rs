@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::logging::MakeFmt;
+use crate::instrumentation::MakeFmt;
 
 use super::REDACTED;
 
@@ -22,7 +22,7 @@ use super::REDACTED;
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::logging::sensitivity::Sensitive;
+/// # use aws_smithy_http_server::instrumentation::sensitivity::Sensitive;
 /// # let address = "";
 /// tracing::debug!(
 ///     name = %Sensitive("Alice"),

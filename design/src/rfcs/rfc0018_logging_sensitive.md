@@ -395,7 +395,12 @@ Code generation would be need to be used in order to produce the filtering crite
 ## Changes Checklist
 
 - [x] Implement and integrate code generated logging middleware.
-  - https://github.com/awslabs/smithy-rs/pull/1550
-- [ ] Add logging to `Router` implementation.
-- [ ] Write developer guideline.
-- [ ] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position).
+  - <https://github.com/awslabs/smithy-rs/pull/1550>
+- [x] Add logging to `Router` implementation.
+  - <https://github.com/awslabs/smithy-rs/issues/1666>
+- [x] Write developer guideline.
+  - <https://github.com/awslabs/smithy-rs/pull/1772>
+- [x] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position).
+  - <https://github.com/awslabs/smithy-rs/pull/1620>
+  - <https://github.com/awslabs/smithy-rs/pull/1679>
+  - <https://github.com/awslabs/smithy-rs/pull/1693>

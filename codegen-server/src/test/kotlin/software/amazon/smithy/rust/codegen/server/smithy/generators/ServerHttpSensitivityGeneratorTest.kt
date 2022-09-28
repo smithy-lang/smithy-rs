@@ -63,8 +63,8 @@ class ServerHttpSensitivityGeneratorTest {
                 rustTemplate(
                     """
                     let closure = #{Closure:W};
-                    assert_eq!(closure("query_a"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: false });
-                    assert_eq!(closure("query_b"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: true });
+                    assert_eq!(closure("query_a"), #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker { key: false, value: false });
+                    assert_eq!(closure("query_b"), #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker { key: false, value: true });
                     """,
                     "Closure" to querySensitivity.closure(),
                     *codegenScope,
@@ -110,7 +110,7 @@ class ServerHttpSensitivityGeneratorTest {
                 rustTemplate(
                     """
                     let closure = #{Closure:W};
-                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: true, value: true });
+                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker { key: true, value: true });
                     """,
                     "Closure" to querySensitivity.closure(),
                     *codegenScope,
@@ -158,7 +158,7 @@ class ServerHttpSensitivityGeneratorTest {
                 rustTemplate(
                     """
                     let closure = #{Closure:W};
-                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: true, value: false });
+                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker { key: true, value: false });
                     """,
                     "Closure" to querySensitivity.closure(),
                     *codegenScope,
@@ -206,7 +206,7 @@ class ServerHttpSensitivityGeneratorTest {
                 rustTemplate(
                     """
                     let closure = #{Closure:W};
-                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: true });
+                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker { key: false, value: true });
                     """,
                     "Closure" to querySensitivity.closure(),
                     *codegenScope,
@@ -284,9 +284,9 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     let closure = #{Closure:W};
                     let name = #{Http}::header::HeaderName::from_static("header-a");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
                     let name = #{Http}::header::HeaderName::from_static("header-b");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
                     """,
                     "Closure" to headerData.closure(),
                     *codegenScope,
@@ -332,11 +332,11 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     let closure = #{Closure:W};
                     let name = #{Http}::header::HeaderName::from_static("prefix-a");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: Some(7) });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: true, key_suffix: Some(7) });
                     let name = #{Http}::header::HeaderName::from_static("prefix-b");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: Some(7) });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: true, key_suffix: Some(7) });
                     let name = #{Http}::header::HeaderName::from_static("other");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
                     """,
                     "Closure" to headerData.closure(),
                     *codegenScope,
@@ -415,11 +415,11 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     let closure = #{Closure:W};
                     let name = #{Http}::header::HeaderName::from_static("prefix-a");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: Some(7) });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: false, key_suffix: Some(7) });
                     let name = #{Http}::header::HeaderName::from_static("prefix-b");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: Some(7) });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: false, key_suffix: Some(7) });
                     let name = #{Http}::header::HeaderName::from_static("other");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
                     """,
                     "Closure" to headerData.closure(),
                     *codegenScope,
@@ -469,11 +469,11 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     let closure = #{Closure:W};
                     let name = #{Http}::header::HeaderName::from_static("prefix-a");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
                     let name = #{Http}::header::HeaderName::from_static("prefix-b");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
                     let name = #{Http}::header::HeaderName::from_static("other");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
                     """,
                     "Closure" to headerData.closure(),
                     *codegenScope,
