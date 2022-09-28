@@ -76,13 +76,14 @@ class UnconstrainedCollectionGenerator(
                     type Error = #{ConstraintViolationSymbol};
                 
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
-                        let res: Result<_, #{InnerConstraintViolationSymbol}> = value
+                        let res: Result<_, (usize, #{InnerConstraintViolationSymbol})> = value
                             .0
                             .into_iter()
-                            .map(|inner| inner.try_into())
+                            .enumerate()
+                            .map(|(idx, inner)| inner.try_into().map_err(|inner_violation| (idx, inner_violation)))
                             .collect();
                         res.map(Self)   
-                           .map_err(#{ConstraintViolationSymbol})
+                           .map_err(|(idx, inner_violation)| #{ConstraintViolationSymbol}(idx, inner_violation))
                     }
                 }
                 """,
@@ -107,11 +108,14 @@ class UnconstrainedCollectionGenerator(
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
-                pub struct $constraintViolationName(pub(crate) #{InnerConstraintViolationSymbol});
+                pub struct $constraintViolationName(
+                    pub(crate) usize,
+                    pub(crate) #{InnerConstraintViolationSymbol}
+                );
                 
                 impl $constraintViolationName {
                     pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField {
-                        self.0.as_validation_exception_field(path)
+                        self.1.as_validation_exception_field(format!("{}/{}", path, self.0))
                     }
                 }
                 """,
