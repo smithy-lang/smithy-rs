@@ -115,15 +115,16 @@ class EndpointConfigCustomization(
                 "pub (crate) endpoint_resolver: std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> rustTemplate(
-                """
-                /// Returns the endpoint resolver.
-                pub fn endpoint_resolver(&self) -> std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>> {
-                    self.endpoint_resolver.clone()
-                }
-                """,
-                *codegenScope,
-            )
+            is ServiceConfig.ConfigImpl -> emptySection // TODO: Uncomment once endpoints 2.0 project is completed.
+//                rustTemplate(
+//                """
+//                /// Returns the endpoint resolver.
+//                pub fn endpoint_resolver(&self) -> std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>> {
+//                    self.endpoint_resolver.clone()
+//                }
+//                """,
+//                *codegenScope,
+//            )
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("endpoint_resolver: Option<std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
@@ -156,24 +157,24 @@ class EndpointConfigCustomization(
                         self
                     }
                     """,
-                        *codegenScope,
-                    )
+                    *codegenScope,
+                )
 
-                ServiceConfig.BuilderBuild -> {
-                    val resolverGenerator = EndpointResolverGenerator(codegenContext, endpointData)
-                    rustTemplate(
-                        """
+            ServiceConfig.BuilderBuild -> {
+                val resolverGenerator = EndpointResolverGenerator(codegenContext, endpointData)
+                rustTemplate(
+                    """
                     endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
                         std::sync::Arc::new(#{EndpointShim}::from_resolver(#{Resolver}()))
                     ),
                     """,
-                        *codegenScope, "Resolver" to resolverGenerator.resolver(),
-                    )
-                }
-
-                else -> emptySection
+                    *codegenScope, "Resolver" to resolverGenerator.resolver(),
+                )
             }
+
+            else -> emptySection
         }
+    }
 }
 
 // This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern
