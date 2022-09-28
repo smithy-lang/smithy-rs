@@ -41,9 +41,9 @@ class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: Runti
     /** Returns the type of the `MakeFmt`. */
     fun type(): Writable = writable {
         if (sensitive) {
-            rustTemplate("#{SmithyHttpServer}::logging::MakeSensitive", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::MakeSensitive", *codegenScope)
         } else {
-            rustTemplate("#{SmithyHttpServer}::logging::MakeIdentity", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::MakeIdentity", *codegenScope)
         }
     }
 
@@ -86,9 +86,9 @@ class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedy
 
     /** Returns the type of the `MakeFmt`. */
     fun type(): Writable = if (hasRedactions()) writable {
-        rustTemplate("#{SmithyHttpServer}::logging::sensitivity::uri::MakeLabel<fn(usize) -> bool>", *codegenScope)
+        rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::uri::MakeLabel<fn(usize) -> bool>", *codegenScope)
     } else writable {
-        rustTemplate("#{SmithyHttpServer}::logging::MakeIdentity", *codegenScope)
+        rustTemplate("#{SmithyHttpServer}::instrumentation::MakeIdentity", *codegenScope)
     }
 
     /** Returns the value of the `GreedyLabel`. */
@@ -96,7 +96,7 @@ class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedy
         if (greedyLabel != null) {
             rustTemplate(
                 """
-                Some(#{SmithyHttpServer}::logging::sensitivity::uri::GreedyLabel::new(${greedyLabel.segmentIndex}, ${greedyLabel.endOffset}))""",
+                Some(#{SmithyHttpServer}::instrumentation::sensitivity::uri::GreedyLabel::new(${greedyLabel.segmentIndex}, ${greedyLabel.endOffset}))""",
                 *codegenScope,
             )
         } else {
@@ -148,9 +148,9 @@ sealed class HeaderSensitivity(
     /** Returns the type of the `MakeDebug`. */
     fun type(): Writable = writable {
         if (hasRedactions()) {
-            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::headers::MakeHeaders<fn(&#{Http}::header::HeaderName) -> #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker>", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::headers::MakeHeaders<fn(&#{Http}::header::HeaderName) -> #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker>", *codegenScope)
         } else {
-            rustTemplate("#{SmithyHttpServer}::logging::MakeIdentity", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::MakeIdentity", *codegenScope)
         }
     }
 
@@ -194,7 +194,7 @@ sealed class HeaderSensitivity(
                         let name_match = #{NameMatch:W};
 
                         #{SuffixAndValue:W}
-                        #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { key_suffix, value }
+                        #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { key_suffix, value }
                     }
                 } as fn(&_) -> _
                 """,
@@ -240,9 +240,9 @@ sealed class QuerySensitivity(
     /** Returns the type of the `MakeFmt`. */
     fun type(): Writable = writable {
         if (hasRedactions()) {
-            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::uri::MakeQuery<fn(&str) -> #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker>", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::uri::MakeQuery<fn(&str) -> #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker>", *codegenScope)
         } else {
-            rustTemplate("#{SmithyHttpServer}::logging::MakeIdentity", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::MakeIdentity", *codegenScope)
         }
     }
 
@@ -267,7 +267,7 @@ sealed class QuerySensitivity(
                     |name: &str| {
                         let key = $allKeysSensitive;
                         let value = #{Value:W};
-                        #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key, value }
+                        #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker { key, value }
                     }
                 } as fn(&_) -> _
                 """,
@@ -296,7 +296,7 @@ data class MakeFmt(
  * parts of the request/response HTTP as sensitive.
  *
  * These closures are provided to `RequestFmt` and `ResponseFmt` constructors, which in turn are provided to
- * `InstrumentedOperation` to configure logging. These structures can be found in `aws_smithy_http_server::logging`.
+ * `InstrumentedOperation` to configure logging. These structures can be found in `aws_smithy_http_server::instrumentation`.
  *
  * See [Logging in the Presence of Sensitive Data](https://github.com/awslabs/smithy-rs/blob/main/design/src/rfcs/rfc0018_logging_sensitive.md)
  * for more details.
@@ -458,10 +458,10 @@ class ServerHttpSensitivityGenerator(
 
     private fun defaultRequestFmt(): MakeFmt {
         val type = writable {
-            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::DefaultRequestFmt", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::DefaultRequestFmt", *codegenScope)
         }
         val value = writable {
-            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::RequestFmt::new()", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::RequestFmt::new()", *codegenScope)
         }
         return MakeFmt(type, value)
     }
@@ -483,9 +483,9 @@ class ServerHttpSensitivityGenerator(
         val type = writable {
             rustTemplate(
                 """
-                #{SmithyHttpServer}::logging::sensitivity::RequestFmt<
+                #{SmithyHttpServer}::instrumentation::sensitivity::RequestFmt<
                     #{HeaderType:W},
-                    #{SmithyHttpServer}::logging::sensitivity::uri::MakeUri<
+                    #{SmithyHttpServer}::instrumentation::sensitivity::uri::MakeUri<
                         #{LabelType:W},
                         #{QueryType:W}
                     >
@@ -498,18 +498,18 @@ class ServerHttpSensitivityGenerator(
             )
         }
 
-        val value = writable { rustTemplate("#{SmithyHttpServer}::logging::sensitivity::RequestFmt::new()", *codegenScope) } + headerSensitivity.setter() + labelSensitivity.setter() + querySensitivity.setters()
+        val value = writable { rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::RequestFmt::new()", *codegenScope) } + headerSensitivity.setter() + labelSensitivity.setter() + querySensitivity.setters()
 
         return MakeFmt(type, value)
     }
 
     private fun defaultResponseFmt(): MakeFmt {
         val type = writable {
-            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::DefaultResponseFmt", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::DefaultResponseFmt", *codegenScope)
         }
 
         val value = writable {
-            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::ResponseFmt::new()", *codegenScope)
         }
         return MakeFmt(type, value)
     }
@@ -527,7 +527,7 @@ class ServerHttpSensitivityGenerator(
 
         val type = writable {
             rustTemplate(
-                "#{SmithyHttpServer}::logging::sensitivity::ResponseFmt<#{HeaderType:W}, #{StatusType:W}>",
+                "#{SmithyHttpServer}::instrumentation::sensitivity::ResponseFmt<#{HeaderType:W}, #{StatusType:W}>",
                 "HeaderType" to headerSensitivity.type(),
                 "StatusType" to statusCodeSensitivity.type(),
                 *codegenScope,
@@ -535,7 +535,7 @@ class ServerHttpSensitivityGenerator(
         }
 
         val value = writable {
-            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", *codegenScope)
+            rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::ResponseFmt::new()", *codegenScope)
         } + headerSensitivity.setter() + statusCodeSensitivity.setter()
 
         return MakeFmt(type, value)

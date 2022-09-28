@@ -12,7 +12,7 @@
 //!
 //! ```
 //! # use std::convert::Infallible;
-//! # use aws_smithy_http_server::logging::{*, sensitivity::{*, headers::*, uri::*}};
+//! # use aws_smithy_http_server::instrumentation::{*, sensitivity::{*, headers::*, uri::*}};
 //! # use http::{Request, Response};
 //! # use tower::{util::service_fn, Service};
 //! # async fn service(request: Request<()>) -> Result<Response<()>, Infallible> {

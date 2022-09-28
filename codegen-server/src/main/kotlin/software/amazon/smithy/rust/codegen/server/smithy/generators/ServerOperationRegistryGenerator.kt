@@ -338,7 +338,7 @@ ${operationImplementationStubs(operations)}
                                 let svc = #{ServerOperationHandler}::operation(registry.$operationName);
                                 let request_fmt = #{RequestFmt:W};
                                 let response_fmt = #{ResponseFmt:W};
-                                let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, "$operationName").request_fmt(request_fmt).response_fmt(response_fmt);
+                                let svc = #{SmithyHttpServer}::instrumentation::InstrumentOperation::new(svc, "$operationName").request_fmt(request_fmt).response_fmt(response_fmt);
                                 (#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)
                                 """,
                                 "RequestFmt" to sensitivityGen.requestFmt().value,

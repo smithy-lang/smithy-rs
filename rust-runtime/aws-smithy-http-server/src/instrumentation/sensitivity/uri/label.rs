@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::logging::{sensitivity::Sensitive, MakeFmt};
+use crate::instrumentation::{sensitivity::Sensitive, MakeFmt};
 
 /// A wrapper around a path [`&str`](str) which modifies the behavior of [`Display`]. Specific path segments are marked
 /// as sensitive by providing predicate over the segment index. This accommodates the [httpLabel trait] with
@@ -18,7 +18,7 @@ use crate::logging::{sensitivity::Sensitive, MakeFmt};
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::logging::sensitivity::uri::Label;
+/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::Label;
 /// # use http::Uri;
 /// # let path = "";
 /// // Path segment 2 is redacted and a trailing greedy label
@@ -42,7 +42,7 @@ pub struct Label<'a, F> {
 /// The pattern, `/alpha/beta/{greedy+}/trail`, has segment index 2 and offset from the end of 6.
 ///
 /// ```rust
-/// # use aws_smithy_http_server::logging::sensitivity::uri::GreedyLabel;
+/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::GreedyLabel;
 /// let greedy_label = GreedyLabel::new(2, 6);
 /// ```
 #[derive(Clone, Debug)]
@@ -177,7 +177,7 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::logging::sensitivity::uri::{tests::EXAMPLES, GreedyLabel};
+    use crate::instrumentation::sensitivity::uri::{tests::EXAMPLES, GreedyLabel};
 
     use super::Label;
 
