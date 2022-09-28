@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
@@ -78,6 +80,7 @@ internal class TopLevelErrorGeneratorTest {
             codegenContext.settings.codegenConfig,
         )
 
+        RustWriter.root().rust("##![allow(deprecated)]")
         rustCrate.withModule(RustModule.Error) { writer ->
             for (shape in model.structureShapes) {
                 if (shape.id.namespace == "com.example") {
