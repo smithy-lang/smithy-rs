@@ -33,10 +33,7 @@ const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
 
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
-    let format = tracing_subscriber::fmt::layer()
-        .with_ansi(true)
-        .with_line_number(true)
-        .with_level(true);
+    let format = tracing_subscriber::fmt::layer().pretty();
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
@@ -184,8 +181,11 @@ pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
 ) -> Result<output::GetStorageOutput, error::GetStorageError> {
+    tracing::debug!("attempting to authenticate storage user");
+
     // We currently only support Ash and he has nothing stored
     if !(input.user == "ash" && input.passcode == "pikachu123") {
+        tracing::debug!("authentication failed");
         return Err(error::GetStorageError::NotAuthorized(error::NotAuthorized {}));
     }
     Ok(output::GetStorageOutput { collection: vec![] })

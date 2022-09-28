@@ -14,7 +14,7 @@ pub mod body;
 pub(crate) mod error;
 pub mod extension;
 #[doc(hidden)]
-pub mod logging;
+pub mod instrumentation;
 #[doc(hidden)]
 pub mod operation;
 #[doc(hidden)]
