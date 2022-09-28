@@ -56,6 +56,10 @@ check-client-codegen-integration-tests:
 check-client-codegen-unit-tests:
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-core-codegen-unit-tests
+check-core-codegen-unit-tests:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-rust-runtimes
 check-rust-runtimes:
 	$(CI_ACTION) $@ $(ARGS)
