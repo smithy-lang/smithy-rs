@@ -115,7 +115,8 @@ class EndpointConfigCustomization(
                 "pub (crate) endpoint_resolver: std::sync::Arc<dyn #{SmithyResolver}<#{PlaceholderParams}>>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection // TODO: Uncomment once endpoints 2.0 project is completed.
+            is ServiceConfig.ConfigImpl -> emptySection
+// TODO(https://github.com/awslabs/smithy-rs/issues/1780): Uncomment once endpoints 2.0 project is completed
 //                rustTemplate(
 //                """
 //                /// Returns the endpoint resolver.
