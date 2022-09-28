@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
  * [ConstrainedStringGenerator] generates a wrapper tuple newtype holding a constrained `String`.
@@ -158,19 +159,10 @@ class ConstrainedStringGenerator(
             rustBlock("impl ${constraintViolation.name}") {
                 rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
                     rustBlock("match self") {
-                        val beginning = "Value with length {} at '{}' failed to satisfy constraint: Member must have length "
-                        val ending = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
-                            "between ${lengthTrait.min.get()} and ${lengthTrait.max.get()}, inclusive"
-                        } else if (lengthTrait.min.isPresent) (
-                            "greater than or equal to ${lengthTrait.min.get()}"
-                        ) else {
-                            check(lengthTrait.max.isPresent)
-                            "less than or equal to ${lengthTrait.max.get()}"
-                        }
                         rust(
                             """
                             Self::Length(length) => crate::model::ValidationExceptionField {
-                                message: format!("$beginning$ending", length, &path),
+                                message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
                                 path,
                             },
                             """

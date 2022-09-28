@@ -15,8 +15,10 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rust
 import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 class MapConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
@@ -80,24 +82,25 @@ class MapConstraintViolationGenerator(
             )
 
             rustBlock("impl $constraintViolationName") {
-                // TODO Remove `dead_code` once we use `path`.
-                rustBlock("##[allow(dead_code)] pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
                     rustBlock("match self") {
-                        if (shape.hasTrait<LengthTrait>()) {
-                            // TODO
+                        shape.getTrait<LengthTrait>()?.also {
                             rust(
                                 """
-                                Self::Length(_length) => crate::model::ValidationExceptionField {
+                                Self::Length(length) => crate::model::ValidationExceptionField {
+                                    message: format!("${it.validationErrorMessage()}", length, &path),
                                     path,
-                                    message: "make code good".to_owned(),
                                 },
                                 """)
                         }
                         if (isKeyConstrained(keyShape, symbolProvider)) {
-                            rust("""Self::Key(key_constraint_violation) => key_constraint_violation.as_validation_exception_field(path + "/${shape.key.memberName}"),""")
+                            // Note how we _do not_ append the key's member name to the path. This is intentional, as
+                            // per the `RestJsonMalformedLengthMapKey` test. Note keys are always strings.
+                            // https://github.com/awslabs/smithy/blob/ee0b4ff90daaaa5101f32da936c25af8c91cc6e9/smithy-aws-protocol-tests/model/restJson1/validation/malformed-length.smithy#L296-L295
+                            rust("""Self::Key(key_constraint_violation) => key_constraint_violation.as_validation_exception_field(path),""")
                         }
                         if (isValueConstrained(valueShape, model, symbolProvider)) {
-                            rust("""Self::Value(value_constraint_violation) => value_constraint_violation.as_validation_exception_field(path + "${shape.value.memberName}"),""")
+                            rust("""Self::Value(value_constraint_violation) => value_constraint_violation.as_validation_exception_field(path + "/${shape.value.memberName}"),""")
                         }
                     }
                 }
