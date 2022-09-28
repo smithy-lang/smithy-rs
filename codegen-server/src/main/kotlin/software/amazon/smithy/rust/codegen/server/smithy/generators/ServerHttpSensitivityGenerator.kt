@@ -32,6 +32,12 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import java.util.Optional
 
+/** Calculate the byte length of a `String` in UTF-8 encoding. This matches `String::len` in Rust.
+ *
+ * See https://doc.rust-lang.org/std/string/struct.String.html#method.len for more information.
+ * */
+private fun String.toRustLen(): Int = this.encodeToByteArray(throwOnInvalidSequence = true).size
+
 /** Models the ways status codes can be bound and sensitive. */
 class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: RuntimeConfig) {
     private val codegenScope = arrayOf(
@@ -169,7 +175,7 @@ sealed class HeaderSensitivity(
                     rust(
                         """
                         let starts_with = name.as_str().starts_with("$it");
-                        let key_suffix = if starts_with { Some(${it.length}) } else { None };
+                        let key_suffix = if starts_with { Some(${it.toRustLen()}) } else { None };
                         """,
                     )
                 } ?: rust("let key_suffix = None;")
@@ -178,7 +184,7 @@ sealed class HeaderSensitivity(
             is SensitiveMapValue -> writable {
                 rust("let starts_with = name.as_str().starts_with(${prefixHeader.dq()});")
                 if (keySensitive) {
-                    rust("let key_suffix = if starts_with { Some(${prefixHeader.length}) } else { None };")
+                    rust("let key_suffix = if starts_with { Some(${prefixHeader.toRustLen()}) } else { None };")
                 } else {
                     rust("let key_suffix = None;")
                 }
@@ -437,7 +443,7 @@ class ServerHttpSensitivityGenerator(
                 val remainder = uriPattern
                     .segments
                     .drop(index + 1)
-                    .sumOf { it.content.length + 1 }
+                    .sumOf { it.content.toRustLen() + 1 }
                 GreedyLabel(index, remainder)
             }
 
