@@ -28,6 +28,27 @@ class ServerHttpSensitivityGeneratorTest {
     )
 
     @Test
+    fun `rust string length`() {
+        val strings = arrayOf(
+            "",
+            "hello world",
+            "\uD83D\uDE0A",
+            "ᄿԼӔӰ㌕",
+            "פארוואס קוקסטו דאס?",
+        )
+
+        val testProject = TestWorkspace.testProject()
+        testProject.lib { writer ->
+            writer.unitTest("rust_length") {
+                for (str in strings) {
+                    rustTemplate("""assert_eq!("$str".len(), ${str.toRustLen()});""")
+                }
+            }
+        }
+        testProject.compileAndTest()
+    }
+
+    @Test
     fun `query closure`() {
         val model = """
             namespace test

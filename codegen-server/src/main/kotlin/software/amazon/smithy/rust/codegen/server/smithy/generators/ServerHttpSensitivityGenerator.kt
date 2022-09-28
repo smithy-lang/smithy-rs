@@ -36,7 +36,7 @@ import java.util.Optional
  *
  * See https://doc.rust-lang.org/std/string/struct.String.html#method.len for more information.
  * */
-private fun String.toRustLen(): Int = this.encodeToByteArray(throwOnInvalidSequence = true).size
+internal fun String.toRustLen(): Int = this.encodeToByteArray(throwOnInvalidSequence = true).size
 
 /** Models the ways status codes can be bound and sensitive. */
 class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: RuntimeConfig) {
