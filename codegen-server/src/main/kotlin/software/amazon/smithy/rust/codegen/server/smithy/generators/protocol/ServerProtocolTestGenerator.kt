@@ -868,6 +868,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKeyOverride_case0", TestType.MalformedRequest),
