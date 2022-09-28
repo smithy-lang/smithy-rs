@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client
+package software.amazon.smithy.rust.codegen.client.smithy
 
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotBeEmpty
@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
-class SymbolBuilderTest {
+class SymbolVisitorTest {
     private fun Symbol.referenceClosure(): List<Symbol> {
         val referencedSymbols = this.references.map { it.symbol }
         return listOf(this) + referencedSymbols.flatMap { it.referenceClosure() }
