@@ -7,10 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -20,7 +16,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.RestRequestSpecGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType

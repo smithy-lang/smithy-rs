@@ -16,8 +16,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXmlFactory
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -31,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
@@ -57,7 +57,7 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
     ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> =
         currentProtocols.letIf(applies(serviceId)) {
             it + mapOf(
-                RestXmlTrait.ID to RestXmlFactory { protocolConfig ->
+                RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
                     S3(protocolConfig)
                 },
             )

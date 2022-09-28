@@ -19,7 +19,6 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
-import software.amazon.smithy.rust.codegen.client.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -37,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait

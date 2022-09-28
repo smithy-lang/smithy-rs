@@ -24,7 +24,6 @@ import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -74,6 +73,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator

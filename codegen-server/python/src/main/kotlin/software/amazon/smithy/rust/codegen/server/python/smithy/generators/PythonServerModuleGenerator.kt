@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -19,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class PythonServerModuleGenerator(
     codegenContext: ServerCodegenContext,

@@ -8,14 +8,14 @@ package software.amazon.smithy.rust.codegen.client.customizations
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.rustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.stubConfigProject
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.rustSettings
 
 internal class ResiliencyConfigCustomizationTest {
     private val baseModel = """
