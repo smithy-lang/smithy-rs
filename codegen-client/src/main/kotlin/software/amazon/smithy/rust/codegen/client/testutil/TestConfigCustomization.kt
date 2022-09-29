@@ -26,7 +26,14 @@ fun stubConfigCustomization(name: String): ConfigCustomization {
         override fun section(section: ServiceConfig): Writable = writable {
             when (section) {
                 ServiceConfig.ConfigStruct -> rust("_$name: u64,")
-                ServiceConfig.ConfigImpl -> emptySection
+                ServiceConfig.ConfigImpl -> rust(
+                    """
+                    ##[allow(missing_docs)]
+                    pub fn $name(&self) -> u64 {
+                        self._$name
+                    }
+                    """,
+                )
                 ServiceConfig.BuilderStruct -> rust("_$name: Option<u64>,")
                 ServiceConfig.BuilderImpl -> rust(
                     """

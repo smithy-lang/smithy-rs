@@ -105,17 +105,23 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
     private val region = region(codegenContext.runtimeConfig)
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
-    override fun section(section: ServiceConfig) =
-        writable {
-            when (section) {
-                is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
-                is ServiceConfig.ConfigImpl -> emptySection
-                is ServiceConfig.BuilderStruct ->
-                    rustTemplate("region: Option<#{Region}>,", *codegenScope)
-
-                ServiceConfig.BuilderImpl ->
-                    rustTemplate(
-                        """
+    override fun section(section: ServiceConfig) = writable {
+        when (section) {
+            is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
+            is ServiceConfig.ConfigImpl -> rustTemplate(
+                """
+                /// Returns the AWS region, if it was provided.
+                pub fn region(&self) -> Option<&#{Region}> {
+                    self.region.as_ref()
+                }
+                """,
+                *codegenScope,
+            )
+            is ServiceConfig.BuilderStruct ->
+                rustTemplate("region: Option<#{Region}>,", *codegenScope)
+            ServiceConfig.BuilderImpl ->
+                rustTemplate(
+                    """
                     /// Sets the AWS region to use when making requests.
                     ///
                     /// ## Examples
@@ -132,15 +138,15 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                         self
                     }
                     """,
-                        *codegenScope,
-                    )
-
-                ServiceConfig.BuilderBuild -> rustTemplate(
-                    """region: self.region,""",
                     *codegenScope,
                 )
-            }
+
+            ServiceConfig.BuilderBuild -> rustTemplate(
+                """region: self.region,""",
+                *codegenScope,
+            )
         }
+    }
 }
 
 class RegionConfigPlugin : OperationCustomization() {
