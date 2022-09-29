@@ -138,15 +138,15 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                         self
                     }
                     """,
-                        *codegenScope,
-                    )
-
-                ServiceConfig.BuilderBuild -> rustTemplate(
-                    """region: self.region,""",
                     *codegenScope,
                 )
-            }
+
+            ServiceConfig.BuilderBuild -> rustTemplate(
+                """region: self.region,""",
+                *codegenScope,
+            )
         }
+    }
 }
 
 class RegionConfigPlugin : OperationCustomization() {

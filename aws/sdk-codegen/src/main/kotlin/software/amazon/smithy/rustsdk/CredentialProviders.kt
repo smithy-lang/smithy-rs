@@ -96,16 +96,16 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                         self
                     }
                     """,
-                        *codegenScope,
-                    )
-                }
-
-                ServiceConfig.BuilderBuild -> rustTemplate(
-                    "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
                     *codegenScope,
                 )
             }
+
+            ServiceConfig.BuilderBuild -> rustTemplate(
+                "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
+                *codegenScope,
+            )
         }
+    }
 }
 
 class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
