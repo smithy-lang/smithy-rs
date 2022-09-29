@@ -34,13 +34,13 @@ class CustomizableOperationGenerator(
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.Operation) { writer ->
-            writer.docs("Operation customization and supporting types")
-            writer.rust("pub mod customize;")
+        crate.withModule(RustModule.Operation) {
+            docs("Operation customization and supporting types")
+            rust("pub mod customize;")
         }
 
-        crate.withNonRootModule(CUSTOMIZE_MODULE) { writer ->
-            writer.rustTemplate(
+        crate.withNonRootModule(CUSTOMIZE_MODULE) {
+            rustTemplate(
                 """
                 pub use #{Operation};
                 pub use #{ClassifyRetry};
@@ -50,10 +50,10 @@ class CustomizableOperationGenerator(
                 "ClassifyRetry" to smithyHttp.member("retry::ClassifyRetry"),
                 "RetryKind" to smithyTypes.member("retry::RetryKind"),
             )
-            renderCustomizableOperationModule(writer)
+            renderCustomizableOperationModule(this)
 
             if (includeFluentClient) {
-                renderCustomizableOperationSend(writer)
+                renderCustomizableOperationSend(this)
             }
         }
     }

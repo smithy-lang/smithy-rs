@@ -172,12 +172,12 @@ open class ServerCodegenVisitor(
      */
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
-        rustCrate.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
+        rustCrate.useShapeWriter(shape) {
+            StructureGenerator(model, symbolProvider, this, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-            builderGenerator.render(writer)
-            writer.implBlock(shape, symbolProvider) {
+            builderGenerator.render(this)
+            this.implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
             }
         }
@@ -191,8 +191,8 @@ open class ServerCodegenVisitor(
     override fun stringShape(shape: StringShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                ServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
+            rustCrate.useShapeWriter(shape) {
+                ServerEnumGenerator(model, symbolProvider, this, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
     }
@@ -207,7 +207,7 @@ open class ServerCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         logger.info("[rust-server-codegen] Generating an union $shape")
         rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = false).render()
+            UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = false).render()
         }
     }
 

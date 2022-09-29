@@ -176,7 +176,7 @@ class JsonSerializerGenerator(
         includedMembers: List<MemberShape>,
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(structureShape),
@@ -194,8 +194,8 @@ class JsonSerializerGenerator(
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val fnName = symbolProvider.serializeFunctionName(member)
         val target = model.expectShape(member.target)
-        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
-            writer.rustBlockTemplate(
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+            rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> std::result::Result<#{ByteSlab}, #{Error}>",
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(target),
@@ -215,8 +215,8 @@ class JsonSerializerGenerator(
 
     override fun unsetStructure(structure: StructureShape): RuntimeType {
         val fnName = "rest_json_unsetpayload"
-        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
-            writer.rustTemplate(
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+            rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
                     b"{}"[..].into()
@@ -237,7 +237,7 @@ class JsonSerializerGenerator(
         val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
@@ -253,7 +253,7 @@ class JsonSerializerGenerator(
     override fun documentSerializer(): RuntimeType {
         val fnName = "serialize_document"
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustTemplate(
+            rustTemplate(
                 """
                 pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
                     let mut out = String::new();
@@ -303,8 +303,8 @@ class JsonSerializerGenerator(
     ) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
-            writer.rustBlockTemplate(
+        val structureSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) {
+            rustBlockTemplate(
                 "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
                 *codegenScope,
@@ -435,8 +435,8 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) { writer ->
-            writer.rustBlockTemplate(
+        val unionSerializer = RuntimeType.forInlineFun(fnName, jsonSerModule) {
+            rustBlockTemplate(
                 "pub fn $fnName(${context.writerExpression}: &mut #{JsonObjectWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to unionSymbol,
                 *codegenScope,

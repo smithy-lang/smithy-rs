@@ -41,19 +41,19 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        rustCrate.withModule(DefaultPublicModules["operation"]!!) { writer ->
-            ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(writer)
+        rustCrate.withModule(DefaultPublicModules["operation"]!!) {
+            ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
         }
 
         for (operation in operations) {
             if (operation.errors.isNotEmpty()) {
-                rustCrate.withModule(RustModule.Error) { writer ->
-                    renderCombinedErrors(writer, operation)
+                rustCrate.withModule(RustModule.Error) {
+                    renderCombinedErrors(this, operation)
                 }
             }
         }
-        rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
-            renderOperationHandler(writer, operations)
+        rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) {
+            renderOperationHandler(this, operations)
         }
         rustCrate.withModule(
             RustModule.public(
@@ -63,8 +63,8 @@ open class ServerServiceGenerator(
                 you can register your service's operation implementations.
                 """,
             ),
-        ) { writer ->
-            renderOperationRegistry(writer, operations)
+        ) {
+            renderOperationRegistry(this, operations)
         }
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
@@ -77,23 +77,22 @@ open class ServerServiceGenerator(
                         Attribute.DocHidden,
                     ),
                 ),
-                null,
             ),
-        ) { writer ->
+        ) {
             for (operation in operations) {
-                ServerOperationGenerator(codegenContext, operation).render(writer)
+                ServerOperationGenerator(codegenContext, operation).render(this)
             }
         }
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
             RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
-        ) { writer ->
+        ) {
             val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
             ServerServiceGeneratorV2(
                 codegenContext,
                 serverProtocol,
-            ).render(writer)
+            ).render(this)
         }
 
         renderExtras(operations)

@@ -86,14 +86,14 @@ class PythonServerCodegenVisitor(
      */
     override fun structureShape(shape: StructureShape) {
         logger.info("[python-server-codegen] Generating a structure $shape")
-        rustCrate.useShapeWriter(shape) { writer ->
+        rustCrate.useShapeWriter(shape) {
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
+            PythonServerStructureGenerator(model, symbolProvider, this, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-            builderGenerator.render(writer)
-            writer.implBlock(shape, symbolProvider) {
+            builderGenerator.render(this)
+            implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
             }
         }
@@ -107,8 +107,8 @@ class PythonServerCodegenVisitor(
     override fun stringShape(shape: StringShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                PythonServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
+            rustCrate.useShapeWriter(shape) {
+                PythonServerEnumGenerator(model, symbolProvider, this, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
     }

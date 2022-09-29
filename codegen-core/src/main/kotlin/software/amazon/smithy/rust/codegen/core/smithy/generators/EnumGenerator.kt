@@ -129,23 +129,23 @@ open class EnumGenerator(
         meta.render(writer)
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
-            rust("/// Returns the `&str` value of the enum member.")
-            rustBlock("pub fn as_str(&self) -> &str") {
-                write("&self.0")
+            writer.rust("/// Returns the `&str` value of the enum member.")
+            writer.rustBlock("pub fn as_str(&self) -> &str") {
+                writer.write("&self.0")
             }
 
-            rust("/// Returns all the `&str` representations of the enum members.")
-            rustBlock("pub fn $Values() -> &'static [&'static str]") {
-                withBlock("&[", "]") {
+            writer.rust("/// Returns all the `&str` representations of the enum members.")
+            writer.rustBlock("pub fn $Values() -> &'static [&'static str]") {
+                writer.withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
-                    write(memberList)
+                    writer.write(memberList)
                 }
             }
         }
 
         writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
             writer.rustBlock("fn from(s: T) -> Self") {
-                write("$enumName(s.as_ref().to_owned())")
+                writer.write("$enumName(s.as_ref().to_owned())")
             }
         }
     }
@@ -166,8 +166,8 @@ open class EnumGenerator(
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
             if (target == CodegenTarget.CLIENT) {
-                docs("$UnknownVariant contains new variants that have been added since this code was generated.")
-                write("$UnknownVariant(String)")
+                writer.docs("$UnknownVariant contains new variants that have been added since this code was generated.")
+                writer.write("$UnknownVariant(String)")
             }
         }
     }

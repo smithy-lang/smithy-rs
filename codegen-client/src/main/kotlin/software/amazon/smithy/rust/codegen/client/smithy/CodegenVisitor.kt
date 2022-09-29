@@ -181,12 +181,12 @@ class CodegenVisitor(
      */
     override fun structureShape(shape: StructureShape) {
         logger.fine("generating a structure...")
-        rustCrate.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).render()
+        rustCrate.useShapeWriter(shape) {
+            StructureGenerator(model, symbolProvider, this, shape).render()
             if (!shape.hasTrait<SyntheticInputTrait>()) {
                 val builderGenerator = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-                builderGenerator.render(writer)
-                writer.implBlock(shape, symbolProvider) {
+                builderGenerator.render(this)
+                this.implBlock(shape, symbolProvider) {
                     builderGenerator.renderConvenienceMethod(this)
                 }
             }
@@ -200,8 +200,8 @@ class CodegenVisitor(
      */
     override fun stringShape(shape: StringShape) {
         shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                EnumGenerator(model, symbolProvider, writer, shape, enum).render()
+            rustCrate.useShapeWriter(shape) {
+                EnumGenerator(model, symbolProvider, this, shape, enum).render()
             }
         }
     }
@@ -215,7 +215,7 @@ class CodegenVisitor(
      */
     override fun unionShape(shape: UnionShape) {
         rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = true).render()
+            UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
     }
 }
