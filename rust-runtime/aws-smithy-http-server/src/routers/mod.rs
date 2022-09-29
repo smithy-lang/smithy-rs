@@ -48,7 +48,7 @@ pub trait Router<B> {
 
 /// A [`Service`] using the a [`Router`] `R` to redirect messages to specific routes.
 ///
-/// The `Protocol` parameter is used to determine
+/// The `Protocol` parameter is used to determine the serialization of errors.
 pub struct RoutingService<R, Protocol> {
     router: R,
     _protocol: PhantomData<Protocol>,
