@@ -1,6 +1,8 @@
-# The Anatomy of Smithy Rust
+# The Anatomy of a Service
 
-This is an dissection of the various mechanisms at work inside Smithy Rust, intended for new contributors or users who are interested in the internal details.
+What is [Smithy](https://awslabs.github.io/smithy/2.0/index.html)? At a high-level, it's a grammar for specifying services modulo business logic. A [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service) specifies a set of function signatures in the form of [Operations](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) to which encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.
+
+This is an dissection of the various mechanisms at work inside Smithy Rust in order to provide such a builder. This is intended for new contributors or users who are interested in the internal details.
 
 ## Operations
 
@@ -330,7 +332,7 @@ where
 }
 ```
 
-The `RouterService` is the final piece necessary to form a functioning composition - they are used to aggregate together HTTP services into a single HTTP service which can be presented to the customer.
+The `RouterService` is the final piece necessary to form a functioning composition - it is used to aggregate together the HTTP services, created via the upgrade procedure, into a single HTTP service which can be presented to the customer.
 
 ![RouterService](imgs/router.png)
 
@@ -532,7 +534,7 @@ The `Upgradable::upgrade` method on `Operation<S, L>`, previously presented in [
 
 ![Upgradable Diagram](imgs/upgradable-plugin.png)
 
-An example `Plugin` implementation can be found in [aws-smithy-http-server/examples/pokemon-service/src/plugin.rs](TODO).
+An example `Plugin` implementation can be found in [aws-smithy-http-server/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs).
 
 All builders implement the `Pluggable` trait, which allows them to apply plugins to service builders:
 
