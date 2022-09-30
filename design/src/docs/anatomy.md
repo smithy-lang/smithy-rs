@@ -74,7 +74,7 @@ impl aws_smithy_http_server::operation::OperationShape for GetPokemonSpecies {
 
 Note that `GetPokemonSpecies` marker structure is a zero-sized type (ZST), and therefore does not allocate - only existing in the type system as a way to hang operation specific data on.
 
-The following nomenclature will aid us in our survey. We describe a `tower::Service` as a "model service" if it's request and response are Smithy structures, as defined by the `OperationShape` trait - the `GetPokemonSpeciesInput`, `GetPokemonSpeciesOutput`, and `GetPokemonSpeciesError` described above. Similarly, we describe a `tower::Service` as a "HTTP service" if it's request and response are [`http`](https://github.com/hyperium/http) structures - `http::Request` and `http::Response`.
+The following nomenclature will aid us in our survey. We describe a `tower::Service` as a "model service" if its request and response are Smithy structures, as defined by the `OperationShape` trait - the `GetPokemonSpeciesInput`, `GetPokemonSpeciesOutput`, and `GetPokemonSpeciesError` described above. Similarly, we describe a `tower::Service` as a "HTTP service" if its request and response are [`http`](https://github.com/hyperium/http) structures - `http::Request` and `http::Response`.
 
 <!-- TODO(hidden_docs): Link to `Operation` and `OperationShapeExt` documentation  -->
 In contrast to the marker ZSTs above, the `Operation<S, L>` structure holds the actual runtime behavior of an operation, which is specified, during construction, by the customer. The `S` here is a model service, this is specified during construction of the `Operation<S, L>`. The constructors exist on the marker ZSTs as an extension trait to `OperationShape`, namely `OperationShapeExt`:
@@ -104,7 +104,7 @@ pub trait OperationShapeExt: OperationShape {
 
 Observe that there are two constructors provided: `from_handler` which takes a `H: Handler` and `from_service` which takes a `S: OperationService`. In both cases `Self` is passed as a parameter to the traits - this constrains `handler: H` and `svc: S` to the signature given by the implementation of `OperationShape` on `Self`.
 
-The `Handler` and `OperationService` both serve a similar purpose - they provide a common interface for converting to a the model service `S`. The `Handler<GetPokemonSpecies>` trait covers all closures taking `GetPokemonSpeciesInput` and asynchronously returning a `Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError>` - they are converted to a model service by a `IntoService`. The `OperationService<GetPokemonSpecies>` trait covers all `tower::Service`s with request `GetPokemonSpeciesInput`, response `GetPokemonSpeciesOutput` and error `GetPokemonSpeciesOutput` - they are converted to a model service by a `Normalize` (this is a very small conversion which flattens request tuples).
+The `Handler` and `OperationService` both serve a similar purpose - they provide a common interface for converting to a model service `S`. The `Handler<GetPokemonSpecies>` trait covers all closures taking `GetPokemonSpeciesInput` and asynchronously returning a `Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError>` - they are converted to a model service by a `IntoService`. The `OperationService<GetPokemonSpecies>` trait covers all `tower::Service`s with request `GetPokemonSpeciesInput`, response `GetPokemonSpeciesOutput` and error `GetPokemonSpeciesOutput` - they are converted to a model service by a `Normalize` (this is a very small conversion which flattens request tuples).
 <!-- TODO(hidden_docs): More information about the conversions can be found here. -->
 
 The `from_handler` constructor is used in the following way:
@@ -154,7 +154,7 @@ impl<S, L> Operation<S, L> {
 A typical use of this might be:
 
 ```rust
-let operation = GetPokemonSpecies::from_handler(hamdler).layer(RequestBodyLimitLayer::new(500));
+let operation = GetPokemonSpecies::from_handler(handler).layer(RequestBodyLimitLayer::new(500));
 ```
 
 where [RequestBodyLimitLayer](https://docs.rs/tower-http/latest/tower_http/limit/struct.RequestBodyLimitLayer.html) limits the size of the HTTP request to the `GetPokemonSpecies` operation.
@@ -317,7 +317,7 @@ which provides the ability to lookup an inner HTTP service from a collection usi
 Types which implement the `Router` trait are converted to a HTTP service via the `RoutingService` struct:
 
 ```rust
-/// A [`Service`] using the a [`Router`] `R` to redirect messages to specific routes.
+/// A [`Service`] using a [`Router`] `R` to redirect messages to specific routes.
 ///
 /// The `Protocol` parameter is used to determine the serialization of errors.
 pub struct RoutingService<R, Protocol> {
@@ -538,6 +538,7 @@ pub struct PokemonService<S> {
 ```
 
 ## Plugins
+<!-- TODO: Link to "Write a Plugin" documentation -->
 
 Smithy Rust also provides a way to hook into the upgrade procedure in order to modify the service behavior. This is done via the `Plugin` trait:
 
