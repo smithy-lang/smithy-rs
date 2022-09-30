@@ -221,10 +221,19 @@ where
     OpError: IntoResponse<P>,
 
     // The signature of the inner service is correct
-    S: Service<Op::Input, Response = Op::Output, Error = Op::Error> + Clone,
+    S: Service<Op::Input, Response = Op::Output, Error = Op::Error>,
+
+    async fn call(&mut self, request: http::Request) -> http::Response {
+        let model_request = match <Op::Input as OperationShape>::from_request(request).await {
+            Ok(ok) => ok,
+            Err(err) => return err.into_response()
+        };
+        let model_response = self.model_service.call(model_request).await;
+        model_response.into_response()
+    }
 ```
 
-When we `GetPokemonService::from_handler` or `GetPokemonService::from_service` the `S` we noted earlier in [Operations](#operations) will meet these requirements.
+When we `GetPokemonService::from_handler` or `GetPokemonService::from_service` the `S` we noted earlier in [Operations](#operations) will meet the constraints above.
 
 There is an associated `tower::Layer`, `UpgradeLayer<P, Op, B>` which constructs `Upgrade` from a service.
 
@@ -496,7 +505,13 @@ We provide two builder constructors:
 
 The `builder` constructor provides a `PokemonServiceBuilder` where `build` cannot be called until all operations are set because `MissingOperation` purposefully doesn't implement `Upgradable`. In contrast, the `unchecked_builder` which sets all `Op{N}` to `FailOnMissingOperation` can be immediately built, however any unset operations are upgraded into a service which always returns status code 500, as noted in [Upgrading a Model Service](#upgrading-a-model-service).
 
-After all `Op{N}` are upgraded in `build` they are collected into their protocol specific `Router` implementation, type erased via a `Route` (which basically amounts to `Box`ing), and then bundled up into a `RoutingService`. The `RoutingService` is then wrapped in a `PokemonService` newtype and presented to the user.
+The build method then proceeds as follows:
+
+1. Upgrade all `Op{N}` to a HTTP service via their `Upgradable::upgrade` method.
+2. Type erase them via `Route` (basically amounts to `Box`ing them).
+3. Pair each of them with their routing information and collect them all into a `Router`.
+4. Transform the `Router` implementation into a HTTP service via `RouterService`.
+5. Wrap the `RouterService` in a newtype given by the service name, `PokemonService`.
 
 ```rust
     /// Constructs a [`PokemonService`] from the arguments provided to the builder.
