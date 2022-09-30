@@ -56,13 +56,13 @@ long WriteIOs
 /// <p>Contains I/O usage metrics for a command that was invoked.</p>
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
-pub struct IOUsage {
+pub struct IoUsage {
     /// <p>The number of read I/O requests that the command made.</p>
     pub read_i_os: i64,
     /// <p>The number of write I/O requests that the command made.</p>
     pub write_i_os: i64,
 }
-impl std::fmt::Debug for IOUsage {
+impl std::fmt::Debug for IoUsage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = f.debug_struct("IOUsage");
         formatter.field("read_i_os", &self.read_i_os);
@@ -70,9 +70,9 @@ impl std::fmt::Debug for IOUsage {
         formatter.finish()
     }
 }
-/// See [`IOUsage`](crate::model::IOUsage)
+/// See [`IOUsage`](crate::model::IoUsage)
 pub mod io_usage {
-    /// A builder for [`IOUsage`](crate::model::IOUsage)
+    /// A builder for [`IoUsage`](crate::model::IoUsage)
     #[non_exhaustive]
     #[derive(Debug, Clone, Default)]
     pub struct Builder {
@@ -85,8 +85,9 @@ pub mod io_usage {
             self.read_i_os = Some(inp);
             self
         }
-        pub fn set_read_i_os(mut self, inp: i64) -> Self {
-            self.read_i_os = Some(inp);
+         /// <p>The number of read I/O requests that the command made.</p>
+        pub fn set_read_i_os(mut self, inp: Option<i64>) -> Self {
+            self.read_i_os = inp;
             self
         }
         /// <p>The number of write I/O requests that the command made.</p>
@@ -94,21 +95,22 @@ pub mod io_usage {
             self.write_i_os = Some(inp);
             self
         }
-        pub fn set_write_i_os(mut self, inp: i64) -> Self {
-            self.write_i_os = Some(inp);
+        /// <p>The number of write I/O requests that the command made.</p>
+        pub fn set_write_i_os(mut self, inp: Option<i64>) -> Self {
+            self.write_i_os = inp;
             self
         }
-        /// Consumes the builder and constructs a [`IOUsage`](crate::model::IOUsage)
-        pub fn build(self) -> crate::model::IOUsage {
-            crate::model::IOUsage {
+        /// Consumes the builder and constructs a [`IoUsage`](crate::model::IoUsage)
+        pub fn build(self) -> crate::model::IoUsage {
+            crate::model::IoUsage {
                 read_i_os: self.read_i_os.unwrap_or_default(),
                 write_i_os: self.write_i_os.unwrap_or_default(),
             }
         }
     }
 }
-impl IOUsage {
-    /// Creates a new builder-style object to manufacture [`IOUsage`](crate::model::IOUsage)
+impl IoUsage {
+    /// Creates a new builder-style object to manufacture [`IoUsage`](crate::model::IoUsage)
     pub fn builder() -> crate::model::io_usage::Builder {
         crate::model::io_usage::Builder::default()
     }
