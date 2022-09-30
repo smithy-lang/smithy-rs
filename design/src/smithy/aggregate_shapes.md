@@ -28,10 +28,10 @@ Smithy `structure` becomes a `struct` in Rust. Backwards compatibility & usabili
   2. All structs are marked `#[non_exhaustive]`
   3. All structs derive `Debug` & `PartialEq`. Structs **do not** derive `Eq` because a `float` member may be added in the future.
   4. Struct fields are public. Public struct fields allow for [split borrows](https://doc.rust-lang.org/nomicon/borrow-splitting.html). When working with output objects this significantly improves ergonomics, especially with optional fields.
-    ```rust,ignore
-     let out = dynamo::ListTablesOutput::new();
-     out.some_field.unwrap(); // <- partial move, impossible with an accessor
-    ```
+      ```rust
+      let out = dynamo::ListTablesOutput::new();
+      out.some_field.unwrap(); // <- partial move, impossible with an accessor
+      ```
   5. Builders are generated for structs that provide ergonomic and backwards compatible constructors. A builder for a struct is always available via the convenience method `SomeStruct::builder()`
   6. Structures manually implement debug: In order to support the [sensitive trait](https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait), a `Debug` implementation for structures is manually generated.
 
@@ -52,7 +52,7 @@ long ReadIOs
 long WriteIOs
 ```
 **Rust Output**:
-```rust,ignore
+```rust
 /// <p>Contains I/O usage metrics for a command that was invoked.</p>
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
@@ -118,12 +118,12 @@ impl IOUsage {
 ## Union
 Smithy `Union` is modeled as `enum` in Rust.
 
-    1. Generated `enum`s must be marked `#[non_exhaustive]`.
-    2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/awslabs/smithy-rs/issues/185).
-    1. Union members (enum variants) are **not** nullable, because Smithy union members cannot contain null values.
-    2. When union members contain references to other shapes, we generate a wrapping variant (see below).
-    3. Union members do not require `#[non_exhaustive]`, because changing the shape targeted by a union member is not backwards compatible.
-    4. `is_variant` and `as_variant` helper functions are generated to improve ergonomics.
+1. Generated `enum`s must be marked `#[non_exhaustive]`.
+2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/awslabs/smithy-rs/issues/185).
+3. Union members (enum variants) are **not** nullable, because Smithy union members cannot contain null values.
+4. When union members contain references to other shapes, we generate a wrapping variant (see below).
+5. Union members do not require `#[non_exhaustive]`, because changing the shape targeted by a union member is not backwards compatible.
+6. `is_variant` and `as_variant` helper functions are generated to improve ergonomics.
 
 ### Generated Union Example
 The union generated for a simplified `dynamodb::AttributeValue`
@@ -149,7 +149,7 @@ list BoolList {
 }
 ```
 **Rust**:
-```rust,ignore
+```rust
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 pub enum AttributeValue {
