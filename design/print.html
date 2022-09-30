@@ -612,23 +612,23 @@ long WriteIOs
 </span>/// &lt;p&gt;Contains I/O usage metrics for a command that was invoked.&lt;/p&gt;
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
-pub struct IOUsage {
+pub struct IoUsage {
     /// &lt;p&gt;The number of read I/O requests that the command made.&lt;/p&gt;
     pub read_i_os: i64,
     /// &lt;p&gt;The number of write I/O requests that the command made.&lt;/p&gt;
     pub write_i_os: i64,
 }
-impl std::fmt::Debug for IOUsage {
+impl std::fmt::Debug for IoUsage {
     fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
-        let mut formatter = f.debug_struct(&quot;IOUsage&quot;);
+        let mut formatter = f.debug_struct(&quot;IoUsage&quot;);
         formatter.field(&quot;read_i_os&quot;, &amp;self.read_i_os);
         formatter.field(&quot;write_i_os&quot;, &amp;self.write_i_os);
         formatter.finish()
     }
 }
-/// See [`IOUsage`](crate::model::IOUsage)
+/// See [`IoUsage`](crate::model::IoUsage)
 pub mod io_usage {
-    /// A builder for [`IOUsage`](crate::model::IOUsage)
+    /// A builder for [`IoUsage`](crate::model::IoUsage)
     #[non_exhaustive]
     #[derive(Debug, Clone, Default)]
     pub struct Builder {
@@ -641,8 +641,9 @@ pub mod io_usage {
             self.read_i_os = Some(inp);
             self
         }
-        pub fn set_read_i_os(mut self, inp: i64) -&gt; Self {
-            self.read_i_os = Some(inp);
+         /// &lt;p&gt;The number of read I/O requests that the command made.&lt;/p&gt;
+        pub fn set_read_i_os(mut self, inp: Option&lt;i64&gt;) -&gt; Self {
+            self.read_i_os = inp;
             self
         }
         /// &lt;p&gt;The number of write I/O requests that the command made.&lt;/p&gt;
@@ -650,21 +651,22 @@ pub mod io_usage {
             self.write_i_os = Some(inp);
             self
         }
-        pub fn set_write_i_os(mut self, inp: i64) -&gt; Self {
-            self.write_i_os = Some(inp);
+        /// &lt;p&gt;The number of write I/O requests that the command made.&lt;/p&gt;
+        pub fn set_write_i_os(mut self, inp: Option&lt;i64&gt;) -&gt; Self {
+            self.write_i_os = inp;
             self
         }
-        /// Consumes the builder and constructs a [`IOUsage`](crate::model::IOUsage)
-        pub fn build(self) -&gt; crate::model::IOUsage {
-            crate::model::IOUsage {
+        /// Consumes the builder and constructs a [`IoUsage`](crate::model::IoUsage)
+        pub fn build(self) -&gt; crate::model::IoUsage {
+            crate::model::IoUsage {
                 read_i_os: self.read_i_os.unwrap_or_default(),
                 write_i_os: self.write_i_os.unwrap_or_default(),
             }
         }
     }
 }
-impl IOUsage {
-    /// Creates a new builder-style object to manufacture [`IOUsage`](crate::model::IOUsage)
+impl IoUsage {
+    /// Creates a new builder-style object to manufacture [`IoUsage`](crate::model::IoUsage)
     pub fn builder() -&gt; crate::model::io_usage::Builder {
         crate::model::io_usage::Builder::default()
     }
