@@ -8,22 +8,21 @@ description = "A smithy Rust service to retrieve information about Pokémon."
 default-run = "pokemon-service"
 
 [[bin]]
+name = "pokemon-service"
+path = "src/bin/pokemon-service.rs"
+
+[[bin]]
 name = "pokemon-service-tls"
 path = "src/bin/pokemon-service-tls.rs"
 
 [[bin]]
-name = "pokemon-service"
-path = "src/main.rs"
-
-[[bin]]
 name = "pokemon-service-lambda"
-path = "src/lambda.rs"
+path = "src/bin/pokemon-service-lambda.rs"
 
 [dependencies]
 async-stream = "0.3"
 clap = { version = "~3.2.1", features = ["derive"] }
 hyper = {version = "0.14.12", features = ["server"] }
-lambda_http = "0.6.0"
 rand = "0.8"
 tokio = "1.20.1"
 tower = "0.4"
@@ -31,11 +30,14 @@ tower-http = { version = "0.3", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 
-# These dependencies are only required for `pokemon-service-tls`.
+# These dependencies are only required for the `pokemon-service-tls` program.
 tls-listener = { version = "0.5.1", features = ["rustls", "hyper-h2"] }
 tokio-rustls = "0.23.4"
 rustls-pemfile = "1.0.1"
 futures-util = "0.3"
+
+# This dependency is only required for the `pokemon-service-lambda` program.
+lambda_http = "0.6.0"
 
 # Local paths
 aws-smithy-http-server = { path = "../../" }
@@ -47,7 +49,7 @@ home = "0.5"
 serial_test = "0.7.0"
 wrk-api-bench = "0.0.7"
 
-# These dependencies are only required for testing `pokemon-service-tls`.
+# This dependency is only required for testing the `pokemon-service-tls` program.
 hyper-rustls = { version = "0.23.0", features = ["http2"] }
 
 # Local paths
