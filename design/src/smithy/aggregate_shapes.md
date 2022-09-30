@@ -28,11 +28,10 @@ Smithy `structure` becomes a `struct` in Rust. Backwards compatibility & usabili
   2. All structs are marked `#[non_exhaustive]`
   3. All structs derive `Debug` & `PartialEq`. Structs **do not** derive `Eq` because a `float` member may be added in the future.
   4. Struct fields are public. Public struct fields allow for [split borrows](https://doc.rust-lang.org/nomicon/borrow-splitting.html). When working with output objects this significantly improves ergonomics, especially with optional fields.
-    
-```rust,ignore
-let out = dynamo::ListTablesOutput::new();
-out.some_field.unwrap(); // <- partial move, impossible with an accessor
-```
+      ```rust,ignore
+      let out = dynamo::ListTablesOutput::new();
+      out.some_field.unwrap(); // <- partial move, impossible with an accessor
+      ```
   5. Builders are generated for structs that provide ergonomic and backwards compatible constructors. A builder for a struct is always available via the convenience method `SomeStruct::builder()`
   6. Structures manually implement debug: In order to support the [sensitive trait](https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait), a `Debug` implementation for structures is manually generated.
 
