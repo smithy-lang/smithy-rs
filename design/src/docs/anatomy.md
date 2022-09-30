@@ -2,13 +2,31 @@
 
 What is [Smithy](https://awslabs.github.io/smithy/2.0/index.html)? At a high-level, it's a grammar for specifying services modulo business logic. A [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service) specifies a set of function signatures in the form of [Operations](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) to which encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.
 
-This is an dissection of the various mechanisms at work inside Smithy Rust in order to provide such a builder. This is intended for new contributors or users who are interested in the internal details.
+This survey is disinterested in the actual code generator Kotlin implementation and instead focused on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in the internal details.
+
+During the survey we will use the [`pokemon.smithy`](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
+
+```smithy
+/// The Pokémon Service allows you to retrieve information about Pokémon species.
+@title("Pokémon Service")
+@restJson1
+service PokemonService {
+    version: "2021-12-01",
+    resources: [PokemonSpecies, Storage],
+    operations: [
+        GetServerStatistics,
+        DoNothing,
+        CapturePokemon,
+        CheckHealth
+    ],
+}
+```
 
 ## Operations
 
 A [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) specifies the input, output, and possible errors of an API operation. One might characterize an Operation as syntax for specifying a function type - constraining the domain and codomain.
-
 <!-- TODO(hidden_docs): Link to `OperationShape` documentation  -->
+
 We represent this in Rust using the `OperationShape` trait:
 
 ```rust
@@ -117,11 +135,9 @@ let svc: Svc = /* ... */;
 let operation = GetPokemonService::from_service(svc);
 ```
 
-To summarize, the `S`, in `Operation<S, L>`, is a **model service** constructed from a `Handler` or a `OperationService` subject to the constraints of a `OperationShape`.
+To summarize, the `S`, in `Operation<S, L>`, is a **model service** constructed from a `Handler` or a `OperationService` subject to the constraints of an `OperationShape`.
 
-Now, what about the `L` in `Operation<S, L>`?
-
-The `L` is a `tower::Layer`, or colloquially "middleware", that is applied to a **HTTP service**. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
+Now, what about the `L` in `Operation<S, L>`? The `L` is a `tower::Layer`, or colloquially "middleware", that is applied to a **HTTP service**. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
 
 ```rust
 impl<S, L> Operation<S, L> {
@@ -167,7 +183,7 @@ pub trait IntoResponse<Protocol> {
 }
 ```
 
-Note that both traits are parameterized by `Protocol`. These are ZST marker structs, a few [publicly available](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) markers are:
+Note that both traits are parameterized by `Protocol`. [Protocols](https://awslabs.github.io/smithy/2.0/aws/protocols/index.html) exist as ZST marker structs:
 
 ```rust
 /// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
@@ -344,14 +360,7 @@ The service builder is the primary public API, it can be generated for every [Sm
 /// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
-pub struct PokemonServiceBuilder<
-    Op1,
-    Op2,
-    Op3,
-    Op4,
-    Op5,
-    Op6,
-> {
+pub struct PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
     capture_pokemon_operation: Op1,
     empty_operation: Op2,
     get_pokemon_species: Op3,
@@ -487,7 +496,38 @@ We provide two builder constructors:
 
 The `builder` constructor provides a `PokemonServiceBuilder` where `build` cannot be called until all operations are set because `MissingOperation` purposefully doesn't implement `Upgradable`. In contrast, the `unchecked_builder` which sets all `Op{N}` to `FailOnMissingOperation` can be immediately built, however any unset operations are upgraded into a service which always returns status code 500, as noted in [Upgrading a Model Service](#upgrading-a-model-service).
 
-After all `Op{N}` are upgraded in `build` they are collected into their protocol specific `Router` implementation and then bundled up into a `RoutingService`. The `RoutingService` is then wrapped in a `PokemonService` newtype and presented to the user.
+After all `Op{N}` are upgraded in `build` they are collected into their protocol specific `Router` implementation, type erased via a `Route` (which basically amounts to `Box`ing), and then bundled up into a `RoutingService`. The `RoutingService` is then wrapped in a `PokemonService` newtype and presented to the user.
+
+```rust
+    /// Constructs a [`PokemonService`] from the arguments provided to the builder.
+    pub fn build(self) -> PokemonService<Route>
+    where
+        Op1: Upgradable<AwsRestJson1, CheckHealth>,
+        Op1::Service: tower::Service<http::Request, Error = Infallible>,
+
+        Op2: Upgradable<AwsRestJson1, DoNothing>,
+        Op2::Service: tower::Service<http::Request, Error = Infallible>,
+
+        /* ... */
+{
+    let router = RestRouter::from_iter([
+        (
+            /* `CheckHealth` (Op1) routing information */,
+            Route::new(self.check_health.upgrade())
+        ),
+        (
+            /* `DoNothing` (Op2) routing information */,
+            Route::new(self.do_nothing.upgrade())
+        ),
+        /* ... */
+    ]);
+    PokemonService {
+        router: RoutingService::new(router)
+    }
+}
+```
+
+where
 
 ```rust
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
@@ -566,7 +606,45 @@ pub trait Pluggable<NewPlugin> {
 }
 ```
 
-As seen in the `Pluggable` documentation, third-parties can use extension traits over `Pluggable` to extend the API of builders.
+As seen in the `Pluggable` documentation, third-parties can use extension traits over `Pluggable` to extend the API of builders. In addition to all the `Op{N}` the service builder also holds a `Pl`:
+
+```rust
+/// The service builder for [`PokemonService`].
+///
+/// Constructed via [`PokemonService::builder`].
+pub struct PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Pl> {
+    capture_pokemon_operation: Op1,
+    empty_operation: Op2,
+    get_pokemon_species: Op3,
+    get_server_statistics: Op4,
+    get_storage: Op5,
+    health_check_operation: Op6,
+
+    plugin: Pl
+}
+```
+
+which allows the following `Pluggable` implementation to be generated:
+
+```rust
+impl<Op1, Op2, /* ... */, Pl, NewPl> aws_smithy_http_server::plugin::Pluggable<NewPl>
+    for PokemonServiceBuilder<Op1, Op2, /* ... */, Pl>
+{
+    type Output =
+        PokemonServiceBuilder<Op1, Exts1, aws_smithy_http_server::plugin::PluginStack<Pl, NewPl>>;
+    fn apply(self, plugin: NewPl) -> Self::Output {
+        PokemonServiceBuilder {
+            capture_pokemon_operation: self.capture_pokemon_operation,
+            empty_operation: self.empty_operation,
+            /* ... */,
+
+            plugin: PluginStack::new(self.plugin, plugin),
+        }
+    }
+}
+```
+
+Here `PluginStack` works in a similar way to [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) - allowing users to append a new plugin rather than replacing the currently set one.
 
 ## Accessing Unmodelled Data
 
