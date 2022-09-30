@@ -64,13 +64,13 @@ pub struct IoUsage {
 }
 impl std::fmt::Debug for IoUsage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut formatter = f.debug_struct("IOUsage");
+        let mut formatter = f.debug_struct("IoUsage");
         formatter.field("read_i_os", &self.read_i_os);
         formatter.field("write_i_os", &self.write_i_os);
         formatter.finish()
     }
 }
-/// See [`IOUsage`](crate::model::IoUsage)
+/// See [`IoUsage`](crate::model::IoUsage)
 pub mod io_usage {
     /// A builder for [`IoUsage`](crate::model::IoUsage)
     #[non_exhaustive]
