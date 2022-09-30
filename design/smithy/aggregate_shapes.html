@@ -168,7 +168,13 @@
 <li>All structs are marked <code>#[non_exhaustive]</code></li>
 <li>All structs derive <code>Debug</code> &amp; <code>PartialEq</code>. Structs <strong>do not</strong> derive <code>Eq</code> because a <code>float</code> member may be added in the future.</li>
 <li>Struct fields are public. Public struct fields allow for <a href="https://doc.rust-lang.org/nomicon/borrow-splitting.html">split borrows</a>. When working with output objects this significantly improves ergonomics, especially with optional fields.
-<code>rust,ignore let out = dynamo::ListTablesOutput::new(); out.some_field.unwrap(); // &lt;- partial move, impossible with an accessor </code></li>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let out = dynamo::ListTablesOutput::new();
+out.some_field.unwrap(); // &lt;- partial move, impossible with an accessor
+<span class="boring">}
+</span></code></pre></pre>
+</li>
 <li>Builders are generated for structs that provide ergonomic and backwards compatible constructors. A builder for a struct is always available via the convenience method <code>SomeStruct::builder()</code></li>
 <li>Structures manually implement debug: In order to support the <a href="https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait">sensitive trait</a>, a <code>Debug</code> implementation for structures is manually generated.</li>
 </ol>
@@ -187,7 +193,9 @@ long ReadIOs
 long WriteIOs
 </code></pre>
 <p><strong>Rust Output</strong>:</p>
-<pre><code class="language-rust ignore">/// &lt;p&gt;Contains I/O usage metrics for a command that was invoked.&lt;/p&gt;
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// &lt;p&gt;Contains I/O usage metrics for a command that was invoked.&lt;/p&gt;
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
 pub struct IOUsage {
@@ -247,16 +255,18 @@ impl IOUsage {
         crate::model::io_usage::Builder::default()
     }
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 <h2 id="union"><a class="header" href="#union">Union</a></h2>
 <p>Smithy <code>Union</code> is modeled as <code>enum</code> in Rust.</p>
-<pre><code>1. Generated `enum`s must be marked `#[non_exhaustive]`.
-2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/awslabs/smithy-rs/issues/185).
-1. Union members (enum variants) are **not** nullable, because Smithy union members cannot contain null values.
-2. When union members contain references to other shapes, we generate a wrapping variant (see below).
-3. Union members do not require `#[non_exhaustive]`, because changing the shape targeted by a union member is not backwards compatible.
-4. `is_variant` and `as_variant` helper functions are generated to improve ergonomics.
-</code></pre>
+<ol>
+<li>Generated <code>enum</code>s must be marked <code>#[non_exhaustive]</code>.</li>
+<li>Generated <code>enum</code>s must provide an <code>Unknown</code> variant. If parsing receives an unknown input that doesn't match any of the given union variants, <code>Unknown</code> should be constructed. <a href="https://github.com/awslabs/smithy-rs/issues/185">Tracking Issue</a>.</li>
+<li>Union members (enum variants) are <strong>not</strong> nullable, because Smithy union members cannot contain null values.</li>
+<li>When union members contain references to other shapes, we generate a wrapping variant (see below).</li>
+<li>Union members do not require <code>#[non_exhaustive]</code>, because changing the shape targeted by a union member is not backwards compatible.</li>
+<li><code>is_variant</code> and <code>as_variant</code> helper functions are generated to improve ergonomics.</li>
+</ol>
 <h3 id="generated-union-example"><a class="header" href="#generated-union-example">Generated Union Example</a></h3>
 <p>The union generated for a simplified <code>dynamodb::AttributeValue</code>
 <strong>Smithy</strong>:</p>
@@ -280,7 +290,9 @@ list BoolList {
 }
 </code></pre>
 <p><strong>Rust</strong>:</p>
-<pre><code class="language-rust ignore">#[non_exhaustive]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 pub enum AttributeValue {
     /// a string value
@@ -316,7 +328,8 @@ impl AttributeValue {
         self.as_string().is_some()
     }
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 
                     </main>
 

@@ -276,7 +276,9 @@ full middleware layers that will get added by the dispatch stack.</p>
 <h3 id="input-construction"><a class="header" href="#input-construction">Input Construction</a></h3>
 <p>A customer interacts with the SDK builders to construct an input. The <code>build()</code> method on an input returns
 an <code>Operation&lt;Output&gt;</code>. This codifies the base HTTP request &amp; all the configuration and middleware layers required to modify and dispatch the request.</p>
-<pre><code class="language-rust ignore">pub struct Operation&lt;H, R&gt; {
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct Operation&lt;H, R&gt; {
     request: Request,
     response_handler: H,
     _retry_policy: R,
@@ -286,13 +288,16 @@ pub struct Request {
     inner: http::Request&lt;SdkBody&gt;,
     properties: PropertyBag,
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 <p>For most requests, <code>.build()</code> will NOT consume the input. A user can call <code>.build()</code> multiple times to produce multiple operations from the same input.</p>
 <p>By using a property bag, we can define the <code>Operation</code> in Smithy core. AWS specific configuration can be added later in the stack.</p>
 <h3 id="operation-construction"><a class="header" href="#operation-construction">Operation Construction</a></h3>
 <p>In order to construct an operation, the generated code injects appropriate middleware &amp; configuration via the configuration property bag. It does this by reading the configuration properties out of the service
 config, copying them as necessary, and loading them into the <code>Request</code>:</p>
-<pre><code class="language-rust ignore">// This is approximately the generated code, I've cleaned a few things up for readability.
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// This is approximately the generated code, I've cleaned a few things up for readability.
 pub fn build(self, config: &amp;dynamodb::config::Config) -&gt; Operation&lt;BatchExecuteStatement&gt; {
     let op = BatchExecuteStatement::new(BatchExecuteStatementInput {
         statements: self.statements,
@@ -305,7 +310,8 @@ pub fn build(self, config: &amp;dynamodb::config::Config) -&gt; Operation&lt;Bat
     props.insert_endpoint_resolver(config.endpoint_resolver.clone());
     Operation::new(req)
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 <h3 id="operation-dispatch-and-middleware"><a class="header" href="#operation-dispatch-and-middleware">Operation Dispatch and Middleware</a></h3>
 <p>The Rust SDK endeavors to behave as predictably as possible. This means that if at all possible we will not dispatch extra HTTP requests during the dispatch of normal operation. Making this work is covered in more detail in the design of credentials providers &amp; endpoint resolution.</p>
 <p>The upshot is that we will always prefer a design where the user has explicit control of when credentials are loaded and endpoints are resolved. This doesn't mean that users can't use easy-to-use options (We will provide an automatically refreshing credentials provider), however, the credential provider won't load requests during the dispatch of an individual request.</p>
@@ -506,7 +512,7 @@ struct IntermediateStructure {
 }
 <span class="boring">}
 </span></code></pre></pre>
-<pre><code class="language-rust ignore">  |
+<pre><code class="language-text">  |
 3 | struct TopStructure {
   | ^^^^^^^^^^^^^^^^^^^ recursive type has infinite size
 4 |     intermediate: IntermediateStructure
@@ -576,7 +582,13 @@ struct IntermediateStructure {
 <li>All structs are marked <code>#[non_exhaustive]</code></li>
 <li>All structs derive <code>Debug</code> &amp; <code>PartialEq</code>. Structs <strong>do not</strong> derive <code>Eq</code> because a <code>float</code> member may be added in the future.</li>
 <li>Struct fields are public. Public struct fields allow for <a href="https://doc.rust-lang.org/nomicon/borrow-splitting.html">split borrows</a>. When working with output objects this significantly improves ergonomics, especially with optional fields.
-<code>rust,ignore let out = dynamo::ListTablesOutput::new(); out.some_field.unwrap(); // &lt;- partial move, impossible with an accessor </code></li>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let out = dynamo::ListTablesOutput::new();
+out.some_field.unwrap(); // &lt;- partial move, impossible with an accessor
+<span class="boring">}
+</span></code></pre></pre>
+</li>
 <li>Builders are generated for structs that provide ergonomic and backwards compatible constructors. A builder for a struct is always available via the convenience method <code>SomeStruct::builder()</code></li>
 <li>Structures manually implement debug: In order to support the <a href="https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait">sensitive trait</a>, a <code>Debug</code> implementation for structures is manually generated.</li>
 </ol>
@@ -595,7 +607,9 @@ long ReadIOs
 long WriteIOs
 </code></pre>
 <p><strong>Rust Output</strong>:</p>
-<pre><code class="language-rust ignore">/// &lt;p&gt;Contains I/O usage metrics for a command that was invoked.&lt;/p&gt;
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// &lt;p&gt;Contains I/O usage metrics for a command that was invoked.&lt;/p&gt;
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
 pub struct IOUsage {
@@ -655,16 +669,18 @@ impl IOUsage {
         crate::model::io_usage::Builder::default()
     }
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 <h2 id="union"><a class="header" href="#union">Union</a></h2>
 <p>Smithy <code>Union</code> is modeled as <code>enum</code> in Rust.</p>
-<pre><code>1. Generated `enum`s must be marked `#[non_exhaustive]`.
-2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/awslabs/smithy-rs/issues/185).
-1. Union members (enum variants) are **not** nullable, because Smithy union members cannot contain null values.
-2. When union members contain references to other shapes, we generate a wrapping variant (see below).
-3. Union members do not require `#[non_exhaustive]`, because changing the shape targeted by a union member is not backwards compatible.
-4. `is_variant` and `as_variant` helper functions are generated to improve ergonomics.
-</code></pre>
+<ol>
+<li>Generated <code>enum</code>s must be marked <code>#[non_exhaustive]</code>.</li>
+<li>Generated <code>enum</code>s must provide an <code>Unknown</code> variant. If parsing receives an unknown input that doesn't match any of the given union variants, <code>Unknown</code> should be constructed. <a href="https://github.com/awslabs/smithy-rs/issues/185">Tracking Issue</a>.</li>
+<li>Union members (enum variants) are <strong>not</strong> nullable, because Smithy union members cannot contain null values.</li>
+<li>When union members contain references to other shapes, we generate a wrapping variant (see below).</li>
+<li>Union members do not require <code>#[non_exhaustive]</code>, because changing the shape targeted by a union member is not backwards compatible.</li>
+<li><code>is_variant</code> and <code>as_variant</code> helper functions are generated to improve ergonomics.</li>
+</ol>
 <h3 id="generated-union-example"><a class="header" href="#generated-union-example">Generated Union Example</a></h3>
 <p>The union generated for a simplified <code>dynamodb::AttributeValue</code>
 <strong>Smithy</strong>:</p>
@@ -688,7 +704,9 @@ list BoolList {
 }
 </code></pre>
 <p><strong>Rust</strong>:</p>
-<pre><code class="language-rust ignore">#[non_exhaustive]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 pub enum AttributeValue {
     /// a string value
@@ -724,7 +742,8 @@ impl AttributeValue {
         self.as_string().is_some()
     }
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="endpoint-resolution"><a class="header" href="#endpoint-resolution">Endpoint Resolution</a></h1>
 <h2 id="requirements"><a class="header" href="#requirements">Requirements</a></h2>
 <p>The core codegen generates HTTP requests that do not contain an authority, scheme or post. These properties must be set later based on configuration. Existing AWS services have a number of requirements that increase the complexity:</p>

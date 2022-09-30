@@ -157,7 +157,9 @@ full middleware layers that will get added by the dispatch stack.</p>
 <h3 id="input-construction"><a class="header" href="#input-construction">Input Construction</a></h3>
 <p>A customer interacts with the SDK builders to construct an input. The <code>build()</code> method on an input returns
 an <code>Operation&lt;Output&gt;</code>. This codifies the base HTTP request &amp; all the configuration and middleware layers required to modify and dispatch the request.</p>
-<pre><code class="language-rust ignore">pub struct Operation&lt;H, R&gt; {
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct Operation&lt;H, R&gt; {
     request: Request,
     response_handler: H,
     _retry_policy: R,
@@ -167,13 +169,16 @@ pub struct Request {
     inner: http::Request&lt;SdkBody&gt;,
     properties: PropertyBag,
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 <p>For most requests, <code>.build()</code> will NOT consume the input. A user can call <code>.build()</code> multiple times to produce multiple operations from the same input.</p>
 <p>By using a property bag, we can define the <code>Operation</code> in Smithy core. AWS specific configuration can be added later in the stack.</p>
 <h3 id="operation-construction"><a class="header" href="#operation-construction">Operation Construction</a></h3>
 <p>In order to construct an operation, the generated code injects appropriate middleware &amp; configuration via the configuration property bag. It does this by reading the configuration properties out of the service
 config, copying them as necessary, and loading them into the <code>Request</code>:</p>
-<pre><code class="language-rust ignore">// This is approximately the generated code, I've cleaned a few things up for readability.
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// This is approximately the generated code, I've cleaned a few things up for readability.
 pub fn build(self, config: &amp;dynamodb::config::Config) -&gt; Operation&lt;BatchExecuteStatement&gt; {
     let op = BatchExecuteStatement::new(BatchExecuteStatementInput {
         statements: self.statements,
@@ -186,7 +191,8 @@ pub fn build(self, config: &amp;dynamodb::config::Config) -&gt; Operation&lt;Bat
     props.insert_endpoint_resolver(config.endpoint_resolver.clone());
     Operation::new(req)
 }
-</code></pre>
+<span class="boring">}
+</span></code></pre></pre>
 <h3 id="operation-dispatch-and-middleware"><a class="header" href="#operation-dispatch-and-middleware">Operation Dispatch and Middleware</a></h3>
 <p>The Rust SDK endeavors to behave as predictably as possible. This means that if at all possible we will not dispatch extra HTTP requests during the dispatch of normal operation. Making this work is covered in more detail in the design of credentials providers &amp; endpoint resolution.</p>
 <p>The upshot is that we will always prefer a design where the user has explicit control of when credentials are loaded and endpoints are resolved. This doesn't mean that users can't use easy-to-use options (We will provide an automatically refreshing credentials provider), however, the credential provider won't load requests during the dispatch of an individual request.</p>
