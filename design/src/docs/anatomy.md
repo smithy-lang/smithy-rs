@@ -1,8 +1,8 @@
 # The Anatomy of a Service
 
-What is [Smithy](https://awslabs.github.io/smithy/2.0/index.html)? At a high-level, it's a grammar for specifying services while leaving the business logic undefined. A [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service) specifies a collection of function signatures in the form of [Operations](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) which encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.
+What is [Smithy](https://awslabs.github.io/smithy/2.0/index.html)? At a high-level, it's a grammar for specifying services while leaving the business logic undefined. A [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service) specifies a collection of function signatures in the form of [Operations](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation), their purpose is to encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.
 
-This survey is disinterested in the actual code generator Kotlin implementation and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in the internal details.
+This survey is disinterested in the actual Kotlin implementation of the code generator, and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in internal details.
 
 During the survey we will use the [`pokemon.smithy`](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
 
@@ -635,11 +635,9 @@ pub struct PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Pl> {
 which allows the following `Pluggable` implementation to be generated:
 
 ```rust
-impl<Op1, Op2, /* ... */, Pl, NewPl> aws_smithy_http_server::plugin::Pluggable<NewPl>
-    for PokemonServiceBuilder<Op1, Op2, /* ... */, Pl>
+impl<Op1, Op2, /* ... */, Pl, NewPl> Pluggable<NewPl> for PokemonServiceBuilder<Op1, Op2, /* ... */, Pl>
 {
-    type Output =
-        PokemonServiceBuilder<Op1, Exts1, aws_smithy_http_server::plugin::PluginStack<Pl, NewPl>>;
+    type Output = PokemonServiceBuilder<Op1, Exts1, PluginStack<Pl, NewPl>>;
     fn apply(self, plugin: NewPl) -> Self::Output {
         PokemonServiceBuilder {
             capture_pokemon_operation: self.capture_pokemon_operation,
