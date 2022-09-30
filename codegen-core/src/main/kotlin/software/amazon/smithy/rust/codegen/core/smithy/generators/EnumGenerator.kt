@@ -5,11 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -51,7 +53,7 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
 
     private fun renderDeprecated(writer: RustWriter) {
         if (definition.isDeprecated) {
-            writer.rust("##[deprecated]")
+            Attribute.Custom.deprecated().render(writer)
         }
     }
 
@@ -86,8 +88,8 @@ open class EnumGenerator(
     private val shape: StringShape,
     private val enumTrait: EnumTrait,
 ) {
-    protected val symbol = symbolProvider.toSymbol(shape)
-    protected val enumName = symbol.name
+    protected val symbol: Symbol = symbolProvider.toSymbol(shape)
+    protected val enumName: String = symbol.name
     protected val meta = symbol.expectRustMetadata()
     protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
@@ -114,7 +116,7 @@ open class EnumGenerator(
             // impl Blah { pub fn as_str(&self) -> &str
             implBlock()
             writer.rustBlock("impl AsRef<str> for $enumName") {
-                writer.rustBlock("fn as_ref(&self) -> &str") {
+                rustBlock("fn as_ref(&self) -> &str") {
                     rust("self.as_str()")
                 }
             }
@@ -129,23 +131,23 @@ open class EnumGenerator(
         meta.render(writer)
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
-            writer.rust("/// Returns the `&str` value of the enum member.")
-            writer.rustBlock("pub fn as_str(&self) -> &str") {
-                writer.write("&self.0")
+            docs("Returns the `&str` value of the enum member.")
+            rustBlock("pub fn as_str(&self) -> &str") {
+                rust("&self.0")
             }
 
-            writer.rust("/// Returns all the `&str` representations of the enum members.")
-            writer.rustBlock("pub fn $Values() -> &'static [&'static str]") {
-                writer.withBlock("&[", "]") {
-                    val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
-                    writer.write(memberList)
+            docs("Returns all the `&str` representations of the enum members.")
+            rustBlock("pub fn $Values() -> &'static [&'static str]") {
+                withBlock("&[", "]") {
+                    val memberList = sortedMembers.joinToString(", ") { it.value.dq() }
+                    rust(memberList)
                 }
             }
         }
 
         writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
-            writer.rustBlock("fn from(s: T) -> Self") {
-                writer.write("$enumName(s.as_ref().to_owned())")
+            rustBlock("fn from(s: T) -> Self") {
+                rust("$enumName(s.as_ref().to_owned())")
             }
         }
     }
@@ -166,8 +168,8 @@ open class EnumGenerator(
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
             if (target == CodegenTarget.CLIENT) {
-                writer.docs("$UnknownVariant contains new variants that have been added since this code was generated.")
-                writer.write("$UnknownVariant(String)")
+                docs("$UnknownVariant contains new variants that have been added since this code was generated.")
+                rust("$UnknownVariant(String)")
             }
         }
     }
@@ -175,19 +177,19 @@ open class EnumGenerator(
     private fun implBlock() {
         writer.rustBlock("impl $enumName") {
             rust("/// Returns the `&str` value of the enum member.")
-            writer.rustBlock("pub fn as_str(&self) -> &str") {
-                writer.rustBlock("match self") {
+            rustBlock("pub fn as_str(&self) -> &str") {
+                rustBlock("match self") {
                     sortedMembers.forEach { member ->
-                        write("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
+                        rust("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
                     if (target == CodegenTarget.CLIENT) {
-                        write("$enumName::$UnknownVariant(s) => s.as_ref()")
+                        rust("$enumName::$UnknownVariant(s) => s.as_ref()")
                     }
                 }
             }
 
             rust("/// Returns all the `&str` values of the enum members.")
-            writer.rustBlock("pub fn $Values() -> &'static [&'static str]") {
+            rustBlock("pub fn $Values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
                     write(memberList)
@@ -198,12 +200,12 @@ open class EnumGenerator(
 
     protected open fun renderFromForStr() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
-            writer.rustBlock("fn from(s: &str) -> Self") {
-                writer.rustBlock("match s") {
+            rustBlock("fn from(s: &str) -> Self") {
+                rustBlock("match s") {
                     sortedMembers.forEach { member ->
-                        write("""${member.value.dq()} => $enumName::${member.derivedName()},""")
+                        rust("""${member.value.dq()} => $enumName::${member.derivedName()},""")
                     }
-                    write("other => $enumName::$UnknownVariant(other.to_owned())")
+                    rust("other => $enumName::$UnknownVariant(other.to_owned())")
                 }
             }
         }
