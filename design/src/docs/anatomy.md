@@ -2,7 +2,7 @@
 
 What is [Smithy](https://awslabs.github.io/smithy/2.0/index.html)? At a high-level, it's a grammar for specifying services while leaving the business logic undefined. A [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service) specifies a collection of function signatures in the form of [Operations](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) which encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.
 
-This survey is disinterested in the actual code generator Kotlin implementation and instead focused on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in the internal details.
+This survey is disinterested in the actual code generator Kotlin implementation and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in the internal details.
 
 During the survey we will use the [`pokemon.smithy`](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
 
@@ -133,9 +133,9 @@ let svc: Svc = /* ... */;
 let operation = GetPokemonService::from_service(svc);
 ```
 
-To summarize, the `S`, in `Operation<S, L>`, is a **model service** constructed from a `Handler` or a `OperationService` subject to the constraints of an `OperationShape`.
+To summarize, the `S`, in `Operation<S, L>`, is a _model service_ constructed from a `Handler` or a `OperationService` subject to the constraints of an `OperationShape`.
 
-Now, what about the `L` in `Operation<S, L>`? The `L` is a `tower::Layer`, or colloquially "middleware", that is applied to a **HTTP service**. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
+Now, what about the `L` in `Operation<S, L>`? The `L` is a `tower::Layer`, or colloquially "middleware", that is applied to a _HTTP service_. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
 
 ```rust
 impl<S, L> Operation<S, L> {
@@ -148,6 +148,8 @@ impl<S, L> Operation<S, L> {
     }
 }
 ```
+
+where [`Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) is used to chains layers together.
 
 A typical use of this might be:
 
@@ -203,7 +205,7 @@ Notice that we can "upgrade" a model service to a HTTP service using `FromReques
 
 ![Upgrade Data Flow Diagram](imgs/upgrade-dfd.png)
 
-This formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L76-L84) HTTP service. The `tower::Service` implementation is as approximately:
+This formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L76-L84) HTTP service. The `tower::Service` implementation is approximately:
 
 ```rust
 impl<P, Op, S> Service<http::Request> for Upgrade<P, Op, S>
@@ -230,7 +232,7 @@ where
     }
 ```
 
-When we `GetPokemonService::from_handler` or `GetPokemonService::from_service` the `S` we noted earlier in [Operations](#operations) will meet the constraints above.
+When we `GetPokemonService::from_handler` or `GetPokemonService::from_service`, the model service produced, `S`, will meet the constraints above.
 
 There is an associated `tower::Layer`, `UpgradeLayer<P, Op, B>` which constructs `Upgrade` from a service.
 
@@ -277,7 +279,7 @@ where
 }
 ```
 
-Why do we need a trait for this? Why not simply write an `upgrade` method on `Operation<S, L>`? The reason is that we might **not** want to supply an `Operation<S, L>` to the service builder, instead we might want to supply something that overrides the typical upgrade procedure.
+Why do we need a trait for this? Why not simply write an `upgrade` method on `Operation<S, L>`? The reason is that we might _not_ want to supply an `Operation<S, L>` to the service builder, instead we might want to supply something that overrides the typical upgrade procedure.
 
 Below we give an example of a ZST which can be provided to the builder, which also satisfies `Upgradable` and returns a `MissingFailure` `tower::Service`. This `MissingFailure` service simply returns a status code 500.
 
