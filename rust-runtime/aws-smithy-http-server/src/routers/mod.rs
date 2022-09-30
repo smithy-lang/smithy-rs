@@ -46,7 +46,7 @@ pub trait Router<B> {
     fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error>;
 }
 
-/// A [`Service`] using the a [`Router`] `R` to redirect messages to specific routes.
+/// A [`Service`] using the [`Router`] `R` to redirect messages to specific routes.
 ///
 /// The `Protocol` parameter is used to determine the serialization of errors.
 pub struct RoutingService<R, Protocol> {
