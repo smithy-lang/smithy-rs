@@ -175,7 +175,6 @@ open class RustCrate(
  */
 val DefaultPublicModules = setOf(
     RustModule.Error,
-    RustModule.Operation,
     RustModule.public("model", documentation = "Data structures used by operation inputs/outputs."),
     RustModule.public("input", documentation = "Input structures for operations."),
     RustModule.public("output", documentation = "Output structures for operations."),
