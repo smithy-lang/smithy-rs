@@ -107,9 +107,9 @@ open class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val sensitive = "SmithyHttpServer::instrumentation::sensitivity::Sensitive"
+                    val sensitive = "aws_smithy_http_server::instrumentation::sensitivity::Sensitive"
                     rust(
-                        "formatter.field(${memberName.dq()}, &$sensitive(self.$memberName));",
+                        "formatter.field(${memberName.dq()}, &$sensitive(&self.$memberName));",
                     )
                 }
                 rust("formatter.finish()")
