@@ -64,7 +64,8 @@ class PythonServerCodegenVisitor(
 
         model = codegenDecorator.transformModel(service, baseModel)
 
-        // `publicConstrainedTypes` must always be `false` for the Python server.
+        // `publicConstrainedTypes` must always be `false` for the Python server, since Python generates its own
+        // wrapper newtypes.
         settings = settings.copy(codegenConfig = settings.codegenConfig.copy(publicConstrainedTypes = false))
 
         fun baseSymbolProviderFactory(
