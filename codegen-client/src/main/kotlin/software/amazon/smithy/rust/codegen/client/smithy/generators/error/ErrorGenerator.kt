@@ -85,24 +85,20 @@ class ErrorGenerator(
             }
             if (messageShape != null) {
                 val messageSymbol = symbolProvider.toSymbol(messageShape).mapRustType { t -> t.asDeref() }
-                val (returnType, message) = if (messageSymbol.rustType()
-                    .stripOuter<RustType.Option>() is RustType.Opaque
-                ) {
+                val messageType = messageSymbol.rustType()
+                val (returnType, message) = if (messageType.stripOuter<RustType.Option>() is RustType.Opaque) {
                     // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
                     if (messageSymbol.isOptional()) {
-                        "Option<&${
-                        messageSymbol.rustType().stripOuter<RustType.Option>().render()
-                        }>" to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                        "Option<&${messageType.stripOuter<RustType.Option>().render()}>" to
+                            "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
                     } else {
-                        "&${messageSymbol.rustType().render()}" to "&self.${symbolProvider.toMemberName(messageShape)}"
+                        "&${messageType.render()}" to "&self.${symbolProvider.toMemberName(messageShape)}"
                     }
                 } else {
                     if (messageSymbol.isOptional()) {
-                        messageSymbol.rustType()
-                            .render() to "self.${symbolProvider.toMemberName(messageShape)}.as_deref()"
+                        messageType.render() to "self.${symbolProvider.toMemberName(messageShape)}.as_deref()"
                     } else {
-                        messageSymbol.rustType()
-                            .render() to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                        messageType.render() to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
                     }
                 }
 
