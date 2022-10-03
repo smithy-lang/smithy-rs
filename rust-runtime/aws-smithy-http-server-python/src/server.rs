@@ -6,7 +6,10 @@
 
 use std::{collections::HashMap, ops::Deref, process, thread};
 
-use aws_smithy_http_server::{routing::Router, AddExtensionLayer};
+use aws_smithy_http_server::{
+    routing::{LambdaHandler, Router},
+    AddExtensionLayer,
+};
 use parking_lot::Mutex;
 use pyo3::{prelude::*, types::IntoPyDict};
 use signal_hook::{consts::*, iterator::Signals};
@@ -62,6 +65,9 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
     fn handlers(&mut self) -> &mut HashMap<String, PyHandler>;
 
     fn middlewares(&mut self) -> &mut PyMiddlewares;
+
+    /// Build the app's `Router` using given `event_loop`.
+    fn build_router(&mut self, event_loop: &pyo3::PyAny) -> pyo3::PyResult<Router>;
 
     /// Handle the graceful termination of Python workers by looping through all the
     /// active workers and calling `terminate()` on them. If termination fails, this
@@ -212,9 +218,6 @@ event_loop.add_signal_handler(signal.SIGINT,
         router: Router,
         worker_number: isize,
     ) -> PyResult<()> {
-        // Create the `PyState` object from the Python context object.
-        let context = self.context().clone().unwrap_or_else(|| py.None());
-        // let state = PyState::new(context);
         // Clone the socket.
         let borrow = socket.try_borrow_mut()?;
         let held_socket: &PySocket = &*borrow;
@@ -231,19 +234,14 @@ event_loop.add_signal_handler(signal.SIGINT,
                 .thread_name(format!("smithy-rs-tokio[{worker_number}]"))
                 .build()
                 .expect("Unable to start a new tokio runtime for this process");
-            // Register operations into a Router, add middleware and start the `hyper` server,
-            // all inside a [tokio] blocking function.
             rt.block_on(async move {
-                tracing::debug!("Add middlewares to Rust Python router");
-                let app =
-                    router.layer(ServiceBuilder::new().layer(AddExtensionLayer::new(context)));
                 let server = hyper::Server::from_tcp(
                     raw_socket
                         .try_into()
                         .expect("Unable to convert socket2::Socket into std::net::TcpListener"),
                 )
                 .expect("Unable to create hyper server from shared socket")
-                .serve(app.into_make_service());
+                .serve(router.into_make_service());
 
                 tracing::debug!("Started hyper server from shared socket");
                 // Run forever-ish...
@@ -456,5 +454,41 @@ event_loop.add_signal_handler(signal.SIGINT,
         tracing::info!("Rust Python server started successfully");
         self.block_on_rust_signals();
         Ok(())
+    }
+
+    /// Lambda main entrypoint: start the server on Lambda.
+    ///
+    /// Unlike the `run_server`, `run_lambda_server` does not spawns other processes,
+    /// it starts the Lambda server on the current process.
+    fn run_lambda_server(&mut self, py: Python) -> PyResult<()> {
+        let event_loop = self.configure_python_event_loop(py)?;
+        let app = self.build_and_configure_router(py, event_loop)?;
+        let rt = runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Unable to start a new Tokio runtime for this process");
+        rt.block_on(async move {
+            let handler = LambdaHandler::new(app);
+            let lambda = lambda_http::run(handler);
+            tracing::debug!("Starting Lambda server");
+            if let Err(err) = lambda.await {
+                tracing::error!("server error: {}", err);
+            }
+        });
+        Ok(())
+    }
+
+    // Builds the router and adds necessary layers to it.
+    fn build_and_configure_router(
+        &mut self,
+        py: Python,
+        event_loop: &pyo3::PyAny,
+    ) -> pyo3::PyResult<Router> {
+        let app = self.build_router(event_loop)?;
+        // Create the `PyState` object from the Python context object.
+        let context = self.context().clone().unwrap_or_else(|| py.None());
+        tracing::debug!("Add middlewares to Rust Python router");
+        let app = app.layer(ServiceBuilder::new().layer(AddExtensionLayer::new(context)));
+        Ok(app)
     }
 }
