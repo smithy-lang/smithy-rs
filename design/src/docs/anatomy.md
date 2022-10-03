@@ -22,6 +22,27 @@ service PokemonService {
 }
 ```
 
+Smithy Rust will use this model to produce the following API:
+
+```rust
+// A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
+async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
+    /* implementation */
+}
+
+// Apply a `tower::Layer` to a handler.
+let get_pokemon_species_op = GetPokemonSpecies::from_handler(get_pokemon_species).layer(/* some `tower::Layer` */);
+
+// Use the service builder to create `PokemonService`.
+let pokemon_service = PokemonService::builder()
+    // Pass the handler directly to the service builder...
+    .get_pokemon_species(get_pokemon_species)
+    // ...or pass the layered handler.
+    .get_pokemon_species_operation(get_pokemon_species_op)
+    /* other operation setters */
+    .build();
+```
+
 ## Operations
 
 A [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) specifies the input, output, and possible errors of an API operation. One might characterize a Smithy Operation as syntax for specifying a function type.
@@ -75,7 +96,19 @@ Note that `GetPokemonSpecies` marker structure is a zero-sized type (ZST), and t
 
 The following nomenclature will aid us in our survey. We describe a `tower::Service` as a "model service" if its request and response are Smithy structures, as defined by the `OperationShape` trait - the `GetPokemonSpeciesInput`, `GetPokemonSpeciesOutput`, and `GetPokemonSpeciesError` described above. Similarly, we describe a `tower::Service` as a "HTTP service" if its request and response are [`http`](https://github.com/hyperium/http) structures - `http::Request` and `http::Response`.
 
-In contrast to the marker ZSTs above, the [`Operation<S, L>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/mod.rs#L192-L198) structure holds the actual runtime behavior of an operation, which is specified, during construction, by the customer. The `S` here is a model service, this is specified during construction of the `Operation<S, L>`. The constructors exist on the marker ZSTs as an extension trait to `OperationShape`, namely [`OperationShapeExt`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/shape.rs#L24-L45):
+In contrast to the marker ZSTs above, the [`Operation<S, L>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/mod.rs#L192-L198) structure holds the actual runtime behavior of an operation, which is specified, during construction, by the customer.
+
+```rust
+/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`](tower::Layer) `L`.
+///
+/// The `L` is held and applied lazily during [`Upgradable::upgrade`].
+pub struct Operation<S, L = Identity> {
+    inner: S,
+    layer: L,
+}
+```
+
+The `S` here is a model service, this is specified during construction of the `Operation<S, L>`. The constructors exist on the marker ZSTs as an extension trait to `OperationShape`, namely [`OperationShapeExt`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/shape.rs#L24-L45):
 
 ```rust
 /// An extension trait over [`OperationShape`].
@@ -135,7 +168,7 @@ let operation = GetPokemonService::from_service(svc);
 
 To summarize, the `S`, in `Operation<S, L>`, is a _model service_ constructed from a `Handler` or a `OperationService` subject to the constraints of an `OperationShape`.
 
-Now, what about the `L` in `Operation<S, L>`? The `L` is a `tower::Layer`, or colloquially "middleware", that is applied to a _HTTP service_. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
+Now, what about the `L` in `Operation<S, L>`? The `L` is a [`tower::Layer`](https://docs.rs/tower/latest/tower/layer/trait.Layer.html), or colloquially "middleware", that is applied to a _HTTP service_. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
 
 ```rust
 impl<S, L> Operation<S, L> {
@@ -149,7 +182,7 @@ impl<S, L> Operation<S, L> {
 }
 ```
 
-where [`Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) is used to chains layers together.
+where [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) is used to chains layers together.
 
 A typical use of this might be:
 
@@ -157,7 +190,7 @@ A typical use of this might be:
 let operation = GetPokemonSpecies::from_handler(handler).layer(RequestBodyLimitLayer::new(500));
 ```
 
-where [`RequestBodyLimitLayer`](https://docs.rs/tower-http/latest/tower_http/limit/struct.RequestBodyLimitLayer.html) limits the size of the HTTP request to the `GetPokemonSpecies` operation.
+where [`RequestBodyLimitLayer`](https://docs.rs/tower-http/latest/tower_http/limit/struct.RequestBodyLimitLayer.html) limits the size of the HTTP request body to the `GetPokemonSpecies` operation.
 
 As mentioned, `L` is applied _after_ the `Operation<S, L>` has been "upgraded" to a HTTP service. The procedure of upgrading a model service to a HTTP service is described in the [Upgrading a Model Service](#upgrading-a-model-service) section below.
 
@@ -201,11 +234,11 @@ pub struct AwsJson11;
 
 ## Upgrading a Model Service
 
-Notice that we can "upgrade" a model service to a HTTP service using `FromRequest` and `IntoResponse` described in the prior section:
+We can "upgrade" a model service to a HTTP service using `FromRequest` and `IntoResponse` described in the prior section:
 
 ![Upgrade Data Flow Diagram](imgs/upgrade-dfd.png)
 
-This formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L76-L84) HTTP service. The `tower::Service` implementation is approximately:
+This is formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L76-L84) HTTP service. The `tower::Service` implementation is approximately:
 
 ```rust
 impl<P, Op, S> Service<http::Request> for Upgrade<P, Op, S>
@@ -234,9 +267,9 @@ where
 
 When we `GetPokemonService::from_handler` or `GetPokemonService::from_service`, the model service produced, `S`, will meet the constraints above.
 
-There is an associated `tower::Layer`, `UpgradeLayer<P, Op, B>` which constructs `Upgrade` from a service.
+There is an associated `Layer`, `UpgradeLayer<P, Op, B>` which constructs `Upgrade` from a service.
 
-The upgrade procedure is finalized by the application of the `tower::Layer` `L`, referenced in `Operation<S, L>`. In this way the entire upgrade procedure takes an `Operation<S, L>` and returns a HTTP service.
+The upgrade procedure is finalized by the application of the `Layer` `L`, referenced in `Operation<S, L>`. In this way the entire upgrade procedure takes an `Operation<S, L>` and returns a HTTP service.
 
 ![Upgradable Diagram](imgs/upgradable.png)
 
@@ -320,7 +353,7 @@ pub trait Router {
 }
 ```
 
-which provides the ability to lookup an inner HTTP service from a collection using a `&http::Request`.
+which provides the ability to determine an inner HTTP service from a collection using a `&http::Request`.
 
 Types which implement the `Router` trait are converted to a HTTP service via the `RoutingService` struct:
 
@@ -340,7 +373,7 @@ where
     R::Error: IntoResponse<P> + Error,
 {
     type Response = http::Response;
-    type Error = Box<dyn Error>;
+    type Error = /* implementation detail */;
 
     async fn call(&mut self, req: http::Request<B>) -> Result<Self::Response, Self::Error> {
         match self.router.match_route(&req) {
@@ -378,7 +411,7 @@ pub struct PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
 }
 ```
 
-The builder has one generic variable for each [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) in the [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service). Each setter switches the type of the `Op{N}` type parameter:
+The builder has one generic type parameter for each [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) in the [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service). Each setter switches the type of the `Op{N}` type parameter:
 
 ```rust
     /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
@@ -410,7 +443,7 @@ The builder has one generic variable for each [Smithy Operation](https://awslabs
 
     /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
     ///
-    /// This should be a closure satisfying the [`Handler`](aws_smithy_http_server::operation::Handler) trait.
+    /// This should be an async function satisfying the [`Handler`](aws_smithy_http_server::operation::Handler) trait.
     /// See the [operation module documentation](aws_smithy_http_server::operation) for more information.
     pub fn get_pokemon_species<H, NewExts>(
         self,
@@ -430,7 +463,7 @@ The builder has one generic variable for each [Smithy Operation](https://awslabs
     }
 ```
 
-To finalize the build and construct the complete service, `PokemonService`, each builder has a `build` method whose constraints list out all the requirements for composition:
+To finalize the build and construct the complete service, `PokemonService`, each builder has a `build` method whose bounds list out all the requirements for composition:
 
 ```rust
     /// Constructs a [`PokemonService`] from the arguments provided to the builder.
@@ -573,7 +606,7 @@ impl<S> PokemonService<S> {
     /// Applies a layer uniformly to all routes.
     pub fn layer<L>(self, layer: &L) -> PokemonService<L::Service>
     where
-        L: tower::Layer<S>,
+        L: Layer<S>,
     {
         PokemonService {
             router: self.router.map(|s| s.layer(layer)),
@@ -621,7 +654,7 @@ The `Upgradable::upgrade` method on `Operation<S, L>`, previously presented in [
 
 An example `Plugin` implementation can be found in [aws-smithy-http-server/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs).
 
-All builders implement the [`Pluggable`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L8-L29) trait, which allows them to apply plugins to service builders:
+The service builder implements the [`Pluggable`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L8-L29) trait, which allows them to apply plugins to service builders:
 
 ```rust
 /// Provides a standard interface for applying [`Plugin`]s to a service builder. This is implemented automatically for
@@ -687,7 +720,7 @@ impl<Op1, Op2, /* ... */, Pl, NewPl> Pluggable<NewPl> for PokemonServiceBuilder<
 }
 ```
 
-Here `PluginStack` works in a similar way to [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) - allowing users to append a new plugin rather than replacing the currently set one.
+Here `PluginStack` works in a similar way to [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) - allowing users to stack a new plugin rather than replacing the currently set one.
 
 ## Accessing Unmodelled Data
 
