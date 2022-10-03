@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.util
 
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.utils.CaseUtils
 import software.amazon.smithy.utils.StringUtils
 
@@ -23,3 +24,5 @@ fun String.toSnakeCase(): String {
 fun String.toPascalCase(): String {
     return CaseUtils.toSnakeCase(this).let { CaseUtils.toPascalCase(it) }
 }
+
+fun String.toRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())

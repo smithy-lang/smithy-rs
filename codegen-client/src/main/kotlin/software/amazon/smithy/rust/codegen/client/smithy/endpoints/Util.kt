@@ -9,32 +9,31 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.KnowledgeIndex
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rulesengine.language.EndpointRuleset
+import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.util.toRustName
 
-class EndpointRulesetIndex(model: Model) : KnowledgeIndex {
+class EndpointRuleSetIndex(model: Model) : KnowledgeIndex {
 
-    private val rulesets: HashMap<ServiceShape, EndpointRuleset?> = HashMap()
+    private val rulesets: HashMap<ServiceShape, EndpointRuleSet?> = HashMap()
 
     fun endpointRulesForService(serviceShape: ServiceShape) = rulesets.computeIfAbsent(
         serviceShape,
-    ) { serviceShape.getTrait<EndpointRuleSetTrait>() ?.ruleSet?.let { EndpointRuleset.fromNode(it) } }
+    ) { serviceShape.getTrait<EndpointRuleSetTrait>() ?.ruleSet?.let { EndpointRuleSet.fromNode(it) } }
 
     companion object {
-        fun of(model: Model): EndpointRulesetIndex {
-            return model.getKnowledge(EndpointRulesetIndex::class.java) { EndpointRulesetIndex(it) }
+        fun of(model: Model): EndpointRuleSetIndex {
+            return model.getKnowledge(EndpointRuleSetIndex::class.java) { EndpointRuleSetIndex(it) }
         }
     }
 }
@@ -43,10 +42,8 @@ class EndpointRulesetIndex(model: Model) : KnowledgeIndex {
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)
  */
 fun Identifier.rustName(): String {
-    return this.toString().stringToRustName()
+    return this.toString().toRustName()
 }
-
-fun String.stringToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
 
 /**
  * Returns the memberName() for a given [Parameter]
@@ -55,7 +52,7 @@ fun Parameter.memberName(): String {
     return name.rustName()
 }
 
-fun ContextParamTrait.memberName(): String = this.name.stringToRustName()
+fun ContextParamTrait.memberName(): String = this.name.toRustName()
 
 /**
  * Returns the symbol for a given parameter. This enables [RustWriter] to generate the correct [RustType].
