@@ -7,6 +7,23 @@ This survey is disinterested in the actual Kotlin implementation of the code gen
 During the survey we will use the [`pokemon.smithy`](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
 
 ```smithy
+/// A Pokémon species forms the basis for at least one Pokémon.
+@title("Pokémon Species")
+resource PokemonSpecies {
+    identifiers: {
+        name: String
+    },
+    read: GetPokemonSpecies,
+}
+
+/// A users current Pokémon storage.
+resource Storage {
+    identifiers: {
+        user: String
+    },
+    read: GetStorage,
+}
+
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 @title("Pokémon Service")
 @restJson1
@@ -88,6 +105,8 @@ impl OperationShape for GetPokemonSpecies {
 
     type Input = GetPokemonSpeciesInput;
     type Output = GetPokemonSpeciesOutput;
+    // NOTE: `GetPokemonSpeciesError` is an enum generated from the `errors: [ResourceNotFoundException]` from the
+    // model above.
     type Error = GetPokemonSpeciesError;
 }
 ```
