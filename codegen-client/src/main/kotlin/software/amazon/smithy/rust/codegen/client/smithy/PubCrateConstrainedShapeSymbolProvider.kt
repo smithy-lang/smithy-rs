@@ -37,7 +37,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * have associated types that are generated as `pub(crate)`. See the
  * `PubCrate*Generator` classes to see how these types are generated.
  *
- * It is important that this symbol provider _not_ wrap
+ * It is important that this symbol provider does _not_ wrap
  * [ConstrainedShapeSymbolProvider], since otherwise it will eventually
  * delegate to it and generate a symbol with a `pub` type.
  *
