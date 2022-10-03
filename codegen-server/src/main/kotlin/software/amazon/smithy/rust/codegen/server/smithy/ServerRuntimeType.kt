@@ -21,6 +21,12 @@ object ServerRuntimeType {
     val Phantom = RuntimeType("PhantomData", dependency = null, namespace = "std::marker")
     val Cow = RuntimeType("Cow", dependency = null, namespace = "std::borrow")
 
+    fun ConstrainedTrait(runtimeConfig: RuntimeConfig) =
+        RuntimeType("Constrained", ServerCargoDependency.SmithyHttpServer(runtimeConfig), namespace = "${runtimeConfig.crateSrcPrefix}_http_server::constrained")
+
+    fun MaybeConstrained(runtimeConfig: RuntimeConfig) =
+        RuntimeType("MaybeConstrained", ServerCargoDependency.SmithyHttpServer(runtimeConfig), namespace = "${runtimeConfig.crateSrcPrefix}_http_server::constrained")
+
     fun Router(runtimeConfig: RuntimeConfig) =
         RuntimeType("Router", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
 

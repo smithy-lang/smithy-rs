@@ -16,8 +16,8 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.makeMaybeConstrained
 
 /**
  * Generates a Rust type for a constrained map shape that is able to hold values for the corresponding

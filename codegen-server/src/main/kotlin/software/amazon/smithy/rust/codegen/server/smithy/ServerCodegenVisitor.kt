@@ -358,7 +358,7 @@ open class ServerCodegenVisitor(
             logger.info("[rust-server-codegen] Generating an enum $shape")
             rustCrate.useShapeWriter(shape) { writer ->
                 enumShapeGeneratorFactory(codegenContext, writer, shape).render()
-                ConstrainedTraitForEnumGenerator(model, codegenContext.symbolProvider, writer, shape).render()
+                ConstrainedTraitForEnumGenerator(model, codegenContext, writer, shape).render()
             }
         }
 

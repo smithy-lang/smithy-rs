@@ -24,13 +24,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.makeMaybeConstrained
 
 /**
  * Generates a Rust type for a constrained union shape that is able to hold values for the corresponding _unconstrained_
@@ -119,7 +120,7 @@ class UnconstrainedUnionGenerator(
                 }
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to ServerRuntimeType.ConstrainedTrait(codegenContext.runtimeConfig),
             "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
             "ConstrainedSymbol" to constrainedSymbol,
             "UnconstrainedSymbol" to symbol,

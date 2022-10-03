@@ -122,23 +122,6 @@ fun Symbol.makeRustBoxed(): Symbol =
     }
 
 /**
- * Make the Rust type of a symbol wrapped in `MaybeConstrained`. (hold `MaybeConstrained<T>`).
- *
- * This is idempotent and will have no change if the type is already `MaybeConstrained<T>`.
- */
-fun Symbol.makeMaybeConstrained(): Symbol =
-    if (this.rustType() is RustType.MaybeConstrained) {
-        this
-    } else {
-        val rustType = RustType.MaybeConstrained(this.rustType())
-        Symbol.builder()
-            .rustType(rustType)
-            .addReference(this)
-            .name(rustType.name)
-            .build()
-    }
-
-/**
  * Map the [RustType] of a symbol with [f].
  *
  * WARNING: This function does not set any `SymbolReference`s on the returned symbol. You will have to add those

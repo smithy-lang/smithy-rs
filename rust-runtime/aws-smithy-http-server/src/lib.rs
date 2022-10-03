@@ -11,6 +11,8 @@
 pub(crate) mod macros;
 
 pub mod body;
+#[doc(hidden)]
+pub mod constrained;
 pub(crate) mod error;
 pub mod extension;
 #[doc(hidden)]

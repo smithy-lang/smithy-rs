@@ -19,9 +19,10 @@ import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
@@ -142,7 +143,7 @@ class ConstrainedStringGenerator(
                 }
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to ServerRuntimeType.ConstrainedTrait(codegenContext.runtimeConfig),
             "ConstraintViolation" to constraintViolation,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,

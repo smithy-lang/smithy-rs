@@ -36,7 +36,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.serverBuilde
 import software.amazon.smithy.rust.codegen.client.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.client.smithy.isOptional
 import software.amazon.smithy.rust.codegen.client.smithy.isRustBoxed
-import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.client.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.client.smithy.mapRustType
@@ -49,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.makeMaybeConstrained
 
 /**
  * Generates a builder for the Rust type associated with the [StructureShape].
@@ -108,7 +108,7 @@ class ServerBuilderGenerator(
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained(),
+        "MaybeConstrained" to ServerRuntimeType.MaybeConstrained(runtimeConfig),
     )
 
     fun render(writer: RustWriter) {
