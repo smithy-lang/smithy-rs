@@ -11,10 +11,9 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.makeMaybeConstrained
 
 /**
  * [ConstrainedTraitForEnumGenerator] generates code that implements the [RuntimeType.ConstrainedTrait] trait on an
@@ -22,14 +21,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.makeMaybeConstrained
  */
 class ConstrainedTraitForEnumGenerator(
     val model: Model,
-    val codegenContext: ServerCodegenContext,
+    val symbolProvider: RustSymbolProvider,
     val writer: RustWriter,
     val shape: StringShape,
 ) {
     fun render() {
         shape.expectTrait<EnumTrait>()
 
-        val symbol = codegenContext.symbolProvider.toSymbol(shape)
+        val symbol = symbolProvider.toSymbol(shape)
         val name = symbol.name
         val unconstrainedType = "String"
 
@@ -45,7 +44,7 @@ class ConstrainedTraitForEnumGenerator(
                 }
             }
             """,
-            "ConstrainedTrait" to ServerRuntimeType.ConstrainedTrait(codegenContext.runtimeConfig),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
         )
     }

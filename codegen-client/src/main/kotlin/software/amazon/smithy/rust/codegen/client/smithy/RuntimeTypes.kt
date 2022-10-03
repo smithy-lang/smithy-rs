@@ -252,6 +252,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 func, CargoDependency.SmithyProtocolTestHelpers(runtimeConfig), "aws_smithy_protocol_test",
             )
 
+        fun ConstrainedTrait() = RuntimeType("Constrained", InlineDependency.constrained(), namespace = "crate::constrained")
+        fun MaybeConstrained() = RuntimeType("MaybeConstrained", InlineDependency.constrained(), namespace = "crate::constrained")
+
         val http = CargoDependency.Http.asType()
         fun Http(path: String): RuntimeType =
             RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")

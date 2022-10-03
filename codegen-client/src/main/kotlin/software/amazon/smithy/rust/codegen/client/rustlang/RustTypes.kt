@@ -22,7 +22,7 @@ fun autoDeref(input: String) = if (input.startsWith("&")) {
 /**
  * A hierarchy of types handled by Smithy codegen
  */
-abstract class RustType {
+sealed class RustType {
 
     // TODO(kotlin): when Kotlin supports, sealed interfaces, seal Container
     /**
@@ -148,6 +148,12 @@ abstract class RustType {
         }
     }
 
+    data class MaybeConstrained(override val member: RustType) : RustType(), Container {
+        val runtimeType: RuntimeType = RuntimeType.MaybeConstrained()
+        override val name = runtimeType.name!!
+        override val namespace = runtimeType.namespace
+    }
+
     data class Box(override val member: RustType) : RustType(), Container {
         override val name = "Box"
         override val namespace = "std::boxed"
@@ -237,6 +243,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
         is RustType.Opaque -> this.name
+        is RustType.MaybeConstrained -> "${this.name}<${this.member.render(fullyQualified)}>"
     }
     return "$namespace$base"
 }
