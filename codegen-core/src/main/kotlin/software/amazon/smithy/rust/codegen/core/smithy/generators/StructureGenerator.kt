@@ -98,6 +98,18 @@ open class StructureGenerator(
         } else ""
     }
 
+    private fun redactMemberIfNecessary(member: MemberShape): String {
+        val targetIsSensitive = model.expectShape(member.target).hasTrait<SensitiveTrait>()
+        val memberName = symbolProvider.toMemberName(member)
+
+        return if (targetIsSensitive) {
+            val sensitive = "aws_smithy_http_server::instrumentation::sensitivity::Sensitive"
+            "$sensitive(&self.$memberName)"
+        } else {
+            "self.$memberName"
+        }
+    }
+
     /** Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
@@ -107,9 +119,10 @@ open class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val sensitive = "aws_smithy_http_server::instrumentation::sensitivity::Sensitive"
+                    val memberValue = redactMemberIfNecessary(member)
+
                     rust(
-                        "formatter.field(${memberName.dq()}, &$sensitive(&self.$memberName));",
+                        "formatter.field(${memberName.dq()}, &$memberValue);",
                     )
                 }
                 rust("formatter.finish()")
