@@ -24,7 +24,8 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 
 sealed class ErrorKind {
     abstract fun writable(runtimeConfig: RuntimeConfig): Writable
@@ -121,10 +122,12 @@ class ErrorGenerator(
                 }
                 write("write!(f, ${errorDesc.dq()})?;")
                 messageShape?.let {
-                    ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
-                        val fieldValue = it.redactIfNecessary(model, field)
-
-                        write("""write!(f, ": {}", $fieldValue)?;""")
+                    if (it.shouldRedact(model)) {
+                        write("""write!(f, ": {}", $REDACTION)?;""")
+                    } else {
+                        ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
+                            write("""write!(f, ": {}", $field)?;""")
+                        }
                     }
                 }
                 write("Ok(())")
