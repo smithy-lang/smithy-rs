@@ -44,8 +44,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType

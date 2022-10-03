@@ -48,9 +48,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStrea
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator

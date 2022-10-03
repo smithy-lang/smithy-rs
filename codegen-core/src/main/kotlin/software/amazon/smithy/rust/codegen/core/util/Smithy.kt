@@ -69,17 +69,6 @@ fun Shape.hasEventStreamMember(model: Model): Boolean {
     return members().any { it.isEventStream(model) }
 }
 
-private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
-    is StructureShape, is UnionShape, is ListShape, is MapShape -> {
-        shape.hasTrait<AggregateShapeReachableFromOperationInputTagTrait>()
-    } else -> PANIC("this method does not support shape type ${shape.type}")
-}
-
-fun StructureShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
-fun CollectionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
-fun UnionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
-fun MapShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
-
 fun OperationShape.isInputEventStream(model: Model): Boolean {
     return input.map { id -> model.expectShape(id).hasEventStreamMember(model) }.orElse(false)
 }
