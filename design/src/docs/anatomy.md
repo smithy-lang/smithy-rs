@@ -547,7 +547,44 @@ pub struct PokemonService<S> {
 ## Plugins
 <!-- TODO(missing_doc): Link to "Write a Plugin" documentation -->
 
-Smithy Rust also provides a way to hook into the upgrade procedure in order to modify the service behavior. This is done via the [`Plugin`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L31-L41) trait:
+There are a variety of places in which the customer can apply middleware. During the build:
+
+- For a specific operation, for example `GetPokemonSpecies`, the model service can be wrapped by a `Layer` before passing it to `GetPokemonSpecies::from_service` constructor.
+- The `Operation::layer` method can be used to apply a `Layer` to a specific operation _after_ it's been upgraded.
+
+After the build is finalized:
+
+- The entire `PokemonService` HTTP service can be wrapped by a `Layer`.
+- Every `Route` in the `Router` can be wrapped by a `Layer` using `PokemonService::layer`.
+
+Although this provides a reasonably "complete" API, it can be cumbersome in some use cases. Suppose a customer wants to log the operation name when a request is routed to said operation. Writing a `Layer`, `NameLogger`, to log a operation name is simple, however with the current API the customer is forced to do the following
+
+```rust
+let get_pokemon_species = GetPokemonSpecies::from_handler(/* handler */).layer(NameLogger::new("GetPokemonSpecies"));
+let get_storage = GetStorage::from_handler(/* handler */).layer(NameLogger::new("GetStorage"));
+let do_nothing = DoNothing::from_handler(/* handler */).layer(NameLogger::new("DoNothing"));
+/* Repeat for every route... */
+```
+
+Note that `PokemonService::layer` cannot be used here because it applies a _single_ layer uniformly across all `Route`s stored in the `Router`.
+
+```rust
+impl<S> PokemonService<S> {
+    /// Applies a layer uniformly to all routes.
+    pub fn layer<L>(self, layer: &L) -> PokemonService<L::Service>
+    where
+        L: tower::Layer<S>,
+    {
+        PokemonService {
+            router: self.router.map(|s| s.layer(layer)),
+        }
+    }
+}
+```
+
+The plugin system solves the general problem of modifying `Operation<S, L>` prior to the upgrade procedure in a way parameterized by the protocol and operation marker structures. This parameterization removes the excessive boiler plate above.
+
+The central trait is [`Plugin`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L31-L41):
 
 ```rust
 /// A mapping from one [`Operation`] to another. Used to modify the behavior of
