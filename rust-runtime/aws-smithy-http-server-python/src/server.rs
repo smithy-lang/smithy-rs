@@ -426,7 +426,13 @@ event_loop.add_signal_handler(signal.SIGINT,
         // Forcing the multiprocessing start method to fork is a workaround for it.
         // https://github.com/pytest-dev/pytest-flask/issues/104#issuecomment-577908228
         #[cfg(target_os = "macos")]
-        mp.call_method1("set_start_method", ("fork",))?;
+        mp.call_method(
+            "set_start_method",
+            ("fork",),
+            // We need to pass `force=True` to prevent `context has already been set` exception,
+            // see https://github.com/pytorch/pytorch/issues/3492
+            Some(vec![("force", true)].into_py_dict(py)),
+        )?;
 
         let address = address.unwrap_or_else(|| String::from("127.0.0.1"));
         let port = port.unwrap_or(13734);
