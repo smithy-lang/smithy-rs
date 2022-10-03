@@ -23,6 +23,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -81,10 +83,12 @@ class CodegenVisitor(
         symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
+        val publicModules = DefaultPublicModules.toMutableMap()
+        publicModules["operation"] = RustModule.operation(Visibility.PUBLIC)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
-            DefaultPublicModules,
+            publicModules,
             codegenContext.settings.codegenConfig,
         )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
