@@ -43,7 +43,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  *
  * [the spec]: https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html
  */
-fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
+fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when (this) {
     is StructureShape -> {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
         //  The only reason why the functions in this file have
@@ -63,7 +63,7 @@ fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTy
     else -> false
 }
 
-fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model: Model) =
+fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model: Model): Boolean =
     hasPublicConstrainedWrapperTupleType(model, true)
 
 /**
@@ -72,7 +72,7 @@ fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(
  * This function is used in core code generators, so it takes in a [CoreCodegenContext] that is downcast
  * to [ServerCodegenContext] when generating servers.
  */
-fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, coreCodegenContext: CoreCodegenContext) =
+fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, coreCodegenContext: CoreCodegenContext): Boolean =
     coreCodegenContext.target == CodegenTarget.SERVER &&
         shape.hasPublicConstrainedWrapperTupleType(
             coreCodegenContext.model,
@@ -106,13 +106,13 @@ fun Shape.typeNameContainsNonPublicType(
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
 
-fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider) =
+fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider): Boolean =
     this.isDirectlyConstrained(symbolProvider) || (model.expectShape(this.target).isDirectlyConstrained(symbolProvider))
 
-fun Shape.isTransitivelyButNotDirectlyConstrained(model: Model, symbolProvider: SymbolProvider) =
+fun Shape.isTransitivelyButNotDirectlyConstrained(model: Model, symbolProvider: SymbolProvider): Boolean =
     !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
 
-fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
+fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     if (this is MemberShape) {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not implemented
         //  yet. Also, note that a walker over a member shape can, perhaps counterintuitively, reach the _containing_ shape,
