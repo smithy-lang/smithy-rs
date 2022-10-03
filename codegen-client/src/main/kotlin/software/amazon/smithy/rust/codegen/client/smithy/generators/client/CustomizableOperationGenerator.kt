@@ -35,7 +35,7 @@ class CustomizableOperationGenerator(
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.operationModule(Visibility.PUBLIC)) { writer ->
+        crate.withModule(RustModule.operation(Visibility.PUBLIC)) { writer ->
             writer.docs("Operation customization and supporting types")
             writer.rust("pub mod customize;")
         }

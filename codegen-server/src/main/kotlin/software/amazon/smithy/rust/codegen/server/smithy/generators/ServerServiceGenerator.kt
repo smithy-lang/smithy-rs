@@ -40,7 +40,7 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        rustCrate.withModule(RustModule.operationModule(Visibility.PRIVATE)) { writer ->
+        rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) { writer ->
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(writer)
         }
 
