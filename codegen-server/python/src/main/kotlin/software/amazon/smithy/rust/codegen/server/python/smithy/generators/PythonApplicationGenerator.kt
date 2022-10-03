@@ -7,16 +7,16 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.Errors
-import software.amazon.smithy.rust.codegen.client.smithy.Inputs
-import software.amazon.smithy.rust.codegen.client.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.Errors
+import software.amazon.smithy.rust.codegen.core.smithy.Inputs
+import software.amazon.smithy.rust.codegen.core.smithy.Outputs
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
  * Example:
  *     from pool import DatabasePool
  *     from my_library import App, OperationInput, OperationOutput
-
  *     @dataclass
  *     class Context:
  *         db = DatabasePool()
@@ -62,13 +61,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val operations: List<OperationShape>,
 ) {
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val libName = "lib${coreCodegenContext.settings.moduleName.toSnakeCase()}"
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
-    private val model = coreCodegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val model = codegenContext.model
+    private val protocol = codegenContext.protocol
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
@@ -101,6 +101,7 @@ class PythonApplicationGenerator(
             ##[derive(Debug, Default)]
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
+                middlewares: #{SmithyPython}::PyMiddlewares,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
@@ -116,6 +117,7 @@ class PythonApplicationGenerator(
                 fn clone(&self) -> Self {
                     Self {
                         handlers: self.handlers.clone(),
+                        middlewares: self.middlewares.clone(),
                         context: self.context.clone(),
                         workers: #{parking_lot}::Mutex::new(vec![]),
                     }
@@ -135,8 +137,8 @@ class PythonApplicationGenerator(
         ) {
             rustBlockTemplate(
                 """
-                /// Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::Router].
-                pub fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::Router>
+                /// Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::routing::Router].
+                pub fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::routing::Router>
                 """,
                 *codegenScope,
             ) {
@@ -151,7 +153,7 @@ class PythonApplicationGenerator(
                     val name = operationName.toSnakeCase()
                     rustTemplate(
                         """
-                        let ${name}_locals = pyo3_asyncio::TaskLocals::new(event_loop);
+                        let ${name}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
                         let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
                         let router = router.$name(move |input, state| {
                             #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
@@ -162,11 +164,20 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let router: #{SmithyServer}::Router = router
+                    let middleware_locals = pyo3_asyncio::TaskLocals::new(event_loop);
+                    use #{SmithyPython}::PyApp;
+                    let service = #{tower}::ServiceBuilder::new().layer(
+                        #{SmithyPython}::PyMiddlewareLayer::new(
+                            self.middlewares.clone(),
+                            self.protocol(),
+                            middleware_locals
+                        )?,
+                    );
+                    let router: #{SmithyServer}::routing::Router = router
                         .build()
                         .expect("Unable to build operation registry")
                         .into();
-                    Ok(router)
+                    Ok(router.layer(service))
                     """,
                     *codegenScope,
                 )
@@ -175,19 +186,24 @@ class PythonApplicationGenerator(
     }
 
     private fun renderPyAppTrait(writer: RustWriter) {
+        val protocol = protocol.toString().replace("#", "##")
         writer.rustTemplate(
             """
             impl #{SmithyPython}::PyApp for App {
                 fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
                     &self.workers
                 }
-
                 fn context(&self) -> &Option<#{pyo3}::PyObject> {
                     &self.context
                 }
-
                 fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
                     &mut self.handlers
+                }
+                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
+                    &mut self.middlewares
+                }
+                fn protocol(&self) -> &'static str {
+                    "$protocol"
                 }
             }
             """,
@@ -207,15 +223,19 @@ class PythonApplicationGenerator(
                 """
                 /// Create a new [App].
                 ##[new]
-                pub fn new(py: #{pyo3}::Python, log_level: Option<#{SmithyPython}::LogLevel>) -> #{pyo3}::PyResult<Self> {
-                    let log_level = log_level.unwrap_or(#{SmithyPython}::LogLevel::Info);
-                    #{SmithyPython}::logging::setup(py, log_level)?;
-                    Ok(Self::default())
+                pub fn new() -> Self {
+                    Self::default()
                 }
                 /// Register a context object that will be shared between handlers.
                 ##[pyo3(text_signature = "(${'$'}self, context)")]
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
                    self.context = Some(context);
+                }
+                /// Register a request middleware function that will be run inside a Tower layer, without cloning the body.
+                ##[pyo3(text_signature = "(${'$'}self, func)")]
+                pub fn request_middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    self.register_middleware(py, func, #{SmithyPython}::PyMiddlewareType::Request)
                 }
                 /// Main entrypoint: start the server on multiple workers.
                 ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]
@@ -235,7 +255,7 @@ class PythonApplicationGenerator(
                 pub fn start_worker(
                     &mut self,
                     py: pyo3::Python,
-                    socket: &pyo3::PyCell<aws_smithy_http_server_python::PySocket>,
+                    socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
                     worker_number: isize,
                 ) -> pyo3::PyResult<()> {
                     use #{SmithyPython}::PyApp;
@@ -280,21 +300,17 @@ class PythonApplicationGenerator(
             """.trimIndent(),
         )
         writer.rust(
-            if (operations.any { it.errors.isNotEmpty() }) {
-                """
-                /// from $libName import ${Inputs.namespace}
-                /// from $libName import ${Outputs.namespace}
-                /// from $libName import ${Errors.namespace}
-                """.trimIndent()
-            } else {
-                """
-                /// from $libName import ${Inputs.namespace}
-                /// from $libName import ${Outputs.namespace}
-                """.trimIndent()
-            },
+            """
+            /// from $libName import ${Inputs.namespace}
+            /// from $libName import ${Outputs.namespace}
+            """.trimIndent(),
         )
+        if (operations.any { it.errors.isNotEmpty() }) {
+            writer.rust("""/// from $libName import ${Errors.namespace}""".trimIndent())
+        }
         writer.rust(
             """
+            /// from $libName import middleware
             /// from $libName import App
             ///
             /// @dataclass
@@ -303,6 +319,11 @@ class PythonApplicationGenerator(
             ///
             /// app = App()
             /// app.context(Context())
+            ///
+            /// @app.request_middleware
+            /// def request_middleware(request: middleware::Request):
+            ///     if request.get_header("x-amzn-id") != "secret":
+            ///         raise middleware.MiddlewareException("Unsupported `x-amz-id` header", 401)
             ///
             """.trimIndent(),
         )

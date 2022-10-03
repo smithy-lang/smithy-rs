@@ -7,28 +7,28 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RestRequestSpecGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.RestRequestSpecGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 
-private fun allOperations(coreCodegenContext: CoreCodegenContext): List<OperationShape> {
-    val index = TopDownIndex.of(coreCodegenContext.model)
-    return index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+private fun allOperations(codegenContext: CodegenContext): List<OperationShape> {
+    val index = TopDownIndex.of(codegenContext.model)
+    return index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
 }
 
 interface ServerProtocol : Protocol {
@@ -79,39 +79,38 @@ interface ServerProtocol : Protocol {
 }
 
 class ServerAwsJsonProtocol(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     awsJsonVersion: AwsJsonVersion,
-) : AwsJson(coreCodegenContext, awsJsonVersion), ServerProtocol {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+) : AwsJson(codegenContext, awsJsonVersion), ServerProtocol {
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
     )
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val service = coreCodegenContext.serviceShape
+    private val symbolProvider = codegenContext.symbolProvider
+    private val service = codegenContext.serviceShape
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)
+        ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver, awsJsonVersion)
 
     companion object {
-        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.coreCodegenContext, awsJson.version)
+        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.codegenContext, awsJson.version)
     }
 
     override fun markerStruct(): RuntimeType {
-        val name = when (version) {
+        return when (version) {
             is AwsJsonVersion.Json10 -> {
-                "AwsJson10"
+                ServerRuntimeType.Protocol("AwsJson10", "aws_json_10", runtimeConfig)
             }
             is AwsJsonVersion.Json11 -> {
-                "AwsJson11"
+                ServerRuntimeType.Protocol("AwsJson11", "aws_json_11", runtimeConfig)
             }
         }
-        return ServerRuntimeType.Protocol(name, runtimeConfig)
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::aws_json")
+    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
-        val allOperationShapes = allOperations(coreCodegenContext)
+        val allOperationShapes = allOperations(codegenContext)
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol
         // visitor should not be invoked in service shapes"
@@ -159,27 +158,27 @@ class ServerAwsJsonProtocol(
     }
 }
 
-private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::routers::rest")
+private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::rest::router")
 
 private fun restRouterConstruction(
     protocol: ServerProtocol,
     operationValues: Iterable<Writable>,
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
 ): Writable = writable {
-    val operations = allOperations(coreCodegenContext)
+    val operations = allOperations(codegenContext)
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol visitor
-    // should not be invoked in service shapes"
-    // val serviceName = symbolProvider.toSymbol(service).name
-    val serviceName = coreCodegenContext.serviceShape.id.name
+    //  should not be invoked in service shapes"
+    //  val serviceName = symbolProvider.toSymbol(service).name
+    val serviceName = codegenContext.serviceShape.id.name
     val pairs = writable {
         for ((operationShape, operationValue) in operations.zip(operationValues)) {
-            val operationName = coreCodegenContext.symbolProvider.toSymbol(operationShape).name
+            val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
             val key = protocol.serverRouterRequestSpec(
                 operationShape,
                 operationName,
                 serviceName,
-                ServerCargoDependency.SmithyHttpServer(coreCodegenContext.runtimeConfig).asType().member("routing::request_spec"),
+                ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType().member("routing::request_spec"),
             )
             rustTemplate(
                 """
@@ -190,7 +189,7 @@ private fun restRouterConstruction(
                 """,
                 "Key" to key,
                 "OperationValue" to operationValue,
-                "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(coreCodegenContext.runtimeConfig).asType(),
+                "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
             )
         }
     }
@@ -204,19 +203,19 @@ private fun restRouterConstruction(
 }
 
 class ServerRestJsonProtocol(
-    coreCodegenContext: CoreCodegenContext,
-) : RestJson(coreCodegenContext), ServerProtocol {
-    val runtimeConfig = coreCodegenContext.runtimeConfig
+    codegenContext: CodegenContext,
+) : RestJson(codegenContext), ServerProtocol {
+    val runtimeConfig = codegenContext.runtimeConfig
 
     companion object {
-        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.coreCodegenContext)
+        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext)
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", "rest_json_1", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
+    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, codegenContext)
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
@@ -231,21 +230,21 @@ class ServerRestJsonProtocol(
 }
 
 class ServerRestXmlProtocol(
-    coreCodegenContext: CoreCodegenContext,
-) : RestXml(coreCodegenContext), ServerProtocol {
-    val runtimeConfig = coreCodegenContext.runtimeConfig
+    codegenContext: CodegenContext,
+) : RestXml(codegenContext), ServerProtocol {
+    val runtimeConfig = codegenContext.runtimeConfig
 
     companion object {
         fun fromCoreProtocol(restXml: RestXml): ServerRestXmlProtocol {
-            return ServerRestXmlProtocol(restXml.coreCodegenContext)
+            return ServerRestXmlProtocol(restXml.codegenContext)
         }
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestXml", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestXml", "rest_xml", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, coreCodegenContext)
+    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, codegenContext)
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,

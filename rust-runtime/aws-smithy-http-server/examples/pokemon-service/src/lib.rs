@@ -33,10 +33,7 @@ const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
 
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
-    let format = tracing_subscriber::fmt::layer()
-        .with_ansi(true)
-        .with_line_number(true)
-        .with_level(true);
+    let format = tracing_subscriber::fmt::layer().pretty();
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
@@ -179,13 +176,16 @@ pub async fn get_pokemon_species(
     }
 }
 
-/// Retrieves the users storage
+/// Retrieves the users storage.
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
 ) -> Result<output::GetStorageOutput, error::GetStorageError> {
+    tracing::debug!("attempting to authenticate storage user");
+
     // We currently only support Ash and he has nothing stored
     if !(input.user == "ash" && input.passcode == "pikachu123") {
+        tracing::debug!("authentication failed");
         return Err(error::GetStorageError::NotAuthorized(error::NotAuthorized {}));
     }
     Ok(output::GetStorageOutput { collection: vec![] })
@@ -208,10 +208,10 @@ pub async fn get_server_statistics(
     output::GetServerStatisticsOutput { calls_count }
 }
 
-/// Attempts to capture a Pokémon
+/// Attempts to capture a Pokémon.
 pub async fn capture_pokemon(
-    mut input: input::CapturePokemonOperationInput,
-) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {
+    mut input: input::CapturePokemonInput,
+) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     if input.region != "Kanto" {
         return Err(error::CapturePokemonOperationError::UnsupportedRegionError(
             error::UnsupportedRegionError { region: input.region },
@@ -272,20 +272,20 @@ pub async fn capture_pokemon(
             }
         }
     };
-    Ok(output::CapturePokemonOperationOutput::builder()
+    Ok(output::CapturePokemonOutput::builder()
         .events(output_stream.into())
         .build()
         .unwrap())
 }
 
 /// Empty operation used to benchmark the service.
-pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::EmptyOperationOutput {
-    output::EmptyOperationOutput {}
+pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutput {
+    output::DoNothingOutput {}
 }
 
 /// Operation used to show the service is running.
-pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {
-    output::HealthCheckOperationOutput {}
+pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
+    output::CheckHealthOutput {}
 }
 
 #[cfg(test)]

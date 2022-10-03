@@ -23,10 +23,12 @@
 
 use std::borrow::Cow;
 
-use crate::{
-    protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml, Protocol},
-    response::{IntoResponse, Response},
-};
+use crate::proto::aws_json_10::AwsJson10;
+use crate::proto::aws_json_11::AwsJson11;
+use crate::proto::rest_json_1::AwsRestJson1;
+use crate::proto::rest_xml::AwsRestXml;
+use crate::protocols::Protocol;
+use crate::response::{IntoResponse, Response};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {

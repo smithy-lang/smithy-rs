@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
  * Object used *exclusively* in the runtime of the Python server, for separation concerns.

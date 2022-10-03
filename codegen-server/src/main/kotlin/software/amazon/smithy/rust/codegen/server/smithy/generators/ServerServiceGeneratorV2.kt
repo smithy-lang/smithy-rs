@@ -6,27 +6,27 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.client.rustlang.join
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.join
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
 ) {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "Bytes" to CargoDependency.Bytes.asType(),
@@ -36,16 +36,16 @@ class ServerServiceGeneratorV2(
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
             "Tower" to CargoDependency.Tower.asType(),
         )
-    private val model = coreCodegenContext.model
-    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
 
-    private val service = coreCodegenContext.serviceShape
+    private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
-    private val index = TopDownIndex.of(coreCodegenContext.model)
-    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+    private val index = TopDownIndex.of(codegenContext.model)
+    private val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
 
     /** The sequence of builder generics: `Op1`, ..., `OpN`. */
     private val builderOps = (1..operations.size).map { "Op$it" }
@@ -221,7 +221,7 @@ class ServerServiceGeneratorV2(
                 {
                     let router = #{Router:W};
                     $serviceName {
-                        router: #{SmithyHttpServer}::routing::routers::RoutingService::new(router),
+                        router: #{SmithyHttpServer}::routers::RoutingService::new(router),
                     }
                 }
             }
@@ -280,7 +280,7 @@ class ServerServiceGeneratorV2(
             """
             ##[derive(Clone)]
             pub struct $serviceName<S> {
-                router: #{SmithyHttpServer}::routing::routers::RoutingService<#{Router}<S>, #{Protocol}>,
+                router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
 
             impl $serviceName<()> {
@@ -331,7 +331,7 @@ class ServerServiceGeneratorV2(
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
                 type Error = S::Error;
-                type Future = #{SmithyHttpServer}::routing::routers::RoutingFuture<S, B>;
+                type Future = #{SmithyHttpServer}::routers::RoutingFuture<S, B>;
 
                 fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
                     self.router.poll_ready(cx)

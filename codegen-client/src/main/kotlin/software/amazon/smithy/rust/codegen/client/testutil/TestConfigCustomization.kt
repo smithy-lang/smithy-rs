@@ -5,13 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.client.testutil
 
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfigGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 /**
  * Test helper to produce a valid config customization to test that a [ConfigCustomization] can be used in conjunction
@@ -22,7 +26,14 @@ fun stubConfigCustomization(name: String): ConfigCustomization {
         override fun section(section: ServiceConfig): Writable = writable {
             when (section) {
                 ServiceConfig.ConfigStruct -> rust("_$name: u64,")
-                ServiceConfig.ConfigImpl -> emptySection
+                ServiceConfig.ConfigImpl -> rust(
+                    """
+                    ##[allow(missing_docs)]
+                    pub fn $name(&self) -> u64 {
+                        self._$name
+                    }
+                    """,
+                )
                 ServiceConfig.BuilderStruct -> rust("_$name: Option<u64>,")
                 ServiceConfig.BuilderImpl -> rust(
                     """

@@ -7,27 +7,27 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.Errors
-import software.amazon.smithy.rust.codegen.client.smithy.Inputs
-import software.amazon.smithy.rust.codegen.client.smithy.Outputs
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.Errors
+import software.amazon.smithy.rust.codegen.core.smithy.Inputs
+import software.amazon.smithy.rust.codegen.core.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -48,16 +48,16 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * [`tower::Service`]: https://docs.rs/tower/latest/tower/trait.Service.html
  */
 class ServerOperationRegistryGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
     private val operations: List<OperationShape>,
 ) {
-    private val crateName = coreCodegenContext.settings.moduleName
-    private val model = coreCodegenContext.model
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val serviceName = coreCodegenContext.serviceShape.toShapeId().name
+    private val crateName = codegenContext.settings.moduleName
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val serviceName = codegenContext.serviceShape.toShapeId().name
     private val operationNames = operations.map { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
@@ -320,7 +320,7 @@ ${operationImplementationStubs(operations)}
                 }
 
                 val sensitivityGens = operations.map {
-                    ServerHttpSensitivityGenerator(model, it, coreCodegenContext.runtimeConfig)
+                    ServerHttpSensitivityGenerator(model, it, codegenContext.runtimeConfig)
                 }
 
                 withBlockTemplate(
@@ -333,15 +333,18 @@ ${operationImplementationStubs(operations)}
                         val (requestSpecVarName, operationName) = inner
 
                         rustBlock("") {
-                            rustTemplate("let svc = #{ServerOperationHandler}::operation(registry.$operationName);", *codegenScope)
-                            withBlock("let request_fmt =", ";") {
-                                sensitivityGen.renderRequestFmt(writer)
-                            }
-                            withBlock("let response_fmt =", ";") {
-                                sensitivityGen.renderResponseFmt(writer)
-                            }
-                            rustTemplate("let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, \"$operationName\").request_fmt(request_fmt).response_fmt(response_fmt);", *codegenScope)
-                            rustTemplate("(#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)", *codegenScope)
+                            rustTemplate(
+                                """
+                                let svc = #{ServerOperationHandler}::operation(registry.$operationName);
+                                let request_fmt = #{RequestFmt:W};
+                                let response_fmt = #{ResponseFmt:W};
+                                let svc = #{SmithyHttpServer}::instrumentation::InstrumentOperation::new(svc, "$operationName").request_fmt(request_fmt).response_fmt(response_fmt);
+                                (#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)
+                                """,
+                                "RequestFmt" to sensitivityGen.requestFmt().value,
+                                "ResponseFmt" to sensitivityGen.responseFmt().value,
+                                *codegenScope,
+                            )
                         }
                         rust(",")
                     }

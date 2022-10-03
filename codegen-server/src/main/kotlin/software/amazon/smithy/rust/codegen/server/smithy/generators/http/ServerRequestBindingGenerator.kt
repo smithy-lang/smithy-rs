@@ -6,18 +6,17 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.UnconstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpBindingGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBindingDescriptor
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
 class ServerRequestBindingGenerator(
     protocol: Protocol,
-    coreCodegenContext: CoreCodegenContext,
+    CodegenContext: CodegenContext,
     unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     operationShape: OperationShape,
 ) {

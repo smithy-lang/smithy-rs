@@ -5,11 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
 
 /**
  * Add a `make_token` field to Service config. See below for the resulting generated code.
@@ -20,7 +20,19 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
             is ServiceConfig.ConfigStruct -> writable {
                 rust("pub (crate) make_token: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
             }
-            ServiceConfig.ConfigImpl -> emptySection
+            ServiceConfig.ConfigImpl -> writable {
+                rust(
+                    """
+                    /// Returns a copy of the idempotency token provider.
+                    /// If a random token provider was configured,
+                    /// a newly-randomized token provider will be returned.
+                    pub fn make_token(&self) -> #T::IdempotencyTokenProvider {
+                        self.make_token.clone()
+                    }
+                    """,
+                    RuntimeType.IdempotencyToken,
+                )
+            }
             ServiceConfig.BuilderStruct -> writable {
                 rust("make_token: Option<#T::IdempotencyTokenProvider>,", RuntimeType.IdempotencyToken)
             }

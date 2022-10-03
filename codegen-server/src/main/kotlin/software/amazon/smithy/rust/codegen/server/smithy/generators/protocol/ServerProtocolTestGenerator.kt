@@ -23,27 +23,26 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.escape
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.allErrors
-import software.amazon.smithy.rust.codegen.client.testutil.TokioTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
+import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -66,18 +65,18 @@ private const val PROTOCOL_TEST_HELPER_MODULE_NAME = "protocol_test_helper"
  * Generate protocol tests for an operation
  */
 class ServerProtocolTestGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocolSupport: ProtocolSupport,
-    private val protocolGenerator: ProtocolGenerator,
+    private val protocolGenerator: ServerProtocolGenerator,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
-    private val model = coreCodegenContext.model
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val operationIndex = OperationIndex.of(coreCodegenContext.model)
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val operationIndex = OperationIndex.of(codegenContext.model)
 
-    private val serviceName = coreCodegenContext.serviceShape.id.name.toPascalCase()
-    private val operations = TopDownIndex.of(coreCodegenContext.model).getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+    private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
+    private val operations = TopDownIndex.of(codegenContext.model).getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
 
     private val operationInputOutputTypes = operations.associateWith {
         val inputSymbol = symbolProvider.toSymbol(it.inputShape(model))
@@ -97,20 +96,20 @@ class ServerProtocolTestGenerator(
         inputT to outputT
     }
 
-    private val instantiator = with(coreCodegenContext) {
+    private val instantiator = with(codegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
     }
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "SmithyHttp" to CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType(),
+        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
         "Tokio" to ServerCargoDependency.TokioDev.asType(),
         "Tower" to CargoDependency.Tower.asType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(coreCodegenContext.runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
         "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
-        "Router" to ServerRuntimeType.Router(coreCodegenContext.runtimeConfig),
+        "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
     )
 
     sealed class TestCase {
@@ -145,7 +144,7 @@ class ServerProtocolTestGenerator(
         renderTestHelper(writer)
 
         for (operation in operations) {
-            protocolGenerator.serverRenderOperation(writer, operation)
+            protocolGenerator.renderOperation(writer, operation)
             renderOperationTestCases(operation, writer)
         }
     }
@@ -226,7 +225,7 @@ class ServerProtocolTestGenerator(
     }
 
     private fun renderOperationTestCases(operationShape: OperationShape, writer: RustWriter) {
-        val outputShape = operationShape.outputShape(coreCodegenContext.model)
+        val outputShape = operationShape.outputShape(codegenContext.model)
         val operationSymbol = symbolProvider.toSymbol(operationShape)
 
         val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
@@ -281,7 +280,7 @@ class ServerProtocolTestGenerator(
     private fun List<TestCase>.filterMatching(): List<TestCase> {
         return if (RunOnly.isNullOrEmpty()) {
             this.filter { testCase ->
-                testCase.protocol == coreCodegenContext.protocol &&
+                testCase.protocol == codegenContext.protocol &&
                     !DisableTests.contains(testCase.id)
             }
         } else {
@@ -295,7 +294,7 @@ class ServerProtocolTestGenerator(
     private fun List<TestCase>.fixBroken(): List<TestCase> = this.map {
         when (it) {
             is TestCase.RequestTest -> {
-                val howToFixIt = BrokenRequestTests[Pair(coreCodegenContext.serviceShape.id.toString(), it.id)]
+                val howToFixIt = BrokenRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
                 if (howToFixIt == null) {
                     it
                 } else {
@@ -304,7 +303,7 @@ class ServerProtocolTestGenerator(
                 }
             }
             is TestCase.ResponseTest -> {
-                val howToFixIt = BrokenResponseTests[Pair(coreCodegenContext.serviceShape.id.toString(), it.id)]
+                val howToFixIt = BrokenResponseTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
                 if (howToFixIt == null) {
                     it
                 } else {
@@ -389,7 +388,7 @@ class ServerProtocolTestGenerator(
     }
 
     private fun expectFail(testCase: TestCase): Boolean = ExpectFail.find {
-        it.id == testCase.id && it.testType == testCase.testType && it.service == coreCodegenContext.serviceShape.id.toString()
+        it.id == testCase.id && it.testType == testCase.testType && it.service == codegenContext.serviceShape.id.toString()
     } != null
 
     /**
@@ -510,8 +509,8 @@ class ServerProtocolTestGenerator(
 
     /** Returns the body of the request test. */
     private fun checkRequestHandler(operationShape: OperationShape, httpRequestTestCase: HttpRequestTestCase) = writable {
-        val inputShape = operationShape.inputShape(coreCodegenContext.model)
-        val outputShape = operationShape.outputShape(coreCodegenContext.model)
+        val inputShape = operationShape.inputShape(codegenContext.model)
+        val outputShape = operationShape.outputShape(codegenContext.model)
 
         // Construct expected request.
         withBlock("let expected = ", ";") {
@@ -584,8 +583,8 @@ class ServerProtocolTestGenerator(
             // A streaming shape does not implement `PartialEq`, so we have to iterate over the input shape's members
             // and handle the equality assertion separately.
             for (member in inputShape.members()) {
-                val memberName = coreCodegenContext.symbolProvider.toMemberName(member)
-                if (member.isStreaming(coreCodegenContext.model)) {
+                val memberName = codegenContext.symbolProvider.toMemberName(member)
+                if (member.isStreaming(codegenContext.model)) {
                     rustWriter.rustTemplate(
                         """
                         #{AssertEq}(
@@ -613,11 +612,11 @@ class ServerProtocolTestGenerator(
             // TODO(https://github.com/awslabs/smithy-rs/issues/1147) Handle the case of nested floating point members.
             if (hasFloatingPointMembers) {
                 for (member in inputShape.members()) {
-                    val memberName = coreCodegenContext.symbolProvider.toMemberName(member)
-                    when (coreCodegenContext.model.expectShape(member.target)) {
+                    val memberName = codegenContext.symbolProvider.toMemberName(member)
+                    when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "FloatEquals")
+                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals")
                                     .toSymbol(),
                             )
                             rustWriter.rust(
@@ -711,8 +710,8 @@ class ServerProtocolTestGenerator(
                     "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "MediaType"),
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType"),
                 )
             }
         }
@@ -765,7 +764,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $variableName)",
-                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "validate_headers"),
+                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers"),
             )
         }
     }
@@ -786,7 +785,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $expectedVariableName)",
-                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, checkFunction),
+                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction),
             )
         }
     }
@@ -796,7 +795,7 @@ class ServerProtocolTestGenerator(
      * for pretty prettying protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
-        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }

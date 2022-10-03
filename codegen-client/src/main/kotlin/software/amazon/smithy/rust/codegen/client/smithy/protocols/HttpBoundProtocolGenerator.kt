@@ -9,35 +9,39 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.assignment
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.client.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTraitImplGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.errorMessageMember
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.assignment
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
@@ -45,28 +49,28 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     protocol: Protocol,
-) : ProtocolGenerator(
-    coreCodegenContext,
+) : ClientProtocolGenerator(
+    codegenContext,
     protocol,
     MakeOperationGenerator(
-        coreCodegenContext,
+        codegenContext,
         protocol,
-        HttpBoundProtocolPayloadGenerator(coreCodegenContext, protocol),
+        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
         public = true,
         includeDefaultPayloadHeaders = true,
     ),
-    HttpBoundProtocolTraitImplGenerator(coreCodegenContext, protocol),
+    HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 
 class HttpBoundProtocolTraitImplGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val model = coreCodegenContext.model
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationDeserModule = RustModule.private("operation_deser")
 
@@ -121,7 +125,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }""",
             *codegenScope,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
+            "E" to operationShape.errorSymbol(model, symbolProvider, codegenContext.target),
             "parse_error" to parseError(operationShape),
             "parse_response" to parseResponse(operationShape, customizations),
         )
@@ -152,7 +156,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }
             """,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
+            "E" to operationShape.errorSymbol(model, symbolProvider, codegenContext.target),
             "parse_streaming_response" to parseStreamingResponse(operationShape, customizations),
             "parse_error" to parseError(operationShape),
             *codegenScope,
@@ -163,7 +167,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, codegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
@@ -237,7 +241,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, codegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
@@ -266,7 +270,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, codegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
@@ -295,7 +299,7 @@ class HttpBoundProtocolTraitImplGenerator(
         errorSymbol: RuntimeType,
         customizations: List<OperationCustomization>,
     ) {
-        val httpBindingGenerator = ResponseBindingGenerator(protocol, coreCodegenContext, operationShape)
+        val httpBindingGenerator = ResponseBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
@@ -348,7 +352,7 @@ class HttpBoundProtocolTraitImplGenerator(
         httpBindingGenerator: ResponseBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, codegenContext.target)
         val member = binding.member
         return when (binding.location) {
             HttpLocation.HEADER -> writable {

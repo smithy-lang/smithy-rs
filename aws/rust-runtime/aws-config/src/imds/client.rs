@@ -28,7 +28,6 @@ use aws_smithy_http_tower::map_request::{
     AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
 };
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_smithy_types::timeout;
 use aws_types::os_shim_internal::{Env, Fs};
 
 use bytes::Bytes;
@@ -38,18 +37,19 @@ use tokio::sync::OnceCell;
 
 use crate::connector::expect_connector;
 use crate::imds::client::token::TokenMiddleware;
-use crate::profile::ProfileParseError;
+use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
 use crate::{profile, PKG_VERSION};
-use aws_smithy_client::http_connector::HttpSettings;
+use aws_sdk_sso::config::timeout::TimeoutConfig;
+use aws_smithy_client::http_connector::ConnectorSettings;
 
 mod token;
 
 // 6 hours
 const DEFAULT_TOKEN_TTL: Duration = Duration::from_secs(21_600);
 const DEFAULT_ATTEMPTS: u32 = 4;
-const DEFAULT_CONNECT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
-const DEFAULT_READ_TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
 
 fn user_agent() -> AwsUserAgent {
     AwsUserAgent::new_from_environment(Env::real(), ApiMetadata::new("imds", PKG_VERSION))
@@ -439,7 +439,7 @@ pub enum BuildError {
     InvalidEndpointMode(InvalidEndpointMode),
 
     /// The AWS Profile (e.g. `~/.aws/config`) was invalid
-    InvalidProfile(ProfileParseError),
+    InvalidProfile(ProfileFileError),
 
     /// The specified endpoint was not a valid URI
     InvalidEndpointUri(InvalidUri),
@@ -555,11 +555,12 @@ impl Builder {
     /// Build an IMDSv2 Client
     pub async fn build(self) -> Result<Client, BuildError> {
         let config = self.config.unwrap_or_default();
-        let http_timeout_config = timeout::Http::new()
-            .with_connect_timeout(self.connect_timeout.or(DEFAULT_CONNECT_TIMEOUT).into())
-            .with_read_timeout(self.read_timeout.or(DEFAULT_READ_TIMEOUT).into());
-        let http_settings = HttpSettings::default().with_http_timeout_config(http_timeout_config);
-        let connector = expect_connector(config.connector(&http_settings));
+        let timeout_config = TimeoutConfig::builder()
+            .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
+            .read_timeout(DEFAULT_READ_TIMEOUT)
+            .build();
+        let connector_settings = ConnectorSettings::from_timeout_config(&timeout_config);
+        let connector = expect_connector(config.connector(&connector_settings));
         let endpoint_source = self
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
@@ -567,7 +568,6 @@ impl Builder {
         let endpoint = Endpoint::immutable(endpoint);
         let retry_config = retry::Config::default()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
-        let timeout_config = timeout::Config::default();
         let token_loader = token::TokenMiddleware::new(
             connector.clone(),
             config.time_source(),
@@ -578,13 +578,13 @@ impl Builder {
             config.sleep(),
         );
         let middleware = ImdsMiddleware { token_loader };
-        let smithy_client = aws_smithy_client::Builder::new()
+        let mut smithy_builder = aws_smithy_client::Client::builder()
             .connector(connector.clone())
             .middleware(middleware)
-            .sleep_impl(config.sleep())
-            .build()
-            .with_retry_config(retry_config)
-            .with_timeout_config(timeout_config);
+            .retry_config(retry_config)
+            .operation_timeout_config(timeout_config.into());
+        smithy_builder.set_sleep_impl(config.sleep());
+        let smithy_client = smithy_builder.build();
 
         let client = Client {
             inner: Arc::new(ClientInner {
@@ -626,7 +626,7 @@ impl EndpointSource {
             }
             EndpointSource::Env(env, fs) => {
                 // load an endpoint override from the environment
-                let profile = profile::load(fs, env)
+                let profile = profile::load(fs, env, &Default::default())
                     .await
                     .map_err(BuildError::InvalidProfile)?;
                 let uri_override = if let Ok(uri) = env.get(env::ENDPOINT) {

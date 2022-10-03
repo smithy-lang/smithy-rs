@@ -8,31 +8,33 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.TitleTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.client.rustlang.Feature
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
@@ -45,11 +47,13 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
     val awsSmithyClient = smithyClientDep.asType()
 
+    val connectorSettings = RuntimeType("ConnectorSettings", smithyClientDep, "aws_smithy_client::http_connector")
     val defaultMiddleware = runtimeConfig.defaultMiddleware()
     val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
     val dynMiddleware = RuntimeType("DynMiddleware", smithyClientDep, "aws_smithy_client::erase")
-    val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
     val retryConfig = RuntimeType("RetryConfig", smithyTypesDep, "aws_smithy_types::retry")
+    val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
+    val timeoutConfig = RuntimeType("TimeoutConfig", smithyTypesDep, "aws_smithy_types::timeout")
 
     val connectorError = RuntimeType("ConnectorError", smithyHttpDep, "aws_smithy_http::result")
 }
@@ -74,14 +78,18 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override val bounds = writable { }
 
     /** Bounds for generated `send()` functions */
-    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable = writable { }
+    override fun sendBounds(
+        operation: Symbol,
+        operationOutput: Symbol,
+        operationError: RuntimeType,
+        retryClassifier: RuntimeType,
+    ): Writable =
+        writable { }
 
-    override fun toGenericsGenerator(): GenericsGenerator {
-        return GenericsGenerator()
-    }
+    override fun toRustGenerics() = RustGenerics()
 }
 
-class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "FluentClient"
 
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
@@ -100,7 +108,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
             ),
             retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withModule(FluentClientGenerator.customizableOperationModule) { writer ->
+        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) { writer ->
             renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
         }
         rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
@@ -121,12 +129,13 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
                     Attribute.DocInline.render(this)
                     rust("pub use client::Client;")
                 }
+
                 else -> emptySection
             }
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
@@ -135,9 +144,11 @@ private class AwsFluentClientExtensions(types: Types) {
         "ConnectorError" to types.connectorError,
         "DynConnector" to types.dynConnector,
         "DynMiddleware" to types.dynMiddleware,
+        "ConnectorSettings" to types.connectorSettings,
         "Middleware" to types.defaultMiddleware,
         "RetryConfig" to types.retryConfig,
         "SmithyConnector" to types.smithyConnector,
+        "TimeoutConfig" to types.timeoutConfig,
         "aws_smithy_client" to types.awsSmithyClient,
         "aws_types" to types.awsTypes,
         "retry" to types.smithyClientRetry,
@@ -154,15 +165,13 @@ private class AwsFluentClientExtensions(types: Types) {
                     E: Into<#{ConnectorError}>,
                 {
                     let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
                     let mut builder = #{aws_smithy_client}::Builder::new()
                         .connector(#{DynConnector}::new(conn))
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    if let Some(sleep_impl) = conf.sleep_impl() {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
+                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .retry_config(retry_config.into())
+                        .operation_timeout_config(timeout_config.into());
+                    builder.set_sleep_impl(conf.sleep_impl());
                     let client = builder.build();
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
@@ -177,21 +186,18 @@ private class AwsFluentClientExtensions(types: Types) {
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
                     let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
                     let sleep_impl = conf.sleep_impl();
                     if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
                         panic!("An async sleep implementation is required for retries or timeouts to work. \
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");
                     }
-                    let mut builder = #{aws_smithy_client}::Builder::dyn_https()
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
-                    // only set it if we actually have a sleep impl.
-                    if let Some(sleep_impl) = sleep_impl {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
+                    let mut builder = #{aws_smithy_client}::Builder::new()
+                        .dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
+                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                        .retry_config(retry_config.into())
+                        .operation_timeout_config(timeout_config.into());
+                    builder.set_sleep_impl(sleep_impl);
                     let client = builder.build();
 
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
@@ -203,17 +209,17 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
-    private val serviceName = coreCodegenContext.serviceShape.expectTrait<TitleTrait>().value
-    private val serviceShape = coreCodegenContext.serviceShape
-    private val crateName = coreCodegenContext.moduleUseName()
+private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : FluentClientCustomization() {
+    private val serviceName = codegenContext.serviceShape.expectTrait<TitleTrait>().value
+    private val serviceShape = codegenContext.serviceShape
+    private val crateName = codegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to coreCodegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
 
     // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
     // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
     private fun suppressUsageDocs(): Boolean =
-        SdkSettings.from(coreCodegenContext.settings).awsConfigVersion == null ||
+        SdkSettings.from(codegenContext.settings).awsConfigVersion == null ||
             setOf(
                 ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
                 ShapeId.from("com.amazonaws.sso#SWBPortalService"),
@@ -249,7 +255,7 @@ private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenCon
                         /// ```
                         /// **Constructing a client with custom configuration**
                         /// ```rust,no_run
-                        /// use #{aws_config}::RetryConfig;
+                        /// use #{aws_config}::retry::RetryConfig;
                         /// ## async fn docs() {
                         /// let shared_config = #{aws_config}::load_from_env().await;
                         /// let config = $crateName::config::Builder::from(&shared_config)
@@ -262,6 +268,7 @@ private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenCon
                     )
                 }
             }
+
             else -> emptySection
         }
     }
@@ -274,8 +281,8 @@ private fun renderCustomizableOperationSendMethod(
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toGenericsGenerator()
+    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+    val handleGenerics = generics.toRustGenerics()
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(

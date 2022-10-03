@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.testRustSettings
+import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSettings
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import java.util.Optional
 
 internal class RemoveEventStreamOperationsTest {
@@ -49,7 +49,7 @@ internal class RemoveEventStreamOperationsTest {
     fun `remove event stream ops from services that are not in the allow list`() {
         val transformed = RemoveEventStreamOperations.transform(
             model,
-            testRustSettings(
+            clientTestRustSettings(
                 codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("not-test-module")),
             ),
         )
@@ -61,7 +61,7 @@ internal class RemoveEventStreamOperationsTest {
     fun `keep event stream ops from services that are in the allow list`() {
         val transformed = RemoveEventStreamOperations.transform(
             model,
-            testRustSettings(
+            clientTestRustSettings(
                 codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("test-module")),
             ),
         )
