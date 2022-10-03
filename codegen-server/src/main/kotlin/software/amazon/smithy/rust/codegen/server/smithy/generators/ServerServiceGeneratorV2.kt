@@ -113,7 +113,7 @@ class ServerServiceGeneratorV2(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
-                /// This should be async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
+                /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
                 /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
                 pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{HandlerSetterGenerics:W}>
                 where
