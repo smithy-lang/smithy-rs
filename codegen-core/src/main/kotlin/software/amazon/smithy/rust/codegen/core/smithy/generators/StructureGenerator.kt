@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -108,9 +107,9 @@ open class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+                    val sensitive = "SmithyHttpServer::instrumentation::sensitivity::Sensitive"
                     rust(
-                        "formatter.field(${memberName.dq()}, &$fieldValue);",
+                        "formatter.field(${memberName.dq()}, &$sensitive(self.$memberName));",
                     )
                 }
                 rust("formatter.finish()")

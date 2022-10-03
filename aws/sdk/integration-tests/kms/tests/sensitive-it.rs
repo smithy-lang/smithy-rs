@@ -10,6 +10,7 @@ use aws_smithy_http::operation::{self, Parts};
 use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_http::retry::ClassifyRetry;
+use aws_smithy_http::instrumentation::sensitivity::REDACTED;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use bytes::Bytes;
 use kms::error::CreateAliasError;
@@ -24,7 +25,7 @@ fn validate_sensitive_trait() {
         .build();
     assert_eq!(
         format!("{:?}", output),
-        "GenerateRandomOutput { plaintext: \"*** Sensitive Data Redacted ***\" }"
+        "GenerateRandomOutput { plaintext: REDACTED }"
     );
 }
 
