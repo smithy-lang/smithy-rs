@@ -41,9 +41,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * a subset of shapes in each arm, and check for a subset of constraint traits attached to the shape in the arm's
  * (with these subsets being smaller than what [the spec] accounts for).
  *
- * Note `uniqueItems` is deprecated, so we won't ever implement it.
- *
- * [the spec]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html
+ * [the spec]: https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html
  */
 fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
     is StructureShape -> {
