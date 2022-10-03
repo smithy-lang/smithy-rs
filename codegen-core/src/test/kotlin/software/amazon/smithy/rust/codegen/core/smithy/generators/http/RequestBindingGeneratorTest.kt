@@ -276,7 +276,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     // make sure we obey the sensitive trait
-                    assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `{redacted}` cannot be used as a header value: failed to parse header value)");
+                    assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
                 """,
             )
 

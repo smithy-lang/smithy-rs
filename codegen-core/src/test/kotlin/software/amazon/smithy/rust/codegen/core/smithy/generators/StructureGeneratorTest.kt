@@ -156,7 +156,7 @@ class StructureGeneratorTest {
                 password: Some("don't leak me".to_owned()),
                 secret_key: Some("don't leak me".to_owned())
             };
-            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"{redacted}\", secret_key: \"{redacted}\" }");
+            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
             """,
         )
         writer.compileAndTest()

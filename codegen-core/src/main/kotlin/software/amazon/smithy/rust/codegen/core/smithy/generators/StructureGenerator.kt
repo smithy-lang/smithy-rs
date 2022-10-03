@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -98,18 +99,6 @@ open class StructureGenerator(
         } else ""
     }
 
-    private fun redactMemberIfNecessary(member: MemberShape): String {
-        val targetIsSensitive = model.expectShape(member.target).hasTrait<SensitiveTrait>()
-        val memberName = symbolProvider.toMemberName(member)
-
-        return if (targetIsSensitive) {
-            val sensitive = "aws_smithy_http_server::instrumentation::sensitivity::Sensitive"
-            "$sensitive(&self.$memberName)"
-        } else {
-            "self.$memberName"
-        }
-    }
-
     /** Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
@@ -119,10 +108,10 @@ open class StructureGenerator(
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val memberValue = redactMemberIfNecessary(member)
+                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
 
                     rust(
-                        "formatter.field(${memberName.dq()}, &$memberValue);",
+                        "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
                 rust("formatter.finish()")
