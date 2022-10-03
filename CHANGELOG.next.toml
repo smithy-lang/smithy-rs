@@ -10,6 +10,16 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Mark `operation` and `operation_handler` modules as private in the generated server crate.
+Both modules did not contain any public types, therefore there should be no actual breakage when updating.
+"""
+references = ["smithy-rs#1803"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
+author = "LukeMathWalker"
+
 [[smithy-rs]]
 message = "Pokémon Service example code now runs clippy during build."
 references = ["smithy-rs#1727"]
