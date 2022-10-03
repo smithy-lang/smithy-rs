@@ -114,7 +114,7 @@ open class StructureGenerator(
             model: Model,
             symbolProvider: SymbolProvider,
             takeInUnconstrainedTypes: Boolean,
-        ) =
+        ): Boolean =
             if (takeInUnconstrainedTypes) {
                 structureShape.canReachConstrainedShape(model, symbolProvider)
             } else {
@@ -133,7 +133,7 @@ open class StructureGenerator(
         fun serverHasFallibleBuilderWithoutPublicConstrainedTypes(
             structureShape: StructureShape,
             symbolProvider: SymbolProvider,
-        ) =
+        ): Boolean =
             structureShape
                 .members()
                 .map { symbolProvider.toSymbol(it) }
