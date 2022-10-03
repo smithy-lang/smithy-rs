@@ -12,12 +12,12 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticAggregateShapeReachableFromOperationInputTagTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.AggregateShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 
 /**
  * Tag all [aggregate shapes] reachable from operation input with the
- * [SyntheticAggregateShapeReachableFromOperationInputTagTrait] tag.
+ * [AggregateShapeReachableFromOperationInputTagTrait] tag.
  *
  * This is useful to determine whether we need to generate code to
  * enforce constraints upon request deserialization in the server.
@@ -55,7 +55,7 @@ object AggregateShapesReachableFromOperationInputTagger {
                             is MapShape -> shape.toBuilder()
                             else -> UNREACHABLE("the `when` is exhaustive")
                         }
-                        builder.addTrait(SyntheticAggregateShapeReachableFromOperationInputTagTrait()).build()
+                        builder.addTrait(AggregateShapeReachableFromOperationInputTagTrait()).build()
                     } else {
                         shape
                     }

@@ -21,7 +21,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticAggregateShapeReachableFromOperationInputTagTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.AggregateShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 
@@ -71,7 +71,7 @@ fun Shape.hasEventStreamMember(model: Model): Boolean {
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
     is StructureShape, is UnionShape, is ListShape, is MapShape -> {
-        shape.hasTrait<SyntheticAggregateShapeReachableFromOperationInputTagTrait>()
+        shape.hasTrait<AggregateShapeReachableFromOperationInputTagTrait>()
     } else -> PANIC("this method does not support shape type ${shape.type}")
 }
 

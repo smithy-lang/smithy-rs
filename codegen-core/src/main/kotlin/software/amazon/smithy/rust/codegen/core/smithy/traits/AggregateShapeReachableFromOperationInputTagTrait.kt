@@ -9,7 +9,12 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AnnotationTrait
 
-class SyntheticAggregateShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.objectNode()) {
+/**
+ * Tag to indicate that an aggregate shape is reachable from operation input.
+ *
+ * See the [AggregateShapesReachableFromOperationInputTagger] model transform for how it's used.
+ */
+class AggregateShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
         val ID = ShapeId.from("smithy.api.internal#syntheticStructureReachableFromOperationInputTag")
     }
