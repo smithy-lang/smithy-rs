@@ -10,7 +10,7 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-[[rust-runtime]]
+[[smithy-rs]]
 message = "Pokémon Service example code now runs clippy during build."
 references = ["smithy-rs#1727"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
@@ -93,3 +93,9 @@ message = "Paginators now stop on encountering a duplicate token by default rath
 references = ["aws-sdk-rust#620", "smithy-rs#1748"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The client Config now has getters for every value that it holds."
+references = ["smithy-rs#1747"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "kastolars"

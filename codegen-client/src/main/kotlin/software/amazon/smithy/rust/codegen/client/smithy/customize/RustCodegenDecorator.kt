@@ -65,8 +65,7 @@ interface RustCodegenDecorator<T, C : CodegenContext> {
 
     fun extras(codegenContext: C, rustCrate: RustCrate) {}
 
-    fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap<T, C>): ProtocolMap<T, C> =
-        currentProtocols
+    fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap<T, C>): ProtocolMap<T, C> = currentProtocols
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
 

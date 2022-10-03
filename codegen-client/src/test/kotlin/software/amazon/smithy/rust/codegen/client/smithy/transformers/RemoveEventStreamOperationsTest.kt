@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSettings
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import java.util.Optional
 
 internal class RemoveEventStreamOperationsTest {
