@@ -553,9 +553,14 @@ class HttpBindingGenerator(
         }
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val listHeader = memberType is CollectionShape
+            val iterableExpression = if (workingWithPublicConstrainedWrapperTupleType(memberShape, coreCodegenContext)) {
+                "&$field.0"
+            } else {
+                field
+            }
             rustTemplate(
                 """
-                for (k, v) in ${ if (workingWithPublicConstrainedWrapperTupleType(memberShape, coreCodegenContext)) "&$field.0" else field } {
+                for (k, v) in $iterableExpression {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
