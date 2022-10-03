@@ -105,13 +105,13 @@ impl OperationShape for GetPokemonSpecies {
 
     type Input = GetPokemonSpeciesInput;
     type Output = GetPokemonSpeciesOutput;
-    // NOTE: `GetPokemonSpeciesError` is an enum generated from the `errors: [ResourceNotFoundException]` from the
-    // model above.
     type Error = GetPokemonSpeciesError;
 }
 ```
 
-Note that `GetPokemonSpecies` marker structure is a zero-sized type (ZST), and therefore does not allocate - only existing in the type system as a way to hang operation specific data on.
+where `GetPokemonSpeciesInput`, `GetPokemonSpeciesOutput` are both generated from the Smithy structures and `GetPokemonSpeciesError` is an enum generated from the `errors: [ResourceNotFoundException]`.
+
+Note that the `GetPokemonSpecies` marker structure is a zero-sized type (ZST), and therefore does not allocate - only existing in the type system as a way to hang operation specific data on.
 
 The following nomenclature will aid us in our survey. We describe a `tower::Service` as a "model service" if its request and response are Smithy structures, as defined by the `OperationShape` trait - the `GetPokemonSpeciesInput`, `GetPokemonSpeciesOutput`, and `GetPokemonSpeciesError` described above. Similarly, we describe a `tower::Service` as a "HTTP service" if its request and response are [`http`](https://github.com/hyperium/http) structures - `http::Request` and `http::Response`.
 
@@ -154,8 +154,10 @@ pub trait OperationShapeExt: OperationShape {
 
 Observe that there are two constructors provided: `from_handler` which takes a `H: Handler` and `from_service` which takes a `S: OperationService`. In both cases `Self` is passed as a parameter to the traits - this constrains `handler: H` and `svc: S` to the signature given by the implementation of `OperationShape` on `Self`.
 
-The [`Handler`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/handler.rs#L21-L29) and [`OperationService`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/operation_service.rs#L15-L29) both serve a similar purpose - they provide a common interface for converting to a model service `S`. The `Handler<GetPokemonSpecies>` trait covers all closures taking `GetPokemonSpeciesInput` and asynchronously returning a `Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError>` - they are converted to a model service by a `IntoService`. The `OperationService<GetPokemonSpecies>` trait covers all `tower::Service`s with request `GetPokemonSpeciesInput`, response `GetPokemonSpeciesOutput` and error `GetPokemonSpeciesOutput` - they are converted to a model service by a `Normalize` (this is a very small conversion which flattens request tuples).
-<!-- TODO(hidden_docs): More information about the conversions can be found here. -->
+The [`Handler`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/handler.rs#L21-L29) and [`OperationService`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/operation_service.rs#L15-L29) both serve a similar purpose - they provide a common interface for converting to a model service `S`.
+
+- The `Handler<GetPokemonSpecies>` trait covers all async functions taking `GetPokemonSpeciesInput` and asynchronously returning a `Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError>`.
+- The `OperationService<GetPokemonSpecies>` trait covers all `tower::Service`s with request `GetPokemonSpeciesInput`, response `GetPokemonSpeciesOutput` and error `GetPokemonSpeciesOutput`.
 
 The `from_handler` constructor is used in the following way:
 
@@ -185,7 +187,7 @@ let svc: Svc = /* ... */;
 let operation = GetPokemonService::from_service(svc);
 ```
 
-To summarize, the `S`, in `Operation<S, L>`, is a _model service_ constructed from a `Handler` or a `OperationService` subject to the constraints of an `OperationShape`.
+To summarize, the `S`, in `Operation<S, L>`, is a _model service_ constructed from a `Handler` or a `OperationService` subject to the constraints of an `OperationShape`. More detailed information on these conversions is provided in the [Handler and OperationService section](https://github.com/awslabs/smithy-rs/blob/39c0096c33417d44f125a042c112b3c16918098a/rust-runtime/aws-smithy-http-server/src/operation/mod.rs#L50-L100) Rust docs.
 
 Now, what about the `L` in `Operation<S, L>`? The `L` is a [`tower::Layer`](https://docs.rs/tower/latest/tower/layer/trait.Layer.html), or colloquially "middleware", that is applied to a _HTTP service_. Note that this means that `L` is _not_ applied directly to `S`. We can append to `L` using the `Operation::layer` method:
 
