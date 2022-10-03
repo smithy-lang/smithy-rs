@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 sealed class ErrorKind {
     abstract fun writable(runtimeConfig: RuntimeConfig): Writable
@@ -60,6 +62,7 @@ fun StructureShape.modeledRetryKind(errorTrait: ErrorTrait): ErrorKind? {
 }
 
 class ErrorGenerator(
+    private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
@@ -119,7 +122,9 @@ class ErrorGenerator(
                 write("write!(f, ${errorDesc.dq()})?;")
                 messageShape?.let {
                     ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
-                        write("""write!(f, ": {}", $field)?;""")
+                        val fieldValue = it.redactIfNecessary(model, field)
+
+                        write("""write!(f, ": {}", $fieldValue)?;""")
                     }
                 }
                 write("Ok(())")

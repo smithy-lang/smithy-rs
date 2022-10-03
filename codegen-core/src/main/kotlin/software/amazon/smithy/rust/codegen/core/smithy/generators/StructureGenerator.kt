@@ -62,7 +62,7 @@ open class StructureGenerator(
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
+            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
     }
 
