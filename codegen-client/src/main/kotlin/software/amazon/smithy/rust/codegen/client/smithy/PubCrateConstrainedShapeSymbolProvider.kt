@@ -41,9 +41,9 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * [ConstrainedShapeSymbolProvider], since otherwise it will eventually
  * delegate to it and generate a symbol with a `pub` type.
  *
- * Note simple shapes cannot be transitively but not directly constrained, so
- * this symbol provider is only implemented for aggregate shapes. The symbol
- * provider will intentionally crash in such a case to avoid the caller
+ * Note simple shapes cannot be transitively and not directly constrained at
+ * the same time, so this symbol provider is only implemented for aggregate shapes.
+ * The symbol provider will intentionally crash in such a case to avoid the caller
  * incorrectly using it.
  *
  * Note also that for the purposes of this symbol provider, a member shape is
