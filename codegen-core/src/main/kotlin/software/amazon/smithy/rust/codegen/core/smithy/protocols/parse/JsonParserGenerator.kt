@@ -22,7 +22,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -42,7 +41,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -58,10 +56,25 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
 class JsonParserGenerator(
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
+    /** Function that maps a StructureShape into its builder symbol */
+    private val builderSymbol: (StructureShape) -> Symbol,
+    /**
+     * Whether we should parse a value for a shape into its associated unconstrained type. For example, when the shape
+     * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
+     * user gets. This is only relevant for the server, that parses the incoming request and only after enforces
+     * constraint traits.
+     *
+     * The function returns a pair where the second component is the return symbol that should be parsed, and the first
+     * component is whether such symbol is unconstrained or not.
+     *
+     * TODO Try to store whether a symbol is unconstrained or not as a property on the `Symbol` itself, and so then
+     *  this function should just need to return a `Symbol` as opposed to a pair.
+     */
+    private val returnSymbolToParse: (Shape) -> Pair<Boolean, Symbol>,
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -580,26 +593,4 @@ class JsonParserGenerator(
             }
         }
     }
-
-    // TODO These two functions should be taken in as input to `JsonParserGenerator`. Taking in functions is ok, since
-    //  we already take in `::awsJsonFieldName`. Then the `ServerProtocol`s can pass in functions that use `ServerCodegenContext`.
-    //  Same goes with `builderSymbol`.
-
-    /**
-     * Whether we should parse a value for a shape into its associated unconstrained type. For example, when the shape
-     * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
-     * user gets. This is only relevant for the server, that parses the incoming request and only after enforces
-     * constraint traits.
-     *
-     * The function returns a pair where the second component is the return symbol that should be parsed, and the first
-     * component is whether such symbol is unconstrained or not.
-     */
-    private fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
-        if (codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)) {
-            true to (codegenContext as ServerCodegenContext).unconstrainedShapeSymbolProvider.toSymbol(shape)
-        } else {
-            false to symbolProvider.toSymbol(shape)
-        }
-
-    private fun builderSymbol(shape: StructureShape) = shape.builderSymbol(codegenContext, symbolProvider)
 }

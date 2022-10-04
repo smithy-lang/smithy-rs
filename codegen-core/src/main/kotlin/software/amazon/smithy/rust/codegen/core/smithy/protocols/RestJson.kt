@@ -5,9 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
@@ -20,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
@@ -85,8 +88,13 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     override fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> =
         listOf("x-amzn-errortype" to errorShape.id.name)
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
+    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
+        fun builderSymbol(shape: StructureShape): Symbol =
+            shape.builderSymbol(codegenContext.symbolProvider)
+        fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
+            false to codegenContext.symbolProvider.toSymbol(shape)
+        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
+    }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)

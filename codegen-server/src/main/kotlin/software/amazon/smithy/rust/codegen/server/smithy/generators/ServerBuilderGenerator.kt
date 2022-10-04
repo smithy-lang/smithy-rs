@@ -9,45 +9,44 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.rustlang.conditionalBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.deprecatedShape
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.client.rustlang.implInto
-import software.amazon.smithy.rust.codegen.client.rustlang.render
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.client.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.PubCrateConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.client.smithy.hasConstraintTraitOrTargetHasConstraintTrait
-import software.amazon.smithy.rust.codegen.client.smithy.isOptional
-import software.amazon.smithy.rust.codegen.client.smithy.isRustBoxed
-import software.amazon.smithy.rust.codegen.client.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.makeOptional
-import software.amazon.smithy.rust.codegen.client.smithy.makeRustBoxed
-import software.amazon.smithy.rust.codegen.client.smithy.mapRustType
-import software.amazon.smithy.rust.codegen.client.smithy.rustType
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.implInto
+import software.amazon.smithy.rust.codegen.core.rustlang.render
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
+import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
+import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 
 /**
@@ -96,7 +95,7 @@ class ServerBuilderGenerator(
     private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
-    private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
+    private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val moduleName = builderSymbol.namespace.split(builderSymbol.namespaceDelimiter).last()
     private val isBuilderFallible =
         StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
