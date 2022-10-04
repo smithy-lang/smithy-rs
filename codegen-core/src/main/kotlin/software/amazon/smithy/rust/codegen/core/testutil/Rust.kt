@@ -18,11 +18,11 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -199,7 +199,18 @@ class TestWriterDelegator(
     symbolProvider: RustSymbolProvider,
     val codegenConfig: CoreCodegenConfig,
 ) :
-    RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
+    RustCrate(
+        fileManifest,
+        symbolProvider,
+        setOf(
+            RustModule.Error,
+            RustModule.Model,
+            RustModule.Input,
+            RustModule.Output,
+            RustModule.Config,
+        ).associateBy { it.name },
+        codegenConfig,
+    ) {
     val baseDir: Path = fileManifest.baseDir
 
     fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()

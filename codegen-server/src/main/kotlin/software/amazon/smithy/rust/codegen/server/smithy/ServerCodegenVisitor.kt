@@ -18,9 +18,9 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -92,7 +92,14 @@ open class ServerCodegenVisitor(
             settings,
         )
 
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
+        val serverPublicModules = setOf(
+            RustModule.Error,
+            RustModule.Model,
+            RustModule.Input,
+            RustModule.Output,
+            RustModule.Config,
+        ).associateBy { it.name }
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, serverPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
