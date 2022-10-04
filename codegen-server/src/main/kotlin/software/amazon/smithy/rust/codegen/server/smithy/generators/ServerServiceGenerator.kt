@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -41,7 +40,7 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        rustCrate.withModule(DefaultPublicModules["operation"]!!) { writer ->
+        rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) { writer ->
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(writer)
         }
 
@@ -52,7 +51,7 @@ open class ServerServiceGenerator(
                 }
             }
         }
-        rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
+        rustCrate.withModule(RustModule.private("operation_handler", "Operation handlers definition and implementation.")) { writer ->
             renderOperationHandler(writer, operations)
         }
         rustCrate.withModule(
@@ -89,10 +88,9 @@ open class ServerServiceGenerator(
         rustCrate.withModule(
             RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) { writer ->
-            val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
             ServerServiceGeneratorV2(
                 codegenContext,
-                serverProtocol,
+                protocol,
             ).render(writer)
         }
 
