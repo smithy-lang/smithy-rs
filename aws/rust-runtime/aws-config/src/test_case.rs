@@ -3,17 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::connector::default_connector;
 use crate::provider_config::ProviderConfig;
-
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use aws_smithy_client::erase::DynConnector;
+use aws_smithy_types::error::display_context::DisplayErrorContext;
 use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
-
 use serde::Deserialize;
-
-use crate::connector::default_connector;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
@@ -101,7 +99,7 @@ where
             }
             (Err(err), GenericTestResult::ErrorContains(substr)) => {
                 assert!(
-                    format!("{}", err).contains(substr),
+                    format!("{}", DisplayErrorContext(&err)).contains(substr),
                     "`{}` did not contain `{}`",
                     err,
                     substr

@@ -13,25 +13,23 @@
 use crate::fs_util::{home_dir, Os};
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::provider_config::ProviderConfig;
-
 use aws_sdk_sso::middleware::DefaultMiddleware as SsoMiddleware;
 use aws_sdk_sso::model::RoleCredentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_json::deserialize::Token;
 use aws_smithy_types::date_time::Format;
+use aws_smithy_types::error::opaque::OpaqueError;
 use aws_smithy_types::DateTime;
 use aws_types::credentials::{CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use aws_types::{credentials, Credentials};
-
+use ring::digest;
 use std::convert::TryInto;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
-
-use ring::digest;
 use zeroize::Zeroizing;
 
 impl crate::provider_config::ProviderConfig {
@@ -164,18 +162,18 @@ impl Builder {
 pub(crate) enum LoadTokenError {
     InvalidCredentials(InvalidJsonCredentials),
     NoHomeDirectory,
-    IoError { err: io::Error, path: PathBuf },
+    IoError { source: io::Error, path: PathBuf },
 }
 
 impl Display for LoadTokenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoadTokenError::InvalidCredentials(err) => {
-                write!(f, "SSO Token was invalid (expected JSON): {}", err)
+            Self::InvalidCredentials(_) => {
+                write!(f, "SSO Token was invalid (expected JSON)")
             }
-            LoadTokenError::NoHomeDirectory => write!(f, "Could not resolve a home directory"),
-            LoadTokenError::IoError { err, path } => {
-                write!(f, "failed to read `{}`: {}", path.display(), err)
+            Self::NoHomeDirectory => write!(f, "Could not resolve a home directory"),
+            Self::IoError { source: _, path } => {
+                write!(f, "failed to read `{}`", path.display())
             }
         }
     }
@@ -184,9 +182,9 @@ impl Display for LoadTokenError {
 impl Error for LoadTokenError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            LoadTokenError::InvalidCredentials(err) => Some(err as _),
-            LoadTokenError::NoHomeDirectory => None,
-            LoadTokenError::IoError { err, .. } => Some(err as _),
+            Self::InvalidCredentials(source) => Some(source as _),
+            Self::NoHomeDirectory => None,
+            Self::IoError { source, .. } => Some(source as _),
         }
     }
 }
@@ -261,7 +259,7 @@ async fn load_token(start_url: &str, env: &Env, fs: &Fs) -> Result<SsoToken, Loa
             fs.read_to_end(&path)
                 .await
                 .map_err(|err| LoadTokenError::IoError {
-                    err,
+                    source: err,
                     path: path.to_path_buf(),
                 })?,
         );
@@ -314,7 +312,7 @@ fn parse_token_json(input: &[u8]) -> Result<SsoToken, InvalidJsonCredentials> {
     let expires_at = DateTime::from_str(expires_at.as_ref(), Format::DateTime).map_err(|e| {
         InvalidJsonCredentials::InvalidField {
             field: "expiresAt",
-            err: e.into(),
+            source: OpaqueError::new(e),
         }
     })?;
     let region = region.map(Region::new);
@@ -390,11 +388,7 @@ mod test {
             "startUrl": "https://d-abc123.awsapps.com/start"
         }"#;
         let err = parse_token_json(token).expect_err("invalid timestamp");
-        assert!(
-            format!("{}", err).contains("Invalid field in response: `expiresAt`."),
-            "{}",
-            err
-        );
+        assert_eq!("Invalid field in response: `expiresAt`", format!("{}", err));
     }
 
     #[test]

@@ -7,6 +7,7 @@
 
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials, RefreshableCredentials};
 use aws_smithy_json::deserialize::Token;
+use aws_smithy_types::error::opaque::OpaqueError;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use aws_types::{credentials, Credentials};
 use std::fmt;
@@ -197,7 +198,7 @@ pub(crate) fn parse_credential_process_json_credentials(
                 version = Some(i32::try_from(*value).map_err(|err| {
                     InvalidJsonCredentials::InvalidField {
                         field: "Version",
-                        err: err.into(),
+                        source: OpaqueError::new(err),
                     }
                 })?);
             }
@@ -227,7 +228,7 @@ pub(crate) fn parse_credential_process_json_credentials(
         Some(version) => {
             return Err(InvalidJsonCredentials::InvalidField {
                 field: "version",
-                err: format!("unknown version number: {}", version).into(),
+                source: format!("unknown version number: {}", version).into(),
             })
         }
     }
@@ -241,7 +242,7 @@ pub(crate) fn parse_credential_process_json_credentials(
         SystemTime::try_from(OffsetDateTime::parse(&expiration, &Rfc3339).map_err(|err| {
             InvalidJsonCredentials::InvalidField {
                 field: "Expiration",
-                err: err.into(),
+                source: OpaqueError::new(err),
             }
         })?)
         .map_err(|_| {

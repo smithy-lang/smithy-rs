@@ -6,6 +6,7 @@
 use aws_smithy_json::deserialize::token::skip_value;
 use aws_smithy_json::deserialize::{json_token_iter, EscapeError, Token};
 use aws_smithy_types::date_time::Format;
+use aws_smithy_types::error::opaque::OpaqueError;
 use aws_smithy_types::DateTime;
 use std::borrow::Cow;
 use std::convert::TryFrom;
@@ -16,14 +17,15 @@ use std::time::SystemTime;
 #[derive(Debug)]
 pub(crate) enum InvalidJsonCredentials {
     /// The response did not contain valid JSON
-    JsonError(Box<dyn Error + Send + Sync>),
+    JsonError(OpaqueError),
+
     /// The response was missing a required field
     MissingField(&'static str),
 
     /// A field was invalid
     InvalidField {
         field: &'static str,
-        err: Box<dyn Error + Send + Sync>,
+        source: OpaqueError,
     },
 
     /// Another unhandled error occurred
@@ -32,36 +34,44 @@ pub(crate) enum InvalidJsonCredentials {
 
 impl From<EscapeError> for InvalidJsonCredentials {
     fn from(err: EscapeError) -> Self {
-        InvalidJsonCredentials::JsonError(err.into())
+        Self::JsonError(OpaqueError::new(err))
     }
 }
 
 impl From<aws_smithy_json::deserialize::Error> for InvalidJsonCredentials {
     fn from(err: aws_smithy_json::deserialize::Error) -> Self {
-        InvalidJsonCredentials::JsonError(err.into())
+        Self::JsonError(OpaqueError::new(err))
     }
 }
 
 impl Display for InvalidJsonCredentials {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvalidJsonCredentials::JsonError(json) => {
-                write!(f, "invalid JSON in response: {}", json)
+            Self::JsonError(_) => {
+                write!(f, "invalid JSON in response")
             }
-            InvalidJsonCredentials::MissingField(field) => write!(
+            Self::MissingField(field) => write!(
                 f,
                 "Expected field `{}` in response but it was missing",
                 field
             ),
-            InvalidJsonCredentials::Other(msg) => write!(f, "{}", msg),
-            InvalidJsonCredentials::InvalidField { field, err } => {
-                write!(f, "Invalid field in response: `{}`. {}", field, err)
+            Self::Other(msg) => write!(f, "{}", msg),
+            Self::InvalidField { field, source: _ } => {
+                write!(f, "Invalid field in response: `{field}`")
             }
         }
     }
 }
 
-impl Error for InvalidJsonCredentials {}
+impl Error for InvalidJsonCredentials {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::JsonError(source) => Some(source),
+            Self::InvalidField { source, .. } => Some(source),
+            Self::MissingField(_) | Self::Other(_) => None,
+        }
+    }
+}
 
 #[derive(PartialEq, Eq)]
 pub(crate) struct RefreshableCredentials<'a> {
@@ -181,7 +191,7 @@ pub(crate) fn parse_json_credentials(
                 DateTime::from_str(expiration.as_ref(), Format::DateTime).map_err(|err| {
                     InvalidJsonCredentials::InvalidField {
                         field: "Expiration",
-                        err: err.into(),
+                        source: OpaqueError::new(err),
                     }
                 })?,
             )

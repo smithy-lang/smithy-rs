@@ -53,9 +53,10 @@ use std::net::IpAddr;
 
 use aws_smithy_client::erase::boxclone::BoxCloneService;
 use aws_smithy_http::endpoint::Endpoint;
+use aws_smithy_types::error::opaque::OpaqueError;
 use aws_types::credentials;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
-use http::uri::{InvalidUri, Scheme};
+use http::uri::Scheme;
 use http::{HeaderValue, Uri};
 use tower::{Service, ServiceExt};
 
@@ -63,7 +64,6 @@ use crate::http_credential_provider::HttpCredentialProvider;
 use crate::provider_config::ProviderConfig;
 use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_types::os_shim_internal::Env;
-use http::header::InvalidHeaderValue;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 
@@ -100,7 +100,7 @@ impl EcsCredentialsProvider {
             Some(auth) => Some(HeaderValue::from_str(&auth).map_err(|err| {
                 tracing::warn!(token = %auth, "invalid auth token");
                 CredentialsError::invalid_configuration(EcsConfigurationErr::InvalidAuthToken {
-                    err,
+                    source: OpaqueError::new(err),
                     value: auth,
                 })
             })?),
@@ -152,7 +152,10 @@ impl Provider {
             let mut dns = dns.or_else(tokio_dns);
             validate_full_uri(&full_uri, dns.as_mut())
                 .await
-                .map_err(|err| EcsConfigurationErr::InvalidFullUri { err, uri: full_uri })
+                .map_err(|err| EcsConfigurationErr::InvalidFullUri {
+                    source: OpaqueError::new(err),
+                    uri: full_uri,
+                })
         } else {
             Err(EcsConfigurationErr::NotConfigured)
         }
@@ -184,7 +187,7 @@ impl Provider {
             Err(invalid_uri) => {
                 tracing::warn!(uri = ?invalid_uri, "invalid URI loaded from environment");
                 return Err(EcsConfigurationErr::InvalidRelativeUri {
-                    err: invalid_uri,
+                    source: OpaqueError::new(invalid_uri),
                     uri: relative_uri,
                 });
             }
@@ -197,40 +200,28 @@ impl Provider {
 
 #[derive(Debug)]
 enum EcsConfigurationErr {
-    InvalidRelativeUri {
-        err: InvalidUri,
-        uri: String,
-    },
-    InvalidFullUri {
-        err: InvalidFullUriError,
-        uri: String,
-    },
-    InvalidAuthToken {
-        err: InvalidHeaderValue,
-        value: String,
-    },
+    InvalidRelativeUri { source: OpaqueError, uri: String },
+    InvalidFullUri { source: OpaqueError, uri: String },
+    InvalidAuthToken { source: OpaqueError, value: String },
     NotConfigured,
 }
 
 impl Display for EcsConfigurationErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            EcsConfigurationErr::InvalidRelativeUri { err, uri } => write!(
-                f,
-                "invalid relative URI for ECS provider ({}): {}",
-                err, uri
-            ),
-            EcsConfigurationErr::InvalidFullUri { err, uri } => {
-                write!(f, "invalid full URI for ECS provider ({}): {}", err, uri)
+            EcsConfigurationErr::InvalidRelativeUri { source: _, uri } => {
+                write!(f, "invalid relative URI ({uri}) for ECS provider")
+            }
+            EcsConfigurationErr::InvalidFullUri { source: _, uri } => {
+                write!(f, "invalid full URI ({uri}) for ECS provider")
             }
             EcsConfigurationErr::NotConfigured => write!(
                 f,
                 "No environment variables were set to configure ECS provider"
             ),
-            EcsConfigurationErr::InvalidAuthToken { err, value } => write!(
+            EcsConfigurationErr::InvalidAuthToken { source: _, value } => write!(
                 f,
-                "`{}` could not be used as a header value for the auth token. {}",
-                value, err
+                "`{value}` could not be used as a header value for the auth token"
             ),
         }
     }
@@ -239,9 +230,10 @@ impl Display for EcsConfigurationErr {
 impl Error for EcsConfigurationErr {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self {
-            EcsConfigurationErr::InvalidRelativeUri { err, .. } => Some(err),
-            EcsConfigurationErr::InvalidFullUri { err, .. } => Some(err),
-            _ => None,
+            Self::InvalidRelativeUri { source, .. } => Some(source),
+            Self::InvalidFullUri { source, .. } => Some(source),
+            Self::InvalidAuthToken { source, .. } => Some(source),
+            Self::NotConfigured => None,
         }
     }
 }
@@ -310,7 +302,10 @@ impl Builder {
 pub enum InvalidFullUriError {
     /// The provided URI could not be parsed as a URI
     #[non_exhaustive]
-    InvalidUri(InvalidUri),
+    InvalidUri {
+        /// Cause of the error
+        source: OpaqueError,
+    },
 
     /// No Dns service was provided
     #[non_exhaustive]
@@ -325,25 +320,42 @@ pub enum InvalidFullUriError {
     NotLoopback,
 
     /// DNS lookup failed when attempting to resolve the host to an IP Address for validation.
-    DnsLookupFailed(io::Error),
+    #[non_exhaustive]
+    DnsLookupFailed {
+        /// Cause of the error
+        source: OpaqueError,
+    },
+}
+
+impl InvalidFullUriError {
+    fn invalid_uri(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::InvalidUri {
+            source: OpaqueError::new(source),
+        }
+    }
+
+    fn dns_lookup_failed(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::DnsLookupFailed {
+            source: OpaqueError::new(source),
+        }
+    }
 }
 
 impl Display for InvalidFullUriError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            InvalidFullUriError::InvalidUri(err) => write!(f, "URI was invalid: {}", err),
-            InvalidFullUriError::MissingHost => write!(f, "URI did not specify a host"),
-            InvalidFullUriError::NotLoopback => {
+            Self::InvalidUri { source: _ } => write!(f, "invalid URI"),
+            Self::MissingHost => write!(f, "URI did not specify a host"),
+            Self::NotLoopback => {
                 write!(f, "URI did not refer to the loopback interface")
             }
-            InvalidFullUriError::DnsLookupFailed(err) => {
+            Self::DnsLookupFailed { source: _ } => {
                 write!(
                     f,
-                    "failed to perform DNS lookup while validating URI: {}",
-                    err
+                    "failed to perform DNS lookup while validating URI",
                 )
             }
-            InvalidFullUriError::NoDnsService => write!(f, "No DNS service was provided. Enable `rt-tokio` or provide a `dns` service to the builder.")
+            Self::NoDnsService => write!(f, "No DNS service was provided. Enable `rt-tokio` or provide a `dns` service to the builder.")
         }
     }
 }
@@ -351,9 +363,8 @@ impl Display for InvalidFullUriError {
 impl Error for InvalidFullUriError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            InvalidFullUriError::InvalidUri(err) => Some(err),
-            InvalidFullUriError::DnsLookupFailed(err) => Some(err),
-            _ => None,
+            Self::InvalidUri { source, .. } | Self::DnsLookupFailed { source, .. } => Some(source),
+            Self::NoDnsService | Self::MissingHost | Self::NotLoopback => None,
         }
     }
 }
@@ -373,7 +384,7 @@ async fn validate_full_uri(
 ) -> Result<Uri, InvalidFullUriError> {
     let uri = uri
         .parse::<Uri>()
-        .map_err(InvalidFullUriError::InvalidUri)?;
+        .map_err(InvalidFullUriError::invalid_uri)?;
     if uri.scheme() == Some(&Scheme::HTTPS) {
         return Ok(uri);
     }
@@ -383,10 +394,10 @@ async fn validate_full_uri(
         Ok(addr) => addr.is_loopback(),
         Err(_domain_name) => {
             let dns = dns.ok_or(InvalidFullUriError::NoDnsService)?;
-            dns.ready().await.map_err(InvalidFullUriError::DnsLookupFailed)?
+            dns.ready().await.map_err(InvalidFullUriError::dns_lookup_failed)?
                     .call(host.to_owned())
                     .await
-                    .map_err(InvalidFullUriError::DnsLookupFailed)?
+                    .map_err(InvalidFullUriError::dns_lookup_failed)?
                     .iter()
                     .all(|addr| {
                         if !addr.is_loopback() {

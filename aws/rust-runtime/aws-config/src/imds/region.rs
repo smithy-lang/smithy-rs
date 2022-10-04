@@ -12,10 +12,9 @@ use crate::imds;
 use crate::imds::client::LazyClient;
 use crate::meta::region::{future, ProvideRegion};
 use crate::provider_config::ProviderConfig;
-
+use aws_smithy_types::error::display_context::DisplayErrorContext;
 use aws_types::os_shim_internal::Env;
 use aws_types::region::Region;
-
 use tracing::Instrument;
 
 /// IMDSv2 Region Provider
@@ -57,7 +56,7 @@ impl ImdsRegionProvider {
                 Some(Region::new(region))
             }
             Err(err) => {
-                tracing::warn!(err = % err, "failed to load region from IMDS");
+                tracing::warn!(err = %DisplayErrorContext(&err), "failed to load region from IMDS");
                 None
             }
         }

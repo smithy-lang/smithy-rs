@@ -214,7 +214,7 @@ impl ProfileFileCredentialsProvider {
 #[derive(Debug)]
 pub struct CouldNotReadProfileFile {
     pub(crate) path: PathBuf,
-    pub(crate) cause: std::io::Error,
+    pub(crate) source: std::io::Error,
 }
 
 /// An Error building a Credential source from an AWS Profile
@@ -223,7 +223,10 @@ pub struct CouldNotReadProfileFile {
 pub enum ProfileFileError {
     /// The profile was not a valid AWS profile
     #[non_exhaustive]
-    CouldNotParseProfile(ProfileParseError),
+    CouldNotParseProfile {
+        /// Cause of the error
+        source: ProfileParseError,
+    },
 
     /// No profiles existed (the profile was empty)
     #[non_exhaustive]
@@ -293,13 +296,13 @@ impl ProfileFileError {
 impl Display for ProfileFileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProfileFileError::CouldNotParseProfile(err) => {
-                write!(f, "could not parse profile file: {}", err)
+            ProfileFileError::CouldNotParseProfile { .. } => {
+                write!(f, "could not parse profile file")
             }
             ProfileFileError::CredentialLoop { profiles, next } => write!(
                 f,
                 "profile formed an infinite loop. first we loaded {:?}, \
-            then attempted to reload {}",
+                then attempted to reload {}",
                 profiles, next
             ),
             ProfileFileError::MissingCredentialSource { profile, message } => {
@@ -336,16 +339,22 @@ impl Display for ProfileFileError {
 impl Error for ProfileFileError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            ProfileFileError::CouldNotParseProfile(err) => Some(err),
-            ProfileFileError::CouldNotReadProfileFile(details) => Some(&details.cause),
-            _ => None,
+            Self::CouldNotParseProfile { source } => Some(source),
+            Self::CouldNotReadProfileFile(details) => Some(&details.source),
+            Self::NoProfilesDefined
+            | Self::ProfileDidNotContainCredentials { .. }
+            | Self::CredentialLoop { .. }
+            | Self::MissingCredentialSource { .. }
+            | Self::InvalidCredentialSource { .. }
+            | Self::MissingProfile { .. }
+            | Self::UnknownProvider { .. } => None,
         }
     }
 }
 
 impl From<ProfileParseError> for ProfileFileError {
-    fn from(err: ProfileParseError) -> Self {
-        ProfileFileError::CouldNotParseProfile(err)
+    fn from(source: ProfileParseError) -> Self {
+        ProfileFileError::CouldNotParseProfile { source }
     }
 }
 

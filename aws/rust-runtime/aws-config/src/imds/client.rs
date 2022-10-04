@@ -7,15 +7,14 @@
 //!
 //! Client for direct access to IMDSv2.
 
-use std::borrow::Cow;
-use std::convert::TryFrom;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-
+use crate::connector::expect_connector;
+use crate::imds::client::token::TokenMiddleware;
+use crate::profile::credentials::ProfileFileError;
+use crate::provider_config::ProviderConfig;
+use crate::{profile, PKG_VERSION};
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
+use aws_sdk_sso::config::timeout::TimeoutConfig;
+use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_client::{erase::DynConnector, SdkSuccess};
 use aws_smithy_client::{retry, SdkError};
 use aws_smithy_http::body::SdkBody;
@@ -27,21 +26,19 @@ use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_http_tower::map_request::{
     AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
 };
+use aws_smithy_types::error::opaque::OpaqueError;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use aws_types::os_shim_internal::{Env, Fs};
-
 use bytes::Bytes;
-use http::uri::InvalidUri;
 use http::{Response, Uri};
+use std::borrow::Cow;
+use std::convert::TryFrom;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::OnceCell;
-
-use crate::connector::expect_connector;
-use crate::imds::client::token::TokenMiddleware;
-use crate::profile::credentials::ProfileFileError;
-use crate::provider_config::ProviderConfig;
-use crate::{profile, PKG_VERSION};
-use aws_sdk_sso::config::timeout::TimeoutConfig;
-use aws_smithy_client::http_connector::ConnectorSettings;
 
 mod token;
 
@@ -207,11 +204,11 @@ impl Client {
             .map_err(|err| match err {
                 SdkError::ConstructionFailure(err) => match err.downcast::<ImdsError>() {
                     Ok(token_failure) => *token_failure,
-                    Err(other) => ImdsError::Unexpected(other),
+                    Err(other) => ImdsError::unexpected(other),
                 },
-                SdkError::TimeoutError(err) => ImdsError::IoError(err),
-                SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
-                SdkError::ResponseError { err, .. } => ImdsError::IoError(err),
+                SdkError::TimeoutError(err) => ImdsError::io_error(err),
+                SdkError::DispatchFailure(err) => ImdsError::io_error(err),
+                SdkError::ResponseError { err, .. } => ImdsError::io_error(err),
                 SdkError::ServiceError {
                     err: InnerImdsError::BadStatus,
                     raw,
@@ -221,7 +218,7 @@ impl Client {
                 SdkError::ServiceError {
                     err: InnerImdsError::InvalidUtf8,
                     ..
-                } => ImdsError::Unexpected("IMDS returned invalid UTF-8".into()),
+                } => ImdsError::unexpected("IMDS returned invalid UTF-8"),
             })
     }
 
@@ -255,11 +252,16 @@ pub enum ImdsError {
     ///
     /// Requests to IMDS must be accompanied by a token obtained via a `PUT` request. This is handled
     /// transparently by the [`Client`].
-    FailedToLoadToken(SdkError<TokenError>),
+    #[non_exhaustive]
+    FailedToLoadToken {
+        /// Cause of the error
+        source: SdkError<TokenError>,
+    },
 
     /// The `path` was invalid for an IMDS request
     ///
     /// The `path` parameter must be a valid URI path segment, and it must begin with `/`.
+    #[non_exhaustive]
     InvalidPath,
 
     /// An error response was returned from IMDS
@@ -272,17 +274,43 @@ pub enum ImdsError {
     /// IO Error
     ///
     /// An error occurred communication with IMDS
-    IoError(Box<dyn Error + Send + Sync + 'static>),
+    #[non_exhaustive]
+    IoError {
+        /// Cause of the error
+        source: OpaqueError,
+    },
 
     /// An unexpected error occurred communicating with IMDS
-    Unexpected(Box<dyn Error + Send + Sync + 'static>),
+    #[non_exhaustive]
+    Unexpected {
+        /// Cause of the error
+        source: OpaqueError,
+    },
+}
+
+impl ImdsError {
+    fn failed_to_load_token(source: SdkError<TokenError>) -> Self {
+        Self::FailedToLoadToken { source }
+    }
+
+    fn io_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::IoError {
+            source: OpaqueError::new(source),
+        }
+    }
+
+    fn unexpected(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::Unexpected {
+            source: OpaqueError::new(source),
+        }
+    }
 }
 
 impl Display for ImdsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ImdsError::FailedToLoadToken(inner) => {
-                write!(f, "Failed to load session token: {}", inner)
+            ImdsError::FailedToLoadToken { .. } => {
+                write!(f, "Failed to load session token")
             }
             ImdsError::InvalidPath => write!(
                 f,
@@ -294,14 +322,12 @@ impl Display for ImdsError {
                 response.status().as_u16(),
                 response
             ),
-            ImdsError::IoError(err) => {
-                write!(f, "An IO error occurred communicating with IMDS: {}", err)
+            ImdsError::IoError { .. } => {
+                write!(f, "An IO error occurred communicating with IMDS")
             }
-            ImdsError::Unexpected(err) => write!(
-                f,
-                "An unexpected error occurred communicating with IMDS: {}",
-                err
-            ),
+            ImdsError::Unexpected { .. } => {
+                write!(f, "An unexpected error occurred communicating with IMDS")
+            }
         }
     }
 }
@@ -309,8 +335,9 @@ impl Display for ImdsError {
 impl Error for ImdsError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self {
-            ImdsError::FailedToLoadToken(inner) => Some(inner),
-            _ => None,
+            Self::FailedToLoadToken { source } => Some(source),
+            Self::IoError { source } | Self::Unexpected { source } => Some(source),
+            Self::InvalidPath | Self::ErrorResponse { .. } => None,
         }
     }
 }
@@ -434,24 +461,53 @@ pub struct Builder {
 
 /// Error constructing IMDSv2 Client
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum BuildError {
     /// The endpoint mode was invalid
-    InvalidEndpointMode(InvalidEndpointMode),
+    #[non_exhaustive]
+    InvalidEndpointMode {
+        /// Cause of the error
+        source: InvalidEndpointMode,
+    },
 
     /// The AWS Profile (e.g. `~/.aws/config`) was invalid
-    InvalidProfile(ProfileFileError),
+    #[non_exhaustive]
+    InvalidProfile {
+        /// Cause of the error
+        source: ProfileFileError,
+    },
 
     /// The specified endpoint was not a valid URI
-    InvalidEndpointUri(InvalidUri),
+    #[non_exhaustive]
+    InvalidEndpointUri {
+        /// Cause of the error
+        source: OpaqueError,
+    },
+}
+
+impl BuildError {
+    fn invalid_endpoint_mode(source: InvalidEndpointMode) -> Self {
+        Self::InvalidEndpointMode { source }
+    }
+
+    fn invalid_profile(source: ProfileFileError) -> Self {
+        Self::InvalidProfile { source }
+    }
+
+    fn invalid_endpoint_uri(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::InvalidEndpointUri {
+            source: OpaqueError::new(source),
+        }
+    }
 }
 
 impl Display for BuildError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to build IMDS client: ")?;
+        write!(f, "failed to build IMDS client because of an ")?;
         match self {
-            BuildError::InvalidEndpointMode(e) => write!(f, "{}", e),
-            BuildError::InvalidProfile(e) => write!(f, "{}", e),
-            BuildError::InvalidEndpointUri(e) => write!(f, "{}", e),
+            Self::InvalidEndpointMode { .. } => write!(f, "invalid endpoint mode"),
+            Self::InvalidProfile { .. } => write!(f, "invalid profile"),
+            Self::InvalidEndpointUri { .. } => write!(f, "invalid endpoint URI"),
         }
     }
 }
@@ -459,9 +515,9 @@ impl Display for BuildError {
 impl Error for BuildError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            BuildError::InvalidEndpointMode(e) => Some(e),
-            BuildError::InvalidProfile(e) => Some(e),
-            BuildError::InvalidEndpointUri(e) => Some(e),
+            Self::InvalidEndpointMode { source } => Some(source),
+            Self::InvalidProfile { source } => Some(source),
+            Self::InvalidEndpointUri { source } => Some(source),
         }
     }
 }
@@ -628,14 +684,14 @@ impl EndpointSource {
                 // load an endpoint override from the environment
                 let profile = profile::load(fs, env, &Default::default())
                     .await
-                    .map_err(BuildError::InvalidProfile)?;
+                    .map_err(BuildError::invalid_profile)?;
                 let uri_override = if let Ok(uri) = env.get(env::ENDPOINT) {
                     Some(Cow::Owned(uri))
                 } else {
                     profile.get(profile_keys::ENDPOINT).map(Cow::Borrowed)
                 };
                 if let Some(uri) = uri_override {
-                    return Uri::try_from(uri.as_ref()).map_err(BuildError::InvalidEndpointUri);
+                    return Uri::try_from(uri.as_ref()).map_err(BuildError::invalid_endpoint_uri);
                 }
 
                 // if not, load a endpoint mode from the environment
@@ -643,10 +699,10 @@ impl EndpointSource {
                     mode
                 } else if let Ok(mode) = env.get(env::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
-                        .map_err(BuildError::InvalidEndpointMode)?
+                        .map_err(BuildError::invalid_endpoint_mode)?
                 } else if let Some(mode) = profile.get(profile_keys::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
-                        .map_err(BuildError::InvalidEndpointMode)?
+                        .map_err(BuildError::invalid_endpoint_mode)?
                 } else {
                     EndpointMode::IpV4
                 };
@@ -659,30 +715,36 @@ impl EndpointSource {
 
 /// Error retrieving token from IMDS
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum TokenError {
     /// The token was invalid
     ///
     /// Because tokens must be eventually sent as a header, the token must be a valid header value.
+    #[non_exhaustive]
     InvalidToken,
 
     /// No TTL was sent
     ///
     /// The token response must include a time-to-live indicating the lifespan of the token.
+    #[non_exhaustive]
     NoTtl,
 
     /// The TTL was invalid
     ///
     /// The TTL must be a valid positive integer.
+    #[non_exhaustive]
     InvalidTtl,
 
     /// Invalid Parameters
     ///
     /// The request to load a token was malformed. This indicates an SDK bug.
+    #[non_exhaustive]
     InvalidParameters,
 
     /// Forbidden
     ///
     /// IMDS is disabled or has been disallowed via permissions.
+    #[non_exhaustive]
     Forbidden,
 }
 
@@ -762,6 +824,21 @@ pub(crate) mod test {
     use std::io;
     use std::time::{Duration, UNIX_EPOCH};
     use tracing_test::traced_test;
+
+    macro_rules! assert_full_error_contains {
+        ($err:expr, $contains:expr) => {
+            let err = $err;
+            let message = format!(
+                "{}",
+                aws_smithy_types::error::display_context::DisplayErrorContext(&err)
+            );
+            assert!(
+                message.contains($contains),
+                "Error message '{message}' didn't contain text '{}'",
+                $contains
+            );
+        };
+    }
 
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
@@ -1026,7 +1103,7 @@ pub(crate) mod test {
         )]);
         let client = make_client(&connection).await;
         let err = client.get("/latest/metadata").await.expect_err("no token");
-        assert!(format!("{}", err).contains("forbidden"), "{}", err);
+        assert_full_error_contains!(err, "forbidden");
         connection.assert_requests_match(&[]);
     }
 
@@ -1068,7 +1145,7 @@ pub(crate) mod test {
         )]);
         let client = make_client(&connection).await;
         let err = client.get("/latest/metadata").await.expect_err("no token");
-        assert!(format!("{}", err).contains("Invalid Token"), "{}", err);
+        assert_full_error_contains!(err, "Invalid Token");
         connection.assert_requests_match(&[]);
     }
 
@@ -1089,7 +1166,7 @@ pub(crate) mod test {
         ]);
         let client = make_client(&connection).await;
         let err = client.get("/latest/metadata").await.expect_err("no token");
-        assert!(format!("{}", err).contains("invalid UTF-8"), "{}", err);
+        assert_full_error_contains!(err, "invalid UTF-8");
         connection.assert_requests_match(&[]);
     }
 
@@ -1123,7 +1200,8 @@ pub(crate) mod test {
             time_elapsed
         );
         match resp {
-            ImdsError::FailedToLoadToken(err) if format!("{}", err).contains("timeout") => {} // ok,
+            ImdsError::FailedToLoadToken { source }
+                if format!("{}", source).contains("timeout") => {} // ok,
             other => panic!(
                 "wrong error, expected construction failure with TimedOutError inside: {}",
                 other
@@ -1181,12 +1259,7 @@ pub(crate) mod test {
                 test, test_case.docs
             ),
             (Err(substr), Err(err)) => {
-                assert!(
-                    format!("{}", err).contains(substr),
-                    "`{}` did not contain `{}`",
-                    err,
-                    substr
-                );
+                assert_full_error_contains!(err, substr);
                 return;
             }
             (Ok(_uri), Err(e)) => panic!(

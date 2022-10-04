@@ -137,9 +137,12 @@ impl ImdsCredentialsProvider {
                 );
                 Err(CredentialsError::not_loaded("received 404 from IMDS"))
             }
-            Err(ImdsError::FailedToLoadToken(SdkError::DispatchFailure(err))) => Err(
-                CredentialsError::not_loaded(format!("could not communicate with imds: {}", err)),
-            ),
+            Err(ImdsError::FailedToLoadToken {
+                source: SdkError::DispatchFailure(err),
+            }) => Err(CredentialsError::not_loaded(format!(
+                "could not communicate with IMDS: {}",
+                err
+            ))),
             Err(other) => Err(CredentialsError::provider_error(other)),
         }
     }

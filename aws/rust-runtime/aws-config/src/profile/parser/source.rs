@@ -129,7 +129,7 @@ async fn load_config_file(
                     return Err(ProfileFileError::CouldNotReadProfileFile(
                         CouldNotReadProfileFile {
                             path: path.clone(),
-                            cause: e,
+                            source: e,
                         },
                     ))
                 }
