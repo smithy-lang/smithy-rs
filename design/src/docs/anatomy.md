@@ -257,7 +257,19 @@ pub struct AwsJson11;
 
 We can "upgrade" a model service to a HTTP service using `FromRequest` and `IntoResponse` described in the prior section:
 
-![Upgrade Data Flow Diagram](imgs/upgrade-dfd.png)
+```mermaid
+stateDiagram-v2
+    direction LR
+    HttpService: HTTP Service
+    [*] --> from_request: HTTP Request
+    state HttpService {
+        direction LR
+        ModelService: Model Service
+        from_request --> ModelService: Model Input
+        ModelService --> into_response: Model Output
+    }
+    into_response --> [*]: HTTP Response
+```
 
 This is formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L76-L84) HTTP service. The `tower::Service` implementation is approximately:
 
@@ -292,7 +304,17 @@ There is an associated `Layer`, `UpgradeLayer<P, Op, B>` which constructs `Upgra
 
 The upgrade procedure is finalized by the application of the `Layer` `L`, referenced in `Operation<S, L>`. In this way the entire upgrade procedure takes an `Operation<S, L>` and returns a HTTP service.
 
-![Upgradable Diagram](imgs/upgradable.png)
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> S: HTTP Request
+    state L {
+        state Upgrade {
+            S
+        }
+    }
+    S --> [*]: HTTP Response
+```
 
 Note that the `S` and `L` are specified by logic written, in Rust, by the customer, whereas `Upgrade`/`UpgradeLayer` is specified entirely by Smithy model via the protocol, [HTTP bindings](https://awslabs.github.io/smithy/2.0/spec/http-bindings.html), etc.
 
@@ -412,7 +434,21 @@ where
 
 The `RouterService` is the final piece necessary to form a functioning composition - it is used to aggregate together the HTTP services, created via the upgrade procedure, into a single HTTP service which can be presented to the customer.
 
-![RouterService](imgs/router.png)
+```mermaid
+stateDiagram
+state in <<fork>>
+    direction LR
+    [*] --> in
+    state RouterService {
+        direction LR
+        in -->  ServiceA
+        in --> ServiceB
+        in --> ServiceC
+    }
+    ServiceA --> [*]
+    ServiceB --> [*]
+    ServiceC --> [*]
+```
 
 ## Builders
 
@@ -671,7 +707,38 @@ The `Upgradable::upgrade` method on `Operation<S, L>`, previously presented in [
     }
 ```
 
-![Upgradable Diagram](imgs/upgradable-plugin.png)
+```mermaid
+stateDiagram-v2
+    direction TB
+    Op1: Operation#60;S1, L1#62;
+    state Op1 {
+        direction LR
+        [*] --> S1 : HTTP Request
+        S1 --> [*]: HTTP Response
+        state L1 {
+            Upgrade1 : Upgrade
+            state Upgrade1 {
+                S1
+            }
+        }
+
+    }
+
+    Op2: Operation#60;S2, L2#62;
+    state Op2 {
+        direction LR
+        [*] --> S2: HTTP Request
+        S2 --> [*]: HTTP Response
+        state L2 {
+            Upgrade2 : Upgrade
+            state Upgrade2 {
+                S2
+            }
+        }
+    }
+
+    Op1 --> Op2 : Plugin#colon;#colon;map
+```
 
 An example `Plugin` implementation can be found in [aws-smithy-http-server/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs).
 
