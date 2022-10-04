@@ -16,8 +16,14 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.smithy.Constrained
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
+import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase

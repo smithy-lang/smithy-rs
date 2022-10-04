@@ -62,7 +62,7 @@ class RequestBindingGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
-    private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
+    private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape)
     private val index = HttpBindingIndex.of(model)
     private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
@@ -99,7 +99,7 @@ class RequestBindingGenerator(
                 rust(
                     """
                     let builder = #{T}(input, builder)?;
-                    """.trimIndent(),
+                    """,
                     addHeadersFn,
                 )
             }

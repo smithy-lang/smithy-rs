@@ -225,12 +225,24 @@ private fun restRouterConstruction(
 }
 
 class ServerRestJsonProtocol(
-    codegenContext: CodegenContext,
-) : RestJson(codegenContext), ServerProtocol {
+    private val serverCodegenContext: ServerCodegenContext,
+) : RestJson(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
+    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
+        fun builderSymbol(shape: StructureShape): Symbol =
+            shape.serverBuilderSymbol(serverCodegenContext)
+        fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
+            if (shape.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)) {
+                true to serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape)
+            } else {
+                false to codegenContext.symbolProvider.toSymbol(shape)
+            }
+        return JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
+    }
+
     companion object {
-        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext)
+        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext as ServerCodegenContext)
     }
 
     override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", "rest_json_1", runtimeConfig)

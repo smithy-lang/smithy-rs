@@ -185,7 +185,7 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
-                customizations.forEach { it.section(JsonSection.ServerError(structureShape, "object"))(this) }
+                customizations.forEach { customization -> customization.section(JsonSection.ServerError(structureShape, "object"))(this) }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
@@ -351,6 +351,7 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
         val writer = context.writerExpression
 
+        // TODO Use customization
         val value = if (workingWithPublicConstrainedWrapperTupleType(context.shape, codegenContext)) {
             ValueExpression.Value("${context.valueExpression.name}.0")
         } else {
@@ -431,6 +432,7 @@ class JsonSerializerGenerator(
         val valueName = safeName("value")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyTarget = model.expectShape(context.shape.key.target)
+            // TODO Use customization.
             val keyExpression = if (workingWithPublicConstrainedWrapperTupleType(keyTarget, codegenContext)) {
                 "$keyName.0.as_str()"
             } else if (keyTarget.hasTrait<EnumTrait>()) {

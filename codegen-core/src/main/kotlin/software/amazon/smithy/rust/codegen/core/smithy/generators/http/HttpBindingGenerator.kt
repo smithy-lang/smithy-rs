@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
@@ -92,10 +93,10 @@ enum class HttpMessageType {
 class HttpBindingGenerator(
     private val protocol: Protocol,
     private val codegenContext: CodegenContext,
+    private val symbolProvider: SymbolProvider,
     private val operationShape: OperationShape,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape

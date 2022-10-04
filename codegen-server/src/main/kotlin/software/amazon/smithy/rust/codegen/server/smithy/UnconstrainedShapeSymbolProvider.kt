@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy
+package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
@@ -16,16 +16,18 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.Unconstrained
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -72,8 +74,9 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * `codegen-server` subproject), because that symbol provider will return a
  * constrained type for shapes that have constraint traits attached.
  *
- * TODO Move this to `core`; remove below sentence.
+ * TODO Move this to `server`; remove below sentence.
  *
+ * TODO This sentence below is not true now
  * While this symbol provider is only used by the server, it needs to be in the
  * `codegen` subproject because the (common to client and server) parsers use
  * it.

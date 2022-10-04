@@ -14,9 +14,14 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.smithy.Models
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 // TODO Move this file to `core` or `server`.
@@ -88,6 +93,7 @@ class ConstraintViolationSymbolProvider(
                 constraintViolationSymbolForCollectionOrMapOrUnionShape(shape)
             }
             is StructureShape -> {
+                // TODO This should work with serverBuilderSymbol
                 val builderSymbol = shape.builderSymbol(base)
 
                 val namespace = builderSymbol.namespace

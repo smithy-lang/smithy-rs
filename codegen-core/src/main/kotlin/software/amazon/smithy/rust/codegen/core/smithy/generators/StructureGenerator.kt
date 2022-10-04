@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGen
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -61,13 +62,16 @@ fun StructureShape.builderSymbol(
     codegenContext: CodegenContext,
     symbolProvider: RustSymbolProvider,
 ) =
-    when (codegenContext.target) {
-        CodegenTarget.CLIENT -> this.builderSymbol(symbolProvider)
-        CodegenTarget.SERVER -> {
-            val publicConstrainedTypes = (codegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes
-            this.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
-        }
-    }
+    // TODO We assume we're in the server and `publicConstrainedTypes` is `true` just so that it compiles and we can test,
+    //  the correct implementation is commented.
+    this.serverBuilderSymbol(codegenContext.symbolProvider, false)
+//    when (codegenContext.target) {
+//        CodegenTarget.CLIENT -> this.builderSymbol(symbolProvider)
+//        CodegenTarget.SERVER -> {
+//            val publicConstrainedTypes = (codegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes
+//            this.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
+//        }
+//    }
 
 open class StructureGenerator(
     val model: Model,

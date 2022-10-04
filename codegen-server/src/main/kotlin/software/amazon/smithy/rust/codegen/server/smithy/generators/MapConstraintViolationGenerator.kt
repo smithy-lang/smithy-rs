@@ -8,13 +8,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -44,11 +44,15 @@ class MapConstraintViolationGenerator(
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
-        val constraintViolationCodegenScope = arrayOf(
-            "KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape),
-            "ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape),
-            "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape),
-        )
+        val constraintViolationCodegenScopeMutableList: MutableList<Pair<String, Any>> = mutableListOf()
+        if (isKeyConstrained(keyShape, symbolProvider)) {
+            constraintViolationCodegenScopeMutableList.add("KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape))
+        }
+        if (isValueConstrained(valueShape, model, symbolProvider)) {
+            constraintViolationCodegenScopeMutableList.add("ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape))
+            constraintViolationCodegenScopeMutableList.add("KeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape))
+        }
+        val constraintViolationCodegenScope = constraintViolationCodegenScopeMutableList.toTypedArray()
 
         val constraintViolationVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC

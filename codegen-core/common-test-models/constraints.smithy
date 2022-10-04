@@ -11,25 +11,25 @@ use smithy.framework#ValidationException
 service ConstraintsService {
     operations: [
       ConstrainedShapesOperation,
-//    ConstrainedHttpBoundShapesOperation,
-//    ConstrainedRecursiveShapesOperation,
-//    // `httpQueryParams` and `httpPrefixHeaders` are structurually
-//    // exclusive, so we need one operation per target shape type
-//    // combination.
-//    QueryParamsTargetingLengthMapOperation,
-//    QueryParamsTargetingMapOfLengthStringOperation,
-//    QueryParamsTargetingMapOfEnumStringOperation,
-//    QueryParamsTargetingMapOfListOfLengthStringOperation,
-//    QueryParamsTargetingMapOfSetOfLengthStringOperation,
-//    QueryParamsTargetingMapOfListOfEnumStringOperation,
-//    HttpPrefixHeadersTargetingLengthMapOperation,
-//    // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-//    // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+      ConstrainedHttpBoundShapesOperation,
+      ConstrainedRecursiveShapesOperation,
+      // `httpQueryParams` and `httpPrefixHeaders` are structurually
+      // exclusive, so we need one operation per target shape type
+      // combination.
+      QueryParamsTargetingLengthMapOperation,
+      QueryParamsTargetingMapOfLengthStringOperation,
+      QueryParamsTargetingMapOfEnumStringOperation,
+      QueryParamsTargetingMapOfListOfLengthStringOperation,
+      QueryParamsTargetingMapOfSetOfLengthStringOperation,
+      QueryParamsTargetingMapOfListOfEnumStringOperation,
+      HttpPrefixHeadersTargetingLengthMapOperation,
+      // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+      // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
-//    NonStreamingBlobOperation,
+      NonStreamingBlobOperation,
 
-//    StreamingBlobOperation,
-//    EventStreamsOperation,
+      StreamingBlobOperation,
+      EventStreamsOperation,
     ],
 }
 
@@ -253,33 +253,33 @@ blob StreamingBlob
 blob NonStreamingBlob
 
 structure ConA {
-//  @required
-//  conB: ConB,
+    @required
+    conB: ConB,
 
-//  optConB: ConB,
+    optConB: ConB,
 
     lengthString: LengthString,
-//  minLengthString: MinLengthString,
-//  maxLengthString: MaxLengthString,
-//  fixedLengthString: FixedLengthString,
+    minLengthString: MinLengthString,
+    maxLengthString: MaxLengthString,
+    fixedLengthString: FixedLengthString,
 
-//  conBList: ConBList,
-//  conBList2: ConBList2,
+    conBList: ConBList,
+    conBList2: ConBList2,
 
-//  conBSet: ConBSet,
+    conBSet: ConBSet,
 
-//  conBMap: ConBMap,
+    conBMap: ConBMap,
 
-//  mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
+    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
-//  constrainedUnion: ConstrainedUnion,
-//  enumString: EnumString,
+    constrainedUnion: ConstrainedUnion,
+    enumString: EnumString,
 
-//  listOfLengthString: ListOfLengthString,
-//  setOfLengthString: SetOfLengthString,
-//  mapOfLengthString: MapOfLengthString,
+    listOfLengthString: ListOfLengthString,
+    setOfLengthString: SetOfLengthString,
+    mapOfLengthString: MapOfLengthString,
 
-//  nonStreamingBlob: NonStreamingBlob
+    nonStreamingBlob: NonStreamingBlob
 }
 
 map MapOfLengthString {

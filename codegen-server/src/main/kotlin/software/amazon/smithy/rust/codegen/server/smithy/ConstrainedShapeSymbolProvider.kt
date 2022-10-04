@@ -15,17 +15,17 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
-import software.amazon.smithy.rust.codegen.client.smithy.Models
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.contextName
-import software.amazon.smithy.rust.codegen.client.smithy.handleOptionality
-import software.amazon.smithy.rust.codegen.client.smithy.handleRustBoxing
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.locatedIn
-import software.amazon.smithy.rust.codegen.client.smithy.rustType
-import software.amazon.smithy.rust.codegen.client.smithy.symbolBuilder
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.smithy.Models
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
+import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 

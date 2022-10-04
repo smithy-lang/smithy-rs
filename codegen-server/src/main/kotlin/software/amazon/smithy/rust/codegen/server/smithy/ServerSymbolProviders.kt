@@ -9,9 +9,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.PubCrateConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.client.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 
 /**
  * Just a handy class to centralize initialization all the symbol providers required by the server code generators, to

@@ -102,7 +102,6 @@ data class ServerCodegenConfig(
                 ServerCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
                 )
             }
     }

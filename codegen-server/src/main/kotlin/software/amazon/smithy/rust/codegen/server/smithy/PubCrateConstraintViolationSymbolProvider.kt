@@ -7,11 +7,10 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.client.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 
 /**
  * This is only used when `publicConstrainedTypes` is `false`.

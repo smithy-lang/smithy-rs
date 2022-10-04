@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -52,6 +53,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeO
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
@@ -535,7 +537,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                     val bindings = httpBindingResolver.errorResponseBindings(it)
 
-                    software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+                    Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
                     serverRenderResponseHeaders(operationShape, variantShape)
 
@@ -571,7 +573,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+        Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
@@ -736,12 +738,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         inputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(
-            protocol,
-            codegenContext,
-            unconstrainedShapeSymbolProvider,
-            operationShape,
-        )
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust(
@@ -1155,13 +1152,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
-        val httpBindingGenerator =
-            ServerRequestBindingGenerator(
-                protocol,
-                codegenContext,
-                codegenContext.unconstrainedShapeSymbolProvider,
-                operationShape,
-            )
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
@@ -1175,13 +1166,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun serverRenderPrefixHeadersParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
         check(binding.location == HttpLocation.PREFIX_HEADERS)
 
-        val httpBindingGenerator =
-            ServerRequestBindingGenerator(
-                protocol,
-                codegenContext,
-                codegenContext.unconstrainedShapeSymbolProvider,
-                operationShape,
-            )
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
