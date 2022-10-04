@@ -42,6 +42,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import java.util.logging.Logger
 
+val DefaultServerPublicModules = setOf(
+    RustModule.Error,
+    RustModule.Model,
+    RustModule.Input,
+    RustModule.Output,
+    RustModule.Config,
+).associateBy { it.name }
+
 /**
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
@@ -92,14 +100,7 @@ open class ServerCodegenVisitor(
             settings,
         )
 
-        val serverPublicModules = setOf(
-            RustModule.Error,
-            RustModule.Model,
-            RustModule.Input,
-            RustModule.Output,
-            RustModule.Config,
-        ).associateBy { it.name }
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, serverPublicModules, settings.codegenConfig)
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultServerPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
