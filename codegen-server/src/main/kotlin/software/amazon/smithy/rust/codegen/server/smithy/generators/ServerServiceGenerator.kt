@@ -88,10 +88,9 @@ open class ServerServiceGenerator(
         rustCrate.withModule(
             RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) { writer ->
-            val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
             ServerServiceGeneratorV2(
                 codegenContext,
-                serverProtocol,
+                protocol,
             ).render(writer)
         }
 
