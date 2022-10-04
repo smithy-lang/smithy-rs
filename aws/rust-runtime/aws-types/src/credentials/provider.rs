@@ -4,6 +4,7 @@
  */
 
 use crate::Credentials;
+use aws_smithy_types::error::opaque::OpaqueError;
 use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::Arc;
@@ -16,13 +17,16 @@ pub enum CredentialsError {
     /// No credentials were available for this provider
     #[non_exhaustive]
     CredentialsNotLoaded {
-        /// Underlying cause of the error.
-        context: Box<dyn Error + Send + Sync + 'static>,
+        /// Cause of the error
+        source: OpaqueError,
     },
 
     /// Loading credentials from this provider exceeded the maximum allowed duration
     #[non_exhaustive]
-    ProviderTimedOut(Duration),
+    ProviderTimedOut {
+        /// The timeout duration
+        after: Duration,
+    },
 
     /// The provider was given an invalid configuration
     ///
@@ -31,8 +35,8 @@ pub enum CredentialsError {
     /// - assume role profile that forms an infinite loop
     #[non_exhaustive]
     InvalidConfiguration {
-        /// Underlying cause of the error.
-        cause: Box<dyn Error + Send + Sync + 'static>,
+        /// Cause of the error
+        source: OpaqueError,
     },
 
     /// The provider experienced an error during credential resolution
@@ -41,8 +45,8 @@ pub enum CredentialsError {
     /// read a configuration file.
     #[non_exhaustive]
     ProviderError {
-        /// Underlying cause of the error.
-        cause: Box<dyn Error + Send + Sync + 'static>,
+        /// Cause of the error
+        source: OpaqueError,
     },
 
     /// An unexpected error occurred during credential resolution
@@ -53,8 +57,8 @@ pub enum CredentialsError {
     /// - A provider returns data that is missing required fields
     #[non_exhaustive]
     Unhandled {
-        /// Underlying cause of the error.
-        cause: Box<dyn Error + Send + Sync + 'static>,
+        /// Cause of the error
+        source: OpaqueError,
     },
 }
 
@@ -64,9 +68,9 @@ impl CredentialsError {
     /// This error indicates the credentials provider was not enable or no configuration was set.
     /// This contrasts with [`invalid_configuration`](CredentialsError::InvalidConfiguration), indicating
     /// that the provider was configured in some way, but certain settings were invalid.
-    pub fn not_loaded(context: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn not_loaded(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         CredentialsError::CredentialsNotLoaded {
-            context: context.into(),
+            source: OpaqueError::new(source),
         }
     }
 
@@ -74,9 +78,9 @@ impl CredentialsError {
     ///
     /// Unhandled errors should not occur during normal operation and should be reserved for exceptional
     /// cases, such as a JSON API returning an output that was not parseable as JSON.
-    pub fn unhandled(cause: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn unhandled(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         Self::Unhandled {
-            cause: cause.into(),
+            source: OpaqueError::new(source),
         }
     }
 
@@ -84,48 +88,46 @@ impl CredentialsError {
     ///
     /// Provider errors may occur during normal use of a credentials provider, e.g. a 503 when
     /// retrieving credentials from IMDS.
-    pub fn provider_error(cause: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn provider_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         Self::ProviderError {
-            cause: cause.into(),
+            source: OpaqueError::new(source),
         }
     }
 
     /// The provided configuration for a provider was invalid
-    pub fn invalid_configuration(cause: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+    pub fn invalid_configuration(
+        source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
+    ) -> Self {
         Self::InvalidConfiguration {
-            cause: cause.into(),
+            source: OpaqueError::new(source),
         }
     }
 
     /// The credentials provider did not provide credentials within an allotted duration
-    pub fn provider_timed_out(context: Duration) -> Self {
-        Self::ProviderTimedOut(context)
+    pub fn provider_timed_out(after: Duration) -> Self {
+        Self::ProviderTimedOut { after }
     }
 }
 
 impl Display for CredentialsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            CredentialsError::CredentialsNotLoaded { context } => {
-                write!(f, "The credential provider was not enabled: {}", context)
+            CredentialsError::CredentialsNotLoaded { source: _ } => {
+                write!(f, "The credential provider was not enabled")
             }
-            CredentialsError::ProviderTimedOut(d) => write!(
+            CredentialsError::ProviderTimedOut { after } => write!(
                 f,
                 "Credentials provider timed out after {} seconds",
-                d.as_secs()
+                after.as_secs()
             ),
-            CredentialsError::Unhandled { cause } => {
-                write!(f, "Unexpected credentials error: {}", cause)
+            CredentialsError::Unhandled { source: _ } => {
+                write!(f, "Unexpected credentials error")
             }
-            CredentialsError::InvalidConfiguration { cause } => {
-                write!(
-                    f,
-                    "The credentials provider was not properly configured: {}",
-                    cause
-                )
+            CredentialsError::InvalidConfiguration { source: _ } => {
+                write!(f, "The credentials provider was not properly configured")
             }
-            CredentialsError::ProviderError { cause } => {
-                write!(f, "An error occurred while loading credentials: {}", cause)
+            CredentialsError::ProviderError { source: _ } => {
+                write!(f, "An error occurred while loading credentials")
             }
         }
     }
@@ -134,10 +136,10 @@ impl Display for CredentialsError {
 impl Error for CredentialsError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            CredentialsError::Unhandled { cause }
-            | CredentialsError::ProviderError { cause }
-            | CredentialsError::InvalidConfiguration { cause } => Some(cause.as_ref() as _),
-            CredentialsError::CredentialsNotLoaded { context } => Some(context.as_ref() as _),
+            CredentialsError::Unhandled { source }
+            | CredentialsError::ProviderError { source }
+            | CredentialsError::InvalidConfiguration { source }
+            | CredentialsError::CredentialsNotLoaded { source } => Some(source),
             _ => None,
         }
     }
