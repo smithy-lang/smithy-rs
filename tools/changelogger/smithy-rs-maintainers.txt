@@ -5,6 +5,8 @@ david-perez
 drganjoo
 hlbarber
 jdisanti
+jjant
+LukeMathWalker
 rcoh
 unexge
 velfi

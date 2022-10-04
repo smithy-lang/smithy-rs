@@ -64,24 +64,26 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
         "DefaultProvider" to defaultProvider,
     )
 
-    override fun section(section: ServiceConfig) =
-        writable {
-            when (section) {
-                is ServiceConfig.ConfigStruct -> rustTemplate(
-                    """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
-                    *codegenScope,
-                )
-
-                is ServiceConfig.ConfigImpl -> emptySection
-                is ServiceConfig.BuilderStruct ->
-                    rustTemplate(
-                        "credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,",
-                        *codegenScope,
-                    )
-
-                ServiceConfig.BuilderImpl -> {
-                    rustTemplate(
-                        """
+    override fun section(section: ServiceConfig) = writable {
+        when (section) {
+            is ServiceConfig.ConfigStruct -> rustTemplate(
+                """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
+                *codegenScope,
+            )
+            is ServiceConfig.ConfigImpl -> rustTemplate(
+                """
+                /// Returns the credentials provider.
+                pub fn credentials_provider(&self) -> #{credentials}::SharedCredentialsProvider {
+                    self.credentials_provider.clone()
+                }
+                """,
+                *codegenScope,
+            )
+            is ServiceConfig.BuilderStruct ->
+                rustTemplate("credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,", *codegenScope)
+            ServiceConfig.BuilderImpl -> {
+                rustTemplate(
+                    """
                     /// Sets the credentials provider for this service
                     pub fn credentials_provider(mut self, credentials_provider: impl #{credentials}::ProvideCredentials + 'static) -> Self {
                         self.credentials_provider = Some(#{credentials}::SharedCredentialsProvider::new(credentials_provider));
@@ -94,16 +96,16 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                         self
                     }
                     """,
-                        *codegenScope,
-                    )
-                }
-
-                ServiceConfig.BuilderBuild -> rustTemplate(
-                    "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
                     *codegenScope,
                 )
             }
+
+            ServiceConfig.BuilderBuild -> rustTemplate(
+                "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
+                *codegenScope,
+            )
         }
+    }
 }
 
 class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {

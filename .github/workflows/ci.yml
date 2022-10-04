@@ -62,6 +62,7 @@ jobs:
         - action: check-aws-sdk-adhoc-tests
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
+        - action: check-core-codegen-unit-tests
         - action: check-rust-runtimes
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests

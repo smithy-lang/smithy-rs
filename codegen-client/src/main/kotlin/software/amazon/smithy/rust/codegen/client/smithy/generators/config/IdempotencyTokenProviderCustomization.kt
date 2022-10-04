@@ -20,7 +20,19 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
             is ServiceConfig.ConfigStruct -> writable {
                 rust("pub (crate) make_token: #T::IdempotencyTokenProvider,", RuntimeType.IdempotencyToken)
             }
-            ServiceConfig.ConfigImpl -> emptySection
+            ServiceConfig.ConfigImpl -> writable {
+                rust(
+                    """
+                    /// Returns a copy of the idempotency token provider.
+                    /// If a random token provider was configured,
+                    /// a newly-randomized token provider will be returned.
+                    pub fn make_token(&self) -> #T::IdempotencyTokenProvider {
+                        self.make_token.clone()
+                    }
+                    """,
+                    RuntimeType.IdempotencyToken,
+                )
+            }
             ServiceConfig.BuilderStruct -> writable {
                 rust("make_token: Option<#T::IdempotencyTokenProvider>,", RuntimeType.IdempotencyToken)
             }

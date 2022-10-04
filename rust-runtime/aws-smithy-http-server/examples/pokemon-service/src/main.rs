@@ -13,8 +13,6 @@ use pokemon_service::{
     State,
 };
 use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
-use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -49,11 +47,7 @@ pub async fn main() {
 
     // Setup shared state and middlewares.
     let shared_state = Arc::new(State::default());
-    let app = app.layer(
-        ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
-            .layer(AddExtensionLayer::new(shared_state)),
-    );
+    let app = app.layer(AddExtensionLayer::new(shared_state));
 
     // Start the [`hyper::Server`].
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

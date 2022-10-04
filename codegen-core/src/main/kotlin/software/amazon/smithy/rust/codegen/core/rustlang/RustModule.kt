@@ -23,8 +23,18 @@ data class RustModule(val name: String, val rustMetadata: RustMetadata, val docu
         fun private(name: String, documentation: String? = null): RustModule =
             default(name, visibility = Visibility.PRIVATE, documentation = documentation)
 
+        /* Common modules used across client, server and tests */
         val Config = public("config", documentation = "Configuration for the service.")
         val Error = public("error", documentation = "All error types that operations can return.")
-        val Operation = public("operation", documentation = "All operations that this crate can perform.")
+        val Model = public("model", documentation = "Data structures used by operation inputs/outputs.")
+        val Input = public("input", documentation = "Input structures for operations.")
+        val Output = public("output", documentation = "Output structures for operations.")
+
+        /**
+         * Helper method to generate the `operation` Rust module.
+         * Its visibility depends on the generation context (client or server).
+         */
+        fun operation(visibility: Visibility): RustModule =
+            default("operation", visibility = visibility, documentation = "All operations that this crate can perform.")
     }
 }
