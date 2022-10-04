@@ -581,6 +581,10 @@ class JsonParserGenerator(
         }
     }
 
+    // TODO These two functions should be taken in as input to `JsonParserGenerator`. Taking in functions is ok, since
+    //  we already take in `::awsJsonFieldName`. Then the `ServerProtocol`s can pass in functions that use `ServerCodegenContext`.
+    //  Same goes with `builderSymbol`.
+
     /**
      * Whether we should parse a value for a shape into its associated unconstrained type. For example, when the shape
      * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
