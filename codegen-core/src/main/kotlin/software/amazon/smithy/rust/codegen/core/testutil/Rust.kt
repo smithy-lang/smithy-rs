@@ -189,6 +189,14 @@ fun RustWriter.unitTest(
     return rustBlock("fn $name()", *args, block = block)
 }
 
+val DefaultTestPublicModules = setOf(
+    RustModule.Error,
+    RustModule.Model,
+    RustModule.Input,
+    RustModule.Output,
+    RustModule.Config,
+).associateBy { it.name }
+
 /**
  * WriterDelegator used for test purposes
  *
@@ -202,13 +210,7 @@ class TestWriterDelegator(
     RustCrate(
         fileManifest,
         symbolProvider,
-        setOf(
-            RustModule.Error,
-            RustModule.Model,
-            RustModule.Input,
-            RustModule.Output,
-            RustModule.Config,
-        ).associateBy { it.name },
+        DefaultTestPublicModules,
         codegenConfig,
     ) {
     val baseDir: Path = fileManifest.baseDir
