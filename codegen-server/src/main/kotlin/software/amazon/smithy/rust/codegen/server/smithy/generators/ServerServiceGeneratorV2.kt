@@ -312,7 +312,7 @@ class ServerServiceGeneratorV2(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
-                /// Applies a layer uniformly to all routes.
+                /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                 pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
                 where
                     L: #{Tower}::Layer<S>

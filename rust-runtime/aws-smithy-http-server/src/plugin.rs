@@ -27,7 +27,7 @@ use crate::operation::Operation;
 pub trait Pluggable<NewPlugin> {
     type Output;
 
-    /// Applies a plugin to the service builder.
+    /// Applies a [`Plugin`] to the service builder.
     fn apply(self, plugin: NewPlugin) -> Self::Output;
 }
 

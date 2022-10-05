@@ -660,7 +660,7 @@ Note that `PokemonService::layer` cannot be used here because it applies a _sing
 
 ```rust
 impl<S> PokemonService<S> {
-    /// Applies a layer uniformly to all routes.
+    /// Applies a [`Layer`](tower::Layer) uniformly to all routes.
     pub fn layer<L>(self, layer: &L) -> PokemonService<L::Service>
     where
         L: Layer<S>,
@@ -767,7 +767,7 @@ The service builder implements the [`Pluggable`](https://github.com/awslabs/smit
 pub trait Pluggable<NewPlugin> {
     type Output;
 
-    /// Applies a plugin to the service builder.
+    /// Applies a [`Plugin`] to the service builder.
     fn apply(self, plugin: NewPlugin) -> Self::Output;
 }
 ```
