@@ -157,8 +157,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v1
-      with:
-        path: smithy-rs
       # Pinned to the commit hash of v1.3.0
     - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
       with:
@@ -171,12 +169,18 @@ jobs:
         profile: minimal
         override: true
         target: ${{ matrix.target }}
-    - name: Build target
+    - name: Build rust-runtime crates
       uses: actions-rs/cargo@v1
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }}
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml"
+    - name: Build AWS rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml"
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
