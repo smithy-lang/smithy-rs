@@ -1,4 +1,5 @@
 # Summary
+
 - [Design Overview](./overview.md)
 - [Tenets](./tenets.md)
 - [Design FAQ](./faq.md)
@@ -7,11 +8,16 @@
   - [HTTP Middleware](transport/middleware.md)
 
 - [Smithy](./smithy/overview.md)
-    - [Simple Shapes](./smithy/simple_shapes.md)
-    - [Recursive Shapes](./smithy/recursive_shapes.md)
-    - [Aggregate Shapes](./smithy/aggregate_shapes.md)
-    - [Endpoint Resolution](smithy/endpoint.md)
-    - [Backwards Compatibility](smithy/backwards-compat.md)
+  - [Simple Shapes](./smithy/simple_shapes.md)
+  - [Recursive Shapes](./smithy/recursive_shapes.md)
+  - [Aggregate Shapes](./smithy/aggregate_shapes.md)
+  - [Endpoint Resolution](smithy/endpoint.md)
+  - [Backwards Compatibility](smithy/backwards-compat.md)
+
+- [Server](./server/overview.md)
+  - [Generating Common Service Code](./server/code_generation.md)
+  - [Generating the Pokémon Service](./server/pokemon_service.md)
+  - [Instrumentation](./server/instrumentation.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)

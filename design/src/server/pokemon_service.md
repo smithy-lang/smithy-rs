@@ -1,4 +1,4 @@
-## Code generating the Pokémon Service
+# Generating the Pokémon Service
 
 This is an overview of client and server of the Pokémon service. It introduces:
 
@@ -10,7 +10,7 @@ All the code shown and linked to is from the repository at this commit: [db48039
 
 The Smithy model used to generate the code snippets is: [Pokémon][2]
 
-### Building the service
+## Building the service
 
 The entry point of a service is [main.rs][3]
 
@@ -59,37 +59,37 @@ let app: Router = OperationRegistryBuilder::default()
 
 Each of these operations is a function that can take any of these signatures.
 
-1.  If the operation is not fallible and does not share any state:
+1. If the operation is not fallible and does not share any state:
 
-```rust
-pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {...}
-```
+    ```rust
+    pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {...}
+    ```
 
-2.  If the operation is fallible and does not share any state:
+2. If the operation is fallible and does not share any state:
 
-```rust
-pub async fn capture_pokemon(
-    mut input: input::CapturePokemonOperationInput,
-) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {...}
-```
+    ```rust
+    pub async fn capture_pokemon(
+        mut input: input::CapturePokemonOperationInput,
+    ) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {...}
+    ```
 
-3.  If the operation is not fallible and shares some state:
+3. If the operation is not fallible and shares some state:
 
-```rust
-pub async fn get_server_statistics(
-    _input: input::GetServerStatisticsInput,
-    state: Extension<Arc<State>>,
-) -> output::GetServerStatisticsOutput {...}
-```
+    ```rust
+    pub async fn get_server_statistics(
+        _input: input::GetServerStatisticsInput,
+        state: Extension<Arc<State>>,
+    ) -> output::GetServerStatisticsOutput {...}
+    ```
 
-4.  If the operation is fallible and shares some state:
+4. If the operation is fallible and shares some state:
 
-```rust
-pub async fn get_storage(
-    input: input::GetStorageInput,
-    _state: Extension<Arc<State>>,
-) -> Result<output::GetStorageOutput, error::GetStorageError> {...}
-```
+    ```rust
+    pub async fn get_storage(
+        input: input::GetStorageInput,
+        _state: Extension<Arc<State>>,
+    ) -> Result<output::GetStorageOutput, error::GetStorageError> {...}
+    ```
 
 All of these are operations which implementors define; they are the business logic of the application. The rest is code generated.
 
