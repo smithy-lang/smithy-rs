@@ -160,7 +160,7 @@ jobs:
         # as a target platform (see https://github.com/briansmith/ring/issues/389)
         # We also exclude all first-party crates that have a non-optional dependency on `ring`.
         - target: powerpc-unknown-linux-gnu
-          features: ''
+          features: --features native-tls
           aws_excludes: --exclude aws-inlineable --exclude aws-sigv4 --exclude aws-sig-auth
     steps:
     - name: Checkout
