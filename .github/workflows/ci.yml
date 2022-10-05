@@ -150,6 +150,7 @@ jobs:
     name: Exotic platform support
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         target:
         - i686-unknown-linux-gnu
