@@ -203,7 +203,7 @@ jobs:
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.features }}
+        args: -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.features }}
     - name: Build AWS rust-runtime crates
       uses: actions-rs/cargo@v1
       env:
