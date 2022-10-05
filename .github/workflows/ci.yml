@@ -160,7 +160,7 @@ jobs:
         # as a target platform (see https://github.com/briansmith/ring/issues/389)
         # We also exclude all first-party crates that have a non-optional dependency on `ring`.
         - target: powerpc-unknown-linux-gnu
-          features: --features native-tls
+          features: ''
           aws_excludes: --exclude aws-inlineable --exclude aws-sigv4 --exclude aws-sig-auth
     steps:
     - name: Checkout
@@ -181,6 +181,8 @@ jobs:
       shell: bash
       run: |
         cat > Cross.toml << EOF
+        [target.x86-unknown-linux-gnu]
+        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes libssl-dev:i386"]
         [target.i686-unknown-linux-gnu]
         pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes libssl-dev:i386"]
         [target.powerpc-unknown-linux-gnu]
