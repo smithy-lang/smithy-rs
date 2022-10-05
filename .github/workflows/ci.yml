@@ -169,8 +169,15 @@ jobs:
         profile: minimal
         override: true
         target: ${{ matrix.target }}
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo dpkg --add-architecture i386 && sudo apt-get update && sudo apt-get install libssl-dev:i386
     - name: Build rust-runtime crates
       uses: actions-rs/cargo@v1
+      env:
+        OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu/
+        OPENSSL_INCLUDE_DIR: /usr/include/openssl/
       with:
         use-cross: true
         command: build
