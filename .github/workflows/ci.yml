@@ -195,6 +195,7 @@ jobs:
       uses: actions-rs/cargo@v1
       env:
         CROSS_CONFIG: Cross.toml
+        CROSS_DEBUG: true
         OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu/
         OPENSSL_INCLUDE_DIR: /usr/include/openssl/
       with:
