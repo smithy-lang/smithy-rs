@@ -71,6 +71,7 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
                 rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
             }
         }
+        is JsonSection.BeforeIteratingOverMap -> emptySection
     }
 }
 
@@ -81,7 +82,7 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
  * https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
  */
 class ServerAwsJsonSerializerGenerator(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     private val awsJsonVersion: AwsJsonVersion,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
@@ -89,6 +90,6 @@ class ServerAwsJsonSerializerGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            customizations = listOf(ServerAwsJsonError(awsJsonVersion)),
+            customizations = listOf(ServerAwsJsonError(awsJsonVersion), ServerBeforeIteratingOverMapCustomization(codegenContext)),
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator

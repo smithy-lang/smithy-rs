@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -73,7 +74,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            serverBuilderConstraintViolations.render(writer, nonExhaustive = false)
+            serverBuilderConstraintViolations.render(writer, Visibility.PUBLIC, nonExhaustive = false)
 
             renderTryFromBuilderImpl(writer)
         } else {

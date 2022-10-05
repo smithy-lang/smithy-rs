@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -24,7 +25,6 @@ import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -42,6 +42,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -73,6 +75,17 @@ enum class HttpMessageType {
 }
 
 /**
+ * Class describing an HTTP binding (de)serialization section that can be used in a customization.
+ */
+sealed class HttpBindingSection(name: String) : Section(name) {
+    // TODO `shape` should be `MapShape`.
+    data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: Shape) :
+        HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
+}
+
+typealias HttpBindingCustomization = NamedSectionGenerator<HttpBindingSection>
+
+/**
  * This class generates Rust functions that (de)serialize data from/to an HTTP message.
  * They are useful for *both*:
  *     - servers (that deserialize HTTP requests and serialize HTTP responses); and
@@ -95,6 +108,9 @@ class HttpBindingGenerator(
     private val codegenContext: CodegenContext,
     private val symbolProvider: SymbolProvider,
     private val operationShape: OperationShape,
+    /** Function that maps a StructureShape into its builder symbol */
+    private val builderSymbol: (StructureShape) -> Symbol,
+    private val customizations: List<HttpBindingCustomization> = listOf(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
@@ -237,6 +253,7 @@ class HttpBindingGenerator(
             codegenContext,
             operationShape,
             targetShape,
+            builderSymbol,
         ).render()
         rustTemplate(
             """
@@ -548,15 +565,19 @@ class HttpBindingGenerator(
             else -> UNREACHABLE("unexpected member for prefix headers: $memberType")
         }
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
+            // TODO How can this be a collection shape? Makes no sense, `httpPrefixHeaders` is for map shapes.
             val listHeader = memberType is CollectionShape
-            val iterableExpression = if (workingWithPublicConstrainedWrapperTupleType(memberShape, codegenContext)) {
-                "&$field.0"
-            } else {
-                field
+            customizations.forEach { customization ->
+                customization.section(
+                    HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(
+                        field,
+                        memberType,
+                    ),
+                )(this)
             }
             rustTemplate(
                 """
-                for (k, v) in $iterableExpression {
+                for (k, v) in $field {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
@@ -597,10 +618,7 @@ class HttpBindingGenerator(
                     val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
                     "$func(&$targetName)"
                 } else {
-                    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member traits are not
-                    //  supported yet.
-                    val expr = if (workingWithPublicConstrainedWrapperTupleType(target, codegenContext)) "&$targetName.0" else targetName
-                    quoteValue("AsRef::<str>::as_ref($expr)")
+                    quoteValue("$targetName.as_str()")
                 }
             }
             target.isTimestampShape -> {

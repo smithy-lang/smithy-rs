@@ -135,7 +135,7 @@ class UnconstrainedUnionGenerator(
             RustMetadata(visibility = constraintViolationVisibility),
         ) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
-            rustBlock("pub enum $constraintViolationName") {
+            rustBlock("pub${ if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else "" } enum $constraintViolationName") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 

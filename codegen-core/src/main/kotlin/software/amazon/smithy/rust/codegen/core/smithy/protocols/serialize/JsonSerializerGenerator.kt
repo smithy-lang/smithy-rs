@@ -19,9 +19,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
-import software.amazon.smithy.rust.codegen.client.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -49,7 +47,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -59,6 +56,8 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 sealed class JsonSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
+    // TODO This could take in directly the `Context<MapShape>`
+    data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSection("BeforeIteratingOverMap")
 }
 
 /**
@@ -67,7 +66,7 @@ sealed class JsonSection(name: String) : Section(name) {
 typealias JsonCustomization = NamedSectionGenerator<JsonSection>
 
 class JsonSerializerGenerator(
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
@@ -351,12 +350,14 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
         val writer = context.writerExpression
 
-        // TODO Use customization
-        val value = if (workingWithPublicConstrainedWrapperTupleType(context.shape, codegenContext)) {
-            ValueExpression.Value("${context.valueExpression.name}.0")
-        } else {
-            context.valueExpression
-        }
+//        // TODO Use customization
+//        // let
+//        val value = if (workingWithPublicConstrainedWrapperTupleType(context.shape, codegenContext)) {
+//            ValueExpression.Value("${context.valueExpression.name}.0")
+//        } else {
+//            context.valueExpression
+//        }
+        val value = context.valueExpression
 
         when (target) {
             is StringShape -> rust("$writer.string(${value.name}.as_str());")
@@ -430,16 +431,18 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeMap(context: Context<MapShape>) {
         val keyName = safeName("key")
         val valueName = safeName("value")
+        customizations.forEach { customization -> customization.section(JsonSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(this) }
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyTarget = model.expectShape(context.shape.key.target)
-            // TODO Use customization.
-            val keyExpression = if (workingWithPublicConstrainedWrapperTupleType(keyTarget, codegenContext)) {
-                "$keyName.0.as_str()"
-            } else if (keyTarget.hasTrait<EnumTrait>()) {
-                "$keyName.as_str()"
-            } else {
-                keyName
-            }
+            // TODO Remove
+//            val keyExpression = if (workingWithPublicConstrainedWrapperTupleType(keyTarget, codegenContext)) {
+//                "$keyName.0.as_str()"
+//            } else if (keyTarget.hasTrait<EnumTrait>()) {
+//                "$keyName.as_str()"
+//            } else {
+//                keyName
+//            }
+            val keyExpression = "$keyName.as_str()"
             serializeMember(MemberContext.mapMember(context, keyExpression, valueName))
         }
     }

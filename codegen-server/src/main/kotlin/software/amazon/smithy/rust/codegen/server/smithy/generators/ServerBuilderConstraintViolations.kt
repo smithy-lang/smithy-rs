@@ -7,6 +7,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -50,12 +51,12 @@ class ServerBuilderConstraintViolations(
         )
     }
 
-    fun render(writer: RustWriter, nonExhaustive: Boolean) {
+    fun render(writer: RustWriter, visibility: Visibility, nonExhaustive: Boolean) {
         Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
         writer.docs("Holds one variant for each of the ways the builder can fail.")
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
         val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
-        writer.rustBlock("pub enum $constraintViolationSymbolName") {
+        writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate) " else "" } enum $constraintViolationSymbolName") {
             renderConstraintViolations(writer)
         }
         renderImplDisplayConstraintViolation(writer)

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -68,8 +69,9 @@ data class OperationWrapperContext(
 )
 
 class XmlBindingTraitParserGenerator(
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
+    private val builderSymbol: (shape: StructureShape) -> Symbol,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
 
@@ -740,6 +742,4 @@ class XmlBindingTraitParserGenerator(
     private fun StructureShape.xmlMembers(): XmlMemberIndex {
         return XmlMemberIndex.fromMembers(this.members().toList())
     }
-
-    private fun builderSymbol(shape: StructureShape) = shape.builderSymbol(codegenContext, symbolProvider)
 }

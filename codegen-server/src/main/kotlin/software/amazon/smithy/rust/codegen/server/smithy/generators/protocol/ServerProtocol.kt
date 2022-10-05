@@ -28,12 +28,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
 
 private fun allOperations(codegenContext: CodegenContext): List<OperationShape> {
     val index = TopDownIndex.of(codegenContext.model)
@@ -111,7 +113,7 @@ class ServerAwsJsonProtocol(
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver, awsJsonVersion)
+        ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
 
     companion object {
         fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol =
@@ -240,6 +242,9 @@ class ServerRestJsonProtocol(
             }
         return JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
     }
+
+    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+        ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
 
     companion object {
         fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext as ServerCodegenContext)

@@ -74,15 +74,9 @@ fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(
  * This function is used in core code generators, so it takes in a [CodegenContext] that is downcast
  * to [ServerCodegenContext] when generating servers.
  */
-fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, codegenContext: CodegenContext): Boolean =
-    // TODO We assume we're in the server and `publicConstrainedTypes` is `true` just so that it compiles and we can test
-    //  , the correct implementation is commented.
-    shape.hasPublicConstrainedWrapperTupleType(codegenContext.model, true)
-//    codegenContext.target == CodegenTarget.SERVER &&
-//        shape.hasPublicConstrainedWrapperTupleType(
-//            codegenContext.model,
-//            (codegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes,
-//        )
+// TODO Move this to the `codegen-server`. In fact, try to move everything to `codegen-server`.
+fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, model: Model, publicConstrainedTypes: Boolean): Boolean =
+    shape.hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
 
 /**
  * Returns whether a shape's type _name_ contains a non-public type when `publicConstrainedTypes` is `false`.

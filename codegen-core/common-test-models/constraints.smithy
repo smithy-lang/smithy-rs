@@ -10,26 +10,26 @@ use smithy.framework#ValidationException
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
-      ConstrainedShapesOperation,
-      ConstrainedHttpBoundShapesOperation,
-      ConstrainedRecursiveShapesOperation,
-      // `httpQueryParams` and `httpPrefixHeaders` are structurually
-      // exclusive, so we need one operation per target shape type
-      // combination.
-      QueryParamsTargetingLengthMapOperation,
-      QueryParamsTargetingMapOfLengthStringOperation,
-      QueryParamsTargetingMapOfEnumStringOperation,
-      QueryParamsTargetingMapOfListOfLengthStringOperation,
-      QueryParamsTargetingMapOfSetOfLengthStringOperation,
-      QueryParamsTargetingMapOfListOfEnumStringOperation,
-      HttpPrefixHeadersTargetingLengthMapOperation,
-      // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-      // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+        ConstrainedShapesOperation,
+        ConstrainedHttpBoundShapesOperation,
+        ConstrainedRecursiveShapesOperation,
+        // `httpQueryParams` and `httpPrefixHeaders` are structurually
+        // exclusive, so we need one operation per target shape type
+        // combination.
+        QueryParamsTargetingLengthMapOperation,
+        QueryParamsTargetingMapOfLengthStringOperation,
+        QueryParamsTargetingMapOfEnumStringOperation,
+        QueryParamsTargetingMapOfListOfLengthStringOperation,
+        QueryParamsTargetingMapOfSetOfLengthStringOperation,
+        QueryParamsTargetingMapOfListOfEnumStringOperation,
+        HttpPrefixHeadersTargetingLengthMapOperation,
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+        // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
-      NonStreamingBlobOperation,
+        NonStreamingBlobOperation,
 
-      StreamingBlobOperation,
-      EventStreamsOperation,
+        StreamingBlobOperation,
+        EventStreamsOperation,
     ],
 }
 

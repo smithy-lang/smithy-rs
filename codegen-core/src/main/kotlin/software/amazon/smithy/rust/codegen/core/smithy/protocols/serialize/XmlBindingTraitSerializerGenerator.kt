@@ -22,7 +22,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
-import software.amazon.smithy.rust.codegen.client.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -56,7 +55,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class XmlBindingTraitSerializerGenerator(
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataSerializerGenerator {
     private val symbolProvider = codegenContext.symbolProvider
@@ -287,11 +286,7 @@ class XmlBindingTraitSerializerGenerator(
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
         when (model.expectShape(member.target)) {
             is StringShape -> {
-                if (workingWithPublicConstrainedWrapperTupleType(member, codegenContext)) {
-                    rust("$input.0.as_str()")
-                } else {
-                    rust("$input.as_str()")
-                }
+                rust("$input.as_str()")
             }
             is BooleanShape, is NumberShape -> {
                 rust(

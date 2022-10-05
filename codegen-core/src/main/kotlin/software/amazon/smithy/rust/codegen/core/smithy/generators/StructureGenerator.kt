@@ -57,7 +57,7 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     }
 }
 
-// TODO Move this to `core`.
+// TODO Delete this
 fun StructureShape.builderSymbol(
     codegenContext: CodegenContext,
     symbolProvider: RustSymbolProvider,

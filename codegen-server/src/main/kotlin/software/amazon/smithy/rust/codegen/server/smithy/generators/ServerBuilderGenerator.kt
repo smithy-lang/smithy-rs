@@ -90,6 +90,7 @@ class ServerBuilderGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val visibility = if (publicConstrainedTypes) Visibility.PUBLIC else Visibility.PUBCRATE
     private val symbolProvider = codegenContext.symbolProvider
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
@@ -111,12 +112,6 @@ class ServerBuilderGenerator(
     )
 
     fun render(writer: RustWriter) {
-        val visibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
-
         writer.docs("See #D.", structureSymbol)
         writer.withModule(moduleName, RustMetadata(visibility = visibility)) {
             renderBuilder(this)
@@ -125,7 +120,7 @@ class ServerBuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            serverBuilderConstraintViolations.render(writer, nonExhaustive = true)
+            serverBuilderConstraintViolations.render(writer, visibility, nonExhaustive = true)
 
             // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
             // an operation input shape.
@@ -148,7 +143,7 @@ class ServerBuilderGenerator(
         val baseDerives = structureSymbol.expectRustMetadata().derives
         val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
         baseDerives.copy(derives = derives).render(writer)
-        writer.rustBlock("pub struct Builder") {
+        writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate)" else "" } struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }
 

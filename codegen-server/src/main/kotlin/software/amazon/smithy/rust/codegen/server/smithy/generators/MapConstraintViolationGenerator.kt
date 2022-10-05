@@ -70,7 +70,7 @@ class MapConstraintViolationGenerator(
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
-                pub enum $constraintViolationName {
+                pub${ if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate) " else "" } enum $constraintViolationName {
                     ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
                     ${if (isKeyConstrained(keyShape, symbolProvider)) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
                     ${if (isValueConstrained(valueShape, model, symbolProvider)) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
