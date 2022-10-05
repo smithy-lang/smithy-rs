@@ -16,7 +16,7 @@
 
 - [Server](./server/overview.md)
   - [Generating Common Service Code](./server/code_generation.md)
-  - [Code Generating the Pokémon Service](./server/pokemon_service.md)
+  - [Generating the Pokémon Service](./server/pokemon_service.md)
   - [Instrumentation](./server/instrumentation.md)
 
 - [RFCs](./rfcs/overview.md)
