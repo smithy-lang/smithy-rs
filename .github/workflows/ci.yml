@@ -182,7 +182,7 @@ jobs:
       run: |
         cat > Cross.toml << EOF
         [build]
-        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes libssl-dev:i386"]
+        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
         [build.env]
         passthrough = [
             "OPENSSL_LIB_DIR",
