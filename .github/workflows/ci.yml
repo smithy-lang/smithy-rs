@@ -194,7 +194,7 @@ jobs:
       env:
         CROSS_CONFIG: Cross.toml
         OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu/
-        OPENSSL_INCLUDE_DIR: /usr/include/openssl/
+        OPENSSL_INCLUDE_DIR: /usr/include/i386-linux-gnu/openssl/
       with:
         use-cross: true
         command: build
@@ -204,7 +204,7 @@ jobs:
       env:
         CROSS_CONFIG: Cross.toml
         OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu/
-        OPENSSL_INCLUDE_DIR: /usr/include/openssl/
+        OPENSSL_INCLUDE_DIR: /usr/include/i386-linux-gnu/openssl/
       with:
         use-cross: true
         command: build
