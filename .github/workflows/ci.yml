@@ -185,6 +185,9 @@ jobs:
         args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace --all-features
     - name: Build AWS rust-runtime crates
       uses: actions-rs/cargo@v1
+      env:
+        OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu/
+        OPENSSL_INCLUDE_DIR: /usr/include/openssl/
       with:
         use-cross: true
         command: build
