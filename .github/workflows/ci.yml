@@ -174,13 +174,13 @@ jobs:
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml"
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace --all-features
     - name: Build AWS rust-runtime crates
       uses: actions-rs/cargo@v1
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml"
+        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace --all-features
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
