@@ -268,7 +268,7 @@ class PythonApplicationGenerator(
                     py: #{pyo3}::Python,
                 ) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
-                    self.run_lambda_server(py)
+                    self.run_lambda_handler(py)
                 }
                 /// Build the router and start a single worker.
                 ##[pyo3(text_signature = "(${'$'}self, socket, worker_number)")]

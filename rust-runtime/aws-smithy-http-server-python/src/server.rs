@@ -453,11 +453,11 @@ event_loop.add_signal_handler(signal.SIGINT,
         Ok(())
     }
 
-    /// Lambda main entrypoint: start the server on Lambda.
+    /// Lambda main entrypoint: start the handler on Lambda.
     ///
-    /// Unlike the `run_server`, `run_lambda_server` does not spawns other processes,
-    /// it starts the Lambda server on the current process.
-    fn run_lambda_server(&mut self, py: Python) -> PyResult<()> {
+    /// Unlike the `run_server`, `run_lambda_handler` does not spawns other processes,
+    /// it starts the Lambda handler on the current process.
+    fn run_lambda_handler(&mut self, py: Python) -> PyResult<()> {
         let event_loop = self.configure_python_event_loop(py)?;
         let app = self.build_and_configure_router(py, event_loop)?;
         let rt = runtime::Builder::new_multi_thread()
@@ -467,9 +467,9 @@ event_loop.add_signal_handler(signal.SIGINT,
         rt.block_on(async move {
             let handler = LambdaHandler::new(app);
             let lambda = lambda_http::run(handler);
-            tracing::debug!("Starting Lambda server");
+            tracing::debug!("Starting Lambda handler");
             if let Err(err) = lambda.await {
-                tracing::error!("server error: {}", err);
+                tracing::error!("Lambda handler error: {}", err);
             }
         });
         Ok(())
