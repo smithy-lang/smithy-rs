@@ -1,9 +1,9 @@
-## Generating common service code
+# Generating common service code
 
 How a service is constructed and how to plug in new business logic is described in [Pokémon Service][1].
 This document introduces the project and how code is being generated. It is written for developers who want to start contributing to `smithy-rs`.
 
-### Folder structure
+## Folder structure
 
 The project is divided in:
 
@@ -15,7 +15,7 @@ which contains common functions used by other crates, [copied into][2] the sourc
 
 `/rust-runtime` crates ("runtime crates") are added to a crate's dependency only when used. If a model uses event streams, it will depend on [`aws-smithy-eventstream`][3].
 
-### Generating code
+## Generating code
 
 `smithy-rs`'s entry points are Smithy code-generation plugins, and is not a command. One entry point is in [RustCodegenPlugin::execute][4] and
 inherits from `SmithyBuildPlugin` in [smithy-build][5]. Code generation is in Kotlin and shared common, non-Rust specific code with the [`smithy` Java repository][6]. They plug into the [Smithy gradle][7] plugin, which is a gradle plugin.
