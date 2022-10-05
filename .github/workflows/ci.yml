@@ -143,6 +143,41 @@ jobs:
           popd &>/dev/null
         done
 
+  # We make sure that Smithy-rs can be compiled on platforms that are not natively supported by GitHub actions.
+  # We do not run tests on those platforms (yet) because it'd require a more complicated setup involving architecture
+  # emulation via QEMU, likely to cause a significant degradation on CI completion time.
+  test-exotic-platform-support:
+    name: Exotic platform support
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+        - i686-unknown-linux-gnu
+        - powerpc-unknown-linux-gnu,
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+      with:
+        path: smithy-rs
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
+        target-dir: ./target
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        profile: minimal
+        override: true
+        target: ${{ matrix.target }}
+    - name: Build target
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --target ${{ matrix.target }}
+
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
@@ -166,6 +201,7 @@ jobs:
     - test-codegen
     - test-sdk
     - test-rust-windows
+    - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest
