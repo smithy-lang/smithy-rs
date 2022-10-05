@@ -47,8 +47,19 @@ COPY app.py ${LAMBDA_TASK_ROOT}
 # When you build your Server SDK for your service you get a shared library
 # that is importable in Python. You need to copy that shared library to same folder
 # with your application code, so it can be imported by your application.
+# Note that you need to build your library for Linux,
+# if you are on a different platform you can consult to
+# https://pyo3.rs/latest/building_and_distribution.html#cross-compiling
+# for cross compiling.
 COPY lib_pokemon_service_server_sdk.so ${LAMBDA_TASK_ROOT}
 
+# You can install your application's dependencies using file `requirements.txt`
+# from your project folder, if you have any.
+# COPY requirements.txt  .
+# RUN  pip3 install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
+
+# Create a symlink for your application's entrypoint,
+# so we can use `/app.py` to refer it
 RUN ln -s ${LAMBDA_TASK_ROOT}/app.py /app.py
 
 # By default `public.ecr.aws/lambda/python` images comes with Python runtime,
