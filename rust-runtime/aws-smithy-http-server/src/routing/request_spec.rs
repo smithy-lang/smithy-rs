@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::borrow::Cow;
+
 use http::Request;
 use regex::Regex;
 
@@ -83,7 +85,7 @@ pub struct RequestSpec {
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum Match {
+pub(crate) enum Match {
     /// The request matches the URI pattern spec.
     Yes,
     /// The request matches the URI pattern spec, but the wrong HTTP method was used. `405 Method
@@ -98,22 +100,22 @@ impl From<&PathSpec> for Regex {
     fn from(uri_path_spec: &PathSpec) -> Self {
         let sep = "/";
         let re = if uri_path_spec.0.is_empty() {
-            String::from("/")
+            String::from(sep)
         } else {
             uri_path_spec
                 .0
                 .iter()
                 .map(|segment_spec| match segment_spec {
-                    PathSegment::Literal(literal) => literal,
+                    PathSegment::Literal(literal) => Cow::Owned(regex::escape(literal)),
                     // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
                     // `*` instead of `+` because the empty string `""` can be bound to a label.
-                    PathSegment::Label => "[^/]*",
-                    PathSegment::Greedy => ".*",
+                    PathSegment::Label => Cow::Borrowed("[^/]*"),
+                    PathSegment::Greedy => Cow::Borrowed(".*"),
                 })
-                .fold(String::new(), |a, b| a + sep + b)
+                .fold(String::new(), |a, b| a + sep + &b)
         };
 
-        Regex::new(&format!("{}$", re)).unwrap()
+        Regex::new(&format!("^{}$", re)).expect("invalid `Regex` from `PathSpec`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }
 }
 
@@ -156,11 +158,11 @@ impl RequestSpec {
     /// updates the spec to define the behavior, update our implementation.
     ///
     /// [the TypeScript sSDK is implementing]: https://github.com/awslabs/smithy-typescript/blob/d263078b81485a6a2013d243639c0c680343ff47/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.ts#L59.
-    pub(super) fn rank(&self) -> usize {
+    pub(crate) fn rank(&self) -> usize {
         self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
     }
 
-    pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
+    pub(crate) fn matches<B>(&self, req: &Request<B>) -> Match {
         if let Some(_host_prefix) = &self.uri_spec.host_prefix {
             todo!("Look at host prefix");
         }
@@ -250,15 +252,15 @@ mod tests {
     #[test]
     fn path_spec_into_regex() {
         let cases = vec![
-            (PathSpec(vec![]), "/$"),
-            (PathSpec(vec![PathSegment::Literal(String::from("a"))]), "/a$"),
+            (PathSpec(vec![]), "^/$"),
+            (PathSpec(vec![PathSegment::Literal(String::from("a"))]), "^/a$"),
             (
                 PathSpec(vec![PathSegment::Literal(String::from("a")), PathSegment::Label]),
-                "/a/[^/]*$",
+                "^/a/[^/]*$",
             ),
             (
                 PathSpec(vec![PathSegment::Literal(String::from("a")), PathSegment::Greedy]),
-                "/a/.*$",
+                "^/a/.*$",
             ),
             (
                 PathSpec(vec![
@@ -266,13 +268,41 @@ mod tests {
                     PathSegment::Greedy,
                     PathSegment::Literal(String::from("suffix")),
                 ]),
-                "/a/.*/suffix$",
+                "^/a/.*/suffix$",
             ),
         ];
 
         for case in cases {
             let re: Regex = (&case.0).into();
             assert_eq!(case.1, re.as_str());
+        }
+    }
+
+    #[test]
+    fn paths_must_match_spec_from_the_beginning_literal() {
+        let spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![PathSegment::Literal(String::from("path"))],
+            Vec::new(),
+        );
+
+        let misses = vec![(Method::GET, "/beta/path"), (Method::GET, "/multiple/stages/in/path")];
+        for (method, uri) in &misses {
+            assert_eq!(Match::No, spec.matches(&req(method, uri, None)));
+        }
+    }
+
+    #[test]
+    fn paths_must_match_spec_from_the_beginning_label() {
+        let spec = RequestSpec::from_parts(Method::GET, vec![PathSegment::Label], Vec::new());
+
+        let misses = vec![
+            (Method::GET, "/prefix/label"),
+            (Method::GET, "/label/suffix"),
+            (Method::GET, "/prefix/label/suffix"),
+        ];
+        for (method, uri) in &misses {
+            assert_eq!(Match::No, spec.matches(&req(method, uri, None)));
         }
     }
 
@@ -440,5 +470,23 @@ mod tests {
         for (method, uri) in &hits {
             assert_eq!(Match::Yes, label_spec.matches(&req(method, uri, None)));
         }
+    }
+
+    #[test]
+    fn unsanitary_path() {
+        let spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![
+                PathSegment::Literal(String::from("ReDosLiteral")),
+                PathSegment::Label,
+                PathSegment::Literal(String::from("(a+)+")),
+            ],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            Match::Yes,
+            spec.matches(&req(&Method::GET, "/ReDosLiteral/abc/(a+)+", None))
+        );
     }
 }

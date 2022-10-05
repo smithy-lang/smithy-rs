@@ -3,85 +3,36 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::subcommand::fix_manifests::{subcommand_fix_manifests, Mode};
-use crate::subcommand::publish::subcommand_publish;
-use crate::subcommand::yank_category::subcommand_yank_category;
 use anyhow::Result;
 use clap::Parser;
-use semver::Version;
-use std::path::PathBuf;
-use subcommand::generate_version_manifest::subcommand_generate_version_manifest;
-use subcommand::hydrate_readme::subcommand_hydrate_readme;
-
-mod cargo;
-mod fs;
-mod package;
-mod repo;
-mod retry;
-mod sort;
-mod subcommand;
-
-pub const SDK_REPO_CRATE_PATH: &str = "sdk";
-pub const SDK_REPO_NAME: &str = "aws-sdk-rust";
-pub const SMITHYRS_REPO_NAME: &str = "smithy-rs";
-pub const CRATE_OWNER: &str = "github:awslabs:rust-sdk-owners";
+use publisher::subcommand::fix_manifests::subcommand_fix_manifests;
+use publisher::subcommand::fix_manifests::FixManifestsArgs;
+use publisher::subcommand::generate_version_manifest::{
+    subcommand_generate_version_manifest, GenerateVersionManifestArgs,
+};
+use publisher::subcommand::hydrate_readme::{subcommand_hydrate_readme, HydrateReadmeArgs};
+use publisher::subcommand::publish::subcommand_publish;
+use publisher::subcommand::publish::PublishArgs;
+use publisher::subcommand::tag_versions_manifest::subcommand_tag_versions_manifest;
+use publisher::subcommand::tag_versions_manifest::TagVersionsManifestArgs;
+use publisher::subcommand::yank_release::{subcommand_yank_release, YankReleaseArgs};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 enum Args {
     /// Fixes path dependencies in manifests to also have version numbers
-    FixManifests {
-        /// Path containing the manifests to fix. Manifests will be discovered recursively
-        #[clap(long)]
-        location: PathBuf,
-        /// Checks manifests rather than fixing them
-        #[clap(long)]
-        check: bool,
-    },
+    FixManifests(FixManifestsArgs),
     /// Publishes crates to crates.io
-    Publish {
-        /// Path containing the crates to publish. Crates will be discovered recursively
-        #[clap(long)]
-        location: PathBuf,
-    },
-    /// Yanks a category of packages with the given version number
-    YankCategory {
-        /// Package category to yank (smithy-runtime, aws-runtime, or aws-sdk)
-        #[clap(long)]
-        category: String,
-        /// Version number to yank
-        #[clap(long)]
-        version: Version,
-        /// Path to `aws-sdk-rust` repo. The repo should be checked out at the
-        /// version that is being yanked so that the correct list of crate names
-        /// is used. This will be validated.
-        #[clap(long)]
-        location: PathBuf,
-    },
+    Publish(PublishArgs),
+    /// Yanks an entire SDK release. For individual packages, use `cargo yank` instead.
+    /// Only one of the `--github-release-tag` or `--versions-toml` options are required.
+    YankRelease(YankReleaseArgs),
     /// Hydrates the SDK README template file
-    HydrateReadme {
-        /// AWS Rust SDK version to put in the README
-        #[clap(long)]
-        sdk_version: Version,
-        /// Rust MSRV to put in the README
-        #[clap(long)]
-        msrv: String,
-        /// Path to output the hydrated readme into
-        #[clap(short, long)]
-        output: PathBuf,
-    },
+    HydrateReadme(HydrateReadmeArgs),
     /// Generates a version manifest file for a generated SDK
-    GenerateVersionManifest {
-        /// Path to `smithy-build.json`
-        #[clap(long)]
-        smithy_build: PathBuf,
-        /// Revision of `aws-doc-sdk-examples` repository used to retrieve examples
-        #[clap(long)]
-        examples_revision: String,
-        /// Path containing the generated SDK to generate a version manifest for
-        #[clap(long)]
-        location: PathBuf,
-    },
+    GenerateVersionManifest(GenerateVersionManifestArgs),
+    /// Adds a release tag to an existing version manifest
+    TagVersionsManifest(TagVersionsManifestArgs),
 }
 
 #[tokio::main]
@@ -93,38 +44,13 @@ async fn main() -> Result<()> {
         .init();
 
     match Args::parse() {
-        Args::Publish { location } => {
-            subcommand_publish(&location).await?;
-        }
-        Args::FixManifests { location, check } => {
-            let mode = match check {
-                true => Mode::Check,
-                false => Mode::Execute,
-            };
-            subcommand_fix_manifests(mode, &location).await?;
-        }
-        Args::YankCategory {
-            category,
-            version,
-            location,
-        } => {
-            subcommand_yank_category(&category, version, &location).await?;
-        }
-        Args::HydrateReadme {
-            sdk_version,
-            msrv,
-            output,
-        } => {
-            subcommand_hydrate_readme(sdk_version, msrv, &output).await?;
-        }
-        Args::GenerateVersionManifest {
-            smithy_build,
-            examples_revision,
-            location,
-        } => {
-            subcommand_generate_version_manifest(&smithy_build, &examples_revision, &location)
-                .await?;
-        }
+        Args::Publish(args) => subcommand_publish(&args).await?,
+        Args::FixManifests(args) => subcommand_fix_manifests(&args).await?,
+        Args::YankRelease(args) => subcommand_yank_release(&args).await?,
+        Args::HydrateReadme(args) => subcommand_hydrate_readme(&args)?,
+        Args::GenerateVersionManifest(args) => subcommand_generate_version_manifest(&args).await?,
+        Args::TagVersionsManifest(args) => subcommand_tag_versions_manifest(&args)?,
     }
+
     Ok(())
 }

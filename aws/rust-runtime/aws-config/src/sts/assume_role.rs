@@ -9,7 +9,6 @@ use aws_sdk_sts::error::AssumeRoleErrorKind;
 use aws_sdk_sts::middleware::DefaultMiddleware;
 use aws_sdk_sts::operation::AssumeRole;
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::http_connector::HttpSettings;
 use aws_smithy_http::result::SdkError;
 use aws_types::credentials::{
     self, future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
@@ -69,6 +68,7 @@ impl AssumeRoleProvider {
 /// A builder for [`AssumeRoleProvider`].
 ///
 /// Construct one through [`AssumeRoleProvider::builder`].
+#[derive(Debug)]
 pub struct AssumeRoleProviderBuilder {
     role_arn: String,
     external_id: Option<String>,
@@ -172,13 +172,13 @@ impl AssumeRoleProviderBuilder {
             .build();
 
         let conn = conf
-            .connector(&HttpSettings::default())
+            .connector(&Default::default())
             .expect("A connector must be provided");
-        let client = aws_smithy_client::Builder::new()
+        let mut client_builder = aws_smithy_client::Client::builder()
             .connector(conn)
-            .middleware(DefaultMiddleware::new())
-            .sleep_impl(conf.sleep())
-            .build();
+            .middleware(DefaultMiddleware::new());
+        client_builder.set_sleep_impl(conf.sleep());
+        let client = client_builder.build();
 
         let session_name = self
             .session_name
@@ -248,7 +248,7 @@ impl Inner {
 }
 
 impl ProvideCredentials for Inner {
-    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'_>
     where
         Self: 'a,
     {
@@ -272,6 +272,7 @@ impl ProvideCredentials for AssumeRoleProvider {
 mod test {
     use crate::provider_config::ProviderConfig;
     use crate::sts::AssumeRoleProvider;
+    use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::capture_request;
     use aws_smithy_http::body::SdkBody;
@@ -285,6 +286,7 @@ mod test {
     async fn configures_session_length() {
         let (server, request) = capture_request(None);
         let provider_conf = ProviderConfig::empty()
+            .with_sleep(TokioSleep::new())
             .with_time_source(TimeSource::manual(&ManualTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
             )))
@@ -313,6 +315,7 @@ mod test {
         ));
         let (server, _request) = capture_request(Some(resp));
         let provider_conf = ProviderConfig::empty()
+            .with_sleep(TokioSleep::new())
             .with_time_source(TimeSource::manual(&ManualTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
             )))

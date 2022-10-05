@@ -13,7 +13,7 @@ struct IntermediateStructure {
 }
 ```
 
-```rust,ignore
+```text
   |
 3 | struct TopStructure {
   | ^^^^^^^^^^^^^^^^^^^ recursive type has infinite size

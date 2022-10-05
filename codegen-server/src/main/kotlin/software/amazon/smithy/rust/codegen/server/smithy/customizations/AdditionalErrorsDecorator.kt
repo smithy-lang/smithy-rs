@@ -13,28 +13,35 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
 /**
  * Add at least one error to all operations in the model.
  *
- * When this decorator is applied, even operations that do not have a Smithy error attatched,
+ * When this decorator is applied, even operations that do not have a Smithy error attached,
  * will return `Result<OperationOutput, OperationError>`.
  *
  * To enable this decorator write its class name to a resource file like this:
  * ```
- * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToInfallibleOpsDecorator"
+ * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToInfallibleOperationsDecorator"
  * F="software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator"
  * D="codegen-server/src/main/resources/META-INF/services"
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
-    override val name: String = "AddInternalServerErrorToInfallibleOps"
+class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+    override val name: String = "AddInternalServerErrorToInfallibleOperations"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { shape -> shape.errors.isEmpty() })
+        addErrorShapeToModelOperations(service, model) { shape -> shape.allErrors(model).isEmpty() }
+
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -44,27 +51,30 @@ class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
  * and there is no native mapping of these actual errors to the API errors, servers can generate
  * the code with this decorator to add an internal error shape on-the-fly to all the operations.
  *
- * When this decorator is applied, even operations that do not have a Smithy error attatched,
+ * When this decorator is applied, even operations that do not have a Smithy error attached,
  * will return `Result<OperationOutput, OperationError>`.
  *
  * To enable this decorator write its class name to a resource file like this:
  * ```
- * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOpsDecorator"
+ * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator"
  * F="software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator"
  * D="codegen-server/src/main/resources/META-INF/services"
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToAllOpsDecorator : RustCodegenDecorator {
-    override val name: String = "AddInternalServerErrorToAllOps"
+class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+    override val name: String = "AddInternalServerErrorToAllOperations"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { _ -> true })
+        addErrorShapeToModelOperations(service, model) { true }
+
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
-fun addErrorShapeToModelOps(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
-    val errorShape = internalServerError(service.id.getNamespace())
+fun addErrorShapeToModelOperations(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
+    val errorShape = internalServerError(service.id.namespace)
     val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
     return ModelTransformer.create().mapShapes(modelShapes) { shape ->
         if (shape is OperationShape && opSelector(shape)) {
@@ -75,7 +85,7 @@ fun addErrorShapeToModelOps(service: ServiceShape, model: Model, opSelector: (Op
     }
 }
 
-fun internalServerError(namespace: String): StructureShape =
+private fun internalServerError(namespace: String): StructureShape =
     StructureShape.builder().id("$namespace#InternalServerError")
         .addTrait(ErrorTrait("server"))
         .addMember(
@@ -83,5 +93,5 @@ fun internalServerError(namespace: String): StructureShape =
                 .id("$namespace#InternalServerError\$message")
                 .target("smithy.api#String")
                 .addTrait(RequiredTrait())
-                .build()
+                .build(),
         ).build()

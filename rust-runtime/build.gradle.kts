@@ -6,6 +6,7 @@
 description = "Rust Runtime"
 plugins {
     kotlin("jvm")
+    `maven-publish`
 }
 
 group = "software.amazon.rustruntime"
@@ -44,7 +45,7 @@ tasks.register("fixRuntimeCrateVersions") {
     doLast {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(runtimeOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteSmithyRsCrateVersion(properties, line)
+                rewriteRuntimeCrateVersion(properties, line)
             }
         }
     }
@@ -56,4 +57,13 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     binaryName = "publisher"
     arguments = listOf("fix-manifests", "--location", runtimeOutputDir.absolutePath)
     dependsOn("fixRuntimeCrateVersions")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("default") {
+            from(components["java"])
+        }
+    }
+    repositories { maven { url = uri("$buildDir/repository") } }
 }

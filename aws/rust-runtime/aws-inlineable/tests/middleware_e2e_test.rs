@@ -7,7 +7,6 @@ use std::convert::Infallible;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use bytes::Bytes;
@@ -15,14 +14,15 @@ use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
 use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
-use aws_endpoint::set_endpoint_resolver;
-use aws_http::retry::AwsErrorRetryPolicy;
+use aws_endpoint::{EndpointShim, Params};
+use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
+use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
-use inlineable_aws::middleware::DefaultMiddleware;
 
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::endpoint::ResolveEndpoint;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -75,7 +75,7 @@ impl ParseHttpResponse for TestOperationParser {
     }
 }
 
-fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
+fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier> {
     let req = operation::Request::new(
         http::Request::builder()
             .uri("https://test-service.test-region.amazonaws.com/")
@@ -83,14 +83,14 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
             .unwrap(),
     )
     .augment(|req, mut conf| {
-        set_endpoint_resolver(
-            &mut conf,
-            Arc::new(aws_endpoint::partition::endpoint::Metadata {
+        conf.insert(
+            EndpointShim::from_resolver(aws_endpoint::partition::endpoint::Metadata {
                 uri_template: "test-service.{region}.amazonaws.com",
                 protocol: Protocol::Https,
                 credential_scope: Default::default(),
                 signature_versions: SignatureVersion::V4,
-            }),
+            })
+            .resolve_endpoint(&Params::new(Some(Region::new("test-region")))),
         );
         aws_http::auth::set_provider(
             &mut conf,
@@ -110,13 +110,17 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
         Result::<_, Infallible>::Ok(req)
     })
     .unwrap();
-    Operation::new(req, TestOperationParser).with_retry_policy(AwsErrorRetryPolicy::new())
+    Operation::new(req, TestOperationParser)
+        .with_retry_classifier(AwsResponseRetryClassifier::new())
 }
 
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 #[test]
 fn test_default_client() {
-    let client = Client::dyn_https();
+    let client = Client::builder()
+        .dyn_https_connector(Default::default())
+        .middleware_fn(|r| r)
+        .build();
     let _ = client.call(test_operation());
 }
 

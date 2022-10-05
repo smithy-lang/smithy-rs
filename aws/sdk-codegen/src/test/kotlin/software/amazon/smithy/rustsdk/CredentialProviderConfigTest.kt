@@ -6,7 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
+import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
 
 internal class CredentialProviderConfigTest {
     @Test

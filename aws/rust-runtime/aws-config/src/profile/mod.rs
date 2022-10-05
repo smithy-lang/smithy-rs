@@ -9,14 +9,20 @@
 //! see the [`load`](parser::load) function.
 
 mod parser;
+
+// This can't be included in the other `pub use` statement until
+// https://github.com/rust-lang/rust/pull/87487 is fixed by upgrading
+// to Rust 1.60
 #[doc(inline)]
-pub use parser::{load, Profile, ProfileParseError, ProfileSet, Property};
+pub use parser::ProfileParseError;
+#[doc(inline)]
+pub use parser::{load, Profile, ProfileSet, Property};
 
 pub mod app_name;
 pub mod credentials;
+pub mod profile_file;
 pub mod region;
 pub mod retry_config;
-pub mod timeout_config;
 
 #[doc(inline)]
 pub use credentials::ProfileFileCredentialsProvider;

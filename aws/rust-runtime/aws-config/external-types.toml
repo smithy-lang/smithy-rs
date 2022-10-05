@@ -1,0 +1,31 @@
+# IMPORTANT: Types from `aws-sdk-*` crates MUST NOT be allowed to be
+# exposed in `aws-config`'s public API. Otherwise, `aws-config` will
+# require manual version bumping every time an automated version bump
+# to the exposed SDK crates happens.
+allowed_external_types = [
+   "aws_smithy_async::rt::sleep::AsyncSleep",
+   "aws_smithy_client::bounds::SmithyConnector",
+   "aws_smithy_client::erase::DynConnector",
+   "aws_smithy_client::erase::boxclone::BoxCloneService",
+   "aws_smithy_client::http_connector::HttpConnector",
+   "aws_smithy_client::http_connector::ConnectorSettings",
+   "aws_smithy_http::body::SdkBody",
+   "aws_smithy_http::result::SdkError",
+   "aws_smithy_types::retry",
+   "aws_smithy_types::retry::*",
+   "aws_smithy_types::timeout",
+   "aws_smithy_types::timeout::config::TimeoutConfig",
+   "aws_smithy_types::timeout::error::ConfigError",
+   "aws_types::*",
+   "http::response::Response",
+   "http::uri::Uri",
+   "tower_service::Service",
+
+   # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Decide if `InvalidUri` should be exposed
+   "http::uri::InvalidUri",
+
+   # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Decide if the following should be exposed
+   "hyper::client::connect::Connection",
+   "tokio::io::async_read::AsyncRead",
+   "tokio::io::async_write::AsyncWrite",
+]

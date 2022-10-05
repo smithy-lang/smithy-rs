@@ -9,9 +9,9 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class AdditionalErrorsDecoratorTest {
     private val baseModel = """
@@ -27,9 +27,9 @@ class AdditionalErrorsDecoratorTest {
             output: InputOutput,
             errors: [AnError]
         }
-        
+
         structure InputOutput { }
-        
+
         @error("client")
         structure AnError { }
     """.asSmithyModel()
@@ -40,7 +40,7 @@ class AdditionalErrorsDecoratorTest {
     fun `add InternalServerError to infallible operations only`() {
         model.lookup<OperationShape>("test#Infallible").errors.isEmpty() shouldBe true
         model.lookup<OperationShape>("test#Fallible").errors.size shouldBe 1
-        val transformedModel = AddInternalServerErrorToInfallibleOpsDecorator().transformModel(service, model)
+        val transformedModel = AddInternalServerErrorToInfallibleOperationsDecorator().transformModel(service, model)
         transformedModel.lookup<OperationShape>("test#Infallible").errors.size shouldBe 1
         transformedModel.lookup<OperationShape>("test#Fallible").errors.size shouldBe 1
     }
@@ -49,7 +49,7 @@ class AdditionalErrorsDecoratorTest {
     fun `add InternalServerError to all model operations`() {
         model.lookup<OperationShape>("test#Infallible").errors.isEmpty() shouldBe true
         model.lookup<OperationShape>("test#Fallible").errors.size shouldBe 1
-        val transformedModel = AddInternalServerErrorToAllOpsDecorator().transformModel(service, model)
+        val transformedModel = AddInternalServerErrorToAllOperationsDecorator().transformModel(service, model)
         transformedModel.lookup<OperationShape>("test#Infallible").errors.size shouldBe 1
         transformedModel.lookup<OperationShape>("test#Fallible").errors.size shouldBe 2
     }

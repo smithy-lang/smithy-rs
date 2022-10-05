@@ -14,23 +14,23 @@
 // CAUTION: This subcommand will `git reset --hard` in some cases. Don't ever run
 // it against a smithy-rs repo that you're actively working in.
 
+use crate::build_bundle::BuildBundleArgs;
 use anyhow::{bail, Context, Result};
 use aws_sdk_cloudwatch as cloudwatch;
 use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
 use clap::Parser;
 use cloudwatch::model::StandardUnit;
-use s3::ByteStream;
-use semver::Version;
+use s3::types::ByteStream;
 use serde::Deserialize;
-use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
-use smithy_rs_tool_common::shell::ShellOperation;
+use smithy_rs_tool_common::release_tag::ReleaseTag;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 use std::{env, path::Path};
-use tokio::process::Command;
-use tracing::{error, info};
+use tracing::info;
 
 lazy_static::lazy_static! {
     // Occasionally, a breaking change introduced in smithy-rs will cause the canary to fail
@@ -38,25 +38,35 @@ lazy_static::lazy_static! {
     // get fixed for that breaking change. When this happens, the older SDK versions can be
     // pinned to a commit hash in the smithy-rs repository to get old canary code that still
     // compiles against that version of the SDK.
-    static ref PINNED_SMITHY_RS_VERSIONS: Vec<(Version, &'static str)> = {
+    //
+    // This is a map of SDK release tag to smithy-rs commit hash
+    static ref PINNED_SMITHY_RS_VERSIONS: Vec<(ReleaseTag, &'static str)> = {
         let mut pinned = vec![
             // Versions <= 0.6.0 no longer compile against the canary after this commit in smithy-rs
             // due to the breaking change in https://github.com/awslabs/smithy-rs/pull/1085
-            (Version::parse("0.6.0").unwrap(), "d48c234796a16d518ca9e1dda5c7a1da4904318c"),
+            (ReleaseTag::from_str("v0.6.0").unwrap(), "d48c234796a16d518ca9e1dda5c7a1da4904318c"),
         ];
         pinned.sort();
         pinned
     };
 }
 
-#[derive(Debug, Parser)]
-pub struct RunOpt {
+#[derive(Debug, Parser, Eq, PartialEq)]
+pub struct RunArgs {
     /// Version of the SDK to compile the canary against
-    #[clap(long, required_unless_present = "sdk-path")]
-    sdk_version: Option<String>,
+    #[clap(
+        long,
+        required_unless_present = "sdk-path",
+        conflicts_with = "sdk-path"
+    )]
+    sdk_release_tag: Option<ReleaseTag>,
 
     /// Path to the SDK to compile against
-    #[clap(long, required_unless_present = "sdk-version")]
+    #[clap(
+        long,
+        required_unless_present = "sdk-release-tag",
+        conflicts_with = "sdk-release-tag"
+    )]
     sdk_path: Option<PathBuf>,
 
     /// Whether to target MUSL instead of GLIBC when compiling the Lambda
@@ -83,7 +93,7 @@ pub struct RunOpt {
 
 #[derive(Debug)]
 struct Options {
-    sdk_version: Option<String>,
+    sdk_release_tag: Option<ReleaseTag>,
     sdk_path: Option<PathBuf>,
     musl: bool,
     lambda_code_s3_bucket_name: String,
@@ -92,7 +102,7 @@ struct Options {
 }
 
 impl Options {
-    fn load_from(run_opt: RunOpt) -> Result<Options> {
+    fn load_from(run_opt: RunArgs) -> Result<Options> {
         if let Some(cdk_output) = &run_opt.cdk_output {
             #[derive(Deserialize)]
             struct Inner {
@@ -114,7 +124,7 @@ impl Options {
             )
             .context("read cdk output")?;
             Ok(Options {
-                sdk_version: run_opt.sdk_version,
+                sdk_release_tag: run_opt.sdk_release_tag,
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
                 lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
@@ -123,7 +133,7 @@ impl Options {
             })
         } else {
             Ok(Options {
-                sdk_version: run_opt.sdk_version,
+                sdk_release_tag: run_opt.sdk_release_tag,
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
                 lambda_code_s3_bucket_name: run_opt.lambda_code_s3_bucket_name.expect("required"),
@@ -134,7 +144,7 @@ impl Options {
     }
 }
 
-pub async fn run(opt: RunOpt) -> Result<()> {
+pub async fn run(opt: RunArgs) -> Result<()> {
     let options = Options::load_from(opt)?;
     let start_time = SystemTime::now();
     let config = aws_config::load_from_env().await;
@@ -189,14 +199,14 @@ pub async fn run(opt: RunOpt) -> Result<()> {
     result.map(|_| ())
 }
 
-async fn run_canary(options: &Options, config: &aws_config::Config) -> Result<Duration> {
-    let repo_root = git_root().await?;
-    env::set_current_dir(repo_root.join("tools/ci-cdk/canary-lambda"))
+async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result<Duration> {
+    let smithy_rs_root = find_git_repository_root("smithy-rs", ".").context(here!())?;
+    let smithy_rs = GitCLI::new(&smithy_rs_root).context(here!())?;
+    env::set_current_dir(smithy_rs_root.join("tools/ci-cdk/canary-lambda"))
         .context("failed to change working directory")?;
 
-    if let Some(sdk_version) = &options.sdk_version {
-        use_correct_revision(sdk_version)
-            .await
+    if let Some(sdk_release_tag) = &options.sdk_release_tag {
+        use_correct_revision(&smithy_rs, sdk_release_tag)
             .context(here!("failed to select correct revision of smithy-rs"))?;
     }
 
@@ -246,55 +256,30 @@ async fn run_canary(options: &Options, config: &aws_config::Config) -> Result<Du
     invoke_result.map(|_| invoke_time)
 }
 
-async fn use_correct_revision(sdk_version: &str) -> Result<()> {
-    let sdk_version = Version::parse(sdk_version).expect("valid version");
-    if let Some((version, commit_hash)) = PINNED_SMITHY_RS_VERSIONS
+fn use_correct_revision(smithy_rs: &dyn Git, sdk_release_tag: &ReleaseTag) -> Result<()> {
+    if let Some((pinned_release_tag, commit_hash)) = PINNED_SMITHY_RS_VERSIONS
         .iter()
-        .find(|(v, _)| v >= &sdk_version)
+        .find(|(pinned_release_tag, _)| pinned_release_tag >= sdk_release_tag)
     {
-        info!(
-            "SDK version {} requires smithy-rs@{} to successfully compile the canary",
-            version, commit_hash
-        );
-        let smithy_rs_root = git::find_git_repository_root("smithy-rs", ".").context(here!())?;
+        info!("SDK `{pinned_release_tag}` requires smithy-rs@{commit_hash} to successfully compile the canary");
         // Reset to the revision rather than checkout since the very act of running the
         // canary-runner can make the working tree dirty by modifying the Cargo.lock file
-        git::Reset::new(smithy_rs_root, &["--hard", *commit_hash])
-            .spawn()
-            .await
-            .context(here!())?;
+        smithy_rs.hard_reset(commit_hash).context(here!())?;
     }
     Ok(())
 }
 
 /// Returns the path to the compiled bundle zip file
 async fn build_bundle(options: &Options) -> Result<PathBuf> {
-    let mut builder = Command::new("./build-bundle");
-    if let Some(sdk_version) = &options.sdk_version {
-        builder.arg("--sdk-version").arg(sdk_version);
-    }
-    if let Some(sdk_path) = &options.sdk_path {
-        builder.arg("--sdk-path").arg(sdk_path);
-    }
-    if options.musl {
-        builder.arg("--musl");
-    }
-    let output = builder
-        .stderr(std::process::Stdio::inherit())
-        .output()
-        .await
-        .context(here!())?;
-    if !output.status.success() {
-        error!(
-            "{}",
-            std::str::from_utf8(&output.stderr).expect("valid utf-8")
-        );
-        bail!("Failed to build the canary bundle");
-    } else {
-        Ok(PathBuf::from(
-            String::from_utf8(output.stdout).context(here!())?.trim(),
-        ))
-    }
+    Ok(crate::build_bundle::build_bundle(BuildBundleArgs {
+        canary_path: None,
+        sdk_release_tag: options.sdk_release_tag.clone(),
+        sdk_path: options.sdk_path.clone(),
+        musl: options.musl,
+        manifest_only: false,
+    })
+    .await?
+    .expect("manifest_only set to false, so there must be a bundle path"))
 }
 
 async fn upload_bundle(
@@ -378,7 +363,7 @@ async fn create_lambda_fn(
 
 async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Result<()> {
     use lambda::model::*;
-    use lambda::Blob;
+    use lambda::types::Blob;
 
     let response = lambda_client
         .invoke()
@@ -416,14 +401,4 @@ async fn delete_lambda_fn(lambda_client: lambda::Client, bundle_name: &str) -> R
         .await
         .context(here!("failed to delete Lambda"))?;
     Ok(())
-}
-
-async fn git_root() -> Result<PathBuf> {
-    let output = Command::new("git")
-        .arg("rev-parse")
-        .arg("--show-toplevel")
-        .output()
-        .await
-        .context("couldn't find repository root")?;
-    Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
 }

@@ -6,11 +6,12 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.crateLocation
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.crateLocation
 import java.io.File
 import java.nio.file.Path
 
@@ -36,31 +37,31 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
         path
     }
     return runtimeCrateLocation.copy(
-        path = updatedPath, version = runtimeCrateLocation.version?.let { defaultSdkVersion() }
+        path = updatedPath, versions = runtimeCrateLocation.versions,
     )
 }
 
 object AwsRuntimeType {
     val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
     val Presigning by lazy {
-        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", public = true))
+        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
     }
 
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
-            "middleware", public = true,
+            "middleware", visibility = Visibility.PUBLIC,
             CargoDependency.SmithyHttp(this),
             CargoDependency.SmithyHttpTower(this),
             CargoDependency.SmithyClient(this),
             CargoDependency.Tower,
             awsHttp(),
             awsEndpoint(),
-        )
+        ),
     ).member("DefaultMiddleware")
 }
 
 fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
-    CargoDependency(name, awsRoot().crateLocation(), features = features)
+    CargoDependency(name, awsRoot().crateLocation(null), features = features)
 
 fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
 fun RuntimeConfig.awsTypes(): CargoDependency = awsRuntimeDependency("aws-types")

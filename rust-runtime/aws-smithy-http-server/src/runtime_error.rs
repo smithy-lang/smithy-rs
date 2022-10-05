@@ -9,7 +9,7 @@
 //!
 //! As opposed to rejection types (see [`crate::rejection`]), which are an internal detail about
 //! the framework, `RuntimeError` is surfaced to clients in HTTP responses: indeed, it implements
-//! [`crate::response::IntoResponse`]. Rejections can be "grouped" and converted into a
+//! [`RuntimeError::into_response`]. Rejections can be "grouped" and converted into a
 //! specific `RuntimeError` kind: for example, all request rejections due to serialization issues
 //! can be conflated under the [`RuntimeErrorKind::Serialization`] enum variant.
 //!
@@ -19,24 +19,25 @@
 //! Generated code works always works with [`crate::rejection`] types when deserializing requests
 //! and serializing response. Just before a response needs to be sent, the generated code looks up
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
-//! [`crate::response::IntoResponse`] implementation to render and send a response.
+//! [`RuntimeError::into_response`] method to render and send a response.
 
-use crate::{
-    protocols::Protocol,
-    response::{IntoResponse, Response},
-};
+use crate::proto::aws_json_10::AwsJson10;
+use crate::proto::aws_json_11::AwsJson11;
+use crate::proto::rest_json_1::AwsRestJson1;
+use crate::proto::rest_xml::AwsRestXml;
+use crate::protocols::Protocol;
+use crate::response::{IntoResponse, Response};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
-    /// The requested operation does not exist.
-    UnknownOperation,
     /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),
     /// As of writing, this variant can only occur upon failure to extract an
     /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
-    // UnsupportedMediaType,
-    // NotAcceptable,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1663)
+    NotAcceptable,
+    UnsupportedMediaType,
 }
 
 /// String representation of the runtime error type.
@@ -47,8 +48,35 @@ impl RuntimeErrorKind {
         match self {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
-            RuntimeErrorKind::UnknownOperation => "UnknownOperation",
+            RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
+            RuntimeErrorKind::UnsupportedMediaType => "UnsupportedMediaTypeException",
         }
+    }
+}
+
+pub struct InternalFailureException;
+
+impl IntoResponse<AwsJson10> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::AwsJson10).into_response()
+    }
+}
+
+impl IntoResponse<AwsJson11> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::AwsJson11).into_response()
+    }
+}
+
+impl IntoResponse<AwsRestJson1> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::RestJson1).into_response()
+    }
+}
+
+impl IntoResponse<AwsRestXml> for InternalFailureException {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        RuntimeError::internal_failure_from_protocol(Protocol::RestXml).into_response()
     }
 }
 
@@ -58,12 +86,26 @@ pub struct RuntimeError {
     pub kind: RuntimeErrorKind,
 }
 
-impl IntoResponse for RuntimeError {
-    fn into_response(self) -> Response {
+impl<P> IntoResponse<P> for RuntimeError {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        self.into_response()
+    }
+}
+
+impl RuntimeError {
+    pub fn internal_failure_from_protocol(protocol: Protocol) -> Self {
+        RuntimeError {
+            protocol,
+            kind: RuntimeErrorKind::InternalFailure(crate::Error::new(String::new())),
+        }
+    }
+
+    pub fn into_response(self) -> Response {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
-            RuntimeErrorKind::UnknownOperation => http::StatusCode::NOT_FOUND,
+            RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
+            RuntimeErrorKind::UnsupportedMediaType => http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
         };
 
         let body = crate::body::to_boxed(match self.protocol {
@@ -111,6 +153,9 @@ impl From<crate::rejection::ResponseRejection> for RuntimeErrorKind {
 
 impl From<crate::rejection::RequestRejection> for RuntimeErrorKind {
     fn from(err: crate::rejection::RequestRejection) -> Self {
-        RuntimeErrorKind::Serialization(crate::Error::new(err))
+        match err {
+            crate::rejection::RequestRejection::MissingContentType(_reason) => RuntimeErrorKind::UnsupportedMediaType,
+            _ => RuntimeErrorKind::Serialization(crate::Error::new(err)),
+        }
     }
 }

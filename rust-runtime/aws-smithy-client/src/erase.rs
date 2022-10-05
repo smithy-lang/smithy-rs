@@ -11,7 +11,7 @@
 pub mod boxclone;
 use boxclone::*;
 
-use crate::{bounds, retry, Client};
+use crate::{bounds, http_connector::HttpConnector, retry, Client};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use std::fmt;
@@ -56,7 +56,7 @@ where
             connector: self.connector,
             middleware: DynMiddleware::new(self.middleware),
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -96,7 +96,7 @@ where
             connector: DynConnector::new(self.connector),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -175,6 +175,12 @@ impl Service<http::Request<SdkBody>> for DynConnector {
 
     fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
         self.0.call(req)
+    }
+}
+
+impl From<DynConnector> for HttpConnector {
+    fn from(connector: DynConnector) -> Self {
+        HttpConnector::Prebuilt(Some(connector))
     }
 }
 

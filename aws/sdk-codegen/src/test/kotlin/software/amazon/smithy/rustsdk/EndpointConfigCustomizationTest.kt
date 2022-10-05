@@ -7,23 +7,33 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.testutil.stubConfigCustomization
-import software.amazon.smithy.rust.codegen.testutil.unitTest
-import software.amazon.smithy.rust.codegen.util.runCommand
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.testutil.stubConfigCustomization
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 internal class EndpointConfigCustomizationTest {
+    private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().asType().member("Params")
+    private val codegenScope = arrayOf(
+        "http" to CargoDependency.Http.asType(),
+        "PlaceholderParams" to placeholderEndpointParams,
+        "aws_types" to awsTypes(AwsTestRuntimeConfig).asType(),
+    )
 
     private val model = """
         namespace test
@@ -118,34 +128,36 @@ internal class EndpointConfigCustomizationTest {
 
     private fun validateEndpointCustomizationForService(service: String, test: ((RustCrate) -> Unit)? = null) {
         val (context, testDir) = generatePluginContext(model, service = service, runtimeConfig = AwsTestRuntimeConfig)
-        val codegenDecorator = object : RustCodegenDecorator {
+        val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
             override val name: String = "tests and config"
             override val order: Byte = 0
             override fun configCustomizations(
-                codegenContext: CodegenContext,
-                baseCustomizations: List<ConfigCustomization>
-            ): List<ConfigCustomization> {
-                return baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ConfigCustomization>,
+            ): List<ConfigCustomization> =
+                baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
                     codegenContext,
-                    endpointConfig
+                    endpointConfig,
                 ) + stubConfigCustomization("b")
-            }
 
             override fun libRsCustomizations(
-                codegenContext: CodegenContext,
-                baseCustomizations: List<LibRsCustomization>
-            ): List<LibRsCustomization> {
-                return baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
-            }
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<LibRsCustomization>,
+            ): List<LibRsCustomization> =
+                baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
 
-            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 if (test != null) {
                     test(rustCrate)
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val customization = CombinedCodegenDecorator(listOf(RequiredCustomizations(), codegenDecorator))
         CodegenVisitor(context, customization).execute()
+        println("file:///$testDir")
         "cargo test".runCommand(testDir)
     }
 
@@ -163,21 +175,17 @@ internal class EndpointConfigCustomizationTest {
     fun `support region-specific endpoint overrides`() {
         validateEndpointCustomizationForService("test#TestService") { crate ->
             crate.lib {
-                it.addDependency(awsTypes(AwsTestRuntimeConfig))
-                it.addDependency(CargoDependency.Http)
-                it.unitTest(
-                    "region_override",
-                    """
-                    use aws_types::region::Region;
-                    use http::Uri;
-                    let conf = crate::config::Config::builder().build();
-                    let endpoint = conf.endpoint_resolver
-                        .resolve_endpoint(&Region::new("fips-ca-central-1")).expect("default resolver produces a valid endpoint");
-                    let mut uri = Uri::from_static("/?k=v");
-                    endpoint.set_endpoint(&mut uri, None);
-                    assert_eq!(uri, Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
-                    """
-                )
+                it.unitTest("region_override") {
+                    rustTemplate(
+                        """
+                        let conf = crate::config::Config::builder().build();
+                        let endpoint = conf.endpoint_resolver
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("fips-ca-central-1")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://access-analyzer-fips.ca-central-1.amazonaws.com/");
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
         }
     }
@@ -186,27 +194,21 @@ internal class EndpointConfigCustomizationTest {
     fun `support region-agnostic services`() {
         validateEndpointCustomizationForService("test#NoRegions") { crate ->
             crate.lib {
-                it.addDependency(awsTypes(AwsTestRuntimeConfig))
-                it.addDependency(CargoDependency.Http)
-                it.unitTest(
-                    "global_services",
-                    """
-                    use aws_types::region::Region;
-                    use http::Uri;
-                    let conf = crate::config::Config::builder().build();
-                    let endpoint = conf.endpoint_resolver
-                        .resolve_endpoint(&Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
-                    let mut uri = Uri::from_static("/?k=v");
-                    endpoint.set_endpoint(&mut uri, None);
-                    assert_eq!(uri, Uri::from_static("https://iam.amazonaws.com/?k=v"));
+                it.unitTest("global_services") {
+                    rustTemplate(
+                        """
+                        let conf = crate::config::Config::builder().build();
+                        let endpoint = conf.endpoint_resolver
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("us-east-1")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://iam.amazonaws.com/");
 
-                    let endpoint = conf.endpoint_resolver
-                        .resolve_endpoint(&Region::new("iam-fips")).expect("default resolver produces a valid endpoint");
-                    let mut uri = Uri::from_static("/?k=v");
-                    endpoint.set_endpoint(&mut uri, None);
-                    assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
-                    """
-                )
+                        let endpoint = conf.endpoint_resolver
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("iam-fips")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://iam-fips.amazonaws.com/");
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
         }
     }

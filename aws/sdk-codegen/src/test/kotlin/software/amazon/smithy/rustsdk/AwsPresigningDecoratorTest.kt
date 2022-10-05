@@ -14,9 +14,9 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 
 class AwsPresigningDecoratorTest {
@@ -96,15 +96,15 @@ class OverrideHttpMethodTransformTest {
                     mapOf(
                         ShapeId.from("test#One") to "GET",
                         ShapeId.from("test#Two") to "POST",
-                    )
-                )
-            )
+                    ),
+                ),
+            ),
         )
         val transformed = AwsPresigningDecorator(
             mapOf(
                 ShapeId.from("test#One") to presignableOp,
-                ShapeId.from("test#Two") to presignableOp
-            )
+                ShapeId.from("test#Two") to presignableOp,
+            ),
         ).transformModel(serviceShape, model)
 
         val synthNamespace = "test.synthetic.aws.presigned"
@@ -158,12 +158,12 @@ class MoveDocumentMembersToQueryParamsTransformTest {
             PayloadSigningType.EMPTY,
             listOf(
                 MoveDocumentMembersToQueryParamsTransform(
-                    listOf(ShapeId.from("test#One"))
-                )
-            )
+                    listOf(ShapeId.from("test#One")),
+                ),
+            ),
         )
         val transformed = AwsPresigningDecorator(
-            mapOf(ShapeId.from("test#One") to presignableOp)
+            mapOf(ShapeId.from("test#One") to presignableOp),
         ).transformModel(serviceShape, model)
 
         val index = HttpBindingIndex(transformed)

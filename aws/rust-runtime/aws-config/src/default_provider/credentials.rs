@@ -85,7 +85,7 @@ impl ProvideCredentials for DefaultCredentialsChain {
 }
 
 /// Builder for [`DefaultCredentialsChain`](DefaultCredentialsChain)
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     profile_file_builder: crate::profile::credentials::Builder,
     web_identity_builder: crate::web_identity_token::Builder,
@@ -333,6 +333,7 @@ mod test {
 
     make_test!(ecs_assume_role);
     make_test!(ecs_credentials);
+    make_test!(ecs_credentials_invalid_profile);
 
     make_test!(sso_assume_role);
     make_test!(sso_no_token_file);
@@ -358,6 +359,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::boxclone::BoxCloneService;
@@ -397,7 +399,7 @@ mod test {
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new();
+        let expected_retry_config = RetryConfig::standard();
 
         assert_eq!(actual_retry_config, expected_retry_config);
         // This is redundant but it's really important to make sure that
@@ -418,7 +420,7 @@ mod test {
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new();
+        let expected_retry_config = RetryConfig::standard();
 
         assert_eq!(actual_retry_config, expected_retry_config)
     }
@@ -445,9 +447,7 @@ retry_mode = standard
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new()
-            .with_max_attempts(1)
-            .with_retry_mode(RetryMode::Standard);
+        let expected_retry_config = RetryConfig::standard().with_max_attempts(1);
 
         assert_eq!(actual_retry_config, expected_retry_config)
     }
@@ -478,9 +478,7 @@ retry_mode = standard
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new()
-            .with_max_attempts(42)
-            .with_retry_mode(RetryMode::Standard);
+        let expected_retry_config = RetryConfig::standard().with_max_attempts(42);
 
         assert_eq!(actual_retry_config, expected_retry_config)
     }

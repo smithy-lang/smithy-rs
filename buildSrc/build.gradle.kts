@@ -30,6 +30,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
     implementation(gradleApi())
+    implementation("com.moandjiezana.toml:toml4j:0.7.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
 }
 
