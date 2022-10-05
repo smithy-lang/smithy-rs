@@ -13,6 +13,22 @@
 
 [[smithy-rs]]
 message = """
+Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.
+"""
+references = ["smithy-rs#1811"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+author = "LukeMathWalker"
+
+[[smithy-rs]]
+message = """
+Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.
+"""
+references = ["smithy-rs#1811"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "LukeMathWalker"
+
+[[smithy-rs]]
+message = """
 Mark `operation` and `operation_handler` modules as private in the generated server crate.
 Both modules did not contain any public types, therefore there should be no actual breakage when updating.
 """
