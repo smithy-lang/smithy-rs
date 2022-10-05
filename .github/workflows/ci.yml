@@ -170,15 +170,19 @@ jobs:
         profile: minimal
         override: true
         target: ${{ matrix.target }}
-    - name: Install dependencies
+    - name: Configure cross
       shell: bash
       run: |
-        sudo dpkg --add-architecture i386 && sudo apt-get update && sudo apt-get install libssl-dev:i386
+        cat > Cross.toml << EOF
+        [target.i686-unknown-linux-gnu]
+        pre-build = ["dpkg --add-architecture i386 && apt-get update && apt-get install --assume-yes libssl-dev:i386"]
+        [target.powerpc-unknown-linux-gnu]
+        pre-build = ["dpkg --add-architecture i386 && apt-get update && apt-get install --assume-yes libssl-dev:i386"]
+        EOF
     - name: Build rust-runtime crates
       uses: actions-rs/cargo@v1
       env:
-        OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu/
-        OPENSSL_INCLUDE_DIR: /usr/include/openssl/
+        CROSS_CONFIG: Cross.toml
       with:
         use-cross: true
         command: build
@@ -186,8 +190,7 @@ jobs:
     - name: Build AWS rust-runtime crates
       uses: actions-rs/cargo@v1
       env:
-        OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu/
-        OPENSSL_INCLUDE_DIR: /usr/include/openssl/
+        CROSS_CONFIG: Cross.toml
       with:
         use-cross: true
         command: build
