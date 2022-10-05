@@ -1,4 +1,4 @@
-# Generating common service code
+# Generating Common Service Code
 
 How a service is constructed and how to plug in new business logic is described in [Pokémon Service][1].
 This document introduces the project and how code is being generated. It is written for developers who want to start contributing to `smithy-rs`.

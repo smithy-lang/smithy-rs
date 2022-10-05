@@ -15,9 +15,9 @@
   - [Backwards Compatibility](smithy/backwards-compat.md)
 
 - [Server](./server/overview.md)
-  - [Code Generation](./server/code_generation.md)
+  - [Generating Common Service Code](./server/code_generation.md)
+  - [Code Generating the Pokémon Service](./server/pokemon_service.md)
   - [Instrumentation](./server/instrumentation.md)
-  - [Code generating the Pokémon Service](./server/pokemon_service.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)

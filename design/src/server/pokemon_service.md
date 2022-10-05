@@ -1,4 +1,4 @@
-# Code generating the Pokémon Service
+# Code Generating the Pokémon Service
 
 This is an overview of client and server of the Pokémon service. It introduces:
 
