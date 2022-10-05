@@ -152,9 +152,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-        - i686-unknown-linux-gnu
-        - powerpc-unknown-linux-gnu
+        include:
+        - target: i686-unknown-linux-gnu
+          features: --all-features
+        # We only test `native-tls` here because `rustls` depends on `ring` which in turn does not support powerpc
+        # as a target platform (see https://github.com/briansmith/ring/issues/389)
+        - target: powerpc-unknown-linux-gnu
+          features: --features native-tls
     steps:
     - name: Checkout
       uses: actions/checkout@v1
@@ -186,7 +190,7 @@ jobs:
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace --all-features
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.features }}
     - name: Build AWS rust-runtime crates
       uses: actions-rs/cargo@v1
       env:
@@ -194,7 +198,7 @@ jobs:
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace --all-features
+        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.features }}
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
