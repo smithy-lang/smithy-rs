@@ -82,7 +82,7 @@ open class ServerOperationHandlerGenerator(
                         Ok(v) => v,
                         Err(extension_not_found_rejection) => {
                             let extension = $serverCrate::extension::RuntimeErrorExtension::new(extension_not_found_rejection.to_string());
-                            let runtime_error = $serverCrate::runtime_error::RuntimeError { kind: extension_not_found_rejection.into() };
+                            let runtime_error = $serverCrate::runtime_error::RuntimeError::from(extension_not_found_rejection);
                             let mut response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(runtime_error);
                             response.extensions_mut().insert(extension);
                             return response.map($serverCrate::body::boxed);

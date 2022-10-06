@@ -176,9 +176,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     if ! #{SmithyHttpServer}::protocols::accept_header_classifier(req, ${contentType.dq()}) {
-                        return Err(#{RuntimeError} {
-                            kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
-                        })
+                        return Err(#{RuntimeError}::NotAcceptable)
                     }
                     """,
                     *codegenScope,
@@ -198,9 +196,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             if #{SmithyHttpServer}::protocols::content_type_header_classifier(req, $expectedRequestContentType).is_err() {
-                                return Err(#{RuntimeError} {
-                                    kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::UnsupportedMediaType,
-                                })
+                                return Err(#{RuntimeError}::UnsupportedMediaType)
                             }
                             """,
                             *codegenScope,
@@ -227,11 +223,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     #{parse_request}(req)
                         .await
                         .map($inputName)
-                        .map_err(
-                            |err| #{RuntimeError} {
-                                kind: err.into()
-                            }
-                        )
+                        .map_err(Into::into)
                 }
             }
 
@@ -278,7 +270,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Self::Output(o) => {
                         match #{serialize_response}(o) {
                             Ok(response) => response,
-                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError} { kind: e.into() })
+                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                         }
                     },
                     Self::Error(err) => {
@@ -287,7 +279,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(err.name()));
                                 response
                             },
-                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError} { kind: e.into() })
+                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                         }
                     }
                 }
@@ -332,9 +324,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 match #{serialize_response}(self.0) {
                     Ok(response) => response,
-                    Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError} {
-                        kind: e.into()
-                    })
+                    Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                 }
                 """.trimIndent()
 
