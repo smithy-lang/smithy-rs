@@ -39,7 +39,6 @@ val TestRuntimeConfig =
 val TestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
-    handleRustBoxing = true,
     nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
 )
 
