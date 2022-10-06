@@ -18,6 +18,10 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.model.traits.PatternTrait
+import software.amazon.smithy.model.traits.RangeTrait
+import software.amazon.smithy.model.traits.RequiredTrait
+import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -29,6 +33,18 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  *
  * TODO Move this file to `core` or `server`.
  */
+
+/**
+ * Whether the shape has any trait that could cause a request to be rejected with a constraint violation, _whether
+ * we support it or not_.
+ */
+fun Shape.hasConstraintTrait() =
+    hasTrait<LengthTrait>() ||
+    hasTrait<EnumTrait>() ||
+    hasTrait<UniqueItemsTrait>() ||
+    hasTrait<PatternTrait>() ||
+    hasTrait<RangeTrait>() ||
+    hasTrait<RequiredTrait>()
 
 /**
  * We say a shape is _directly_ constrained if:

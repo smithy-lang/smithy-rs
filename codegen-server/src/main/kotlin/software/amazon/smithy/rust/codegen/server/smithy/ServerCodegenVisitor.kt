@@ -26,6 +26,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputsInAllowList
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AggregateShapesReachableFromOperationInputTagger
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -151,6 +152,8 @@ open class ServerCodegenVisitor(
             .let(RecursiveShapeBoxer::transform)
             // Normalize operations by adding synthetic input and output shapes to every operation
             .let(OperationNormalizer::transform)
+            // TODO Docs.
+            .let(AttachValidationExceptionToConstrainedOperationInputsInAllowList::transform)
             // Tag aggregate shapes reachable from operation input.
             .let(AggregateShapesReachableFromOperationInputTagger::transform)
             // Normalize event stream operations

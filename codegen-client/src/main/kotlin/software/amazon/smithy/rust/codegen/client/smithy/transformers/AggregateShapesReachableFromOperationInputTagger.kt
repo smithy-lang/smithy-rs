@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
  *
  * [aggregate shapes]: https://awslabs.github.io/smithy/2.0/spec/aggregate-types.html#aggregate-types
  *
- * TODO Move this to `core`, together with all the model transformers.
+ * TODO Move this to `server`.
  */
 object AggregateShapesReachableFromOperationInputTagger {
     fun transform(model: Model): Model {

@@ -240,7 +240,7 @@ class ServerRestJsonProtocol(
             } else {
                 false to codegenContext.symbolProvider.toSymbol(shape)
             }
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
+        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
