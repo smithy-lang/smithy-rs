@@ -61,7 +61,6 @@
     ),
     doc = "```no_run"
 )]
-//! ```
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
@@ -213,8 +212,8 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// Construct a HyperAdapter with the default HTTP implementation (rustls). This can be useful when you want to share a Hyper connector
 /// between multiple Smithy clients.
 ///
-#[cfg_attr(not(feature = "client-hyper"), doc = "/// ```no_run,ignore")]
-#[cfg_attr(feature = "client-hyper", doc = "/// ```no_run")]
+#[cfg_attr(not(feature = "client-hyper"), doc = "```no_run,ignore")]
+#[cfg_attr(feature = "client-hyper", doc = "```no_run")]
 /// use tower::layer::util::Identity;
 /// use aws_smithy_client::{conns, hyper_ext};
 /// use aws_smithy_client::erase::DynConnector;
