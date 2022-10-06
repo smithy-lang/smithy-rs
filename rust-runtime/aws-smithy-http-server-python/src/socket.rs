@@ -73,6 +73,14 @@ impl PySocket {
 }
 
 #[cfg(test)]
+// `is_listener` on `Socket` is only available on certain platforms.
+// In particular, this fails to compile on MacOS.
+#[cfg(any(
+    target_os = "android",
+    target_os = "freebsd",
+    target_os = "fuchsia",
+    target_os = "linux",
+))]
 mod tests {
     use super::*;
 
