@@ -19,9 +19,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErr
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 
 /**
@@ -29,12 +29,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBou
  */
 open class ServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
+    private val protocol: ServerProtocol,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"
-    private val service = codegenContext.serviceShape
     private val model = codegenContext.model
-    private val protocol = codegenContext.protocol
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
@@ -83,11 +82,8 @@ open class ServerOperationHandlerGenerator(
                         Ok(v) => v,
                         Err(extension_not_found_rejection) => {
                             let extension = $serverCrate::extension::RuntimeErrorExtension::new(extension_not_found_rejection.to_string());
-                            let runtime_error = $serverCrate::runtime_error::RuntimeError {
-                                protocol: #{SmithyHttpServer}::protocols::Protocol::${protocol.name.toPascalCase()},
-                                kind: extension_not_found_rejection.into(),
-                            };
-                            let mut response = runtime_error.into_response();
+                            let runtime_error = $serverCrate::runtime_error::RuntimeError { kind: extension_not_found_rejection.into() };
+                            let mut response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(runtime_error);
                             response.extensions_mut().insert(extension);
                             return response.map($serverCrate::body::boxed);
                         }
@@ -109,7 +105,8 @@ open class ServerOperationHandlerGenerator(
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
-                                return runtime_error.into_response().map($serverCrate::body::boxed);
+                                let response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(runtime_error);
+                                return response.map($serverCrate::body::boxed);
                             }
                         };
                         $callImpl
@@ -120,6 +117,7 @@ open class ServerOperationHandlerGenerator(
                         response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
+                    "Protocol" to protocol.markerStruct(),
                     *codegenScope,
                 )
             }
