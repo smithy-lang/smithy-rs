@@ -125,3 +125,9 @@ message = "The client Config now has getters for every value that it holds."
 references = ["smithy-rs#1747"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "kastolars"
+
+[[aws-sdk-rust]]
+message = "Fix regression where `connect_timeout` and `read_timeout` fields are unused in the IMDS client"
+references = ["smithy-rs#1822"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "kevinpark1217"
