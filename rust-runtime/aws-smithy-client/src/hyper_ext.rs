@@ -48,19 +48,10 @@
 //! that aren't otherwise exposed by the `Client` builder interface.
 //!
 #![cfg_attr(
-    not(all(
-        any(feature = "rustls", feature = "native-tls"),
-        feature = "client-hyper"
-    )),
+    not(all(feature = "rustls", feature = "client-hyper")),
     doc = "```no_run,ignore"
 )]
-#![cfg_attr(
-    all(
-        any(feature = "rustls", feature = "native-tls"),
-        feature = "client-hyper"
-    ),
-    doc = "```no_run"
-)]
+#![cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
@@ -213,19 +204,10 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// between multiple Smithy clients.
 ///
 #[cfg_attr(
-    not(all(
-        any(feature = "rustls", feature = "native-tls"),
-        feature = "client-hyper"
-    )),
+    not(all(feature = "rustls", feature = "client-hyper")),
     doc = "```no_run,ignore"
 )]
-#[cfg_attr(
-    all(
-        any(feature = "rustls", feature = "native-tls"),
-        feature = "client-hyper"
-    ),
-    doc = "```no_run"
-)]
+#[cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
 /// use tower::layer::util::Identity;
 /// use aws_smithy_client::{conns, hyper_ext};
 /// use aws_smithy_client::erase::DynConnector;
