@@ -47,7 +47,7 @@ mod token;
 
 // 6 hours
 const DEFAULT_TOKEN_TTL: Duration = Duration::from_secs(21_600);
-const DEFAULT_ATTEMPTS: u32 = 4;
+const DEFAULT_ATTEMPTS: u32 = 1;
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -555,9 +555,19 @@ impl Builder {
     /// Build an IMDSv2 Client
     pub async fn build(self) -> Result<Client, BuildError> {
         let config = self.config.unwrap_or_default();
+        let environment = Environment::new(config.env(), config.fs()).await?;
+        let env_timeout = environment
+            .parse::<f64>(env::TIMEOUT, profile_keys::TIMEOUT)
+            .map(Duration::from_secs_f64);
         let timeout_config = TimeoutConfig::builder()
-            .connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
-            .read_timeout(self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT))
+            .connect_timeout(
+                self.connect_timeout
+                    .unwrap_or(env_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT)),
+            )
+            .read_timeout(
+                self.read_timeout
+                    .unwrap_or(env_timeout.unwrap_or(DEFAULT_READ_TIMEOUT)),
+            )
             .build();
         let connector_settings = ConnectorSettings::from_timeout_config(&timeout_config);
         let connector = expect_connector(config.connector(&connector_settings));
@@ -566,8 +576,12 @@ impl Builder {
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
         let endpoint = endpoint_source.endpoint(self.mode_override).await?;
         let endpoint = Endpoint::immutable(endpoint);
-        let retry_config = retry::Config::default()
-            .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
+        let env_retry_attempts =
+            environment.parse::<u32>(env::NUM_ATTEMPTS, profile_keys::NUM_ATTEMPTS);
+        let retry_config = retry::Config::default().with_max_attempts(
+            self.max_attempts
+                .unwrap_or(env_retry_attempts.unwrap_or(DEFAULT_ATTEMPTS)),
+        );
         let token_loader = token::TokenMiddleware::new(
             connector.clone(),
             config.time_source(),
@@ -599,11 +613,60 @@ impl Builder {
 mod env {
     pub(super) const ENDPOINT: &str = "AWS_EC2_METADATA_SERVICE_ENDPOINT";
     pub(super) const ENDPOINT_MODE: &str = "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE";
+    pub(super) const NUM_ATTEMPTS: &str = "AWS_METADATA_SERVICE_NUM_ATTEMPTS";
+    pub(super) const TIMEOUT: &str = "AWS_METADATA_SERVICE_TIMEOUT";
 }
 
 mod profile_keys {
     pub(super) const ENDPOINT: &str = "ec2_metadata_service_endpoint";
     pub(super) const ENDPOINT_MODE: &str = "ec2_metadata_service_endpoint_mode";
+    pub(super) const NUM_ATTEMPTS: &str = "metadata_service_num_attempts";
+    pub(super) const TIMEOUT: &str = "metadata_service_timeout";
+}
+
+/// Profile and Environment Variable Abstraction
+#[derive(Debug, Clone)]
+struct Environment {
+    env: Env,
+    profile: profile::ProfileSet,
+}
+
+impl Environment {
+    async fn new(env: Env, fs: Fs) -> Result<Self, BuildError> {
+        let profile = profile::load(&fs, &env, &Default::default())
+            .await
+            .map_err(BuildError::InvalidProfile)?;
+        Ok(Self { env, profile })
+    }
+
+    fn parse<T: FromStr>(&self, env_key: &str, profile_key: &str) -> Option<T> {
+        // Order of precedence
+        // 1. Environment Variable
+        // 2. Profile Value
+        if let Ok(value) = self.env.get(env_key) {
+            match value.parse::<T>() {
+                Ok(parsed) => return Some(parsed),
+                Err(_) => tracing::warn!(
+                    key = env_key,
+                    value = value,
+                    "Failed to parse environment variable into type `{}`",
+                    stringify!(T)
+                ),
+            };
+        }
+        if let Some(value) = self.profile.get(profile_key) {
+            match value.parse::<T>() {
+                Ok(parsed) => return Some(parsed),
+                Err(_) => tracing::warn!(
+                    key = profile_key,
+                    value = value,
+                    "Failed to parse profile value into type `{}`",
+                    stringify!(T)
+                ),
+            };
+        }
+        None
+    }
 }
 
 /// Endpoint Configuration Abstraction
