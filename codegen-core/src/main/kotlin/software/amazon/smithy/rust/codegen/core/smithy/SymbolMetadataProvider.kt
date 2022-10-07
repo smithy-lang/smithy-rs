@@ -131,7 +131,7 @@ class BaseSymbolMetadataProvider(
     companion object {
         private val defaultDerives by lazy {
             with(RuntimeType) {
-                listOf(Debug, PartialEq, Eq, Clone)
+                listOf(Debug, PartialEq, Clone)
             }
         }
     }

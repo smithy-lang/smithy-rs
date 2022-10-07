@@ -160,7 +160,7 @@ class BuilderGenerator(
         writer.docs("A builder for #D.", structureSymbol)
         // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Clone)) + RuntimeType.Default
+        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
         baseDerives.copy(derives = derives).render(writer)
         writer.rustBlock("pub struct $builderName") {
             for (member in members) {
