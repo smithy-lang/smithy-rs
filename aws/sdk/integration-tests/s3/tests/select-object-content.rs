@@ -13,7 +13,6 @@ use aws_sdk_s3::operation::SelectObjectContent;
 use aws_sdk_s3::{Client, Config, Credentials, Region};
 use aws_smithy_client::dvr::{Event, ReplayingConnection};
 use aws_smithy_client::test_connection::TestConnection;
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
 use std::error::Error as StdError;
 use std::time::{Duration, UNIX_EPOCH};
