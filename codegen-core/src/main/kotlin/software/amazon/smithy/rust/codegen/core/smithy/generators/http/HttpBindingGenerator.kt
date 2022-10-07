@@ -557,7 +557,7 @@ class HttpBindingGenerator(
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
                     val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
-                    "$func(&$targetName)"
+                    "&$func(&$targetName)"
                 } else {
                     quoteValue("AsRef::<str>::as_ref($targetName)")
                 }
