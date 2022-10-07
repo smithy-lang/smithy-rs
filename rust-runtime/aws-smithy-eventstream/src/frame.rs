@@ -96,7 +96,7 @@ mod value {
 
     /// Event Stream frame header value.
     #[non_exhaustive]
-    #[derive(Clone, Debug, PartialEq)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     pub enum HeaderValue {
         Bool(bool),
         Byte(i8),
