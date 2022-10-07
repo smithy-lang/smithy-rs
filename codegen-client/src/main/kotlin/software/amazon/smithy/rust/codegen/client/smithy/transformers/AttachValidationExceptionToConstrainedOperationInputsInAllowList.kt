@@ -21,7 +21,12 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
  */
 object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
     // TODO Use fully qualified shapeIds
-    private val serviceShapeIdNameAllowList = setOf("RestJson")
+    private val sherviceShapeIdAllowList =
+        setOf(
+            ShapeId.from("aws.protocoltests.restjson#RestJson"),
+//            ShapeId.from("abacacacacacacac"),
+//            ShapeId.from("ababababababaaaaaaaaaaaaaa"),
+        )
 
     fun transform(model: Model): Model {
 //        model.serviceShapes.filter { it.toShapeId().name == "RestJsonValidation" }[0].operations.map { model.expectShape(it, OperationShape::class.java) }.map { it.errors.add(
@@ -30,7 +35,7 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
         val walker = Walker(model)
 
         val operationsWithConstrainedInputWithoutValidationException = model.serviceShapes
-            .filter { serviceShapeIdNameAllowList.contains(it.toShapeId().name) }
+            .filter { sherviceShapeIdAllowList.contains(it.toShapeId()) }
             .flatMap { it.operations }
             .map { model.expectShape(it, OperationShape::class.java) }
             .filter { operationShape ->

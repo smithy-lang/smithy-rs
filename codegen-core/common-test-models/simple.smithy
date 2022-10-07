@@ -5,6 +5,7 @@ namespace com.amazonaws.simple
 use aws.protocols#restJson1
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 @restJson1
 @title("SimpleService")
@@ -116,6 +117,7 @@ structure HealthcheckOutputResponse {
 operation StoreServiceBlob {
     input: StoreServiceBlobInput,
     output: StoreServiceBlobOutput
+    errors: [ValidationException]
 }
 
 @documentation("Store a blob for a service id input structure")
@@ -126,16 +128,9 @@ structure StoreServiceBlobInput {
     @required
     @httpPayload
     content: Blob,
-
-    @httpHeader("lengthString")
-    lengthString: LengthString,
 }
 
 @documentation("Store a blob for a service id output structure")
 structure StoreServiceBlobOutput {
-    @required
-    lengthString: LengthString
-}
 
-@length(min: 1, max: 68)
-string LengthString
+}
