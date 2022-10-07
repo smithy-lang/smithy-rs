@@ -25,8 +25,8 @@ hyper = { version = "0.14.20", features = ["server", "http1", "http2", "tcp", "s
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2"
-pyo3 = "0.16.5"
-pyo3-asyncio = { version = "0.16.0", features = ["tokio-runtime"] }
+pyo3 = "0.17.0"
+pyo3-asyncio = { version = "0.17.0", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.4.4", features = ["all"] }
 thiserror = "1.0.32"
