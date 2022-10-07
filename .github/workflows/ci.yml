@@ -9,7 +9,7 @@ on:
   workflow_call:
 
 env:
-  rust_version: 1.61.0
+  rust_version: 1.62.0
   rust_toolchain_components: clippy,rustfmt
 
 jobs:
