@@ -14,14 +14,26 @@ import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SerializeZeroValues
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 class SerializerUtil(private val model: Model) {
-    fun RustWriter.ignoreZeroValues(shape: MemberShape, value: ValueExpression, inner: RustWriter.() -> Unit) {
-        val expr = when (model.expectShape(shape.target)) {
-            is FloatShape, is DoubleShape -> "${value.asValue()} != 0.0"
-            is NumberShape -> "${value.asValue()} != 0"
-            is BooleanShape -> value.asValue()
-            else -> null
+    fun RustWriter.zeroValues(shape: MemberShape, value: ValueExpression, inner: RustWriter.() -> Unit) {
+        val target = model.expectShape(shape.target)
+        val expr = if (target.hasTrait<SerializeZeroValues>()) {
+            // Zero values will be serialized
+            when (target) {
+                is BooleanShape -> value.asValue()
+                else -> null
+            }
+        } else {
+            // Zero values will not be serialized
+            when (target) {
+                is FloatShape, is DoubleShape -> "${value.asValue()} != 0.0"
+                is NumberShape -> "${value.asValue()} != 0"
+                is BooleanShape -> value.asValue()
+                else -> null
+            }
         }
 
         if (expr == null ||

@@ -7,6 +7,11 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
+import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -32,6 +37,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SerializeZeroValues
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import java.util.logging.Logger
@@ -47,6 +54,13 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
         // API returns GetObjectAttributes_Response_ instead of Output
         ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
     )
+
+    private val serializeZeroValuesAllowList = setOf(
+        // Omitting this when zero would change the meaning of the range.
+        // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ScanRange.html
+        ShapeId.from("com.amazonaws.s3#Start"),
+    )
+
 
     private fun applies(serviceId: ShapeId) =
         serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
@@ -70,6 +84,18 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
                     logger.info("Adding AllowInvalidXmlRoot trait to $shape")
                     (shape as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
                 }
+
+                shape.letIf(isInSerializeZeroValuesAllowList(shape)) {
+                    val builder = when (shape) {
+                        is LongShape -> shape.toBuilder()
+                        is DoubleShape -> shape.toBuilder()
+                        is IntegerShape -> shape.toBuilder()
+                        is FloatShape -> shape.toBuilder()
+                        else -> UNREACHABLE("Only numeric shapes have zero values")
+                    }
+                    logger.info("Adding SerializeZeroValues trait to $shape")
+                    builder.addTrait(SerializeZeroValues()).build()
+                }
             }
         }
     }
@@ -86,6 +112,10 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
+    }
+
+    private fun isInSerializeZeroValuesAllowList(shape: Shape): Boolean {
+        return shape is NumberShape && serializeZeroValuesAllowList.contains(shape.id)
     }
 }
 

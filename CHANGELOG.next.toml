@@ -137,3 +137,15 @@ message = "Fix regression where `connect_timeout` and `read_timeout` fields are 
 references = ["smithy-rs#1822"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "kevinpark1217"
+
+[[smithy-rs]]
+message = "Add new trait `SerializeZeroValues` and a update serializer generation to respect it. Shapes with this trait will not skip serializing zero values."
+references = ["aws-sdk-rust#630"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "Velf"
+
+[[aws-sdk-rust]]
+message = "Fix bug that occurred when serializing a `SelectObjectContent` operation with a `ScanRange` starting at 0. Zero values will now be properly serialized."
+references = ["aws-sdk-rust#630"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"

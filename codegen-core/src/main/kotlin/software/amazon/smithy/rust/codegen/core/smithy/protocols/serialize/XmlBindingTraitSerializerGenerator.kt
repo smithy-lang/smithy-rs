@@ -76,7 +76,7 @@ class XmlBindingTraitSerializerGenerator(
 
     private val xmlIndex = XmlNameIndex.of(model)
     private val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
-    private val util = SerializerUtil(model)
+    private val serializerUtil = SerializerUtil(model)
 
     sealed class Ctx {
         abstract val input: String
@@ -461,8 +461,8 @@ class XmlBindingTraitSerializerGenerator(
                 inner(Ctx.updateInput(ctx, tmp))
             }
         } else {
-            with(util) {
-                ignoreZeroValues(member, ValueExpression.Value(autoDeref(ctx.input))) {
+            with(serializerUtil) {
+                zeroValues(member, ValueExpression.Value(autoDeref(ctx.input))) {
                     inner(ctx)
                 }
             }

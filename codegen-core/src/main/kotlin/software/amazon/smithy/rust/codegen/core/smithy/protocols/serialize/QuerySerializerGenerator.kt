@@ -95,7 +95,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private val serializerError = runtimeConfig.serializationError()
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
-    private val serdeUtil = SerializerUtil(model)
+    private val serializerUtil = SerializerUtil(model)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
@@ -193,8 +193,8 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 }
             }
         } else {
-            with(serdeUtil) {
-                ignoreZeroValues(context.shape, context.valueExpression) {
+            with(serializerUtil) {
+                zeroValues(context.shape, context.valueExpression) {
                     serializeMemberValue(context, targetShape)
                 }
             }

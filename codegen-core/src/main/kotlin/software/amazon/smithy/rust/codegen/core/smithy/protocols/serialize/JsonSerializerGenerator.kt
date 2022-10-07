@@ -340,7 +340,7 @@ class JsonSerializerGenerator(
             }
         } else {
             with(serializerUtil) {
-                ignoreZeroValues(context.shape, context.valueExpression) {
+                zeroValues(context.shape, context.valueExpression) {
                     serializeMemberValue(context, targetShape)
                 }
             }
