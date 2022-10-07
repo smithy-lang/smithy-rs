@@ -8,7 +8,7 @@ use crate::rejection::MissingContentTypeReason;
 use crate::request::RequestParts;
 
 /// Supported protocols.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
     RestJson1,
     RestXml,
