@@ -566,7 +566,7 @@ class HttpBindingGenerator(
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.HEADER, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                quoteValue("$targetName.fmt(${writer.format(timestampFormatType)})?")
+                quoteValue("&$targetName.fmt(${writer.format(timestampFormatType)})?")
             }
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")
