@@ -13,9 +13,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.DefaultTestPublicModules
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
@@ -75,7 +75,7 @@ internal class TopLevelErrorGeneratorTest {
         val rustCrate = RustCrate(
             pluginContext.fileManifest,
             symbolProvider,
-            DefaultPublicModules,
+            DefaultTestPublicModules,
             codegenContext.settings.codegenConfig,
         )
 
