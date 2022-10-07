@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 /**
  * Generates a Python compatible application and server that can be configured from Python.
@@ -62,13 +63,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
  */
 class PythonApplicationGenerator(
     codegenContext: CodegenContext,
+    private val protocol: ServerProtocol,
     private val operations: List<OperationShape>,
 ) {
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
-    private val protocol = codegenContext.protocol
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
@@ -88,6 +89,7 @@ class PythonApplicationGenerator(
     fun render(writer: RustWriter) {
         renderPyApplicationRustDocs(writer)
         renderAppStruct(writer)
+        renderAppDefault(writer)
         renderAppClone(writer)
         renderPyAppTrait(writer)
         renderAppImpl(writer)
@@ -98,7 +100,7 @@ class PythonApplicationGenerator(
         writer.rustTemplate(
             """
             ##[#{pyo3}::pyclass]
-            ##[derive(Debug, Default)]
+            ##[derive(Debug)]
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
                 middlewares: #{SmithyPython}::PyMiddlewares,
@@ -124,6 +126,25 @@ class PythonApplicationGenerator(
                 }
             }
             """,
+            *codegenScope,
+        )
+    }
+
+    private fun renderAppDefault(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl Default for App {
+                fn default() -> Self {
+                    Self {
+                        handlers: Default::default(),
+                        middlewares: #{SmithyPython}::PyMiddlewares::new::<#{Protocol}>(vec![]),
+                        context: None,
+                        workers: #{parking_lot}::Mutex::new(vec![]),
+                    }
+                }
+            }
+            """,
+            "Protocol" to protocol.markerStruct(),
             *codegenScope,
         )
     }
@@ -165,20 +186,17 @@ class PythonApplicationGenerator(
                 rustTemplate(
                     """
                     let middleware_locals = pyo3_asyncio::TaskLocals::new(event_loop);
-                    use #{SmithyPython}::PyApp;
-                    let service = #{tower}::ServiceBuilder::new().layer(
-                        #{SmithyPython}::PyMiddlewareLayer::new(
-                            self.middlewares.clone(),
-                            self.protocol(),
-                            middleware_locals
-                        )?,
-                    );
+                    let service = #{tower}::ServiceBuilder::new()
+                        .layer(
+                            #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(self.middlewares.clone(), middleware_locals),
+                        );
                     let router: #{SmithyServer}::routing::Router = router
                         .build()
                         .expect("Unable to build operation registry")
                         .into();
                     Ok(router.layer(service))
                     """,
+                    "Protocol" to protocol.markerStruct(),
                     *codegenScope,
                 )
             }
@@ -186,7 +204,6 @@ class PythonApplicationGenerator(
     }
 
     private fun renderPyAppTrait(writer: RustWriter) {
-        val protocol = protocol.toString().replace("#", "##")
         writer.rustTemplate(
             """
             impl #{SmithyPython}::PyApp for App {
@@ -201,9 +218,6 @@ class PythonApplicationGenerator(
                 }
                 fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
                     &mut self.middlewares
-                }
-                fn protocol(&self) -> &'static str {
-                    "$protocol"
                 }
             }
             """,

@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBou
  */
 open class ServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
-    private val protocol: ServerProtocol,
+    val protocol: ServerProtocol,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"

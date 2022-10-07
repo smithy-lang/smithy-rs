@@ -29,7 +29,7 @@ open class ServerServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ServerProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val protocol: ServerProtocol,
+    val protocol: ServerProtocol,
     private val codegenContext: CodegenContext,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
