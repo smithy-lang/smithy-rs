@@ -27,7 +27,7 @@ pub use crate::date_time::DateTime;
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Blob {
     inner: Vec<u8>,
 }

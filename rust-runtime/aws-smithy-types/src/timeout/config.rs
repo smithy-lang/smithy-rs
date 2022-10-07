@@ -197,7 +197,7 @@ impl From<TimeoutConfig> for TimeoutConfigBuilder {
 /// # }
 /// ```
 #[non_exhaustive]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TimeoutConfig {
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
@@ -274,7 +274,7 @@ impl TimeoutConfig {
 
 /// Configuration subset of [`TimeoutConfig`] for operation timeouts
 #[non_exhaustive]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct OperationTimeoutConfig {
     operation_timeout: Option<Duration>,
     operation_attempt_timeout: Option<Duration>,
