@@ -490,7 +490,7 @@ class HttpBindingGenerator(
                     rustTemplate(
                         """
                         let header_value = $safeName;
-                        let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                        let header_value = http::header::HeaderValue::try_from(header_value).map_err(|err| {
                             #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header value: {}", &${
                         memberShape.redactIfNecessary(model, "header_value")
                         }, err)}
