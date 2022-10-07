@@ -53,8 +53,10 @@ structure GetServerStatisticsInput { }
 structure GetServerStatisticsOutput {
     /// The number of calls executed by the server.
     @required
-    calls_count: Long,
+    calls_count: MyFloat,
 }
+
+float MyFloat
 
 list FlavorTextEntries {
     member: FlavorText
