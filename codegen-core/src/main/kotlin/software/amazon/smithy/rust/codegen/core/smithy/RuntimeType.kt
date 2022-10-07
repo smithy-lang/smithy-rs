@@ -198,6 +198,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
         val PartialEq = std.member("cmp::PartialEq")
+        val Eq = std.member("cmp::Eq")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val String = RuntimeType("String", dependency = null, namespace = "std::string")
 

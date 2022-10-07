@@ -95,14 +95,14 @@ class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider,
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
         val baseMetadata = base.toSymbol(structureShape).expectRustMetadata()
         return if (structureShape.hasStreamingMember(model)) {
-            baseMetadata.withoutDerives(RuntimeType.PartialEq)
+            baseMetadata.withoutDerives(RuntimeType.PartialEq, RuntimeType.Eq)
         } else baseMetadata
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {
         val baseMetadata = base.toSymbol(unionShape).expectRustMetadata()
         return if (unionShape.hasStreamingMember(model)) {
-            baseMetadata.withoutDerives(RuntimeType.PartialEq)
+            baseMetadata.withoutDerives(RuntimeType.PartialEq, RuntimeType.Eq)
         } else baseMetadata
     }
 
