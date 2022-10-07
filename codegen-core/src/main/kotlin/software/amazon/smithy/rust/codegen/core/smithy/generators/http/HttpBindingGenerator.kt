@@ -404,7 +404,6 @@ class HttpBindingGenerator(
     /**
      * Generate a unique name for the deserializer function for a given [operationShape] and HTTP binding.
      */
-    // Rename here technically not required, operations and members cannot be renamed.
     private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
         "${operationShape.id.getName(service).toSnakeCase()}_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 

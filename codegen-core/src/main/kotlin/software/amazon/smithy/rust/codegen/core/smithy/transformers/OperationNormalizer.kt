@@ -32,7 +32,6 @@ import kotlin.streams.toList
  */
 object OperationNormalizer {
     // Functions to construct synthetic shape IDs—Don't rely on these in external code.
-    // Rename safety: Operations cannot be renamed
     // In order to ensure that the fully qualified smithy id of a synthetic shape can never conflict with an existing shape,
     // the `synthetic` namespace is appended.
     private fun OperationShape.syntheticInputId() =
