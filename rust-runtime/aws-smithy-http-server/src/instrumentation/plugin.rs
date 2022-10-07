@@ -10,7 +10,8 @@ use crate::{
     plugin::{Pluggable, Plugin},
 };
 
-use super::{layer::InstrumentLayer, sensitivity::Sensitivity};
+use super::{layer::InstrumentLayer};
+use aws_smithy_types::instrumentation::sensitivity::Sensitivity;
 
 /// An [`Plugin`] which applies [`InstrumentLayer`] to all operations in the builder.
 #[derive(Debug)]

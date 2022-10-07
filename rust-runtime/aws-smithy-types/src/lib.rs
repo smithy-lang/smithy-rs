@@ -15,6 +15,7 @@
 
 use std::collections::HashMap;
 
+pub mod instrumentation;
 pub mod base64;
 pub mod date_time;
 pub mod endpoint;

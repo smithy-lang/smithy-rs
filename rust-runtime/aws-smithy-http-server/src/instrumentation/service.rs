@@ -16,7 +16,7 @@ use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
-use super::{MakeDebug, MakeDisplay, MakeIdentity};
+use aws_smithy_types::instrumentation::{MakeDebug, MakeDisplay, MakeIdentity};
 
 pin_project_lite::pin_project! {
     /// A [`Future`] responsible for logging the response status code and headers.
