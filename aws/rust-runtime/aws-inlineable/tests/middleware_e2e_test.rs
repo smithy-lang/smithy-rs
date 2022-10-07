@@ -93,7 +93,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
             .resolve_endpoint(&Params::new(Some(Region::new("test-region")))),
         );
         aws_http::auth::set_provider(
-            &mut conf,
+            conf,
             SharedCredentialsProvider::new(Credentials::new(
                 "access_key",
                 "secret_key",

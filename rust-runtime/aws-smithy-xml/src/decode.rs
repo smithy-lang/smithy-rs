@@ -531,8 +531,8 @@ mod test {
             root.start_el().attributes,
             vec![Attr {
                 name: Name {
-                    prefix: "xsi".into(),
-                    local: "type".into()
+                    prefix: "xsi",
+                    local: "type"
                 },
                 value: "CanonicalUser".into()
             }]
