@@ -383,7 +383,6 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///         fn context(&self) -> &Option<PyObject> { todo!() }
     ///         fn handlers(&mut self) -> &mut HashMap<String, PyHandler> { todo!() }
     ///         fn middlewares(&mut self) -> &mut PyMiddlewares { todo!() }
-    ///         fn protocol(&self) -> &'static str { "proto1" }
     ///     }
     ///
     ///     #[pymethods]
