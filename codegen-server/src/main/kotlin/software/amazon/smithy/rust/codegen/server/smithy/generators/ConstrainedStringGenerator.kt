@@ -161,8 +161,9 @@ class ConstrainedStringGenerator(
                 """,
             )
 
+            // TODO Remove `dead_code` once we address this being generated only for shapes in operation input closure.
             rustBlock("impl ${constraintViolation.name}") {
-                rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                rustBlock("##[allow(dead_code)] pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
                     rustBlock("match self") {
                         rust(
                             """

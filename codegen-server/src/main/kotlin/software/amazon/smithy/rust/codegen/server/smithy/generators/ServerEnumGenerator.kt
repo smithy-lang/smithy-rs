@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.util.doubleQuote
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -57,12 +58,14 @@ open class ServerEnumGenerator(
             val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
             val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
 
+            // TODO Remove `dead_code` once we address this being generated only for shapes in operation input closure.
+            // TODO ValidationException should live under `crate::error::`.
             rustBlock("impl $constraintViolationName") {
-                rustBlockTemplate("pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField", *codegenScope) {
+                rustBlockTemplate("##[allow(dead_code)] pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField", *codegenScope) {
                     rust(
                         """
                         crate::model::ValidationExceptionField {
-                            message: format!("$message", &self.0, &path),
+                            message: format!(r##"$message"##, &self.0, &path),
                             path,
                         }
                         """

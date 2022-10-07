@@ -24,8 +24,10 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
     private val sherviceShapeIdAllowList =
         setOf(
             ShapeId.from("aws.protocoltests.restjson#RestJson"),
-//            ShapeId.from("abacacacacacacac"),
-//            ShapeId.from("ababababababaaaaaaaaaaaaaa"),
+            ShapeId.from("aws.protocoltests.json10#JsonRpc10"),
+            ShapeId.from("aws.protocoltests.json#JsonProtocol"),
+            ShapeId.from("com.amazonaws.s3#AmazonS3"),
+            ShapeId.from("com.amazonaws.ebs#Ebs"),
         )
 
     fun transform(model: Model): Model {

@@ -6,6 +6,7 @@ use aws.protocols#restJson1
 use aws.api#service
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 apply QueryPrecedence @httpRequestTests([
     {
@@ -153,7 +154,8 @@ structure PrimitiveIntDocument {
 ])
 @http(uri: "/primitive", method: "POST")
 operation PrimitiveIntHeader {
-    output: PrimitiveIntHeaderInput
+    output: PrimitiveIntHeaderInput,
+    errors: [ValidationException],
 }
 
 integer PrimitiveInt
@@ -175,7 +177,8 @@ structure PrimitiveIntHeaderInput {
     }
 ])
 operation EnumQuery {
-    input: EnumQueryInput
+    input: EnumQueryInput,
+    errors: [ValidationException],
 }
 
 structure EnumQueryInput {

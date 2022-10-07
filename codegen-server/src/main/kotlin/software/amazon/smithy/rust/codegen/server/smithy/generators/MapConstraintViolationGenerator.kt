@@ -79,6 +79,7 @@ class MapConstraintViolationGenerator(
                 *constraintViolationCodegenScope,
             )
 
+            // TODO Generate `as_validation_exception_field` only for maps in the operation input closure.
             rustBlock("impl $constraintViolationName") {
                 rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
                     rustBlock("match self") {

@@ -5,6 +5,7 @@ namespace aws.protocoltests.misc
 use aws.protocols#restJson1
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 /// A service to test miscellaneous aspects of code generation where protocol
 /// selection is not relevant. If you want to test something protocol-specific,
@@ -57,6 +58,7 @@ map MapA {
 operation InnerRequiredShapeOperation {
     input: InnerRequiredShapeOperationInputOutput,
     output: InnerRequiredShapeOperationInputOutput,
+    errors: [ValidationException],
 }
 
 structure InnerRequiredShapeOperationInputOutput {

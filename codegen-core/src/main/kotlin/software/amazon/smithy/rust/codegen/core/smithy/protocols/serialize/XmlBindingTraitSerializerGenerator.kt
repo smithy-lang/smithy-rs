@@ -441,7 +441,7 @@ class XmlBindingTraitSerializerGenerator(
      * ```
      *
      * If [member] is not an optional shape, generate code like:
-     * `{ .. Block }`
+     * `{ .. BLOCK }`
      *
      * [inner] is passed a new `ctx` object to use for code generation which handles the
      * potentially new name of the input.
