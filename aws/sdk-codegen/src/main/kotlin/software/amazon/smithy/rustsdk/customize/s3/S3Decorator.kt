@@ -61,7 +61,6 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
         ShapeId.from("com.amazonaws.s3#Start"),
     )
 
-
     private fun applies(serviceId: ShapeId) =
         serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
 
