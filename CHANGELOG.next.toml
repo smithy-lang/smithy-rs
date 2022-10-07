@@ -137,3 +137,24 @@ message = "Fix regression where `connect_timeout` and `read_timeout` fields are 
 references = ["smithy-rs#1822"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "kevinpark1217"
+
+[[aws-sdk-rust]]
+message = """
+It is now possible to configure IMDS retry and timeout with environment variables and profile keys.
+See [Amazon EC2 instance metadata](https://docs.aws.amazon.com/sdkref/latest/guide/feature-ec2-instance-metadata.html) doc for more information.
+
+New environment variables:
+```
+AWS_METADATA_SERVICE_NUM_ATTEMPTS
+AWS_METADATA_SERVICE_TIMEOUT
+```
+
+New profile keys:
+```
+metadata_service_num_attempts
+metadata_service_timeout
+```
+"""
+references = ["aws-sdk-rust#625"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "kevinpark1217"
