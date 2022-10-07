@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -161,14 +160,10 @@ open class StructureGenerator(
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
         val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
-        val additionalAttributes = containerMeta.additionalAttributes.toMutableList();
-        additionalAttributes.add(Attribute.DerivePartialEqWithoutEq)
-        containerMeta.copy(
-            derives = withoutDebug,
-            additionalAttributes = additionalAttributes).render(writer)
+        containerMeta.copy(derives = withoutDebug).render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
-                writer.forEachMember(members) { member, memberName, memberSymbol ->
+            writer.forEachMember(members) { member, memberName, memberSymbol ->
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
         }

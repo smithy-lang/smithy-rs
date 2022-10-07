@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -160,12 +159,10 @@ class BuilderGenerator(
 
         writer.docs("A builder for #D.", structureSymbol)
         // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
-        val containerMeta = structureSymbol.expectRustMetadata()
-        val derives = containerMeta.derives.copy(derives = containerMeta.derives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default)
-        val additionalAttributes = containerMeta.additionalAttributes.toMutableList();
-        additionalAttributes.add(Attribute.DerivePartialEqWithoutEq)
-        containerMeta.copy(derives = derives, additionalAttributes = additionalAttributes).render(writer)
-        writer.rustBlock("struct $builderName") {
+        val baseDerives = structureSymbol.expectRustMetadata().derives
+        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
+        baseDerives.copy(derives = derives).render(writer)
+        writer.rustBlock("pub struct $builderName") {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.

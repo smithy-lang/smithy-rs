@@ -387,7 +387,6 @@ sealed class Attribute {
         val AllowDeadCode = Custom("allow(dead_code)")
         val DocHidden = Custom("doc(hidden)")
         val DocInline = Custom("doc(inline)")
-        val DerivePartialEqWithoutEq = Custom("allow(clippy::derive_partial_eq_without_eq)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {
