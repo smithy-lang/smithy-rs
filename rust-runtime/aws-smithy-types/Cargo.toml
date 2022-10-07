@@ -12,11 +12,6 @@ itoa = "1.0.0"
 num-integer = "0.1.44"
 ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
-http = "0.2.0"
-tracing = "0.1.35"
-tower = { version = "0.4.11", features = ["util", "make"], default-features = false }
-futures-util = { version = "0.3", default-features = false }
-pin-project-lite = "0.2"
 
 [dev-dependencies]
 base64 = "0.13.0"

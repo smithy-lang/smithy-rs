@@ -1,0 +1,15 @@
+[package]
+name = "aws-smithy-instrumentation"
+version = "0.0.0-smithy-rs-head"
+authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
+description = "Instrumentation utilities for smithy-rs codegen."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+
+[dependencies]
+http = "0.2.0"
+tracing = "0.1.35"
+tower = { version = "0.4.11", features = ["util", "make"], default-features = false }
+futures-util = { version = "0.3", default-features = false }
+pin-project-lite = "0.2"

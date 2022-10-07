@@ -16,6 +16,7 @@ publish = true
 unredacted-logging = []
 
 [dependencies]
+aws-smithy-instrumentation = { path = "../aws-smithy-instrumentation" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-json = { path = "../aws-smithy-json" }

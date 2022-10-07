@@ -9,7 +9,7 @@ use std::fmt::{Debug, Display, Error, Formatter};
 
 use http::{header::HeaderName, HeaderMap};
 
-use crate::instrumentation::MakeFmt;
+use crate::MakeFmt;
 
 use super::Sensitive;
 

@@ -6,7 +6,7 @@
 use tower::Layer;
 
 use super::InstrumentOperation;
-use aws_smithy_types::instrumentation::MakeIdentity;
+use aws_smithy_instrumentation::MakeIdentity;
 
 /// A [`Layer`] used to apply [`InstrumentOperation`].
 #[derive(Debug)]

@@ -15,7 +15,7 @@ use http::Uri;
 pub use label::*;
 pub use query::*;
 
-use crate::instrumentation::{MakeDisplay, MakeFmt, MakeIdentity};
+use crate::{MakeDisplay, MakeFmt, MakeIdentity};
 
 /// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Specific parts of the [`Uri`] as are
 /// marked as sensitive using the methods provided.
