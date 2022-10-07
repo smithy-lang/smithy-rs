@@ -300,7 +300,7 @@ pub use value::HeaderValue;
 
 /// Event Stream header.
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "derive-arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header {
     name: StrBytes,
@@ -368,7 +368,7 @@ pub fn write_headers_to<B: BufMut>(headers: &[Header], mut buffer: B) -> Result<
 
 /// Event Stream message.
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Message {
     headers: Vec<Header>,
     payload: Bytes,

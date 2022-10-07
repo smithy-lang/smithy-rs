@@ -51,7 +51,7 @@ impl XmlError {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Name<'a> {
     pub prefix: &'a str,
     pub local: &'a str,
@@ -72,14 +72,14 @@ impl Name<'_> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Attr<'a> {
     name: Name<'a>,
     // attribute values can be escaped (e.g. with double quotes, so we need a Cow)
     value: Cow<'a, str>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct StartEl<'a> {
     name: Name<'a>,
     attributes: Vec<Attr<'a>>,
