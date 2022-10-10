@@ -11,7 +11,7 @@
 //! the framework, `RuntimeError` is surfaced to clients in HTTP responses: indeed, it implements
 //! [`RuntimeError::into_response`]. Rejections can be "grouped" and converted into a
 //! specific `RuntimeError` kind: for example, all request rejections due to serialization issues
-//! can be conflated under the [`RuntimeErrorKind::Serialization`] enum variant.
+//! can be conflated under the [`RuntimeError::Serialization`] enum variant.
 //!
 //! The HTTP response representation of the specific `RuntimeError` can be protocol-specific: for
 //! example, the runtime error in the RestJson1 protocol sets the `X-Amzn-Errortype` header.
