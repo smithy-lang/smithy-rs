@@ -141,9 +141,9 @@ pub enum Error {
 ```
 
 Each error variant gets its own struct, which can hold error-specific contextual information.
-Both the error enum and the details on each variant are extensible.
-
-The code generated errors are already aligned with the goals for this RFC.
+Except for the `Unhandled` variant, both the error enum and the details on each variant are extensible.
+The `Unhandled` variant should move the error source into a struct so that its type can be hidden.
+Otherwise, the code generated errors are already aligned with the goals for this RFC.
 
 Approaches from other projects
 ------------------------------
@@ -203,10 +203,8 @@ This situation might improve if the nightly `request_value`/`request_ref`/`provi
 `std::error::Error` are stabilized, since then contextual information needed for including things
 such as a backtrace could still be retrieved through the opaque error new-type.
 
-This RFC proposes that `Box<dyn Error + Send + Sync + 'static>` is used to refer to errors from libraries.
-An allocation to store this can be avoided if the error source is private, in which case, a reference to it
-can be returned from the `Error::source` implementation. Otherwise, if it's directly exposed as a public enum
-field, then it must be boxed.
+This RFC proposes that error types from other libraries not be directly exposed in the API, but rather,
+be exposed indirectly through `Error::source` as `&dyn Error + 'static`.
 
 Ideally, errors should contain enough useful information on them that downcasting the underlying cause
 is not necessary. Customers needing to downcast the error source should be a last resort, and with the
@@ -257,12 +255,9 @@ pub enum Error {
         source: http::uri::InvalidUri
     },
 
-    // Acceptable: Another library's error type may be in the box, and can be
-    // downcasted to, but the customer is then doing this downcasting at their
-    // own risk with no type safety guarantees that it will continue to work.
-    //
-    // Ideally, there would be a way to do opaque errors while playing
-    // nicely with fancy error reporters.
+    // Bad: The error source type is public, and even though its a boxed error, it won't
+    // be possible to change it to an opaque error type later (for example, if/when
+    // opaque errors become practical due to standard library stabilizations).
     #[non_exhaustive]
     VariantG {
         source: Box<dyn Error + Send + Sync + 'static>,
@@ -368,3 +363,4 @@ Changes Checklist
 -----------------
 
 - [ ] Update every struct/enum that implements `Error` in all the non-server Rust runtime crates
+- [ ] Hide error source type in `Unhandled` variant in code generated errors
