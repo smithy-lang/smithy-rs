@@ -59,8 +59,12 @@ class ServerCombinedErrorGeneratorTest {
                 model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, writer)
             }
             val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
-            val generator = ServerCombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(model.lookup("error#Greeting")), errors)
-            generator.render(writer)
+            ServerCombinedErrorGenerator(
+                model,
+                symbolProvider,
+                symbolProvider.toSymbol(model.lookup("error#Greeting")),
+                errors,
+            ).render(writer)
 
             writer.unitTest(
                 name = "generates_combined_error_enums",

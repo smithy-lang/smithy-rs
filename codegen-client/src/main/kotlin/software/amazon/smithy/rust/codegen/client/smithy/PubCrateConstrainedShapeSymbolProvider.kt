@@ -23,6 +23,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
+import software.amazon.smithy.rust.codegen.core.smithy.hasConstraintTraitOrTargetHasConstraintTrait
+import software.amazon.smithy.rust.codegen.core.smithy.isTransitivelyButNotDirectlyConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase

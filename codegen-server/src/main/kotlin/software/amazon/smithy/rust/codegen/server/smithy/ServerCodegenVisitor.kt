@@ -23,11 +23,11 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputsInAllowList
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.AggregateShapesReachableFromOperationInputTagger
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.ShapesReachableFromOperationInputTagger
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEbsModelValidationException
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -158,7 +158,7 @@ open class ServerCodegenVisitor(
             // TODO Docs.
             .let(AttachValidationExceptionToConstrainedOperationInputsInAllowList::transform)
             // Tag aggregate shapes reachable from operation input.
-            .let(AggregateShapesReachableFromOperationInputTagger::transform)
+            .let(ShapesReachableFromOperationInputTagger::transform)
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 

@@ -13,9 +13,9 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 

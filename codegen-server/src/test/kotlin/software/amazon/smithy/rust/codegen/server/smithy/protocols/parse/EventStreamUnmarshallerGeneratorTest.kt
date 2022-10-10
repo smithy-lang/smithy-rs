@@ -7,10 +7,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.parse
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -34,7 +37,14 @@ class EventStreamUnmarshallerGeneratorTest {
             target = testCase.target,
         )
         val protocol = testCase.protocolBuilder(codegenContext)
-        val generator = EventStreamUnmarshallerGenerator(protocol, codegenContext, test.operationShape, test.streamShape)
+        fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(codegenContext.symbolProvider)
+        val generator = EventStreamUnmarshallerGenerator(
+            protocol,
+            codegenContext,
+            test.operationShape,
+            test.streamShape,
+            ::builderSymbol,
+        )
 
         test.project.lib { writer ->
             writer.rust(

@@ -10,8 +10,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenConfig
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import java.util.logging.Level
 

@@ -21,12 +21,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -139,11 +140,13 @@ class UnconstrainedUnionGenerator(
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
-            rustBlock("impl $constraintViolationName") {
-                rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
-                    withBlock("match self {", "}") {
-                        for (constraintViolation in constraintViolations()) {
-                            rust("""Self::${constraintViolation.name()}(inner) => inner.as_validation_exception_field(path + "/${constraintViolation.forMember.memberName}"),""")
+            if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+                rustBlock("impl $constraintViolationName") {
+                    rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                        withBlock("match self {", "}") {
+                            for (constraintViolation in constraintViolations()) {
+                                rust("""Self::${constraintViolation.name()}(inner) => inner.as_validation_exception_field(path + "/${constraintViolation.forMember.memberName}"),""")
+                            }
                         }
                     }
                 }

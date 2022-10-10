@@ -9,8 +9,8 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
 
 /**
  * Common helper functions used in [UnconstrainedMapGenerator] and [MapConstraintViolationGenerator].

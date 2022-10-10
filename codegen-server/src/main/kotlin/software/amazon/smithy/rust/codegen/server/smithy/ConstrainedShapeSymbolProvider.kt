@@ -15,7 +15,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.Models
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider

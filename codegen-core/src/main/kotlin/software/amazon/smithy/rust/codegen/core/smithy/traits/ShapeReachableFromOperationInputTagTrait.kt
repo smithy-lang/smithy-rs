@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  *
  * See the [AggregateShapesReachableFromOperationInputTagger] model transform for how it's used.
  */
-class AggregateShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.objectNode()) {
+class ShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
         val ID = ShapeId.from("smithy.api.internal#syntheticStructureReachableFromOperationInputTag")
     }
@@ -30,7 +30,7 @@ class AggregateShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, 
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
     is StructureShape, is UnionShape, is ListShape, is MapShape -> {
-        shape.hasTrait<AggregateShapeReachableFromOperationInputTagTrait>()
+        shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
     } else -> PANIC("this method does not support shape type ${shape.type}")
 }
 

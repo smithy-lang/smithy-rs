@@ -8,9 +8,6 @@ package software.amazon.smithy.rust.codegen.core.util
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
-import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.ListShape
-import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -22,7 +19,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.AggregateShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 

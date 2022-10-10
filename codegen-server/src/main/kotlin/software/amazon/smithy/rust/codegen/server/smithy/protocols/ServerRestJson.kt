@@ -5,7 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.rust.codegen.client.smithy.workingWithPublicConstrainedWrapperTupleType
+import software.amazon.smithy.rust.codegen.core.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable

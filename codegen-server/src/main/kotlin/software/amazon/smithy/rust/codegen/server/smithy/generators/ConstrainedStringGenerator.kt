@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.ShapesReachableFromOperationInputTagger
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -19,7 +20,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
@@ -161,18 +164,19 @@ class ConstrainedStringGenerator(
                 """,
             )
 
-            // TODO Remove `dead_code` once we address this being generated only for shapes in operation input closure.
-            rustBlock("impl ${constraintViolation.name}") {
-                rustBlock("##[allow(dead_code)] pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
-                    rustBlock("match self") {
-                        rust(
-                            """
-                            Self::Length(length) => crate::model::ValidationExceptionField {
-                                message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                                path,
-                            },
-                            """
-                        )
+            if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+                rustBlock("impl ${constraintViolation.name}") {
+                    rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                        rustBlock("match self") {
+                            rust(
+                                """
+                                Self::Length(length) => crate::model::ValidationExceptionField {
+                                    message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                                    path,
+                                },
+                                """
+                            )
+                        }
                     }
                 }
             }

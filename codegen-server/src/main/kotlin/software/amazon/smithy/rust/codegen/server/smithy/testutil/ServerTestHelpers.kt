@@ -11,7 +11,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.ShapesReachableFromOperationInputTagger
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -120,3 +120,15 @@ fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: Ru
         modelBuilder.renderConvenienceMethod(this)
     }
 }
+
+// TODO Inline
+fun serverTestModelBaselineTransform(model: Model) =
+    model
+//        .let(RecursiveShapeBoxer::transform)
+//        // Normalize operations by adding synthetic input and output shapes to every operation
+//        .let(OperationNormalizer::transform)
+//        // TODO Docs.
+//        .let(RemoveEbsModelValidationException::transform)
+//        // TODO Docs.
+//        .let(AttachValidationExceptionToConstrainedOperationInputsInAllowList::transform)
+        .let(ShapesReachableFromOperationInputTagger::transform)

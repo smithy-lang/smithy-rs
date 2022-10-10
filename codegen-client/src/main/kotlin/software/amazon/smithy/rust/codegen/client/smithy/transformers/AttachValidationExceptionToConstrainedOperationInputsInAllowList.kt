@@ -12,7 +12,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.hasConstraintTrait
+import software.amazon.smithy.rust.codegen.core.smithy.hasConstraintTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 /**
@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
  * TODO Move to server
  */
 object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
-    // TODO Use fully qualified shapeIds
     private val sherviceShapeIdAllowList =
         setOf(
             ShapeId.from("aws.protocoltests.restjson#RestJson"),

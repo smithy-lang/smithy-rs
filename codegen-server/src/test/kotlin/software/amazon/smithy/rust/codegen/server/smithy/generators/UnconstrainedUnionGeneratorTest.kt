@@ -8,13 +8,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -26,20 +26,6 @@ class UnconstrainedUnionGeneratorTest {
             """
             namespace test
 
-            service TestService {
-                version: "123",
-                operations: [TestOperation]
-            }
-            
-            operation TestOperation {
-                input: TestInputOutput,
-                output: TestInputOutput,
-            }
-            
-            structure TestInputOutput {
-                union: Union
-            }
-            
             union Union {
                 structure: Structure
             }

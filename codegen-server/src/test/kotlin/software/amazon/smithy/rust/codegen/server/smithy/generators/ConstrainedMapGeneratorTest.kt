@@ -15,37 +15,19 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestModelBaselineTransform
 import java.util.stream.Stream
-
-private const val baseModelString = """
-    namespace test
-
-    service TestService {
-        version: "123",
-        operations: [TestOperation]
-    }
-    
-    operation TestOperation {
-        input: TestInputOutput,
-        output: TestInputOutput,
-    }
-    
-    structure TestInputOutput {
-        constrainedMap: ConstrainedMap
-    }
-    """
 
 class ConstrainedMapGeneratorTest {
 
@@ -65,19 +47,19 @@ class ConstrainedMapGeneratorTest {
             val validStringMap = List(it.second) { index -> index.toString() to "value" }.toMap()
             val inValidStringMap = List(it.third) { index -> index.toString() to "value" }.toMap()
             Triple(it.first, ObjectNode.fromStringMap(validStringMap), ObjectNode.fromStringMap(inValidStringMap))
-        }.map {
+        }.map { (trait, validMap, invalidMap) ->
             TestCase(
                 """
-                $baseModelString
+                namespace test
                 
-                ${it.first}
+                $trait
                 map ConstrainedMap {
                     key: String,
                     value: String
                 }
-                """.asSmithyModel(),
-                it.second,
-                it.third,
+                """.asSmithyModel().let { serverTestModelBaselineTransform(it) },
+                validMap,
+                invalidMap,
             )
         }
 
@@ -88,10 +70,9 @@ class ConstrainedMapGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(ConstrainedMapGeneratorTestProvider::class)
     fun `it should generate constrained map types`(testCase: TestCase) {
-        val serviceShape = testCase.model.lookup<ServiceShape>("test#TestService")
         val constrainedMapShape = testCase.model.lookup<MapShape>("test#ConstrainedMap")
 
-        val codegenContext = serverTestCodegenContext(testCase.model, serviceShape)
+        val codegenContext = serverTestCodegenContext(testCase.model)
         val symbolProvider = codegenContext.symbolProvider
 
         val project = TestWorkspace.testProject(symbolProvider)
@@ -163,14 +144,14 @@ class ConstrainedMapGeneratorTest {
     @Test
     fun `type should not be constructible without using a constructor`() {
         val model = """
-            $baseModelString
+            namespace test
             
             @length(min: 1, max: 69)
             map ConstrainedMap {
                 key: String,
                 value: String
             }
-            """.asSmithyModel()
+            """.asSmithyModel().let { serverTestModelBaselineTransform(it) }
         val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
 
         val writer = RustWriter.forModule(ModelsModule.name)

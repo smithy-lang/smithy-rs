@@ -8,12 +8,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -25,20 +25,6 @@ class UnconstrainedMapGeneratorTest {
             """
             namespace test
 
-            service TestService {
-                version: "123",
-                operations: [TestOperation]
-            }
-            
-            operation TestOperation {
-                input: TestInputOutput,
-                output: TestInputOutput,
-            }
-            
-            structure TestInputOutput {
-                map: MapA
-            }
-            
             map MapA {
                 key: String,
                 value: MapB
@@ -100,14 +86,20 @@ class UnconstrainedMapGeneratorTest {
                         );
 
                         // Any of these two errors could be returned; it depends on the order in which the maps are visited.
-                        let missing_string_expected_err =
-                            crate::model::map_a::ConstraintViolation::Value(crate::model::map_b::ConstraintViolation::Value(
+                        let missing_string_expected_err = crate::model::map_a::ConstraintViolation::Value(
+                            "KeyA".to_owned(),
+                            crate::model::map_b::ConstraintViolation::Value(
+                                "KeyB1".to_owned(),
                                 crate::model::structure_c::ConstraintViolation::MissingString,
-                            ));
-                        let missing_int_expected_err =
-                            crate::model::map_a::ConstraintViolation::Value(crate::model::map_b::ConstraintViolation::Value(
+                            )
+                        );
+                        let missing_int_expected_err = crate::model::map_a::ConstraintViolation::Value(
+                            "KeyA".to_owned(),
+                            crate::model::map_b::ConstraintViolation::Value(
+                                "KeyB2".to_owned(),
                                 crate::model::structure_c::ConstraintViolation::MissingInt,
-                            ));
+                            )
+                        );
                             
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
 

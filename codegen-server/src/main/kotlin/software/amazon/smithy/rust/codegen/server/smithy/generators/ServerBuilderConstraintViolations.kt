@@ -4,7 +4,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -62,8 +63,9 @@ class ServerBuilderConstraintViolations(
         renderImplDisplayConstraintViolation(writer)
         writer.rust("impl #T for ConstraintViolation { }", RuntimeType.StdError)
 
-        // TODO This is only needed if the structure shape is part of an operation input closure.
-        renderAsValidationExceptionFieldList(writer)
+        if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+            renderAsValidationExceptionFieldList(writer)
+        }
     }
 
     /**
@@ -156,11 +158,9 @@ class ServerBuilderConstraintViolations(
             }
         }
 
-        // TODO Remove `dead_code` once we address this being generated only for shapes in operation input closure.
         writer.rustTemplate(
             """
             impl ConstraintViolation {
-                ##[allow(dead_code)] 
                 pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField {
                     #{ValidationExceptionFieldWritable:W}
                 }

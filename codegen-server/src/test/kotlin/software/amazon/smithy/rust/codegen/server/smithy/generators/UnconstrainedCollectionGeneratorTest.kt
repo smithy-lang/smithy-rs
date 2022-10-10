@@ -8,12 +8,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -25,20 +25,6 @@ class UnconstrainedCollectionGeneratorTest {
             """
             namespace test
 
-            service TestService {
-                version: "123",
-                operations: [TestOperation]
-            }
-            
-            operation TestOperation {
-                input: TestInputOutput,
-                output: TestInputOutput,
-            }
-            
-            structure TestInputOutput {
-                list: ListA
-            }
-            
             list ListA {
                 member: ListB
             }
@@ -78,6 +64,7 @@ class UnconstrainedCollectionGeneratorTest {
                     UnconstrainedCollectionGenerator(codegenContext, unconstrainedModuleWriter, modelsModuleWriter, it).render()
                 }
 
+                // TODO We should not have to pass in 0. See TODO in `UnconstrainedCollectionGenerator`.
                 unconstrainedModuleWriter.unitTest(
                     name = "list_a_unconstrained_fail_to_constrain_with_first_error",
                     test = """
@@ -87,8 +74,8 @@ class UnconstrainedCollectionGeneratorTest {
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                     let expected_err =
-                        crate::model::list_a::ConstraintViolation(crate::model::list_b::ConstraintViolation(
-                            crate::model::structure_c::ConstraintViolation::MissingString,
+                        crate::model::list_a::ConstraintViolation(0, crate::model::list_b::ConstraintViolation(
+                            0, crate::model::structure_c::ConstraintViolation::MissingString,
                         ));
                         
                     assert_eq!(

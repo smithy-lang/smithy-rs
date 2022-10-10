@@ -10,9 +10,9 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.PubCrateConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.hasConstraintTraitOrTargetHasConstraintTrait
-import software.amazon.smithy.rust.codegen.client.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
+import software.amazon.smithy.rust.codegen.core.smithy.hasConstraintTraitOrTargetHasConstraintTrait
+import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType

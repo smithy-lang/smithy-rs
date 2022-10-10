@@ -14,33 +14,15 @@ import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
-
-private const val baseModelString = """
-    namespace test
-
-    service TestService {
-        version: "123",
-        operations: [TestOperation]
-    }
-    
-    operation TestOperation {
-        input: TestInputOutput,
-        output: TestInputOutput,
-    }
-    
-    structure TestInputOutput {
-        constrainedString: ConstrainedString
-    }
-    """
 
 class ConstrainedStringGeneratorTest {
 
@@ -65,7 +47,7 @@ class ConstrainedStringGeneratorTest {
         ).map {
             TestCase(
                 """
-                $baseModelString
+                namespace test
                 
                 ${it.first}
                 string ConstrainedString
@@ -147,7 +129,7 @@ class ConstrainedStringGeneratorTest {
     @Test
     fun `type should not be constructible without using a constructor`() {
         val model = """
-            $baseModelString
+            namespace test
             
             @length(min: 1, max: 69)
             string ConstrainedString

@@ -14,10 +14,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.client.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.isTransitivelyButNotDirectlyConstrained
-import software.amazon.smithy.rust.codegen.client.smithy.typeNameContainsNonPublicType
+import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.isTransitivelyButNotDirectlyConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.typeNameContainsNonPublicType
 
 /**
  * A generator for a wrapper tuple newtype over a map shape's symbol type.

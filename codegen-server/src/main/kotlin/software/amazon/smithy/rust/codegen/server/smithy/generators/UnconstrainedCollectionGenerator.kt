@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.rust.codegen.client.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 
 /**
@@ -105,7 +107,8 @@ class UnconstrainedCollectionGenerator(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
             RustMetadata(visibility = constraintViolationVisibility),
         ) {
-            // TODO path + "/" + &self.0 instead of format!
+            // TODO We only need to generate `usize` when the collection shape is directly constrained: see
+            //  UnconstrainedCollectionGeneratorTest for an example where it isn't.
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
@@ -113,15 +116,22 @@ class UnconstrainedCollectionGenerator(
                     pub(crate) usize,
                     pub(crate) #{InnerConstraintViolationSymbol}
                 );
-                
-                impl $constraintViolationName {
-                    pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField {
-                        self.1.as_validation_exception_field(format!("{}/{}", path, self.0))
-                    }
-                }
                 """,
-                "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
+            "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
             )
+
+            if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+                rustTemplate(
+                    """
+                    impl $constraintViolationName {
+                        pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                            self.1.as_validation_exception_field(path + "/" + &self.0)
+                        }
+                    }
+                    """,
+                    "String" to RuntimeType.String,
+                )
+            }
         }
     }
 }

@@ -9,32 +9,38 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.core.smithy.traits.AggregateShapeReachableFromOperationInputTagTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 
 /**
- * Tag all [aggregate shapes] reachable from operation input with the
- * [AggregateShapeReachableFromOperationInputTagTrait] tag.
+ * Tag shapes reachable from operation input with the
+ * [ShapeReachableFromOperationInputTagTrait] tag.
  *
  * This is useful to determine whether we need to generate code to
  * enforce constraints upon request deserialization in the server.
  *
  * This needs to be a model transformer; it cannot be lazily calculated
  * when needed. This is because other model transformers may transform
- * the model such that aggregate shapes that were reachable from operation
+ * the model such that shapes that were reachable from operation
  * input are no longer so. For example, [EventStreamNormalizer] pulls
  * event stream error variants out of the union shape where they are defined.
- * As such, [AggregateShapesReachableFromOperationInputTagger] needs to run
+ * As such, [ShapesReachableFromOperationInputTagger] needs to run
  * before these model transformers.
  *
+ * WARNING: This transformer tags _all_ [aggregate shapes], and _some_ [simple shapes],
+ * but not all of them. Read the implementation to find out what shape types it
+ * currently tags.
+ *
+ * [simple shapes]: https://awslabs.github.io/smithy/2.0/spec/simple-types.html
  * [aggregate shapes]: https://awslabs.github.io/smithy/2.0/spec/aggregate-types.html#aggregate-types
  *
  * TODO Move this to `server`.
  */
-object AggregateShapesReachableFromOperationInputTagger {
+object ShapesReachableFromOperationInputTagger {
     fun transform(model: Model): Model {
         val inputShapes = model.operationShapes.map {
             model.expectShape(it.inputShape, StructureShape::class.java)
@@ -46,16 +52,17 @@ object AggregateShapesReachableFromOperationInputTagger {
 
         return ModelTransformer.create().mapShapes(model) { shape ->
             when (shape) {
-                is StructureShape, is UnionShape, is ListShape, is MapShape -> {
+                is StructureShape, is UnionShape, is ListShape, is MapShape, is StringShape -> {
                     if (shapesReachableFromOperationInputs.contains(shape)) {
                         val builder = when (shape) {
                             is StructureShape -> shape.toBuilder()
                             is UnionShape -> shape.toBuilder()
                             is ListShape -> shape.toBuilder()
                             is MapShape -> shape.toBuilder()
+                            is StringShape -> shape.toBuilder()
                             else -> UNREACHABLE("the `when` is exhaustive")
                         }
-                        builder.addTrait(AggregateShapeReachableFromOperationInputTagTrait()).build()
+                        builder.addTrait(ShapeReachableFromOperationInputTagTrait()).build()
                     } else {
                         shape
                     }
