@@ -59,7 +59,8 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             imports = listOf("$commonModels/ebs.json"),
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
-        CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
+        // TODO Commented out until https://github.com/awslabs/smithy-rs/issues/1831 is fixed.
+//        CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
         CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-server-sdk", imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy")),
     )
 }
