@@ -7,6 +7,7 @@
 /rust-runtime/aws-smithy-http-server/           @awslabs/smithy-rs-server
 
 # Shared ownership
+/.github/                                       @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
 /CHANGELOG.md                                   @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
 /CHANGELOG.next.toml                            @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
 /README.md                                      @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
