@@ -647,7 +647,7 @@ After the build is finalized:
 - The entire `PokemonService` HTTP service can be wrapped by a `Layer`.
 - Every `Route` in the `Router` can be wrapped by a `Layer` using `PokemonService::layer`.
 
-Although this provides a reasonably "complete" API, it can be cumbersome in some use cases. Suppose a customer wants to log the operation name when a request is routed to said operation. Writing a `Layer`, `NameLogger`, to log a operation name is simple, however with the current API the customer is forced to do the following
+Although this provides a reasonably "complete" API, it can be cumbersome in some use cases. Suppose a customer wants to log the operation name when a request is routed to said operation. Writing a `Layer`, `NameLogger`, to log an operation name is simple, however with the current API the customer is forced to do the following
 
 ```rust
 let get_pokemon_species = GetPokemonSpecies::from_handler(/* handler */).layer(NameLogger::new("GetPokemonSpecies"));
