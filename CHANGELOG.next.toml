@@ -149,3 +149,15 @@ message = "Fix bug that occurred when serializing a `SelectObjectContent` operat
 references = ["aws-sdk-rust#630"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Remove `Protocol` enum, removing an obstruction to extending smithy to third-party protocols."
+references = ["smithy-rs#1829"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "hlbarber"
+
+[[smithy-rs]]
+message = "Convert the `protocol` argument on `PyMiddlewares::new` constructor to a type parameter."
+references = ["smithy-rs#1829"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "hlbarber"

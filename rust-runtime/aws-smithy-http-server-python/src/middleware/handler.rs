@@ -4,11 +4,10 @@
  */
 
 //! Execute Python middleware handlers.
-use aws_smithy_http_server::body::Body;
+use aws_smithy_http_server::{body::Body, body::BoxBody, response::IntoResponse};
 use http::Request;
 use pyo3::prelude::*;
 
-use aws_smithy_http_server::protocols::Protocol;
 use pyo3_asyncio::TaskLocals;
 
 use crate::{PyMiddlewareException, PyRequest, PyResponse};
@@ -36,18 +35,27 @@ pub struct PyMiddlewareHandler {
 /// Structure holding the list of Python middlewares that will be executed by this server.
 ///
 /// Middlewares are executed one after each other inside the [crate::PyMiddlewareLayer] Tower layer.
-#[derive(Debug, Clone, Default)]
-pub struct PyMiddlewares(Vec<PyMiddlewareHandler>);
+#[derive(Debug, Clone)]
+pub struct PyMiddlewares {
+    handlers: Vec<PyMiddlewareHandler>,
+    into_response: fn(PyMiddlewareException) -> http::Response<BoxBody>,
+}
 
 impl PyMiddlewares {
     /// Create a new instance of `PyMiddlewareHandlers` from a list of heandlers.
-    pub fn new(handlers: Vec<PyMiddlewareHandler>) -> Self {
-        Self(handlers)
+    pub fn new<P>(handlers: Vec<PyMiddlewareHandler>) -> Self
+    where
+        PyMiddlewareException: IntoResponse<P>,
+    {
+        Self {
+            handlers,
+            into_response: PyMiddlewareException::into_response,
+        }
     }
 
     /// Add a new handler to the list.
     pub fn push(&mut self, handler: PyMiddlewareHandler) {
-        self.0.push(handler);
+        self.handlers.push(handler);
     }
 
     /// Execute a single middleware handler.
@@ -114,13 +122,9 @@ impl PyMiddlewares {
     ///   and return a protocol specific error, with the option of setting the HTTP return code.
     /// * Middleware raising any other exception will immediately terminate the request handling and
     ///   return a protocol specific error, with HTTP status code 500.
-    pub fn run(
-        &mut self,
-        mut request: Request<Body>,
-        protocol: Protocol,
-        locals: TaskLocals,
-    ) -> PyFuture {
-        let handlers = self.0.clone();
+    pub fn run(&mut self, mut request: Request<Body>, locals: TaskLocals) -> PyFuture {
+        let handlers = self.handlers.clone();
+        let into_response = self.into_response;
         // Run all Python handlers in a loop.
         Box::pin(async move {
             tracing::debug!("Executing Python middleware stack");
@@ -152,7 +156,7 @@ impl PyMiddlewares {
                         tracing::debug!(
                             "Middleware `{name}` returned an error, exit middleware loop"
                         );
-                        return Err(e.into_response(protocol));
+                        return Err((into_response)(e));
                     }
                 }
             }
@@ -166,6 +170,7 @@ impl PyMiddlewares {
 
 #[cfg(test)]
 mod tests {
+    use aws_smithy_http_server::proto::rest_json_1::AwsRestJson1;
     use http::HeaderValue;
     use hyper::body::to_bytes;
     use pretty_assertions::assert_eq;
@@ -175,7 +180,7 @@ mod tests {
     #[tokio::test]
     async fn request_middleware_chain_keeps_headers_changes() -> PyResult<()> {
         let locals = crate::tests::initialize();
-        let mut middlewares = PyMiddlewares(vec![]);
+        let mut middlewares = PyMiddlewares::new::<AwsRestJson1>(vec![]);
 
         Python::with_gil(|py| {
             let middleware = PyModule::new(py, "middleware").unwrap();
@@ -212,11 +217,7 @@ def second_middleware(request: Request):
         })?;
 
         let result = middlewares
-            .run(
-                Request::builder().body(Body::from("")).unwrap(),
-                Protocol::RestJson1,
-                locals,
-            )
+            .run(Request::builder().body(Body::from("")).unwrap(), locals)
             .await
             .unwrap();
         assert_eq!(
@@ -229,7 +230,7 @@ def second_middleware(request: Request):
     #[tokio::test]
     async fn request_middleware_return_response() -> PyResult<()> {
         let locals = crate::tests::initialize();
-        let mut middlewares = PyMiddlewares(vec![]);
+        let mut middlewares = PyMiddlewares::new::<AwsRestJson1>(vec![]);
 
         Python::with_gil(|py| {
             let middleware = PyModule::new(py, "middleware").unwrap();
@@ -252,11 +253,7 @@ def middleware(request: Request):
         })?;
 
         let result = middlewares
-            .run(
-                Request::builder().body(Body::from("")).unwrap(),
-                Protocol::RestJson1,
-                locals,
-            )
+            .run(Request::builder().body(Body::from("")).unwrap(), locals)
             .await
             .unwrap_err();
         assert_eq!(result.status(), 200);
@@ -268,7 +265,7 @@ def middleware(request: Request):
     #[tokio::test]
     async fn request_middleware_raise_middleware_exception() -> PyResult<()> {
         let locals = crate::tests::initialize();
-        let mut middlewares = PyMiddlewares(vec![]);
+        let mut middlewares = PyMiddlewares::new::<AwsRestJson1>(vec![]);
 
         Python::with_gil(|py| {
             let middleware = PyModule::new(py, "middleware").unwrap();
@@ -291,11 +288,7 @@ def middleware(request: Request):
         })?;
 
         let result = middlewares
-            .run(
-                Request::builder().body(Body::from("")).unwrap(),
-                Protocol::RestJson1,
-                locals,
-            )
+            .run(Request::builder().body(Body::from("")).unwrap(), locals)
             .await
             .unwrap_err();
         assert_eq!(result.status(), 503);
@@ -311,7 +304,7 @@ def middleware(request: Request):
     #[tokio::test]
     async fn request_middleware_raise_python_exception() -> PyResult<()> {
         let locals = crate::tests::initialize();
-        let mut middlewares = PyMiddlewares(vec![]);
+        let mut middlewares = PyMiddlewares::new::<AwsRestJson1>(vec![]);
 
         Python::with_gil(|py| {
             let middleware = PyModule::from_code(
@@ -333,11 +326,7 @@ def middleware(request):
         })?;
 
         let result = middlewares
-            .run(
-                Request::builder().body(Body::from("")).unwrap(),
-                Protocol::RestJson1,
-                locals,
-            )
+            .run(Request::builder().body(Body::from("")).unwrap(), locals)
             .await
             .unwrap_err();
         assert_eq!(result.status(), 500);
