@@ -5,4 +5,4 @@ Smithy Rust provides the ability to generate a server whose operations are provi
 - [Generating Common Service Code](./code_generation.md)
 - [Generating the Pokémon Service](./pokemon_service.md)
 - [Instrumentation](./instrumentation.md)
-<!-- - [The Anatomy of a Service](./anatomy.md) -->
+- [The Anatomy of a Service](./anatomy.md)
