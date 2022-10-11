@@ -463,13 +463,13 @@ event_loop.add_signal_handler(signal.SIGINT,
         let rt = runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
-            .expect("Unable to start a new Tokio runtime for this process");
+            .expect("unable to start a new tokio runtime for this process");
         rt.block_on(async move {
             let handler = LambdaHandler::new(app);
             let lambda = lambda_http::run(handler);
-            tracing::debug!("Starting Lambda handler");
+            tracing::debug!("starting lambda handler");
             if let Err(err) = lambda.await {
-                tracing::error!("Lambda handler error: {}", err);
+                tracing::error!(error = %err, "unable to start lambda handler");
             }
         });
         Ok(())
@@ -484,7 +484,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         let app = self.build_router(event_loop)?;
         // Create the `PyState` object from the Python context object.
         let context = self.context().clone().unwrap_or_else(|| py.None());
-        tracing::debug!("Add middlewares to Rust Python router");
+        tracing::debug!("add middlewares to rust python router");
         let app = app.layer(ServiceBuilder::new().layer(AddExtensionLayer::new(context)));
         Ok(app)
     }
