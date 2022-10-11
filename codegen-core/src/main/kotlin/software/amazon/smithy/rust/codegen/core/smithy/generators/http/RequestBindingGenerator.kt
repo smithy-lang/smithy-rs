@@ -48,7 +48,7 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
     return base.dq()
 }
 
-// TODO Move to `codegen-client` and update docs
+// TODO Move to `codegen-client` and update docs. `MakeOperationGenerator` needs to be moved to `codegen-client` first, which is not easy.
 /**
  * Generates methods to serialize and deserialize requests based on the HTTP trait. Specifically:
  * 1. `fn update_http_request(builder: http::request::Builder) -> Builder`

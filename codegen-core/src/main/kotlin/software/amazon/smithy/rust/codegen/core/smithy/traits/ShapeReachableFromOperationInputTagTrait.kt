@@ -30,6 +30,7 @@ class ShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.obje
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
     is StructureShape, is UnionShape, is ListShape, is MapShape -> {
+        // TODO There are a bunch of sites where we're performing this check inline instead of calling this function.
         shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
     } else -> PANIC("this method does not support shape type ${shape.type}")
 }

@@ -165,12 +165,13 @@ class ServerBuilderConstraintViolations(
         writer.rustTemplate(
             """
             impl ConstraintViolation {
-                pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField {
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                     #{ValidationExceptionFieldWritable:W}
                 }
             }
             """,
             "ValidationExceptionFieldWritable" to validationExceptionFieldWritable,
+            "String" to RuntimeType.String,
         )
     }
 }

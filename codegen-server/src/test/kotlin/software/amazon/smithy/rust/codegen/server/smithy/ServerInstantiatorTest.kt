@@ -172,39 +172,5 @@ class ServerInstantiatorTest {
             }
         }
         project.compileAndTest()
-
-        // TODO Remove
-//        writer.test {
-//            writer.withBlock("let result = ", ";") {
-//                sut.render(this, structure, data, Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
-//            }
-//            writer.write(
-//                """
-//                use std::collections::HashMap;
-//                use aws_smithy_types::{DateTime, Document};
-//
-//                let expected = MyStructRequired {
-//                    str: "".to_owned(),
-//                    primitive_int: 0,
-//                    int: 0,
-//                    ts: DateTime::from_secs(0),
-//                    byte: 0,
-//                    union: NestedUnion::Struct(NestedStruct {
-//                        str: "".into(),
-//                        num: 0,
-//                    }),
-//                    structure: NestedStruct {
-//                        str: "".into(),
-//                        num: 0,
-//                    },
-//                    list: Vec::new(),
-//                    map: HashMap::new(),
-//                    doc: Document::Object(HashMap::new()),
-//                };
-//                assert_eq!(result, expected);
-//                """,
-//            )
-//        }
-//        writer.compileAndTest()
     }
 }

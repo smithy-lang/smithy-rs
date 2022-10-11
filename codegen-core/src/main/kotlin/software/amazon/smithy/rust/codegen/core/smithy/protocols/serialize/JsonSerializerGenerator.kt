@@ -57,7 +57,6 @@ sealed class JsonSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
 
-    // TODO This could take in directly the `Context<MapShape>`
     data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSection("BeforeIteratingOverMap")
 }
 
@@ -350,14 +349,6 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
         val writer = context.writerExpression
-
-//        // TODO Use customization
-//        // let
-//        val value = if (workingWithPublicConstrainedWrapperTupleType(context.shape, codegenContext)) {
-//            ValueExpression.Value("${context.valueExpression.name}.0")
-//        } else {
-//            context.valueExpression
-//        }
         val value = context.valueExpression
 
         when (target) {
@@ -434,15 +425,6 @@ class JsonSerializerGenerator(
         val valueName = safeName("value")
         customizations.forEach { customization -> customization.section(JsonSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(this) }
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
-            val keyTarget = model.expectShape(context.shape.key.target)
-            // TODO Remove
-//            val keyExpression = if (workingWithPublicConstrainedWrapperTupleType(keyTarget, codegenContext)) {
-//                "$keyName.0.as_str()"
-//            } else if (keyTarget.hasTrait<EnumTrait>()) {
-//                "$keyName.as_str()"
-//            } else {
-//                keyName
-//            }
             val keyExpression = "$keyName.as_str()"
             serializeMember(MemberContext.mapMember(context, keyExpression, valueName))
         }

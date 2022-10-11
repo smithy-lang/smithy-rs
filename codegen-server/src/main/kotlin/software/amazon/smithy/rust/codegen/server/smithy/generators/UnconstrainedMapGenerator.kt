@@ -10,9 +10,12 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.join
+import software.amazon.smithy.rust.codegen.core.rustlang.plus
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -105,21 +108,52 @@ class UnconstrainedMapGenerator(
                         constrainedShapeSymbolProvider.toSymbol(valueShape)
                     }
 
-                    // TODO Refactor to use `return` so that we don't have to clone `k`.
+                    val constrainedKeySymbol = constrainedShapeSymbolProvider.toSymbol(keyShape)
+                    val constrainKeyWritable = writable {
+                        rustTemplate(
+                            "let k: #{ConstrainedKeySymbol} = k.try_into().map_err(Self::Error::Key)?;",
+                            "ConstrainedKeySymbol" to constrainedKeySymbol,
+                        )
+                    }
+                    val constrainValueWritable = writable {
+                        rustTemplate(
+                            """
+                            match #{ConstrainedValueSymbol}::try_from(v) {
+                                Ok(v) => Ok((k, v)),
+                                Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
+                            }
+                            """,
+                            "ConstrainedValueSymbol" to constrainedValueSymbol,
+                        )
+                    }
+                    val epilogueWritable = writable { rust("Ok((k, v))") }
+
+                    val constrainKVWritable = if (
+                        isKeyConstrained(keyShape, symbolProvider) &&
+                        isValueConstrained(valueShape, model, symbolProvider)
+                    ) {
+                        listOf(constrainKeyWritable, constrainValueWritable).join("\n")
+                    } else if (isKeyConstrained(keyShape, symbolProvider)) {
+                        listOf(constrainKeyWritable, epilogueWritable).join("\n")
+                    } else if (isValueConstrained(valueShape, model, symbolProvider)) {
+                        constrainValueWritable
+                    } else {
+                        epilogueWritable
+                    }
+
                     rustTemplate(
                         """
                         let res: Result<std::collections::HashMap<#{ConstrainedKeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
-                                ${if (isKeyConstrained(keyShape, symbolProvider)) "let k: #{ConstrainedKeySymbol} = k.try_into().map_err(Self::Error::Key)?;" else ""}
-                                ${if (isValueConstrained(valueShape, model, symbolProvider)) "let v: #{ConstrainedValueSymbol} = v.try_into().map_err(|inner_violation| Self::Error::Value(k.clone(), inner_violation))?;" else ""}
-                                Ok((k, v))
+                                #{ConstrainKVWritable:W}
                             })
                             .collect();
                         let hm = res?;
                         """,
-                        "ConstrainedKeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape),
+                        "ConstrainedKeySymbol" to constrainedKeySymbol,
                         "ConstrainedValueSymbol" to constrainedValueSymbol,
+                        "ConstrainKVWritable" to constrainKVWritable,
                     )
 
                     val constrainedValueTypeIsNotFinalType =

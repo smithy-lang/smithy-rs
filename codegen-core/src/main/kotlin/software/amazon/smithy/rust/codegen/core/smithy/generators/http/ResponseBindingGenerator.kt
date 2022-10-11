@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
-// TODO Move to `codegen-client` and update docs
+// TODO Move to `codegen-client` and update docs. `MakeOperationGenerator` needs to be moved to `codegen-client` first, which is not easy.
 class ResponseBindingGenerator(
     protocol: Protocol,
     private val codegenContext: CodegenContext,

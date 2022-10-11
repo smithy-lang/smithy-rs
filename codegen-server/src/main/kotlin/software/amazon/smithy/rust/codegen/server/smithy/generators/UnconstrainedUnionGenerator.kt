@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
@@ -142,7 +143,10 @@ class UnconstrainedUnionGenerator(
 
             if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
                 rustBlock("impl $constraintViolationName") {
-                    rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                    rustBlockTemplate(
+                        "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
+                        "String" to RuntimeType.String,
+                    ) {
                         withBlock("match self {", "}") {
                             for (constraintViolation in constraintViolations()) {
                                 rust("""Self::${constraintViolation.name()}(inner) => inner.as_validation_exception_field(path + "/${constraintViolation.forMember.memberName}"),""")

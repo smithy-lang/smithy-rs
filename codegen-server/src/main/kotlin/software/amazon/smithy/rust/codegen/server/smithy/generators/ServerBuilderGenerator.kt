@@ -119,18 +119,16 @@ class ServerBuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
-            // an operation input shape.
-            val shouldConvertConstraintViolationToRequestRejection = shape.hasTrait<SyntheticInputTrait>()
-
             serverBuilderConstraintViolations.render(
                 writer,
                 visibility,
                 nonExhaustive = true,
-                shouldRenderAsValidationExceptionFieldList = shouldConvertConstraintViolationToRequestRejection,
+                shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput(),
             )
 
-            if (shouldConvertConstraintViolationToRequestRejection) {
+            // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
+            // an operation input shape.
+            if (shape.hasTrait<SyntheticInputTrait>()) {
                 renderImplFromConstraintViolationForRequestRejection(writer)
             }
 

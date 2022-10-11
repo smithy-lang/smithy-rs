@@ -46,7 +46,6 @@ open class ServerEnumGenerator(
         writer.withModule(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
         ) {
-            // TODO Check that we're using `#{String}` in the other as_validation_exception_field methods.
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
@@ -55,12 +54,11 @@ open class ServerEnumGenerator(
                 *codegenScope,
             )
 
-            // TODO Move out.
-            val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-            val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
-
             // TODO ValidationException should live under `crate::error::`.
             if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+                val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
+                val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
+
                 rustBlock("impl $constraintViolationName") {
                     rustBlockTemplate("pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField", *codegenScope) {
                         rust(

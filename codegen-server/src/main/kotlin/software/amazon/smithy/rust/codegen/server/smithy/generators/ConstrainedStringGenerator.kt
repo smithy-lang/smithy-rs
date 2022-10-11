@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -165,7 +166,10 @@ class ConstrainedStringGenerator(
 
             if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
                 rustBlock("impl ${constraintViolation.name}") {
-                    rustBlock("pub(crate) fn as_validation_exception_field(self, path: String) -> crate::model::ValidationExceptionField") {
+                    rustBlockTemplate(
+                        "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
+                        "String" to RuntimeType.String,
+                    ) {
                         rustBlock("match self") {
                             rust(
                                 """
