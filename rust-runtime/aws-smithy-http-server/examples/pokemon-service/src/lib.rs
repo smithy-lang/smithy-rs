@@ -19,7 +19,6 @@ use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, o
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
-#[doc(hidden)]
 pub mod plugin;
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =

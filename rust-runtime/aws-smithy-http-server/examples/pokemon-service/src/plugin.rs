@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Provides an example [`Plugin`] implementation - [`PrintPlugin`].
+
 use aws_smithy_http_server::{
     operation::{Operation, OperationShape},
     plugin::{Pluggable, Plugin},
@@ -10,7 +12,6 @@ use aws_smithy_http_server::{
 use tower::{layer::util::Stack, Layer, Service};
 
 use std::task::{Context, Poll};
-
 /// A [`Service`](tower::Service) that adds a print log.
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
