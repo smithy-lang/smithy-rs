@@ -19,14 +19,14 @@ pub struct FilterByOperationName<Inner, F> {
 
 impl<Inner, F> FilterByOperationName<Inner, F> {
     /// Creates a new [`FilterByOperationName`].
-    pub fn new(inner: Inner, predicate: F) -> Self {
+    pub(crate) fn new(inner: Inner, predicate: F) -> Self {
         Self { inner, predicate }
     }
 }
 
 impl<P, Op, S, L, Inner, F> Plugin<P, Op, S, L> for FilterByOperationName<Inner, F>
 where
-    F: Fn(&'static str) -> bool,
+    F: Fn(&str) -> bool,
     Inner: Plugin<P, Op, S, L>,
     Op: OperationShape,
 {
