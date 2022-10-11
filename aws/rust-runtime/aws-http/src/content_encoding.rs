@@ -462,7 +462,7 @@ mod tests {
         };
 
         let timeout_duration = Duration::from_secs(3);
-        if (tokio::time::timeout(timeout_duration, test_fut).await).is_err() {
+        if tokio::time::timeout(timeout_duration, test_fut).await.is_err() {
             panic!("test_aws_chunked_encoding timed out after {timeout_duration:?}");
         }
     }
