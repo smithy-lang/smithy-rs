@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * Generates a Python compatible application and server that can be configured from Python.
  *
  * Example:
- * ```
  *     from pool import DatabasePool
  *     from my_library import App, OperationInput, OperationOutput
  *     @dataclass
@@ -45,48 +44,47 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  *        return OperationOutput(description)
  *
  *     app.run()
- * ```
- * The application holds a mapping between operation names (lowercase, snakecase), the context as
- * defined in Python and some task local with the Python event loop for the current process.
+ *
+ * The application holds a mapping between operation names (lowercase, snakecase),
+ * the context as defined in Python and some task local with the Python event loop
+ * for the current process.
  *
  * The application exposes several methods to Python:
  * * `App()`: constructor to create an instance of `App`.
  * * `run()`: run the application on a number of workers.
  * * `context()`: register the context object that is passed to the Python handlers.
- * * One register method per operation that can be used as decorator. For example if the model has
- * one operation called `RegisterServer`, it will codegenerate a method of `App` called
- * `register_service()` that can be used to decorate the Python implementation of this operation.
+ * * One register method per operation that can be used as decorator. For example if
+ *   the model has one operation called `RegisterServer`, it will codegenerate a method
+ *   of `App` called `register_service()` that can be used to decorate the Python implementation
+ *   of this operation.
  *
  * This class also renders the implementation of the `aws_smity_http_server_python::PyServer` trait,
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
-        codegenContext: CodegenContext,
-        private val protocol: ServerProtocol,
-        private val operations: List<OperationShape>,
+    codegenContext: CodegenContext,
+    private val protocol: ServerProtocol,
+    private val operations: List<OperationShape>,
 ) {
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
     private val codegenScope =
-            arrayOf(
-                    "SmithyPython" to
-                            PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig)
-                                    .asType(),
-                    "SmithyServer" to
-                            ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-                    "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-                    "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-                    "tokio" to PythonServerCargoDependency.Tokio.asType(),
-                    "tracing" to PythonServerCargoDependency.Tracing.asType(),
-                    "tower" to PythonServerCargoDependency.Tower.asType(),
-                    "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
-                    "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
-                    "hyper" to PythonServerCargoDependency.Hyper.asType(),
-                    "HashMap" to RustType.HashMap.RuntimeType,
-                    "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
-            )
+        arrayOf(
+            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
+            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
+            "tokio" to PythonServerCargoDependency.Tokio.asType(),
+            "tracing" to PythonServerCargoDependency.Tracing.asType(),
+            "tower" to PythonServerCargoDependency.Tower.asType(),
+            "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
+            "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
+            "hyper" to PythonServerCargoDependency.Hyper.asType(),
+            "HashMap" to RustType.HashMap.RuntimeType,
+            "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
+        )
 
     fun render(writer: RustWriter) {
         renderPyApplicationRustDocs(writer)
@@ -99,7 +97,7 @@ class PythonApplicationGenerator(
 
     fun renderAppStruct(writer: RustWriter) {
         writer.rustTemplate(
-                """
+            """
             ##[#{pyo3}::pyclass]
             ##[derive(Debug)]
             pub struct App {
@@ -109,13 +107,13 @@ class PythonApplicationGenerator(
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
             """,
-                *codegenScope,
+            *codegenScope,
         )
     }
 
     private fun renderAppClone(writer: RustWriter) {
         writer.rustTemplate(
-                """
+            """
             impl Clone for App {
                 fn clone(&self) -> Self {
                     Self {
@@ -127,13 +125,13 @@ class PythonApplicationGenerator(
                 }
             }
             """,
-                *codegenScope,
+            *codegenScope,
         )
     }
 
     private fun renderAppDefault(writer: RustWriter) {
         writer.rustTemplate(
-                """
+            """
             impl Default for App {
                 fn default() -> Self {
                     Self {
@@ -145,20 +143,20 @@ class PythonApplicationGenerator(
                 }
             }
             """,
-                "Protocol" to protocol.markerStruct(),
-                *codegenScope,
+            "Protocol" to protocol.markerStruct(),
+            *codegenScope,
         )
     }
 
     private fun renderPyAppTrait(writer: RustWriter) {
         writer.rustBlockTemplate(
-                """
+            """
             impl #{SmithyPython}::PyApp for App
             """,
-                *codegenScope,
+            *codegenScope,
         ) {
             rustTemplate(
-                    """
+                """
                 fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
                     &self.workers
                 }
@@ -172,38 +170,38 @@ class PythonApplicationGenerator(
                     &mut self.middlewares
                 }
                 """,
-                    *codegenScope,
+                *codegenScope,
             )
 
             rustBlockTemplate(
-                    """
+                """
                 // Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::routing::Router].
                 fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::routing::Router>
                 """,
-                    *codegenScope,
+                *codegenScope,
             ) {
                 rustTemplate(
-                        """
+                    """
                     let router = crate::operation_registry::OperationRegistryBuilder::default();
                     """,
-                        *codegenScope,
+                    *codegenScope,
                 )
                 for (operation in operations) {
                     val operationName = symbolProvider.toSymbol(operation).name
                     val name = operationName.toSnakeCase()
                     rustTemplate(
-                            """
+                        """
                         let ${name}_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
                         let handler = self.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
                         let router = router.$name(move |input, state| {
                             #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
                         });
                         """,
-                            *codegenScope,
+                        *codegenScope,
                     )
                 }
                 rustTemplate(
-                        """
+                    """
                     let middleware_locals = pyo3_asyncio::TaskLocals::new(event_loop);
                     let service = #{tower}::ServiceBuilder::new()
                         .layer(
@@ -215,8 +213,8 @@ class PythonApplicationGenerator(
                         .into();
                     Ok(router.layer(service))
                     """,
-                        "Protocol" to protocol.markerStruct(),
-                        *codegenScope,
+                    "Protocol" to protocol.markerStruct(),
+                    *codegenScope,
                 )
             }
         }
@@ -224,14 +222,14 @@ class PythonApplicationGenerator(
 
     private fun renderPyMethods(writer: RustWriter) {
         writer.rustBlockTemplate(
-                """
+            """
             ##[#{pyo3}::pymethods]
             impl App
             """,
-                *codegenScope,
+            *codegenScope,
         ) {
             rustTemplate(
-                    """
+                """
                 /// Create a new [App].
                 ##[new]
                 pub fn new() -> Self {
@@ -284,13 +282,13 @@ class PythonApplicationGenerator(
                     self.start_hyper_worker(py, socket, event_loop, router, worker_number)
                 }
                 """,
-                    *codegenScope,
+                *codegenScope,
             )
             operations.map { operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 val name = operationName.toSnakeCase()
                 rustTemplate(
-                        """
+                    """
                     /// Method to register `$name` Python implementation inside the handlers map.
                     /// It can be used as a function decorator in Python.
                     ##[pyo3(text_signature = "(${'$'}self, func)")]
@@ -299,7 +297,7 @@ class PythonApplicationGenerator(
                         self.register_operation(py, "$name", func)
                     }
                     """,
-                        *codegenScope,
+                    *codegenScope,
                 )
             }
         }
@@ -307,7 +305,7 @@ class PythonApplicationGenerator(
 
     private fun renderPyApplicationRustDocs(writer: RustWriter) {
         writer.rust(
-                """
+            """
             ##[allow(clippy::tabs_in_doc_comments)]
             /// Main Python application, used to register operations and context and start multiple
             /// workers on the same shared socket.
@@ -320,7 +318,7 @@ class PythonApplicationGenerator(
             """.trimIndent(),
         )
         writer.rust(
-                """
+            """
             /// from $libName import ${Inputs.namespace}
             /// from $libName import ${Outputs.namespace}
             """.trimIndent(),
@@ -329,7 +327,7 @@ class PythonApplicationGenerator(
             writer.rust("""/// from $libName import ${Errors.namespace}""".trimIndent())
         }
         writer.rust(
-                """
+            """
             /// from $libName import middleware
             /// from $libName import App
             ///
@@ -349,7 +347,7 @@ class PythonApplicationGenerator(
         )
         writer.operationImplementationStubs(operations)
         writer.rust(
-                """
+            """
             ///
             /// app.run()
             /// ```
@@ -360,27 +358,22 @@ class PythonApplicationGenerator(
         )
     }
 
-    private fun RustWriter.operationImplementationStubs(operations: List<OperationShape>) =
-            rust(
-                    operations.joinToString("\n///\n") {
-                        val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
-                        val ret =
-                                if (!operationDocumentation.isNullOrBlank()) {
-                                    operationDocumentation
-                                            .replace("#", "##")
-                                            .prependIndent("/// ## ") + "\n"
-                                } else ""
-                        ret +
-                                """
+    private fun RustWriter.operationImplementationStubs(operations: List<OperationShape>) = rust(
+        operations.joinToString("\n///\n") {
+            val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
+            val ret = if (!operationDocumentation.isNullOrBlank()) {
+                operationDocumentation.replace("#", "##").prependIndent("/// ## ") + "\n"
+            } else ""
+            ret +
+                """
                 /// ${it.signature()}:
                 ///     raise NotImplementedError
                 """.trimIndent()
-                    },
-            )
+        },
+    )
 
     /**
-     * Returns the function signature for an operation handler implementation. Used in the
-     * documentation.
+     * Returns the function signature for an operation handler implementation. Used in the documentation.
      */
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
