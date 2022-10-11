@@ -41,7 +41,7 @@ val AllowedClippyLints = listOf(
     "type_complexity",
 
     // Determining if the expression is the last one (to remove return) can make codegen harder in some cases.
-    "needless_return"
+    "needless_return",
 )
 
 val AllowedRustdocLints = listOf(
