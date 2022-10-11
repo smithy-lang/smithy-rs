@@ -22,6 +22,7 @@ bytes = "1.2"
 futures = "0.3"
 http = "0.2"
 hyper = { version = "0.14.20", features = ["server", "http1", "http2", "tcp", "stream"] }
+lambda_http = "0.6.0"
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2"

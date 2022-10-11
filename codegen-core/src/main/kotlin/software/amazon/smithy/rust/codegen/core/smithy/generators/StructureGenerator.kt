@@ -63,7 +63,7 @@ open class StructureGenerator(
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
+            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
     }
 
@@ -109,6 +109,7 @@ open class StructureGenerator(
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
                     val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
