@@ -10,7 +10,7 @@
 use std::{
     collections::HashMap,
     convert::TryInto,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{atomic::AtomicUsize, Arc},
 };
 
 use async_stream::stream;
@@ -108,7 +108,7 @@ struct PokemonTranslations {
 #[derive(Debug)]
 pub struct State {
     pokemons_translations: HashMap<String, PokemonTranslations>,
-    call_count: AtomicU64,
+    call_count: AtomicUsize,
 }
 
 impl Default for State {

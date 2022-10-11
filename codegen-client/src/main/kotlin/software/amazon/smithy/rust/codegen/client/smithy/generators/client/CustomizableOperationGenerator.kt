@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -34,7 +35,7 @@ class CustomizableOperationGenerator(
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.Operation) { writer ->
+        crate.withModule(RustModule.operation(Visibility.PUBLIC)) { writer ->
             writer.docs("Operation customization and supporting types")
             writer.rust("pub mod customize;")
         }
@@ -109,7 +110,7 @@ class CustomizableOperationGenerator(
                 }
 
                 /// Convenience for `map_request` where infallible direct mutation of request is acceptable
-                pub fn mutate_request<E>(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
+                pub fn mutate_request(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
                     self.map_request(|mut req| {
                         f(&mut req);
                         Result::<_, Infallible>::Ok(req)

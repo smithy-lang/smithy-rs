@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilde
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = false,
-    handleRustBoxing = true,
     nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
 )
 

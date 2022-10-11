@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationHandlerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 /**
  * The Rust code responsible to run the Python business logic on the Python interpreter
@@ -33,8 +34,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperat
  */
 class PythonServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
+    protocol: ServerProtocol,
     private val operations: List<OperationShape>,
-) : ServerOperationHandlerGenerator(codegenContext, operations) {
+) : ServerOperationHandlerGenerator(codegenContext, protocol, operations) {
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =

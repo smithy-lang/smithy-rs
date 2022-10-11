@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.Constrained
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -69,6 +68,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.transformers.RemoveEbsM
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.logging.Logger
 
+val DefaultServerPublicModules = setOf(
+    RustModule.Error,
+    RustModule.Model,
+    RustModule.Input,
+    RustModule.Output,
+).associateBy { it.name }
+
 /**
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
@@ -97,7 +103,6 @@ open class ServerCodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
-                handleRustBoxing = true,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
             )
 
@@ -135,7 +140,7 @@ open class ServerCodegenVisitor(
             serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
         )
 
-        rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, DefaultPublicModules, settings.codegenConfig)
+        rustCrate = RustCrate(context.fileManifest, codegenContext.symbolProvider, DefaultServerPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 

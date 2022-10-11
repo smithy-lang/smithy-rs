@@ -6,7 +6,10 @@
 
 use std::{collections::HashMap, ops::Deref, process, thread};
 
-use aws_smithy_http_server::{routing::Router, AddExtensionLayer};
+use aws_smithy_http_server::{
+    routing::{LambdaHandler, Router},
+    AddExtensionLayer,
+};
 use parking_lot::Mutex;
 use pyo3::{prelude::*, types::IntoPyDict};
 use signal_hook::{consts::*, iterator::Signals};
@@ -63,7 +66,8 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
 
     fn middlewares(&mut self) -> &mut PyMiddlewares;
 
-    fn protocol(&self) -> &'static str;
+    /// Build the app's `Router` using given `event_loop`.
+    fn build_router(&mut self, event_loop: &pyo3::PyAny) -> pyo3::PyResult<Router>;
 
     /// Handle the graceful termination of Python workers by looping through all the
     /// active workers and calling `terminate()` on them. If termination fails, this
@@ -214,9 +218,6 @@ event_loop.add_signal_handler(signal.SIGINT,
         router: Router,
         worker_number: isize,
     ) -> PyResult<()> {
-        // Create the `PyState` object from the Python context object.
-        let context = self.context().clone().unwrap_or_else(|| py.None());
-        // let state = PyState::new(context);
         // Clone the socket.
         let borrow = socket.try_borrow_mut()?;
         let held_socket: &PySocket = &*borrow;
@@ -233,19 +234,14 @@ event_loop.add_signal_handler(signal.SIGINT,
                 .thread_name(format!("smithy-rs-tokio[{worker_number}]"))
                 .build()
                 .expect("Unable to start a new tokio runtime for this process");
-            // Register operations into a Router, add middleware and start the `hyper` server,
-            // all inside a [tokio] blocking function.
             rt.block_on(async move {
-                tracing::debug!("Add middlewares to Rust Python router");
-                let app =
-                    router.layer(ServiceBuilder::new().layer(AddExtensionLayer::new(context)));
                 let server = hyper::Server::from_tcp(
                     raw_socket
                         .try_into()
                         .expect("Unable to convert socket2::Socket into std::net::TcpListener"),
                 )
                 .expect("Unable to create hyper server from shared socket")
-                .serve(app.into_make_service());
+                .serve(router.into_make_service());
 
                 tracing::debug!("Started hyper server from shared socket");
                 // Run forever-ish...
@@ -376,16 +372,12 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///     #[derive(Debug, Clone)]
     ///     pub struct App {};
     ///
-    ///     impl App {
-    ///         pub fn build_router(&mut self, event_loop: &PyAny) -> PyResult<aws_smithy_http_server::routing::Router> { todo!() }
-    ///     }
-    ///
     ///     impl PyApp for App {
     ///         fn workers(&self) -> &Mutex<Vec<PyObject>> { todo!() }
     ///         fn context(&self) -> &Option<PyObject> { todo!() }
     ///         fn handlers(&mut self) -> &mut HashMap<String, PyHandler> { todo!() }
     ///         fn middlewares(&mut self) -> &mut PyMiddlewares { todo!() }
-    ///         fn protocol(&self) -> &'static str { "proto1" }
+    ///         fn build_router(&mut self, event_loop: &PyAny) -> PyResult<aws_smithy_http_server::routing::Router> { todo!() }
     ///     }
     ///
     ///     #[pymethods]
@@ -426,7 +418,13 @@ event_loop.add_signal_handler(signal.SIGINT,
         // Forcing the multiprocessing start method to fork is a workaround for it.
         // https://github.com/pytest-dev/pytest-flask/issues/104#issuecomment-577908228
         #[cfg(target_os = "macos")]
-        mp.call_method1("set_start_method", ("fork",))?;
+        mp.call_method(
+            "set_start_method",
+            ("fork",),
+            // We need to pass `force=True` to prevent `context has already been set` exception,
+            // see https://github.com/pytorch/pytorch/issues/3492
+            Some(vec![("force", true)].into_py_dict(py)),
+        )?;
 
         let address = address.unwrap_or_else(|| String::from("127.0.0.1"));
         let port = port.unwrap_or(13734);
@@ -453,5 +451,41 @@ event_loop.add_signal_handler(signal.SIGINT,
         tracing::info!("Rust Python server started successfully");
         self.block_on_rust_signals();
         Ok(())
+    }
+
+    /// Lambda main entrypoint: start the handler on Lambda.
+    ///
+    /// Unlike the `run_server`, `run_lambda_handler` does not spawns other processes,
+    /// it starts the Lambda handler on the current process.
+    fn run_lambda_handler(&mut self, py: Python) -> PyResult<()> {
+        let event_loop = self.configure_python_event_loop(py)?;
+        let app = self.build_and_configure_router(py, event_loop)?;
+        let rt = runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("unable to start a new tokio runtime for this process");
+        rt.block_on(async move {
+            let handler = LambdaHandler::new(app);
+            let lambda = lambda_http::run(handler);
+            tracing::debug!("starting lambda handler");
+            if let Err(err) = lambda.await {
+                tracing::error!(error = %err, "unable to start lambda handler");
+            }
+        });
+        Ok(())
+    }
+
+    // Builds the router and adds necessary layers to it.
+    fn build_and_configure_router(
+        &mut self,
+        py: Python,
+        event_loop: &pyo3::PyAny,
+    ) -> pyo3::PyResult<Router> {
+        let app = self.build_router(event_loop)?;
+        // Create the `PyState` object from the Python context object.
+        let context = self.context().clone().unwrap_or_else(|| py.None());
+        tracing::debug!("add middlewares to rust python router");
+        let app = app.layer(ServiceBuilder::new().layer(AddExtensionLayer::new(context)));
+        Ok(app)
     }
 }

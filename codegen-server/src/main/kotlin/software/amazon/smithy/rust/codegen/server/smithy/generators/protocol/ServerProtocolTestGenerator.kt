@@ -452,8 +452,9 @@ class ServerProtocolTestGenerator(
             """
             let mut http_request = #{SmithyHttpServer}::request::RequestParts::new(http_request);
             let rejection = super::$operationName::from_request(&mut http_request).await.expect_err("request was accepted but we expected it to be rejected");
-            let http_response = rejection.into_response();
+            let http_response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(rejection);
             """,
+            "Protocol" to protocolGenerator.protocol.markerStruct(),
             *codegenScope,
         )
         checkResponse(this, testCase.response)

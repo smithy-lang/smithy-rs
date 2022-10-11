@@ -11,7 +11,7 @@
 //! the framework, `RuntimeError` is surfaced to clients in HTTP responses: indeed, it implements
 //! [`RuntimeError::into_response`]. Rejections can be "grouped" and converted into a
 //! specific `RuntimeError` kind: for example, all request rejections due to serialization issues
-//! can be conflated under the [`RuntimeErrorKind::Serialization`] enum variant.
+//! can be conflated under the [`RuntimeError::Serialization`] enum variant.
 //!
 //! The HTTP response representation of the specific `RuntimeError` can be protocol-specific: for
 //! example, the runtime error in the RestJson1 protocol sets the `X-Amzn-Errortype` header.
@@ -21,17 +21,16 @@
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
 //! [`RuntimeError::into_response`] method to render and send a response.
 
-use std::borrow::Cow;
-
+use crate::extension::RuntimeErrorExtension;
 use crate::proto::aws_json_10::AwsJson10;
 use crate::proto::aws_json_11::AwsJson11;
 use crate::proto::rest_json_1::AwsRestJson1;
 use crate::proto::rest_xml::AwsRestXml;
-use crate::protocols::Protocol;
-use crate::response::{IntoResponse, Response};
+use crate::response::IntoResponse;
+use http::StatusCode;
 
 #[derive(Debug)]
-pub enum RuntimeErrorKind {
+pub enum RuntimeError {
     /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),
     /// As of writing, this variant can only occur upon failure to extract an
@@ -49,14 +48,24 @@ pub enum RuntimeErrorKind {
 /// String representation of the runtime error type.
 /// Used as the value of the `X-Amzn-Errortype` header in RestJson1.
 /// Used as the value passed to construct an [`crate::extension::RuntimeErrorExtension`].
-impl RuntimeErrorKind {
+impl RuntimeError {
     pub fn name(&self) -> &'static str {
         match self {
-            RuntimeErrorKind::Serialization(_) => "SerializationException",
-            RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
-            RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
-            RuntimeErrorKind::UnsupportedMediaType => "UnsupportedMediaTypeException",
-            RuntimeErrorKind::Validation(_) => "ValidationException",
+            Self::Serialization(_) => "SerializationException",
+            Self::InternalFailure(_) => "InternalFailureException",
+            Self::NotAcceptable => "NotAcceptableException",
+            Self::UnsupportedMediaType => "UnsupportedMediaTypeException",
+            Self::Validation(_) => "ValidationException",
+        }
+    }
+
+    pub fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Serialization(_) => StatusCode::BAD_REQUEST,
+            Self::InternalFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotAcceptable => StatusCode::NOT_ACCEPTABLE,
+            Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::Validation(_) => StatusCode::BAD_REQUEST,
         }
     }
 }
@@ -65,118 +74,124 @@ pub struct InternalFailureException;
 
 impl IntoResponse<AwsJson10> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        RuntimeError::internal_failure_from_protocol(Protocol::AwsJson10).into_response()
+        IntoResponse::<AwsJson10>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<AwsJson11> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        RuntimeError::internal_failure_from_protocol(Protocol::AwsJson11).into_response()
+        IntoResponse::<AwsJson11>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<AwsRestJson1> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        RuntimeError::internal_failure_from_protocol(Protocol::RestJson1).into_response()
+        IntoResponse::<AwsRestJson1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<AwsRestXml> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        RuntimeError::internal_failure_from_protocol(Protocol::RestXml).into_response()
+        IntoResponse::<AwsRestXml>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-#[derive(Debug)]
-pub struct RuntimeError {
-    pub protocol: Protocol,
-    pub kind: RuntimeErrorKind,
-}
-
-impl<P> IntoResponse<P> for RuntimeError {
+impl IntoResponse<AwsRestJson1> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        self.into_response()
-    }
-}
+        let res = http::Response::builder()
+            .status(self.status_code())
+            .header("Content-Type", "application/json")
+            .header("X-Amzn-Errortype", self.name())
+            .extension(RuntimeErrorExtension::new(self.name().to_string()));
 
-impl RuntimeError {
-    pub fn internal_failure_from_protocol(protocol: Protocol) -> Self {
-        RuntimeError {
-            protocol,
-            kind: RuntimeErrorKind::InternalFailure(crate::Error::new(String::new())),
-        }
-    }
-
-    pub fn into_response(self) -> Response {
-        let status_code = match self.kind {
-            RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
-            RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
-            RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
-            RuntimeErrorKind::UnsupportedMediaType => http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            RuntimeErrorKind::Validation(_) => http::StatusCode::BAD_REQUEST,
+        let body = match self {
+            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
+            _ => crate::body::to_boxed("{}"),
         };
 
-        let mut builder = http::Response::builder();
-        builder = builder.status(status_code);
-
-        match self.protocol {
-            Protocol::RestJson1 => {
-                builder = builder
-                    .header("Content-Type", "application/json")
-                    .header("X-Amzn-Errortype", self.kind.name());
-            }
-            Protocol::RestXml => builder = builder.header("Content-Type", "application/xml"),
-            Protocol::AwsJson10 => builder = builder.header("Content-Type", "application/x-amz-json-1.0"),
-            Protocol::AwsJson11 => builder = builder.header("Content-Type", "application/x-amz-json-1.1"),
-        }
-
-        builder = builder.extension(crate::extension::RuntimeErrorExtension::new(String::from(
-            self.kind.name(),
-        )));
-
-        let body = crate::body::to_boxed(match self.kind {
-            RuntimeErrorKind::Validation(reason) => Cow::Owned(match self.protocol {
-                Protocol::RestJson1 | Protocol::AwsJson10 | Protocol::AwsJson11 => {
-                    // https://docs.rs/serde_json/latest/serde_json/ser/fn.to_string.html#errors
-                    // serde_json::to_string(reason).expect("unexpected failure during serialization of constraint violation; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
-                    reason
-                }
-                Protocol::RestXml => todo!(),
-            }),
-            _ => {
-                Cow::Borrowed(match self.protocol {
-                    Protocol::RestJson1 => "{}",
-                    Protocol::RestXml => "",
-                    // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#empty-body-serialization
-                    Protocol::AwsJson10 => "",
-                    // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
-                    Protocol::AwsJson11 => "",
-                })
-            }
-        });
-
-        builder.body(body).expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+        res
+            .body(body)
+            .expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }
 }
 
-impl From<crate::rejection::RequestExtensionNotFoundRejection> for RuntimeErrorKind {
+impl IntoResponse<AwsRestXml> for RuntimeError {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        let res = http::Response::builder()
+            .status(self.status_code())
+            .header("Content-Type", "application/xml")
+            .extension(RuntimeErrorExtension::new(self.name().to_string()));
+
+        let body = match self {
+            // TODO(https://github.com/awslabs/smithy/issues/1446) The Smithy spec does not yet
+            // define constraint violation HTTP body responses for RestXml.
+            RuntimeError::Validation(_reason) => todo!("https://github.com/awslabs/smithy/issues/1446"),
+            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
+            _ => crate::body::to_boxed("{}"),
+        };
+
+        res
+            .body(body)
+            .expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+    }
+}
+
+impl IntoResponse<AwsJson10> for RuntimeError {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        let res = http::Response::builder()
+            .status(self.status_code())
+            .header("Content-Type", "application/x-amz-json-1.0")
+            .extension(RuntimeErrorExtension::new(self.name().to_string()));
+
+        let body = match self {
+            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
+            // See https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
+            _ => crate::body::to_boxed("{}"),
+        };
+
+        res
+            .body(body)
+            .expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+    }
+}
+
+impl IntoResponse<AwsJson11> for RuntimeError {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        let res = http::Response::builder()
+            .status(self.status_code())
+            .header("Content-Type", "application/x-amz-json-1.1")
+            .extension(RuntimeErrorExtension::new(self.name().to_string()));
+
+        let body = match self {
+            RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
+            // https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html#empty-body-serialization
+            _ => crate::body::to_boxed(""),
+        };
+
+        res
+            .body(body)
+            .expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+    }
+}
+
+impl From<crate::rejection::RequestExtensionNotFoundRejection> for RuntimeError {
     fn from(err: crate::rejection::RequestExtensionNotFoundRejection) -> Self {
-        RuntimeErrorKind::InternalFailure(crate::Error::new(err))
+        Self::InternalFailure(crate::Error::new(err))
     }
 }
 
-impl From<crate::rejection::ResponseRejection> for RuntimeErrorKind {
+impl From<crate::rejection::ResponseRejection> for RuntimeError {
     fn from(err: crate::rejection::ResponseRejection) -> Self {
-        RuntimeErrorKind::Serialization(crate::Error::new(err))
+        Self::Serialization(crate::Error::new(err))
     }
 }
 
-impl From<crate::rejection::RequestRejection> for RuntimeErrorKind {
+impl From<crate::rejection::RequestRejection> for RuntimeError {
     fn from(err: crate::rejection::RequestRejection) -> Self {
         match err {
-            crate::rejection::RequestRejection::MissingContentType(_reason) => RuntimeErrorKind::UnsupportedMediaType,
-            crate::rejection::RequestRejection::ConstraintViolation(reason) => RuntimeErrorKind::Validation(reason),
-            _ => RuntimeErrorKind::Serialization(crate::Error::new(err)),
+            crate::rejection::RequestRejection::MissingContentType(_reason) => Self::UnsupportedMediaType,
+            crate::rejection::RequestRejection::ConstraintViolation(reason) => Self::Validation(reason),
+            _ => Self::Serialization(crate::Error::new(err)),
         }
     }
 }
