@@ -13,8 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
@@ -107,8 +106,8 @@ class UnconstrainedCollectionGenerator(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
             RustMetadata(visibility = constraintViolationVisibility),
         ) {
-            // TODO We only need to generate `usize` when the collection shape is directly constrained: see
-            //  UnconstrainedCollectionGeneratorTest for an example where it isn't.
+            // The first component of the tuple struct is the index in the collection where the first constraint
+            // violation was found.
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
@@ -120,7 +119,7 @@ class UnconstrainedCollectionGenerator(
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
             )
 
-            if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+            if (shape.isReachableFromOperationInput()) {
                 rustTemplate(
                     """
                     impl $constraintViolationName {

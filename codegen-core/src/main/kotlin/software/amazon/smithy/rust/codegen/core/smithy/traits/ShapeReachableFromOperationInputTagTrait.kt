@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.AnnotationTrait
@@ -29,12 +30,12 @@ class ShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.obje
 }
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
-    is StructureShape, is UnionShape, is ListShape, is MapShape -> {
-        // TODO There are a bunch of sites where we're performing this check inline instead of calling this function.
+    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape -> {
         shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
     } else -> PANIC("this method does not support shape type ${shape.type}")
 }
 
+fun StringShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun StructureShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun CollectionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun UnionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)

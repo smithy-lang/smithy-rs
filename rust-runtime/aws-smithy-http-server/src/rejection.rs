@@ -185,12 +185,6 @@ pub enum RequestRejection {
     // TODO(https://github.com/awslabs/smithy-rs/issues/1703): this will hold a type that can be
     // rendered into a protocol-specific response later on.
     ConstraintViolation(String),
-
-    // TODO ConstraintViolation should supersede this variant.
-    /// Used by the server when the enum variant sent by a client is not known.
-    // Unlike the rejections above, the inner type is code generated,
-    // with each enum having its own generated error type.
-    EnumVariantNotFound(crate::error::BoxError),
 }
 
 #[derive(Debug, Display)]

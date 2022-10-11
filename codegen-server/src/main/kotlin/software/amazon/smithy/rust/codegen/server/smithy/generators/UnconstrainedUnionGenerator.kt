@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -141,7 +141,7 @@ class UnconstrainedUnionGenerator(
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
-            if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+            if (shape.isReachableFromOperationInput()) {
                 rustBlock("impl $constraintViolationName") {
                     rustBlockTemplate(
                         "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",

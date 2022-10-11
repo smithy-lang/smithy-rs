@@ -64,12 +64,11 @@ class UnconstrainedCollectionGeneratorTest {
                     UnconstrainedCollectionGenerator(codegenContext, unconstrainedModuleWriter, modelsModuleWriter, it).render()
                 }
 
-                // TODO We should not have to pass in 0. See TODO in `UnconstrainedCollectionGenerator`.
                 unconstrainedModuleWriter.unitTest(
                     name = "list_a_unconstrained_fail_to_constrain_with_first_error",
                     test = """
                     let c_builder1 = crate::model::StructureC::builder().int(69);
-                    let c_builder2 = crate::model::StructureC::builder().string(String::from("david"));
+                    let c_builder2 = crate::model::StructureC::builder().string("david".to_owned());
                     let list_b_unconstrained = list_b_unconstrained::ListBUnconstrained(vec![c_builder1, c_builder2]);
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
@@ -93,7 +92,7 @@ class UnconstrainedCollectionGeneratorTest {
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                     let expected: Vec<Vec<crate::model::StructureC>> = vec![vec![crate::model::StructureC {
-                        string: String::from("david"),
+                        string: "david".to_owned(),
                         int: 69
                     }]];
                     let actual: Vec<Vec<crate::model::StructureC>> = 

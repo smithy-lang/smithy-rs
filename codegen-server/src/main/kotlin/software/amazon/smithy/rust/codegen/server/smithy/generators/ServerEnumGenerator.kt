@@ -8,15 +8,13 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
@@ -54,23 +52,23 @@ open class ServerEnumGenerator(
                 *codegenScope,
             )
 
-            // TODO ValidationException should live under `crate::error::`.
-            if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+            if (shape.isReachableFromOperationInput()) {
                 val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
                 val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
 
-                rustBlock("impl $constraintViolationName") {
-                    rustBlockTemplate("pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField", *codegenScope) {
-                        rust(
-                            """
+                rustTemplate(
+                    """
+                    impl $constraintViolationName {
+                        pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
                             crate::model::ValidationExceptionField {
                                 message: format!(r##"$message"##, &self.0, &path),
                                 path,
                             }
-                            """,
-                        )
+                        }
                     }
-                }
+                    """,
+                    *codegenScope,
+                )
             }
         }
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.TryFrom) {
