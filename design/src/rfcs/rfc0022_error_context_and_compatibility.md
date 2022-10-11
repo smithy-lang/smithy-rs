@@ -10,9 +10,11 @@ error context AND forwards/backwards compatibility. The goal is to strike
 a balance between these four goals:
 
 1. Errors are forwards compatible, and changes to errors are backwards compatible
-2. Errors are ergonomic
+2. Errors are idiomatic and ergonomic. It is easy to match on them and extract additional
+   information for cases where that's useful. The type system prevents errors from being used
+   incorrectly (for example, incorrectly retrieving context for a different error variant)
 3. Error messages are easy to debug
-4. Errors adhere to Rust's `Error` trait
+4. Errors implement best practices with Rust's `Error` trait (for example, implementing the optional `source()` function where possible)
 
 _Note:_ This RFC is _not_ about error backwards compatibility when it comes to error serialization/deserialization
 for transfer over the wire. The Smithy protocols cover that aspect.
@@ -68,18 +70,19 @@ This error does a few things well:
 However, there are also a number of things that could be improved:
 1. All tuple/struct enum members are public, and `InvalidUri` is an error from the `http` crate.
    Exposing a type from another crate can potentially lock the GA SDK into a specific crate version
-   if breaking changes are ever made to the exposed types.
+   if breaking changes are ever made to the exposed types. In this specific case, it prevents
+   using alternate HTTP implementations that don't use the `http` crate.
 2. `DnsLookupFailed` is missing `#[non_exhaustive]`, so new members can never be added to it.
 3. Use of enum tuples, even with `#[non_exhaustive]`, adds friction to evolving the API since the
    tuple members cannot be named.
 4. Printing the source error in the `Display` impl leads to error repetition by reporters
    that examine the full source chain.
-5. The `source()` impl has a `_` matcher, which means implementers may forget to propagate
-   a source when adding a new variant.
+5. The `source()` impl has a `_` match arm, which means future implementers could forget to propagate
+   a source when adding new error variants.
 6. The error source can be downcasted to `InvalidUri` type from `http` in customer code. This is
    a leaky abstraction where customers can start to rely on the underlying library the SDK uses
    in its implementation, and if that library is replaced/changed, it can silently break the
-   customer's application. _Note:_ later in the RFC, we'll see that fixing this issue is not practical.
+   customer's application. _Note:_ later in the RFC, I'll demonstrate why fixing this issue is not practical.
 
 ### Case study: `ProfileParseError`
 
@@ -115,10 +118,11 @@ What could be improved:
 - It needlessly implements `Clone`, which may prevent it from holding
   an error source in the future since errors are often not `Clone`.
 - In the future, if more error variants are needed, a private inner error
-  kind enum could be added to change messaging, but there's no way to expose
-  information specific to the new error variant to the customer.
+  kind enum could be added to change messaging, but there's not a _nice_ way to
+  expose new variant-specific information to the customer.
 - Programmatic access to the error `Location` may be desired, but
-  this can be trivially added in the future without a breaking change.
+  this can be trivially added in the future without a breaking change by
+  adding an accessor method.
 
 ### Case study: code generated client errors
 
@@ -143,7 +147,7 @@ pub enum Error {
 Each error variant gets its own struct, which can hold error-specific contextual information.
 Except for the `Unhandled` variant, both the error enum and the details on each variant are extensible.
 The `Unhandled` variant should move the error source into a struct so that its type can be hidden.
-Otherwise, the code generated errors are already aligned with the goals for this RFC.
+Otherwise, the code generated errors are already aligned with the goals of this RFC.
 
 Approaches from other projects
 ------------------------------
@@ -206,16 +210,17 @@ such as a backtrace could still be retrieved through the opaque error new-type.
 This RFC proposes that error types from other libraries not be directly exposed in the API, but rather,
 be exposed indirectly through `Error::source` as `&dyn Error + 'static`.
 
-Ideally, errors should contain enough useful information on them that downcasting the underlying cause
-is not necessary. Customers needing to downcast the error source should be a last resort, and with the
-understanding that the type could change at a later date with no compile-time guarantees.
+Errors should not require downcasting to be useful. Downcasting the error's source should be
+a last resort, and with the understanding that the type could change at a later date with no
+compile-time guarantees.
 
 Error Proposal
 --------------
 
 Taking a customer's perspective, there are two broad categories of errors:
 
-1. **Actionable:** Errors that can/should influence program flow
+1. **Actionable:** Errors that can/should influence program flow; where it's useful to
+   do different work based on additional error context or error variant information
 2. **Informative:** Errors that inform that something went wrong, but where
    it's not useful to match on the error to change program flow
 
@@ -224,29 +229,35 @@ all errors in the public API for the Rust runtime crates and generated client cr
 
 ### Actionable error pattern
 
-Actionable errors must be represented as enums. If an error variant has an error source or additional
-contextual information, it must use a struct that is either embedded inside the enum, or separate where it makes
-sense to have private fields. For example:
+Actionable errors are represented as enums. If an error variant has an error source or additional contextual
+information, it must use a separate context struct that is referenced via tuple in the enum. For example:
 
 ```rust
 pub enum Error {
-    // Good
-    #[non_exhaustive]
-    VariantA,
+    // Good: This is exhaustive and uses a tuple, but its sole member is an extensible struct with private fields
+    VariantA(VariantA),
 
-    // Good
+    // Bad: The fields are directly exposed and can't have accessor methods. The error
+    // source type also can't be changed at a later date since.
     #[non_exhaustive]
     VariantB {
         some_additional_info: u32,
         source: AnotherError // AnotherError is from this crate
     },
 
-    // Good: This is exhaustive and uses a tuple, but its sole member is an extensible struct
-    VariantC(VariantC),
+    // Bad: There's no way to add additional contextual information to this error in the future, even
+    // though it is non-exhaustive. Changing it to a tuple or struct later leads to compile errors in existing
+    // match statements.
+    #[non_exhaustive]
+    VariantC,
 
-    // Bad: Not ergonomic if additional context is added later
+    // Bad: Not extensible if additional context is added later (unless that context can be added to `AnotherError`)
     #[non_exhaustive]
     VariantD(AnotherError),
+
+    // Bad: Not extensible. If new context is added later (for example, a second endpoint), there's no way to name it.
+    #[non_exhaustive]
+    VariantE(Endpoint, AnotherError),
 
     // Bad: Exposes another library's error type in the public API,
     // which makes upgrading or replacing that library a breaking change
@@ -264,10 +275,20 @@ pub enum Error {
     }
 }
 
-pub struct VariantC { some_private_field: u32 }
+pub struct VariantA {
+    some_field: u32,
+    // This is private, so it's fine to reference the external library's error type
+    source: http::uri::InvalidUri
+}
+
+impl VariantA {
+    fn some_field(&self) -> u32 {
+        self.some_field
+    }
+}
 ```
 
-When the error variants have a source, the `Error::source` method must be implemented to return that source.
+Error variants that contain a source must return it from the `Error::source` method.
 The `source` implementation _should not_ use the catch all (`_`) match arm, as this makes it easy to miss
 adding a new error variant's source at a later date.
 
@@ -324,12 +345,12 @@ impl Error for InformativeError {
 ```
 
 In general, informative errors should be referenced by variants in actionable errors since they cannot be converted
-to adaptive errors at a later date without a breaking change. This is not a hard rule, however. Use your best judgement
+to actionable errors at a later date without a breaking change. This is not a hard rule, however. Use your best judgement
 for the situation.
 
 ### Displaying full error context
 
-In places where errors are logged rather than returned to the customer, the full error source chain
+In code where errors are logged rather than returned to the customer, the full error source chain
 must be displayed. This will be made easy by placing a `DisplayErrorContext` struct in `aws-smithy-types` that
 is used as a wrapper to get the better error formatting:
 
@@ -364,3 +385,18 @@ Changes Checklist
 
 - [ ] Update every struct/enum that implements `Error` in all the non-server Rust runtime crates
 - [ ] Hide error source type in `Unhandled` variant in code generated errors
+
+Error Code Review Checklist
+---------------------------
+
+This is a checklist meant to aid code review of new errors:
+
+- [ ] The error fits either the actionable or informative pattern
+- [ ] If the error is informative, it's clear that it will never be expanded with additional variants in the future
+- [ ] The `Display` impl does not write the error source to the formatter
+- [ ] The catch all `_` match arm is not used in the `Display` or `Error::source` implementations
+- [ ] Error types from external libraries are not exposed in the public API
+- [ ] Error enums are `#[non_exhaustive]`
+- [ ] Error enum variants that don't have a separate error context struct are `#[non_exhaustive]`
+- [ ] Error context is exposed via accessors rather than by public fields
+- [ ] Errors and their context structs are in an `error` submodule for any given module. They are not mixed with other non-error code
