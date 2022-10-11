@@ -5,9 +5,11 @@
 
 use crate::operation::Operation;
 
-/// Provides a standard interface for applying [`Plugin`]s to a service builder. This is implemented automatically for all builders.
-/// As [`Plugin`]s modify the way in which [`Operation`]s are [`upgraded`](crate::operation::Upgradable) we can use [`Pluggable`] as a foundation
-/// to write extension traits for all builders.
+/// Provides a standard interface for applying [`Plugin`]s to a service builder. This is implemented automatically for
+/// all builders.
+///
+/// As [`Plugin`]s modify the way in which [`Operation`]s are [`upgraded`](crate::operation::Upgradable) we can use
+/// [`Pluggable`] as a foundation to write extension traits which are implemented for all service builders.
 ///
 /// # Example
 ///
@@ -19,29 +21,34 @@ use crate::operation::Operation;
 ///         self.apply(PrintPlugin)
 ///     }
 /// }
+///
 /// impl<Builder> PrintExt for Builder where Builder: Pluggable<PrintPlugin> {}
 /// ```
 pub trait Pluggable<NewPlugin> {
     type Output;
 
-    /// A service builder applies this `plugin`.
+    /// Applies a [`Plugin`] to the service builder.
     fn apply(self, plugin: NewPlugin) -> Self::Output;
 }
 
-/// Maps one [`Operation`] to another,
-/// parameterised by the protocol `P` and operation shape `Op` to allow for plugin behaviour to be specialised accordingly.
+/// A mapping from one [`Operation`] to another. Used to modify the behavior of
+/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder,
 ///
-/// This is passed to [`Pluggable::apply`] to modify the behaviour of the builder.
-pub trait Plugin<P, Op, S, L> {
+/// The generics `Protocol` and `Op` allow the behavior to be parameterized.
+///
+/// Every service builder enjoys [`Pluggable`] and therefore can be provided with a [`Plugin`] using
+/// [`Pluggable::apply`].
+pub trait Plugin<Protocol, Op, S, L> {
     type Service;
     type Layer;
 
-    /// Map an [`Operation`] to another.
+    /// Maps an [`Operation`] to another.
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
 }
 
 /// An [`Plugin`] that maps an `input` [`Operation`] to itself.
 pub struct IdentityPlugin;
+
 impl<P, Op, S, L> Plugin<P, Op, S, L> for IdentityPlugin {
     type Service = S;
     type Layer = L;
