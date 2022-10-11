@@ -74,7 +74,12 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            serverBuilderConstraintViolations.render(writer, Visibility.PUBLIC, nonExhaustive = false)
+            serverBuilderConstraintViolations.render(
+                writer,
+                Visibility.PUBLIC,
+                nonExhaustive = false,
+                shouldRenderAsValidationExceptionFieldList = false,
+            )
 
             renderTryFromBuilderImpl(writer)
         } else {

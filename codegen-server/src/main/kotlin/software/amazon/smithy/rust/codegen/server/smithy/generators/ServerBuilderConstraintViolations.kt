@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -52,7 +51,12 @@ class ServerBuilderConstraintViolations(
         )
     }
 
-    fun render(writer: RustWriter, visibility: Visibility, nonExhaustive: Boolean) {
+    fun render(
+        writer: RustWriter,
+        visibility: Visibility,
+        nonExhaustive: Boolean,
+        shouldRenderAsValidationExceptionFieldList: Boolean,
+    ) {
         Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
         writer.docs("Holds one variant for each of the ways the builder can fail.")
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
@@ -63,7 +67,7 @@ class ServerBuilderConstraintViolations(
         renderImplDisplayConstraintViolation(writer)
         writer.rust("impl #T for ConstraintViolation { }", RuntimeType.StdError)
 
-        if (shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()) {
+        if (shouldRenderAsValidationExceptionFieldList) {
             renderAsValidationExceptionFieldList(writer)
         }
     }
@@ -148,8 +152,8 @@ class ServerBuilderConstraintViolations(
                         rust(
                             """
                             ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                                path: format!("{}/${it.forMember.memberName}", path),
                                 message: format!("Value null at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                                path: path + "/${it.forMember.memberName}",
                             },
                             """
                         )

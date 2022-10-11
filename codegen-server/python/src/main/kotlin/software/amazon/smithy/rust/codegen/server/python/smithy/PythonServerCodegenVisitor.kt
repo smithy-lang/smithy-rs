@@ -16,13 +16,11 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator

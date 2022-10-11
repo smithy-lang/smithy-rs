@@ -18,8 +18,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolVisitor
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonStreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
