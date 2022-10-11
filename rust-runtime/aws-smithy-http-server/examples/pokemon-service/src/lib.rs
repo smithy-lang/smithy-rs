@@ -213,7 +213,7 @@ pub async fn capture_pokemon(
     mut input: input::CapturePokemonInput,
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     if input.region != "Kanto" {
-        return Err(error::CapturePokemonOperationError::UnsupportedRegionError(
+        return Err(error::CapturePokemonError::UnsupportedRegionError(
             error::UnsupportedRegionError { region: input.region },
         ));
     }
