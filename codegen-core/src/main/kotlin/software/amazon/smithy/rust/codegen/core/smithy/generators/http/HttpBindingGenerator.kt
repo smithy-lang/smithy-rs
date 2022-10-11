@@ -78,7 +78,7 @@ enum class HttpMessageType {
  * Class describing an HTTP binding (de)serialization section that can be used in a customization.
  */
 sealed class HttpBindingSection(name: String) : Section(name) {
-    // TODO `shape` should be `MapShape`.
+    // TODO `shape` should be `MapShape`. See the instantiator site, which is working with a `Shape` instead (and should not be).
     data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: Shape) :
         HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
 }

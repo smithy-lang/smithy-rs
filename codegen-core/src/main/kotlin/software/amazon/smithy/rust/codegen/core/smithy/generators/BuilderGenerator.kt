@@ -35,7 +35,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-// TODO Move this entire file to `codegen-client`.
+// TODO This builder generator is only used by the client.
+//  Move this entire file, and its tests, to `codegen-client`. It's not as easy as it seems.
 
 fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
     val structureSymbol = symbolProvider.toSymbol(this)
