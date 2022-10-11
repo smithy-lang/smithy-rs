@@ -64,17 +64,22 @@ pub trait PluginExt<P, Op, S, L>: Plugin<P, Op, S, L> {
         PluginStack::new(self, other)
     }
 
-    /// Filters the application of the [`Plugin`] using a predicate over the [`OperationShape::NAME`].
+    /// Filters the application of the [`Plugin`] using a predicate over the
+    /// [`OperationShape::NAME`](crate::operation::OperationShape).
     ///
     /// # Example
     ///
     /// ```rust
-    /// # use aws_smithy_http_server::plugin::{Plugin, PluginExt};
+    /// # use aws_smithy_http_server::{plugin::{Plugin, PluginExt}, operation::{Operation, OperationShape}};
     /// # struct Pl;
-    /// # impl Plugin<(), (), (), ()> for Pl {}
+    /// # struct Op;
+    /// # impl OperationShape for Op { const NAME: &'static str = ""; type Input = (); type Output = (); type Error = (); }
+    /// # impl Plugin<(), Op, (), ()> for Pl { type Service = (); type Layer = (); fn map(&self, input: Operation<(), ()>) -> Operation<(), ()> { input }}
     /// # let plugin = Pl;
+    /// # let operation = Operation { inner: (), layer: () };
     /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
     /// let filtered_plugin = plugin.filter_by_operation_name(|name| name != "com.aws.example#CheckHealth");
+    /// let new_operation = filtered_plugin.map(operation);
     /// ```
     fn filter_by_operation_name<F>(self, predicate: F) -> FilterByOperationName<Self, F>
     where

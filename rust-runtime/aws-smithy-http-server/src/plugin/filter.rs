@@ -9,6 +9,9 @@ use crate::operation::{Operation, OperationShape};
 
 use super::Plugin;
 
+/// A [`Plugin`] used to filter [`Plugin::map`] application using a predicate over the [`OperationShape::NAME`].
+///
+/// See [`PluginExt::filter_by_operation_name`](super::PluginExt::filter_by_operation_name) for more information.
 pub struct FilterByOperationName<Inner, F> {
     inner: Inner,
     predicate: F,
