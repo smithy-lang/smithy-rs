@@ -65,7 +65,6 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
-    val handleRustBoxing: Boolean,
     val nullabilityCheckMode: NullableIndex.CheckMode,
 )
 
@@ -328,13 +327,8 @@ open class SymbolVisitor(
 
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
-        val targetSymbol = this.toSymbol(target)
         // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
-        return targetSymbol.letIf(config.handleRustBoxing) {
-            handleRustBoxing(it, shape)
-        }.let {
-            handleOptionality(it, shape)
-        }
+        return handleOptionality(handleRustBoxing(toSymbol(target), shape), shape)
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {

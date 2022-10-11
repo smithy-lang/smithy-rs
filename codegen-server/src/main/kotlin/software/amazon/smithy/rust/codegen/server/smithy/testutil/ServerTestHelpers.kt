@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = false,
-    handleRustBoxing = true,
     nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
 )
 

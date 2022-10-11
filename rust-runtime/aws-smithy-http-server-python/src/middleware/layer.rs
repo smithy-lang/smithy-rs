@@ -5,69 +5,52 @@
 
 //! Tower layer implementation of Python middleware handling.
 use std::{
+    marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
 
 use aws_smithy_http_server::{
     body::{Body, BoxBody},
-    protocols::Protocol,
+    response::IntoResponse,
 };
 use futures::{ready, Future};
 use http::{Request, Response};
 use pin_project_lite::pin_project;
-use pyo3::PyResult;
 use pyo3_asyncio::TaskLocals;
 use tower::{Layer, Service};
 
-use crate::{error::PyException, middleware::PyFuture, PyMiddlewares};
+use crate::{middleware::PyFuture, PyMiddlewareException, PyMiddlewares};
 
 /// Tower [Layer] implementation of Python middleware handling.
 ///
 /// Middleware stored in the `handlers` attribute will be executed, in order,
 /// inside an async Tower middleware.
 #[derive(Debug, Clone)]
-pub struct PyMiddlewareLayer {
+pub struct PyMiddlewareLayer<P> {
     handlers: PyMiddlewares,
-    protocol: Protocol,
     locals: TaskLocals,
+    _protocol: PhantomData<P>,
 }
 
-impl PyMiddlewareLayer {
-    pub fn new(
-        handlers: PyMiddlewares,
-        protocol: &str,
-        locals: TaskLocals,
-    ) -> PyResult<PyMiddlewareLayer> {
-        let protocol = match protocol {
-            "aws.protocols#restJson1" => Protocol::RestJson1,
-            "aws.protocols#restXml" => Protocol::RestXml,
-            "aws.protocols#awsjson10" => Protocol::AwsJson10,
-            "aws.protocols#awsjson11" => Protocol::AwsJson11,
-            _ => {
-                return Err(PyException::new_err(format!(
-                    "Protocol {protocol} is not supported"
-                )))
-            }
-        };
-        Ok(Self {
+impl<P> PyMiddlewareLayer<P> {
+    pub fn new(handlers: PyMiddlewares, locals: TaskLocals) -> Self {
+        Self {
             handlers,
-            protocol,
             locals,
-        })
+            _protocol: PhantomData,
+        }
     }
 }
 
-impl<S> Layer<S> for PyMiddlewareLayer {
+impl<S, P> Layer<S> for PyMiddlewareLayer<P>
+where
+    PyMiddlewareException: IntoResponse<P>,
+{
     type Service = PyMiddlewareService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        PyMiddlewareService::new(
-            inner,
-            self.handlers.clone(),
-            self.protocol,
-            self.locals.clone(),
-        )
+        PyMiddlewareService::new(inner, self.handlers.clone(), self.locals.clone())
     }
 }
 
@@ -76,21 +59,14 @@ impl<S> Layer<S> for PyMiddlewareLayer {
 pub struct PyMiddlewareService<S> {
     inner: S,
     handlers: PyMiddlewares,
-    protocol: Protocol,
     locals: TaskLocals,
 }
 
 impl<S> PyMiddlewareService<S> {
-    pub fn new(
-        inner: S,
-        handlers: PyMiddlewares,
-        protocol: Protocol,
-        locals: TaskLocals,
-    ) -> PyMiddlewareService<S> {
+    pub fn new(inner: S, handlers: PyMiddlewares, locals: TaskLocals) -> PyMiddlewareService<S> {
         Self {
             inner,
             handlers,
-            protocol,
             locals,
         }
     }
@@ -113,7 +89,7 @@ where
         let clone = self.inner.clone();
         // See https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
         let inner = std::mem::replace(&mut self.inner, clone);
-        let run = self.handlers.run(req, self.protocol, self.locals.clone());
+        let run = self.handlers.run(req, self.locals.clone());
 
         ResponseFuture {
             middleware: State::Running { run },
@@ -184,6 +160,7 @@ mod tests {
     use super::*;
 
     use aws_smithy_http_server::body::to_boxed;
+    use aws_smithy_http_server::proto::rest_json_1::AwsRestJson1;
     use pyo3::prelude::*;
     use tower::{Service, ServiceBuilder, ServiceExt};
 
@@ -197,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn request_middlewares_are_chained_inside_layer() -> PyResult<()> {
         let locals = crate::tests::initialize();
-        let mut middlewares = PyMiddlewares::new(vec![]);
+        let mut middlewares = PyMiddlewares::new::<AwsRestJson1>(vec![]);
 
         Python::with_gil(|py| {
             let middleware = PyModule::new(py, "middleware").unwrap();
@@ -234,11 +211,7 @@ def second_middleware(request: Request):
         })?;
 
         let mut service = ServiceBuilder::new()
-            .layer(PyMiddlewareLayer::new(
-                middlewares,
-                "aws.protocols#restJson1",
-                locals,
-            )?)
+            .layer(PyMiddlewareLayer::<AwsRestJson1>::new(middlewares, locals))
             .service_fn(echo);
 
         let request = Request::get("/").body(Body::empty()).unwrap();
