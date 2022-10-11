@@ -840,4 +840,41 @@ pub struct Parts {
 }
 ```
 
-This is commonly used to access types stored within [`Extensions`](https://docs.rs/http/0.2.8/http/struct.Extensions.html) which have been inserted by a middleware.
+This is commonly used to access types stored within [`Extensions`](https://docs.rs/http/0.2.8/http/struct.Extensions.html) which have been inserted by a middleware. An `Extension` struct implements `FromParts` to support this use case:
+
+```rust
+/// Generic extension type stored in and extracted from [request extensions].
+///
+/// This is commonly used to share state across handlers.
+///
+/// If the extension is missing it will reject the request with a `500 Internal
+/// Server Error` response.
+///
+/// [request extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
+#[derive(Debug, Clone)]
+pub struct Extension<T>(pub T);
+
+impl<Protocol, T> FromParts<Protocol> for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    type Rejection = MissingExtension;
+
+    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        parts.extensions.remove::<T>().map(Extension).ok_or(MissingExtension)
+    }
+}
+
+/// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
+#[derive(Debug, Error)]
+#[error("the `Extension` is not present in the `http::Request`")]
+pub struct MissingExtension;
+
+impl<Protocol> IntoResponse<Protocol> for MissingExtension {
+    fn into_response(self) -> http::Response<BoxBody> {
+        let mut response = http::Response::new(empty());
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        response
+    }
+}
+```
