@@ -38,4 +38,3 @@ fun StructureShape.isReachableFromOperationInput() = isShapeReachableFromOperati
 fun CollectionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun UnionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun MapShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
-

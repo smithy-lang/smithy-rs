@@ -48,7 +48,7 @@ class ServerResponseBindingGenerator(
 }
 
 // TODO Docs
-class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(val codegenContext: ServerCodegenContext): HttpBindingCustomization() {
+class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(val codegenContext: ServerCodegenContext) : HttpBindingCustomization() {
     override fun section(section: HttpBindingSection): Writable = when (section) {
         is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(section.shape, codegenContext.model, codegenContext.settings.codegenConfig.publicConstrainedTypes)) {

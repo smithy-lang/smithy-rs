@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -140,7 +139,7 @@ class ServerInstantiatorTest {
             UnionGenerator(model, symbolProvider, writer, union).render()
 
             writer.unitTest("server_instantiator_test") {
-                withBlock("let result = " , ";") {
+                withBlock("let result = ", ";") {
                     sut.render(this, structure, data, Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
                 }
 
@@ -168,7 +167,7 @@ class ServerInstantiatorTest {
                         doc: Document::Object(HashMap::new()),
                     };
                     assert_eq!(result, expected);
-                    """
+                    """,
                 )
             }
         }

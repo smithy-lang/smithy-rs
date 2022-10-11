@@ -24,4 +24,3 @@ fun StructureShape.serverBuilderSymbol(symbolProvider: SymbolProvider, pubCrate:
         .definitionFile(structureSymbol.definitionFile)
         .build()
 }
-

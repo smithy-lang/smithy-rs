@@ -22,9 +22,6 @@ import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
@@ -40,11 +37,11 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  */
 fun Shape.hasConstraintTrait() =
     hasTrait<LengthTrait>() ||
-    hasTrait<EnumTrait>() ||
-    hasTrait<UniqueItemsTrait>() ||
-    hasTrait<PatternTrait>() ||
-    hasTrait<RangeTrait>() ||
-    hasTrait<RequiredTrait>()
+        hasTrait<EnumTrait>() ||
+        hasTrait<UniqueItemsTrait>() ||
+        hasTrait<PatternTrait>() ||
+        hasTrait<RangeTrait>() ||
+        hasTrait<RequiredTrait>()
 
 /**
  * We say a shape is _directly_ constrained if:

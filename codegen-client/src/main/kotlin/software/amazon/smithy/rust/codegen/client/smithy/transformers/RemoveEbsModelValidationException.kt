@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.transformers
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.util.orNull
 

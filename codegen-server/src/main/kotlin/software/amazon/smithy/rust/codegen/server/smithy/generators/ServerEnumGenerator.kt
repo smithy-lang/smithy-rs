@@ -69,7 +69,7 @@ open class ServerEnumGenerator(
                                 message: format!(r##"$message"##, &self.0, &path),
                                 path,
                             }
-                            """
+                            """,
                         )
                     }
                 }

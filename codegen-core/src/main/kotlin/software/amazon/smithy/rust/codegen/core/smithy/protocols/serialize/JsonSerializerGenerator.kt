@@ -56,6 +56,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 sealed class JsonSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
+
     // TODO This could take in directly the `Context<MapShape>`
     data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSection("BeforeIteratingOverMap")
 }
