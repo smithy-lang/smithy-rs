@@ -63,8 +63,6 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
 
     fn middlewares(&mut self) -> &mut PyMiddlewares;
 
-    fn protocol(&self) -> &'static str;
-
     /// Handle the graceful termination of Python workers by looping through all the
     /// active workers and calling `terminate()` on them. If termination fails, this
     /// method will try to `kill()` any failed worker.
@@ -385,7 +383,6 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///         fn context(&self) -> &Option<PyObject> { todo!() }
     ///         fn handlers(&mut self) -> &mut HashMap<String, PyHandler> { todo!() }
     ///         fn middlewares(&mut self) -> &mut PyMiddlewares { todo!() }
-    ///         fn protocol(&self) -> &'static str { "proto1" }
     ///     }
     ///
     ///     #[pymethods]

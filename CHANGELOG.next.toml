@@ -37,6 +37,12 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
 author = "LukeMathWalker"
 
 [[smithy-rs]]
+message = "Sensitive fields in errors now respect @sensitive trait and are properly redacted."
+references = ["smithy-rs#1802"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jjant"
+
+[[smithy-rs]]
 message = "Pokémon Service example code now runs clippy during build."
 references = ["smithy-rs#1727"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
@@ -117,7 +123,7 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "Paginators now stop on encountering a duplicate token by default rather than panic. This behavior can be customized by toggling the `stop_on_duplicate_token` property on the paginator before calling `send`."
 references = ["aws-sdk-rust#620", "smithy-rs#1748"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -125,3 +131,21 @@ message = "The client Config now has getters for every value that it holds."
 references = ["smithy-rs#1747"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "kastolars"
+
+[[aws-sdk-rust]]
+message = "Fix regression where `connect_timeout` and `read_timeout` fields are unused in the IMDS client"
+references = ["smithy-rs#1822"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "kevinpark1217"
+
+[[smithy-rs]]
+message = "Remove `Protocol` enum, removing an obstruction to extending smithy to third-party protocols."
+references = ["smithy-rs#1829"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "hlbarber"
+
+[[smithy-rs]]
+message = "Convert the `protocol` argument on `PyMiddlewares::new` constructor to a type parameter."
+references = ["smithy-rs#1829"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "hlbarber"

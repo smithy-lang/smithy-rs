@@ -7,15 +7,6 @@
 use crate::rejection::MissingContentTypeReason;
 use crate::request::RequestParts;
 
-/// Supported protocols.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Protocol {
-    RestJson1,
-    RestXml,
-    AwsJson10,
-    AwsJson11,
-}
-
 /// When there are no modeled inputs,
 /// a request body is empty and the content-type request header must not be set
 pub fn content_type_header_empty_body_no_modeled_input<B>(

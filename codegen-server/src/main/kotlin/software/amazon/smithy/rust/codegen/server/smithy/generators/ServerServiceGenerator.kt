@@ -29,7 +29,7 @@ open class ServerServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ServerProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val protocol: ServerProtocol,
+    val protocol: ServerProtocol,
     private val codegenContext: CodegenContext,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
@@ -107,7 +107,7 @@ open class ServerServiceGenerator(
 
     // Render operations handler.
     open fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationHandlerGenerator(codegenContext, operations).render(writer)
+        ServerOperationHandlerGenerator(codegenContext, protocol, operations).render(writer)
     }
 
     // Render operations registry.
