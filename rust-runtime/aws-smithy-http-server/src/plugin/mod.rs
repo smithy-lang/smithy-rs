@@ -3,7 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+mod filter;
+mod identity;
+mod stack;
+
 use crate::operation::Operation;
+
+pub use filter::*;
+pub use identity::*;
+pub use stack::*;
 
 /// Provides a standard interface for applying [`Plugin`]s to a service builder. This is implemented automatically for
 /// all builders.
@@ -46,41 +54,34 @@ pub trait Plugin<Protocol, Op, S, L> {
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
 }
 
-/// An [`Plugin`] that maps an `input` [`Operation`] to itself.
-pub struct IdentityPlugin;
+/// An extension trait for [`Plugin`].
+pub trait PluginExt<P, Op, S, L>: Plugin<P, Op, S, L> {
+    /// Stacks another [`Plugin`], running them sequentially.
+    fn stack<Other>(self, other: Other) -> PluginStack<Self, Other>
+    where
+        Self: Sized,
+    {
+        PluginStack::new(self, other)
+    }
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for IdentityPlugin {
-    type Service = S;
-    type Layer = L;
-
-    fn map(&self, input: Operation<S, L>) -> Operation<S, L> {
-        input
+    /// Filters the application of the [`Plugin`] using a predicate over the [`OperationShape::NAME`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use aws_smithy_http_server::plugin::{Plugin, PluginExt};
+    /// # struct Pl;
+    /// # impl Plugin<(), (), (), ()> for Pl {}
+    /// # let plugin = Pl;
+    /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
+    /// let filtered_plugin = plugin.filter_by_operation_name(|name| name != "com.aws.example#CheckHealth");
+    /// ```
+    fn filter_by_operation_name<F>(self, predicate: F) -> FilterByOperationName<Self, F>
+    where
+        Self: Sized,
+    {
+        FilterByOperationName::new(self, predicate)
     }
 }
 
-/// A wrapper struct which composes an `Inner` and an `Outer` [`Plugin`].
-pub struct PluginStack<Inner, Outer> {
-    inner: Inner,
-    outer: Outer,
-}
-
-impl<Inner, Outer> PluginStack<Inner, Outer> {
-    /// Creates a new [`PluginStack`].
-    pub fn new(inner: Inner, outer: Outer) -> Self {
-        PluginStack { inner, outer }
-    }
-}
-
-impl<P, Op, S, L, Inner, Outer> Plugin<P, Op, S, L> for PluginStack<Inner, Outer>
-where
-    Inner: Plugin<P, Op, S, L>,
-    Outer: Plugin<P, Op, Inner::Service, Inner::Layer>,
-{
-    type Service = Outer::Service;
-    type Layer = Outer::Layer;
-
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        let inner = self.inner.map(input);
-        self.outer.map(inner)
-    }
-}
+impl<Pl, P, Op, S, L> PluginExt<P, Op, S, L> for Pl where Pl: Plugin<P, Op, S, L> {}
