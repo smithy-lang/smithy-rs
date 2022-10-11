@@ -152,7 +152,7 @@ open class StructureGenerator(
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
-        writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
+        writer.write("$memberName: #T,", memberSymbol)
     }
 
     open fun renderStructure() {
