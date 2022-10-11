@@ -5,8 +5,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSection
-import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
 /**
  * A customization to, just before we iterate over a _constrained_ map shape in a JSON serializer, unwrap the wrapper
