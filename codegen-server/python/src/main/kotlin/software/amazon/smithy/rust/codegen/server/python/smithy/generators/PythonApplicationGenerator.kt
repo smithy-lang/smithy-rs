@@ -92,7 +92,6 @@ class PythonApplicationGenerator(
         renderAppDefault(writer)
         renderAppClone(writer)
         renderPyAppTrait(writer)
-        renderAppImpl(writer)
         renderPyMethods(writer)
     }
 
@@ -149,17 +148,35 @@ class PythonApplicationGenerator(
         )
     }
 
-    private fun renderAppImpl(writer: RustWriter) {
+    private fun renderPyAppTrait(writer: RustWriter) {
         writer.rustBlockTemplate(
             """
-            impl App
+            impl #{SmithyPython}::PyApp for App
             """,
             *codegenScope,
         ) {
+            rustTemplate(
+                """
+                fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
+                    &self.workers
+                }
+                fn context(&self) -> &Option<#{pyo3}::PyObject> {
+                    &self.context
+                }
+                fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
+                    &mut self.handlers
+                }
+                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
+                    &mut self.middlewares
+                }
+                """,
+                *codegenScope,
+            )
+
             rustBlockTemplate(
                 """
-                /// Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::routing::Router].
-                pub fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::routing::Router>
+                // Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::routing::Router].
+                fn build_router(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<#{SmithyServer}::routing::Router>
                 """,
                 *codegenScope,
             ) {
@@ -203,28 +220,6 @@ class PythonApplicationGenerator(
         }
     }
 
-    private fun renderPyAppTrait(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            impl #{SmithyPython}::PyApp for App {
-                fn workers(&self) -> &#{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>> {
-                    &self.workers
-                }
-                fn context(&self) -> &Option<#{pyo3}::PyObject> {
-                    &self.context
-                }
-                fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
-                    &mut self.handlers
-                }
-                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
-                    &mut self.middlewares
-                }
-            }
-            """,
-            *codegenScope,
-        )
-    }
-
     private fun renderPyMethods(writer: RustWriter) {
         writer.rustBlockTemplate(
             """
@@ -264,6 +259,15 @@ class PythonApplicationGenerator(
                     use #{SmithyPython}::PyApp;
                     self.run_server(py, address, port, backlog, workers)
                 }
+                /// Lambda entrypoint: start the server on Lambda.
+                ##[pyo3(text_signature = "(${'$'}self)")]
+                pub fn run_lambda(
+                    &mut self,
+                    py: #{pyo3}::Python,
+                ) -> #{pyo3}::PyResult<()> {
+                    use #{SmithyPython}::PyApp;
+                    self.run_lambda_handler(py)
+                }
                 /// Build the router and start a single worker.
                 ##[pyo3(text_signature = "(${'$'}self, socket, worker_number)")]
                 pub fn start_worker(
@@ -274,7 +278,7 @@ class PythonApplicationGenerator(
                 ) -> pyo3::PyResult<()> {
                     use #{SmithyPython}::PyApp;
                     let event_loop = self.configure_python_event_loop(py)?;
-                    let router = self.build_router(event_loop)?;
+                    let router = self.build_and_configure_router(py, event_loop)?;
                     self.start_hyper_worker(py, socket, event_loop, router, worker_number)
                 }
                 """,
