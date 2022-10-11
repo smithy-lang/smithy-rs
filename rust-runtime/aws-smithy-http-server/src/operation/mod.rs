@@ -193,8 +193,11 @@ pub use upgrade::*;
 ///
 /// The `L` is held and applied lazily during [`Upgradable::upgrade`].
 pub struct Operation<S, L = Identity> {
-    inner: S,
-    layer: L,
+    /// The inner [`Service`](tower::Service) representing the logic of the operation.
+    pub inner: S,
+    /// The [`Layer`](tower::Layer) applied to the HTTP [`Service`](tower::Service) after `S` has been wrapped in
+    /// [`Upgrade`].
+    pub layer: L,
 }
 
 impl<S, L> Operation<S, L> {
