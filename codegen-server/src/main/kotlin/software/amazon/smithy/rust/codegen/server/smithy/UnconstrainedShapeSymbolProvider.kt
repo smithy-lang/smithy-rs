@@ -26,12 +26,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 
 /**
  * The [UnconstrainedShapeSymbolProvider] returns, _for a given constrained
@@ -73,13 +73,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * symbol provider _not_ wrap [PublicConstrainedShapeSymbolProvider] (from the
  * `codegen-server` subproject), because that symbol provider will return a
  * constrained type for shapes that have constraint traits attached.
- *
- * TODO Move this to `server`; remove below sentence.
- *
- * TODO This sentence below is not true now
- * While this symbol provider is only used by the server, it needs to be in the
- * `codegen` subproject because the (common to client and server) parsers use
- * it.
  */
 class UnconstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy
+package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
@@ -23,14 +23,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
-import software.amazon.smithy.rust.codegen.core.smithy.hasConstraintTraitOrTargetHasConstraintTrait
-import software.amazon.smithy.rust.codegen.core.smithy.isTransitivelyButNotDirectlyConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
-
-// TODO Move this to `core` or `server`.
 
 /**
  * The [PubCrateConstrainedShapeSymbolProvider] returns, for a given

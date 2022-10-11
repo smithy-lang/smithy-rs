@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.transformers
+package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
@@ -37,8 +37,6 @@ import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
  *
  * [simple shapes]: https://awslabs.github.io/smithy/2.0/spec/simple-types.html
  * [aggregate shapes]: https://awslabs.github.io/smithy/2.0/spec/aggregate-types.html#aggregate-types
- *
- * TODO Move this to `server`.
  */
 object ShapesReachableFromOperationInputTagger {
     fun transform(model: Model): Model {

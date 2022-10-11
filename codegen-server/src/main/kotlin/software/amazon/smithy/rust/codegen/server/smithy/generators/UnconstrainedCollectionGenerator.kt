@@ -125,7 +125,7 @@ class UnconstrainedCollectionGenerator(
                     """
                     impl $constraintViolationName {
                         pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                            self.1.as_validation_exception_field(path + "/" + &self.0)
+                            self.1.as_validation_exception_field(format!("{}/{}", path, &self.0))
                         }
                     }
                     """,

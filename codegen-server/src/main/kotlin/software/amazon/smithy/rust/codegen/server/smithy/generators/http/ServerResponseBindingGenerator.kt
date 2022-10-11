@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.workingWithPublicConstrainedWrapperTupleType
+import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class ServerResponseBindingGenerator(
@@ -47,8 +47,13 @@ class ServerResponseBindingGenerator(
         httpBindingGenerator.generateAddHeadersFn(shape, HttpMessageType.RESPONSE)
 }
 
-// TODO Docs
-class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(val codegenContext: ServerCodegenContext) : HttpBindingCustomization() {
+/**
+ * A customization to, just before we iterate over a _constrained_ map shape that is bound to HTTP headers via
+ * `@httpPrefixHeaders`, unwrap the wrapper newtype and take a shared reference to the actual `std::collections::HashMap`
+ * within it.
+ */
+class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
+    HttpBindingCustomization() {
     override fun section(section: HttpBindingSection): Writable = when (section) {
         is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(section.shape, codegenContext.model, codegenContext.settings.codegenConfig.publicConstrainedTypes)) {

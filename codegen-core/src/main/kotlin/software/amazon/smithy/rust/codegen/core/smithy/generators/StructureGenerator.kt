@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -35,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGen
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -56,22 +54,6 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
         safeToPrint
     }
 }
-
-// TODO Delete this
-fun StructureShape.builderSymbol(
-    codegenContext: CodegenContext,
-    symbolProvider: RustSymbolProvider,
-) =
-    // TODO We assume we're in the server and `publicConstrainedTypes` is `true` just so that it compiles and we can test,
-    //  the correct implementation is commented.
-    this.serverBuilderSymbol(codegenContext.symbolProvider, false)
-//    when (codegenContext.target) {
-//        CodegenTarget.CLIENT -> this.builderSymbol(symbolProvider)
-//        CodegenTarget.SERVER -> {
-//            val publicConstrainedTypes = (codegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes
-//            this.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
-//        }
-//    }
 
 open class StructureGenerator(
     val model: Model,
@@ -114,6 +96,8 @@ open class StructureGenerator(
         /**
          * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
          * fallible builder to be constructed.
+         *
+         * TODO Move this to `codegen-server`. I can't yet because we need to split `Instantiator.kt`.
          */
         fun serverHasFallibleBuilder(
             structureShape: StructureShape,

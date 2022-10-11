@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.client.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.rustType

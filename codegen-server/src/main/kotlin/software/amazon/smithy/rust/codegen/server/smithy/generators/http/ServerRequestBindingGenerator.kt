@@ -14,8 +14,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 
 class ServerRequestBindingGenerator(
     protocol: Protocol,

@@ -15,8 +15,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.core.smithy.isTransitivelyButNotDirectlyConstrained
-import software.amazon.smithy.rust.codegen.core.smithy.typeNameContainsNonPublicType
+import software.amazon.smithy.rust.codegen.server.smithy.isTransitivelyButNotDirectlyConstrained
+import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPublicType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 /**

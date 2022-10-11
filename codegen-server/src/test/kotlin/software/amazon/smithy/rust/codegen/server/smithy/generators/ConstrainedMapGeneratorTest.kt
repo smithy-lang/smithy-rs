@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestModelBaselineTransform
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
 
 class ConstrainedMapGeneratorTest {
@@ -57,7 +57,7 @@ class ConstrainedMapGeneratorTest {
                     key: String,
                     value: String
                 }
-                """.asSmithyModel().let { serverTestModelBaselineTransform(it) },
+                """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform),
                 validMap,
                 invalidMap,
             )
@@ -151,7 +151,7 @@ class ConstrainedMapGeneratorTest {
                 key: String,
                 value: String
             }
-            """.asSmithyModel().let { serverTestModelBaselineTransform(it) }
+            """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
         val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
 
         val writer = RustWriter.forModule(ModelsModule.name)

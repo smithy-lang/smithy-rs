@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy
+package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
@@ -21,11 +21,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
-
-// TODO Move this file to `core` or `server`.
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 
 /**
  * The [ConstraintViolationSymbolProvider] returns, for a given constrained
@@ -64,6 +62,7 @@ class ConstraintViolationSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
     private val serviceShape: ServiceShape,
+    private val publicConstrainedTypes: Boolean,
 ) : WrappingSymbolProvider(base) {
     private val constraintViolationName = "ConstraintViolation"
 
@@ -94,8 +93,7 @@ class ConstraintViolationSymbolProvider(
                 constraintViolationSymbolForCollectionOrMapOrUnionShape(shape)
             }
             is StructureShape -> {
-                // TODO This should work with serverBuilderSymbol
-                val builderSymbol = shape.builderSymbol(base)
+                val builderSymbol = shape.serverBuilderSymbol(base, pubCrate = !publicConstrainedTypes)
 
                 val namespace = builderSymbol.namespace
                 val rustType = RustType.Opaque(constraintViolationName, namespace)

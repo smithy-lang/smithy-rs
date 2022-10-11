@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 
@@ -55,7 +53,12 @@ class ServerSymbolProviders private constructor(
                     model,
                     service,
                 ),
-                constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(baseSymbolProvider, model, service),
+                constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(
+                    baseSymbolProvider,
+                    model,
+                    service,
+                    publicConstrainedTypes,
+                ),
             )
         }
     }
