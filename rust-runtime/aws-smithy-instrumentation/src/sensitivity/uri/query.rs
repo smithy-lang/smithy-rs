@@ -27,7 +27,7 @@ pub struct QueryMarker {
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::{Query, QueryMarker};
+/// # use aws_smithy_instrumentation::sensitivity::uri::{Query, QueryMarker};
 /// # let uri = "";
 /// // Query string value with key "name" is redacted
 /// let uri = Query::new(&uri, |x| QueryMarker { key: false, value: x == "name" } );
@@ -56,7 +56,10 @@ where
 {
     if let Some((key, value)) = section.split_once('=') {
         match (marker)(key) {
-            QueryMarker { key: true, value: true } => write!(f, "{}={}", Sensitive(key), Sensitive(value)),
+            QueryMarker {
+                key: true,
+                value: true,
+            } => write!(f, "{}={}", Sensitive(key), Sensitive(value)),
             QueryMarker {
                 key: true,
                 value: false,
@@ -119,16 +122,19 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::instrumentation::sensitivity::uri::tests::{
-        ALL_KEYS_QUERY_STRING_EXAMPLES, ALL_PAIRS_QUERY_STRING_EXAMPLES, ALL_VALUES_QUERY_STRING_EXAMPLES, EXAMPLES,
-        QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
+    use crate::sensitivity::uri::tests::{
+        ALL_KEYS_QUERY_STRING_EXAMPLES, ALL_PAIRS_QUERY_STRING_EXAMPLES,
+        ALL_VALUES_QUERY_STRING_EXAMPLES, EXAMPLES, QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
     };
 
     use super::*;
 
     #[test]
     fn mark_none() {
-        let originals = EXAMPLES.into_iter().chain(QUERY_STRING_EXAMPLES).map(Uri::from_static);
+        let originals = EXAMPLES
+            .into_iter()
+            .chain(QUERY_STRING_EXAMPLES)
+            .map(Uri::from_static);
         for original in originals {
             if let Some(query) = original.query() {
                 let output = Query::new(&query, |_| QueryMarker::default()).to_string();
@@ -140,7 +146,9 @@ mod tests {
     #[test]
     fn mark_all_keys() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = Query::new(&original.query().unwrap(), |_| QueryMarker {
                 key: true,
@@ -154,7 +162,9 @@ mod tests {
     #[test]
     fn mark_all_values() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = Query::new(&original.query().unwrap(), |_| QueryMarker {
                 key: false,
@@ -168,9 +178,15 @@ mod tests {
     #[test]
     fn mark_all_pairs() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Query::new(&original.query().unwrap(), |_| QueryMarker { key: true, value: true }).to_string();
+            let output = Query::new(&original.query().unwrap(), |_| QueryMarker {
+                key: true,
+                value: true,
+            })
+            .to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }
     }

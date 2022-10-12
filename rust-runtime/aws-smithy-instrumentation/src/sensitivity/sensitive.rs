@@ -22,7 +22,7 @@ use super::REDACTED;
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::instrumentation::sensitivity::Sensitive;
+/// # use aws_smithy_instrumentation::sensitivity::Sensitive;
 /// # let address = "";
 /// tracing::debug!(
 ///     name = %Sensitive("Alice"),

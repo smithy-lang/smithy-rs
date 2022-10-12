@@ -18,7 +18,7 @@ use crate::{sensitivity::Sensitive, MakeFmt};
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::Label;
+/// # use aws_smithy_instrumentation::sensitivity::uri::Label;
 /// # use http::Uri;
 /// # let path = "";
 /// // Path segment 2 is redacted and a trailing greedy label
@@ -42,7 +42,7 @@ pub struct Label<'a, F> {
 /// The pattern, `/alpha/beta/{greedy+}/trail`, has segment index 2 and offset from the end of 6.
 ///
 /// ```rust
-/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::GreedyLabel;
+/// # use aws_smithy_instrumentation::sensitivity::uri::GreedyLabel;
 /// let greedy_label = GreedyLabel::new(2, 6);
 /// ```
 #[derive(Clone, Debug)]
@@ -177,7 +177,7 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::instrumentation::sensitivity::uri::{tests::EXAMPLES, GreedyLabel};
+    use crate::sensitivity::uri::{tests::EXAMPLES, GreedyLabel};
 
     use super::Label;
 
@@ -258,7 +258,8 @@ mod tests {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = GREEDY_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Label::new(&original.path(), |_| false, Some(GreedyLabel::new(1, 0))).to_string();
+            let output =
+                Label::new(&original.path(), |_| false, Some(GreedyLabel::new(1, 0))).to_string();
             assert_eq!(output, expected.path(), "original = {original}");
         }
     }
@@ -294,7 +295,8 @@ mod tests {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = GREEDY_EXAMPLES_OFFSET.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Label::new(&original.path(), |_| false, Some(GreedyLabel::new(1, 1))).to_string();
+            let output =
+                Label::new(&original.path(), |_| false, Some(GreedyLabel::new(1, 1))).to_string();
             assert_eq!(output, expected.path(), "original = {original}");
         }
     }
@@ -321,7 +323,8 @@ mod tests {
         let originals = EXTRA_EXAMPLES_UNREDACTED.into_iter().map(Uri::from_static);
         let expecteds = EXTRA_EXAMPLES_REDACTED.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Label::new(&original.path(), |_| false, Some(GreedyLabel::new(2, 5))).to_string();
+            let output =
+                Label::new(&original.path(), |_| false, Some(GreedyLabel::new(2, 5))).to_string();
             assert_eq!(output, expected.path(), "original = {original}");
         }
     }
