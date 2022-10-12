@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -26,6 +27,7 @@ class ServerOperationGenerator(
         arrayOf(
             "SmithyHttpServer" to
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+            "SmithyInstrumentation" to CargoDependency.SmithyInstrumentation(runtimeConfig).asType(),
         )
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -61,7 +63,7 @@ class ServerOperationGenerator(
                 type Error = #{Error:W};
             }
 
-            impl #{SmithyHttpServer}::instrumentation::sensitivity::Sensitivity for $operationName {
+            impl #{SmithyInstrumentation}::sensitivity::Sensitivity for $operationName {
                 type RequestFmt = #{RequestType:W};
                 type ResponseFmt = #{ResponseType:W};
 
