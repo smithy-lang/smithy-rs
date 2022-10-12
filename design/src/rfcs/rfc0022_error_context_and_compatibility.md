@@ -1,7 +1,7 @@
 RFC: Error Context and Compatibility
 ====================================
 
-> Status: RFC
+> Status: Accepted
 >
 > Applies to: Generated clients and shared rust-runtime crates
 
