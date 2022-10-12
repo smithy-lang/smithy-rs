@@ -366,7 +366,9 @@ pub struct DisplayErrorContext<E: Error>(pub E);
 
 impl<E: Error> fmt::Display for DisplayErrorContext<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write_err(f, &self.0)
+        write_err(f, &self.0)?;
+        // Also add a debug version of the error at the end
+        write!(f, " ({:?})", self)
     }
 }
 
