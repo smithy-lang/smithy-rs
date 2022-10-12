@@ -167,7 +167,7 @@ Note that this middleware will _not_ be applied if routing fails. This means tha
 
 ### C) Operation Specific HTTP Middleware
 
-A HTTP `Layer` can be applied to specific operations.
+A "HTTP layer" can be applied to specific operations.
 
 ```rust
 // Construct `TraceLayer`.
@@ -182,11 +182,11 @@ let app /* : PokemonService<Route<B>> */ = PokemonService::builder()
     .build();
 ```
 
-This middleware is transforms the operations HTTP requests and responses.
+This middleware transforms the operations HTTP requests and responses.
 
 ### D) Operation Specific Model Middleware
 
-A model layer can be applied to specific operations.
+A "model layer" can be applied to specific operations.
 
 ```rust
 // A handler `Service`.
