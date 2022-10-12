@@ -79,6 +79,7 @@ enum class HttpMessageType {
  */
 sealed class HttpBindingSection(name: String) : Section(name) {
     // TODO `shape` should be `MapShape`. See the instantiator site, which is working with a `Shape` instead (and should not be).
+    //  Addressed in https://github.com/awslabs/smithy-rs/pull/1841
     data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: Shape) :
         HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
 }
@@ -566,6 +567,7 @@ class HttpBindingGenerator(
         }
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             // TODO How can this be a collection shape? Makes no sense, `httpPrefixHeaders` is for map shapes.
+            //  Addressed in https://github.com/awslabs/smithy-rs/pull/1841
             val listHeader = memberType is CollectionShape
             customizations.forEach { customization ->
                 customization.section(
