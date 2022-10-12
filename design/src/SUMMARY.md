@@ -18,6 +18,7 @@
   - [Generating Common Service Code](./server/code_generation.md)
   - [Generating the Pokémon Service](./server/pokemon_service.md)
   - [Instrumentation](./server/instrumentation.md)
+  <!-- - [The Anatomy of a Service](./server/anatomy.md) -->
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)
