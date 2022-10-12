@@ -1,8 +1,45 @@
 # Middleware
 
+The following document provides a brief survey of the various positions middleware can be inserted in Smithy Rust.
+
+We use the [Pokémon service](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) as a reference model throughout.
+
+```smithy
+/// A Pokémon species forms the basis for at least one Pokémon.
+@title("Pokémon Species")
+resource PokemonSpecies {
+    identifiers: {
+        name: String
+    },
+    read: GetPokemonSpecies,
+}
+
+/// A users current Pokémon storage.
+resource Storage {
+    identifiers: {
+        user: String
+    },
+    read: GetStorage,
+}
+
+/// The Pokémon Service allows you to retrieve information about Pokémon species.
+@title("Pokémon Service")
+@restJson1
+service PokemonService {
+    version: "2021-12-01",
+    resources: [PokemonSpecies, Storage],
+    operations: [
+        GetServerStatistics,
+        DoNothing,
+        CapturePokemon,
+        CheckHealth
+    ],
+}
+```
+
 ## Introduction to Tower
 
-Smithy Rust is built on top of [tower](https://github.com/tower-rs/tower).
+Smithy Rust is built on top of [`tower`](https://github.com/tower-rs/tower).
 
 > Tower is a library of modular and reusable components for building robust networking clients and servers.
 
