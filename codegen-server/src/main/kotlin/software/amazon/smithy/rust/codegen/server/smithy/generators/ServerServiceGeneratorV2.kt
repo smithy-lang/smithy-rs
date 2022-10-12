@@ -113,7 +113,7 @@ class ServerServiceGeneratorV2(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
-                /// This should be a closure satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
+                /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
                 /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
                 pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{HandlerSetterGenerics:W}>
                 where
@@ -312,7 +312,7 @@ class ServerServiceGeneratorV2(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
-                /// Applies a layer uniformly to all routes.
+                /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                 pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
                 where
                     L: #{Tower}::Layer<S>
