@@ -387,6 +387,7 @@ Changes Checklist
 
 - [ ] Update every struct/enum that implements `Error` in all the non-server Rust runtime crates
 - [ ] Hide error source type in `Unhandled` variant in code generated errors
+- [ ] Remove `Clone` from `ProfileParseError` and any others that have it
 
 Error Code Review Checklist
 ---------------------------
