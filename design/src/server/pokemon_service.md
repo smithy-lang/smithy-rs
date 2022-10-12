@@ -150,9 +150,9 @@ aws_smithy_http_server::routing::Router::new_rest_json_router(vec![
 At this level, logging might be prohibited by the [`@sensitive`][10] trait. If there are no `@sensitive` shapes, the generated code looks like:
 
 ```rust
-let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new();
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
-let svc = aws_smithy_http_server::logging::InstrumentOperation::new(
+let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
+let svc = aws_smithy_http_server::instrumentation::InstrumentOperation::new(
     svc,
     "capture_pokemon_operation",
 )
@@ -164,20 +164,20 @@ Accessing the Pokédex is modeled as a restricted operation: a passcode is neede
 To not log the passcode, the code will be generated [here][11] as:
 
 ```rust
-let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new()
+let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new()
     .header(|name: &http::header::HeaderName| {
         #[allow(unused_variables)]
         let name = name.as_str();
         let name_match = matches!(name, "passcode");
         let key_suffix = None;
         let value = name_match;
-        aws_smithy_http_server::logging::sensitivity::headers::HeaderMarker {
+        aws_smithy_http_server::instrumentation::sensitivity::headers::HeaderMarker {
             value,
             key_suffix,
         }
     })
     .label(|index: usize| matches!(index, 1));
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
 ```
 
 Each route is a pair, [`BoxCloneService`][12] wrapping the service operation (the implementation) and
