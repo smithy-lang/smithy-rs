@@ -168,3 +168,9 @@ message = "Convert the `protocol` argument on `PyMiddlewares::new` constructor t
 references = ["smithy-rs#1829"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "hlbarber"
+
+[[smithy-rs]]
+message = "Update aws-types zeroize to flexible version to prevent downstream version conflicts."
+references = ["smithy-rs#1817"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ethyi"

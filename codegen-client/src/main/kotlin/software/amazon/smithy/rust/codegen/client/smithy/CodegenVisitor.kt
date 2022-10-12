@@ -69,7 +69,6 @@ class CodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = settings.codegenConfig.renameExceptions,
-                handleRustBoxing = true,
                 nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
             )
         val baseModel = baselineTransform(context.model)
