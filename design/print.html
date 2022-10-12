@@ -1141,9 +1141,9 @@ the business logic is written as protocol-agnostic and clients request a service
 <p>At this level, logging might be prohibited by the <a href="https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait"><code>@sensitive</code></a> trait. If there are no <code>@sensitive</code> shapes, the generated code looks like:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new();
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
-let svc = aws_smithy_http_server::logging::InstrumentOperation::new(
+</span>let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
+let svc = aws_smithy_http_server::instrumentation::InstrumentOperation::new(
     svc,
     &quot;capture_pokemon_operation&quot;,
 )
@@ -1155,20 +1155,20 @@ let svc = aws_smithy_http_server::logging::InstrumentOperation::new(
 To not log the passcode, the code will be generated <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerHttpSensitivityGenerator.kt#L58">here</a> as:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new()
+</span>let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new()
     .header(|name: &amp;http::header::HeaderName| {
         #[allow(unused_variables)]
         let name = name.as_str();
         let name_match = matches!(name, &quot;passcode&quot;);
         let key_suffix = None;
         let value = name_match;
-        aws_smithy_http_server::logging::sensitivity::headers::HeaderMarker {
+        aws_smithy_http_server::instrumentation::sensitivity::headers::HeaderMarker {
             value,
             key_suffix,
         }
     })
     .label(|index: usize| matches!(index, 1));
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
 <span class="boring">}
 </span></code></pre></pre>
 <p>Each route is a pair, <a href="https://docs.rs/tower/latest/tower/util/struct.BoxCloneService.html"><code>BoxCloneService</code></a> wrapping the service operation (the implementation) and
@@ -1268,7 +1268,7 @@ let app = app.layer(
 <li>Opens a DEBUG level span, prior to request handling, including the operation name and request URI and headers.</li>
 <li>Emits a DEBUG level event, after to request handling, including the response headers and status code.</li>
 </ul>
-<p>This is applied by default and can be enabled and disabled by filtering on <code>aws_smithy_http_server::logging</code>.</p>
+<p>This is applied by default and can be enabled and disabled by filtering on <code>aws_smithy_http_server::instrumentation</code>.</p>
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
 <!-- TODO: Document use of the `InstrumentExt` after the new service builder is released. -->
 <h3 id="example"><a class="header" href="#example">Example</a></h3>
@@ -1289,21 +1289,21 @@ pub fn setup_tracing() {
 <pre><code class="language-bash">RUST_LOG=aws_smithy_http_server=debug,pokemon_service=debug cargo r
 </code></pre>
 <p>and then using <code>cargo t</code> to run integration tests against the server, yields the following logs:</p>
-<pre><code class="language-text">  2022-09-27T09:13:35.372517Z DEBUG aws_smithy_http_server::logging::service: response, headers: {&quot;content-type&quot;: &quot;application/json&quot;, &quot;content-length&quot;: &quot;17&quot;}, status_code: 200 OK
+<pre><code class="language-text">  2022-09-27T09:13:35.372517Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {&quot;content-type&quot;: &quot;application/json&quot;, &quot;content-length&quot;: &quot;17&quot;}, status_code: 200 OK
     at /smithy-rs/rust-runtime/aws-smithy-http-server/src/logging/service.rs:47
-    in aws_smithy_http_server::logging::service::request with operation: get_server_statistics, method: GET, uri: /stats, headers: {&quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_server_statistics, method: GET, uri: /stats, headers: {&quot;host&quot;: &quot;localhost:13734&quot;}
 
   2022-09-27T09:13:35.374104Z DEBUG pokemon_service: attempting to authenticate storage user
     at pokemon-service/src/lib.rs:184
-    in aws_smithy_http_server::logging::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
 
   2022-09-27T09:13:35.374152Z DEBUG pokemon_service: authentication failed
     at pokemon-service/src/lib.rs:188
-    in aws_smithy_http_server::logging::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
 
-  2022-09-27T09:13:35.374230Z DEBUG aws_smithy_http_server::logging::service: response, headers: {&quot;content-type&quot;: &quot;application/json&quot;, &quot;x-amzn-errortype&quot;: &quot;NotAuthorized&quot;, &quot;content-length&quot;: &quot;2&quot;}, status_code: 401 Unauthorized
+  2022-09-27T09:13:35.374230Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {&quot;content-type&quot;: &quot;application/json&quot;, &quot;x-amzn-errortype&quot;: &quot;NotAuthorized&quot;, &quot;content-length&quot;: &quot;2&quot;}, status_code: 401 Unauthorized
     at /smithy-rs/rust-runtime/aws-smithy-http-server/src/logging/service.rs:47
-    in aws_smithy_http_server::logging::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
 </code></pre>
 <h2 id="interactions-with-sensitivity"><a class="header" href="#interactions-with-sensitivity">Interactions with Sensitivity</a></h2>
 <p>Instrumentation interacts with Smithy's <a href="https://awslabs.github.io/smithy/2.0/spec/documentation-traits.html#sensitive-trait">sensitive trait</a>.</p>

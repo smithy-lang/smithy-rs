@@ -293,9 +293,9 @@ the business logic is written as protocol-agnostic and clients request a service
 <p>At this level, logging might be prohibited by the <a href="https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait"><code>@sensitive</code></a> trait. If there are no <code>@sensitive</code> shapes, the generated code looks like:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new();
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
-let svc = aws_smithy_http_server::logging::InstrumentOperation::new(
+</span>let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
+let svc = aws_smithy_http_server::instrumentation::InstrumentOperation::new(
     svc,
     &quot;capture_pokemon_operation&quot;,
 )
@@ -307,20 +307,20 @@ let svc = aws_smithy_http_server::logging::InstrumentOperation::new(
 To not log the passcode, the code will be generated <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerHttpSensitivityGenerator.kt#L58">here</a> as:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new()
+</span>let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new()
     .header(|name: &amp;http::header::HeaderName| {
         #[allow(unused_variables)]
         let name = name.as_str();
         let name_match = matches!(name, &quot;passcode&quot;);
         let key_suffix = None;
         let value = name_match;
-        aws_smithy_http_server::logging::sensitivity::headers::HeaderMarker {
+        aws_smithy_http_server::instrumentation::sensitivity::headers::HeaderMarker {
             value,
             key_suffix,
         }
     })
     .label(|index: usize| matches!(index, 1));
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
 <span class="boring">}
 </span></code></pre></pre>
 <p>Each route is a pair, <a href="https://docs.rs/tower/latest/tower/util/struct.BoxCloneService.html"><code>BoxCloneService</code></a> wrapping the service operation (the implementation) and
