@@ -4,13 +4,19 @@
  */
 
 #![deny(missing_docs, missing_debug_implementations)]
+#![warn(
+    missing_debug_implementations,
+    missing_docs,
+    rust_2018_idioms,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub
+)]
 
 //! TODO: Add docs
 
 pub mod sensitivity;
 
 use std::fmt::{Debug, Display};
-
 
 /// A standard interface for taking some component of the HTTP request/response and transforming it into new struct
 /// which enjoys [`Debug`] or [`Display`]. This allows for polymorphism over formatting approaches.

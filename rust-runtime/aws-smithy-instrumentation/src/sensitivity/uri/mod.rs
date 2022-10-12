@@ -59,7 +59,11 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// Marks path segments as sensitive by providing predicate over the segment index.
     ///
     /// See [`Label`] for more info.
-    pub fn label<F>(self, label_marker: F, greedy_label: Option<GreedyLabel>) -> SensitiveUri<'a, MakeLabel<F>, Q> {
+    pub fn label<F>(
+        self,
+        label_marker: F,
+        greedy_label: Option<GreedyLabel>,
+    ) -> SensitiveUri<'a, MakeLabel<F>, Q> {
         self.make_path(MakeLabel {
             label_marker,
             greedy_label,
@@ -145,7 +149,7 @@ mod tests {
 
     // https://www.w3.org/2004/04/uri-rel-test.html
     // NOTE: http::Uri's `Display` implementation trims the fragment, we mirror this behavior
-    pub const EXAMPLES: [&str; 19] = [
+    pub(crate) const EXAMPLES: [&str; 19] = [
         "g:h",
         "http://a/b/c/g",
         "http://a/b/c/g/",
@@ -167,7 +171,7 @@ mod tests {
         "http://a/",
     ];
 
-    pub const QUERY_STRING_EXAMPLES: [&str; 11] = [
+    pub(crate) const QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
         "http://a/b/c/g?x&y",
@@ -220,7 +224,9 @@ mod tests {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = FIRST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original).label(|x| x == 0, None).to_string();
+            let output = SensitiveUri::new(&original)
+                .label(|x| x == 0, None)
+                .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
@@ -264,7 +270,7 @@ mod tests {
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    pub const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = [
+    pub(crate) const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
         "http://a/b/c/g?x&y",
@@ -278,12 +284,14 @@ mod tests {
         "http://a/b/c/g?x&{redacted}=y",
     ];
     #[cfg(feature = "unredacted-logging")]
-    pub const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
+    pub(crate) const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
     fn query_mark_all_keys() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveUri::new(&original)
                 .query(|_| QueryMarker {
@@ -296,7 +304,7 @@ mod tests {
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    pub const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = [
+    pub(crate) const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
         "http://a/b/c/g?x&y",
@@ -310,12 +318,14 @@ mod tests {
         "http://a/b/c/g?x&x={redacted}",
     ];
     #[cfg(feature = "unredacted-logging")]
-    pub const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
+    pub(crate) const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
     fn query_mark_all_values() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveUri::new(&original)
                 .query(|_| QueryMarker {
@@ -328,7 +338,7 @@ mod tests {
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    pub const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = [
+    pub(crate) const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
         "http://a/b/c/g?x&y",
@@ -342,22 +352,27 @@ mod tests {
         "http://a/b/c/g?x&{redacted}={redacted}",
     ];
     #[cfg(feature = "unredacted-logging")]
-    pub const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
+    pub(crate) const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
     fn query_mark_all_pairs() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES
+            .into_iter()
+            .map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveUri::new(&original)
-                .query(|_| QueryMarker { key: true, value: true })
+                .query(|_| QueryMarker {
+                    key: true,
+                    value: true,
+                })
                 .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    pub const X_QUERY_STRING_EXAMPLES: [&str; 11] = [
+    pub(crate) const X_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
         "http://a/b/c/g?x&y",
@@ -371,7 +386,7 @@ mod tests {
         "http://a/b/c/g?x&x={redacted}",
     ];
     #[cfg(feature = "unredacted-logging")]
-    pub const X_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
+    pub(crate) const X_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
     fn query_mark_x() {

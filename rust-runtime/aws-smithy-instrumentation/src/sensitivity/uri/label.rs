@@ -215,7 +215,7 @@ mod tests {
     ];
 
     #[cfg(feature = "unredacted-logging")]
-    pub const ALL_EXAMPLES: [&str; 19] = EXAMPLES;
+    const ALL_EXAMPLES: [&str; 19] = EXAMPLES;
 
     #[test]
     fn mark_all() {
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    pub const GREEDY_EXAMPLES: [&str; 19] = [
+    const GREEDY_EXAMPLES: [&str; 19] = [
         "g:h",
         "http://a/b/{redacted}",
         "http://a/b/{redacted}",
@@ -251,7 +251,7 @@ mod tests {
     ];
 
     #[cfg(feature = "unredacted-logging")]
-    pub const GREEDY_EXAMPLES: [&str; 19] = EXAMPLES;
+    const GREEDY_EXAMPLES: [&str; 19] = EXAMPLES;
 
     #[test]
     fn greedy() {
@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
-    pub const GREEDY_EXAMPLES_OFFSET: [&str; 19] = [
+    const GREEDY_EXAMPLES_OFFSET: [&str; 19] = [
         "g:h",
         "http://a/b/{redacted}g",
         "http://a/b/{redacted}/",
@@ -288,7 +288,7 @@ mod tests {
     ];
 
     #[cfg(feature = "unredacted-logging")]
-    pub const GREEDY_EXAMPLES_OFFSET: [&str; 19] = EXAMPLES;
+    const GREEDY_EXAMPLES_OFFSET: [&str; 19] = EXAMPLES;
 
     #[test]
     fn greedy_offset_a() {
