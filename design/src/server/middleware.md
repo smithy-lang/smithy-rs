@@ -50,25 +50,28 @@ One of the primary goals of Smithy Rust is to provide configurability and extens
 
 ```mermaid
 stateDiagram-v2
-state in <<fork>>
-state "..." as C2
-state "..." as C3
+    state in <<fork>>
+    state "GetPokemonSpecies" as C1
+    state "GetStorage" as C2
+    state "DoNothing" as C3
+    state "..." as C4
     direction LR
     [*] --> in : HTTP Request
-    Handler --> [*]: HTTP Response
-    C2 --> [*]: HTTP Response
-    C3 --> [*]: HTTP Response
+    UpgradeLayer --> [*]: HTTP Response
     state A {
         state PokemonService {
             state RoutingService {
-                in --> Handler
-                in --> C2
-
-                in --> C3
+                in --> UpgradeLayer: HTTP Request
+                in --> C2: HTTP Request
+                in --> C3: HTTP Request
+                in --> C4: HTTP Request
                 state B {
-                    state Operation {
+                    state C1 {
                         state C {
                             state UpgradeLayer {
+                                direction LR
+                                [*] --> Handler: Model Input
+                                Handler --> [*] : Model Output
                                 state D {
                                     Handler
                                 }
@@ -77,10 +80,14 @@ state "..." as C3
                     }
                     C2
                     C3
+                    C4
                 }
             }
         }
     }
+    C2 --> [*]: HTTP Response
+    C3 --> [*]: HTTP Response
+    C4 --> [*]: HTTP Response
 ```
 
 where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP structures and the `RoutingService` is responsible for routing requests to the appropriate operation.
