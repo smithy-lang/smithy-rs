@@ -10,7 +10,7 @@ use std::time::Duration;
 pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
 
 /// HTTP-specific signing settings
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct SigningSettings {
     /// Specifies how to encode the request URL when signing. Some services do not decode
