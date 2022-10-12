@@ -130,7 +130,7 @@ impl FromStr for RetryMode {
 
 /// Builder for [`RetryConfig`].
 #[non_exhaustive]
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct RetryConfigBuilder {
     mode: Option<RetryMode>,
     max_attempts: Option<u32>,
@@ -217,7 +217,7 @@ impl RetryConfigBuilder {
 
 /// Retry configuration for requests.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RetryConfig {
     mode: RetryMode,
     max_attempts: u32,
