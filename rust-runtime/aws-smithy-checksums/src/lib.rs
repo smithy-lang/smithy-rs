@@ -82,7 +82,7 @@ impl ChecksumAlgorithm {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     UnknownChecksumAlgorithm(String),
 }
