@@ -112,36 +112,39 @@ Option C: `CredentialsCache` enum
 The enum approach posits that customers don't need or want to implement custom credential caching,
 but at the same time, doesn't make it impossible to add custom caching later.
 
-The idea is that there would be an enum called `CredentialsCache` that implements a sealed
-trait named `CreateCredentialsCache`:
+The idea is that there would be an enum called `CredentialsCache` that specifies the desired
+caching approach for a given credentials provider:
 
 ```rust
-pub struct LazyCache<P> {
-    credentials_provider: P,
+pub struct LazyCache {
+    credentials_provider: Arc<dyn ProvideCredentials>,
     // ...
 }
 
-pub struct EagerCache<P> {
-    credentials_provider: P,
+pub struct EagerCache {
+    credentials_provider: Arc<dyn ProvideCredentials>,
     // ...
 }
 
-pub struct CustomCache<P> {
-    credentials_provider: P,
+pub struct CustomCache {
+    credentials_provider: Arc<dyn ProvideCredentials>,
     // Not naming or specifying the custom cache trait for now since its out of scope
     cache: Arc<dyn SomeCacheTrait>
 }
 
-#[non_exhaustive]
-pub enum CredentialsCache<P> {
-    Lazy(LazyCache<P>),
+enum CredentialsCacheInner {
+    Lazy(LazyCache),
     // Eager doesn't exist today, so this is purely for illustration
-    Eager(EagerCache<P>),
+    Eager(EagerCache),
     // Custom may not be implemented right away
-    Custom(CustomCache<P>),
+    Custom(CustomCache),
 }
 
-impl CredentialsCache<P> {
+pub struct CredentialsCache {
+    inner: CredentialsCacheInner,
+}
+
+impl CredentialsCache {
     // Methods prefixed with `default_` just use the default cache settings
     pub fn default_lazy(provider: impl ProvideCredentials + 'static) -> Self { /* ... */ }
     pub fn default_eager(provider: impl ProvideCredentials + 'static) -> Self { /* ... */ }
@@ -149,47 +152,30 @@ impl CredentialsCache<P> {
     // Unprefixed methods return a builder that can take customizations
     pub fn lazy(provider: impl ProvideCredentials + 'static) -> LazyBuilder { /* ... */ }
     pub fn eager(provider: impl ProvideCredentials + 'static) -> EagerBuilder { /* ... */ }
-}
 
-pub(crate) mod sealed {
-    pub(crate) trait CreateCredentialsCache: Send + Sync + Debug {
-        // Needs to take `&mut self` instead of `self` so that it's object safe.
-        // The idea is that the enum needs to mutate itself to move a value in cases
-        // where values are provided by customers.
-        fn create_cache(
-            &mut self,
-            sleep_impl: Arc<dyn AsyncSleep>
-        ) -> Option<SharedCredentialsProvider>;
+    pub(crate) fn create_cache(
+        self,
+        sleep_impl: Arc<dyn AsyncSleep>
+    ) -> SharedCredentialsProvider {
         // ^ Note: SharedCredentialsProvider would get renamed to SharedCredentialsCache.
         // This code is using the old name to make it clearer that it already exists,
         // and the rename is called out in the change checklist.
-    }
-
-    impl<P> CreateCredentialsCache for CredentialsCache<P>
-        where P: ProvideCredentials
-    {
-        fn create_cache(
-            &mut self,
-            sleep_impl: Arc<dyn AsyncSleep>
-        ) -> Option<SharedCredentialsProvider> {
-            Some(SharedCredentialsProvider::new(
-                match self {
-                    Self::Lazy(inner) => LazyCachingCredentialsProvider::new(inner.take(), settings.time, /* ... */),
-                    Self::Eager(_inner) => unimplemented!(),
-                    Self::Custom(_custom) => unimplemented!(),
-                }
-            ))
-        }
+        SharedCredentialsProvider::new(
+            match self {
+                Self::Lazy(inner) => LazyCachingCredentialsProvider::new(inner.credentials_provider, settings.time, /* ... */),
+                Self::Eager(_inner) => unimplemented!(),
+                Self::Custom(_custom) => unimplemented!(),
+            }
+        )
     }
 }
 ```
 
-The sealed trait prevents any additional implementations of the credential caching from being implemented.
-In spite of this, if customization is desired in the future, a `Custom` variant could be added with its own
-trait so that customers can implement their own caching.
+Using an enum over a trait prevents custom caching implementations, but if customization is desired,
+a `Custom` variant could be added that has its own trait that customers implement.
 
 The `SharedCredentialsProvider` needs to be updated to take a cache implementation rather
-than `impl ProvideCredentials + 'static`. Another sealed trait could be added to facilitate this.
+than `impl ProvideCredentials + 'static`. A sealed trait could be added to facilitate this.
 
 Configuration would look as follows:
 
@@ -242,9 +228,7 @@ pub async fn load(self) -> SdkConfig {
 - :+1: Removes the possibility of missing out on caching when implementing a custom provider.
 - :+1: Removes the possibility of double caching since the cache implementations won't
   implement `ProvideCredentials`.
-- :-1: Requires a lot of boilerplate in `aws-config` for the builders, sealed trait, etc.
-- :-1: In the beginning, this would be an enum with one variant. This might OK though since
-  it would be constructed through methods rather than through the variant directly.
+- :-1: Requires a lot of boilerplate in `aws-config` for the builders, enum variant structs, etc.
 
 Commonalities
 -------------
@@ -263,7 +247,7 @@ Changes Checklist
 -----------------
 
 Option C:
-- [ ] Implement `CredentialsCache` with its `Lazy` variant, builder, and sealed trait
+- [ ] Implement `CredentialsCache` with its `Lazy` variant and builder
 - [ ] Refactor `ConfigLoader` to take `CredentialsCache` instead of `impl ProvideCredentials + 'static`
 - [ ] Refactor `SharedCredentialsProvider` to take a cache implementation instead of `impl ProvideCredentials + 'static`
 - [ ] Add `ConfigLoader::credentials_with_default_cache` method
