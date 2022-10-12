@@ -197,7 +197,7 @@ class AwsInputPresignedMethod(
                 """
                 let (mut request, _) = self.$makeOperationFn(config)
                     .await
-                    .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
+                    .map_err(#{SdkError}::construction_failure)?
                     .into_request_response();
                 """,
                 *codegenScope,
@@ -272,7 +272,7 @@ class AwsPresignedFluentBuilderMethod(
                 ) {
                     rustTemplate(
                         """
-                        let input = self.inner.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?;
+                        let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
                         input.presigned(&self.handle.conf, presigning_config).await
                         """,
                         *codegenScope,

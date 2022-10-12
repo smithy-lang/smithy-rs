@@ -95,8 +95,8 @@ pub enum ResponseRejection {
 
 impl std::error::Error for ResponseRejection {}
 
-convert_to_response_rejection!(aws_smithy_http::operation::BuildError, Build);
-convert_to_response_rejection!(aws_smithy_http::operation::SerializationError, Serialization);
+convert_to_response_rejection!(aws_smithy_http::operation::error::BuildError, Build);
+convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationError, Serialization);
 convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input

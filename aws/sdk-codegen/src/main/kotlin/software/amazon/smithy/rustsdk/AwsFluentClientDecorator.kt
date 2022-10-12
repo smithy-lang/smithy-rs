@@ -302,7 +302,7 @@ private fun renderCustomizableOperationSendMethod(
             /// Sends this operation's request
             pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
             where
-                E: std::error::Error,
+                E: std::error::Error + 'static,
                 O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
                 Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
             {

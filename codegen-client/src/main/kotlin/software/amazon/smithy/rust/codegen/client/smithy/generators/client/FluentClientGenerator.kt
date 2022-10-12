@@ -283,10 +283,10 @@ class FluentClientGenerator(
                             #{SdkError}<#{OperationError}>
                         > #{send_bounds:W} {
                             let handle = self.handle.clone();
-                            let operation = self.inner.build().map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?
+                            let operation = self.inner.build().map_err(#{SdkError}::construction_failure)?
                                 .make_operation(&handle.conf)
                                 .await
-                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
+                                .map_err(#{SdkError}::construction_failure)?;
                             Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
@@ -300,10 +300,10 @@ class FluentClientGenerator(
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
                         #{send_bounds:W} {
-                            let op = self.inner.build().map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?
+                            let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
                                 .make_operation(&self.handle.conf)
                                 .await
-                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
+                                .map_err(#{SdkError}::construction_failure)?;
                             self.handle.client.call(op).await
                         }
                         """,

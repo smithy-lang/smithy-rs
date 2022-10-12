@@ -34,14 +34,15 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
                 CanaryError(format!("Expected object {} to not exist in S3", test_key)).into(),
             );
         }
-        Err(SdkError::ServiceError {
-            err:
+        Err(SdkError::ServiceError(context))
+            if matches!(
+                context.err(),
                 GetObjectError {
                     kind: GetObjectErrorKind::NoSuchKey { .. },
                     ..
-                },
-            ..
-        }) => {
+                }
+            ) =>
+        {
             // good
         }
         Err(err) => {
