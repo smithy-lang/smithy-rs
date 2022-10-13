@@ -634,6 +634,44 @@ pub struct PokemonService<S> {
 }
 ```
 
+The following schematic summarizes the composition:
+
+```mermaid
+stateDiagram-v2
+    state in <<fork>>
+    state "GetPokemonSpecies" as C1
+    state "GetStorage" as C2
+    state "DoNothing" as C3
+    state "..." as C4
+    direction LR
+    [*] --> in : HTTP Request
+    UpgradeLayer --> [*]: HTTP Response
+    state PokemonService {
+        state RoutingService {
+            in --> UpgradeLayer: HTTP Request
+            in --> C2: HTTP Request
+            in --> C3: HTTP Request
+            in --> C4: HTTP Request
+            state C1 {
+                state L {
+                    state UpgradeLayer {
+                        direction LR
+                        [*] --> S: Model Input
+                        S --> [*] : Model Output
+                    }
+                }
+            }
+            C2
+            C3
+            C4
+        }
+
+    }
+    C2 --> [*]: HTTP Response
+    C3 --> [*]: HTTP Response
+    C4 --> [*]: HTTP Response
+```
+
 ## Plugins
 <!-- TODO(missing_doc): Link to "Write a Plugin" documentation -->
 
