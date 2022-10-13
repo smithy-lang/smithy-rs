@@ -106,7 +106,7 @@ class EndpointConfigCustomization(
         "PlaceholderParams" to placeholderEndpointParams,
         "ResolveAwsEndpoint" to resolveAwsEndpoint,
         "EndpointShim" to endpointShim,
-        "aws_types" to awsTypes(runtimeConfig).asType(),
+        "aws_types" to runtimeConfig.awsTypes().asType(),
     )
 
     override fun section(section: ServiceConfig): Writable =
@@ -190,10 +190,10 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                 // insert the endpoint resolution _result_ into the bag (note that this won't bail if endpoint resolution failed)
                 rustTemplate(
                     """
-                    let endpoint_result: aws_smithy_http::endpoint::Result = _endpoint_params.map_err(
+                    let endpoint_result: aws_smithy_http::endpoint::Result = endpoint_params.map_err(
                         |err|#{EndpointError}::message("failed to construct endpoint parameters").with_cause(err)
                     )
-                    .map(|params| #{PlaceholderParams}::from(params.region))
+                    .map(|params| #{PlaceholderParams}::from(Into::<Option<_>>::into(params.region)))
                     .and_then(|params| ${section.config}
                         .endpoint_resolver
                         .resolve_endpoint(&params)

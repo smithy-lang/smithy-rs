@@ -26,3 +26,15 @@ fun String.toPascalCase(): String {
 }
 
 fun String.toRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
+
+/**
+ * Escape templating directives in a string.
+ *
+ * ## Example
+ *
+ * ```kotlin
+ * val s = "Zelda is the #1 programmer".escapeTemplates()
+ * assert(s == "Zelda is the ##1 programmer")
+ * ```
+ */
+fun String.escapeTemplates(): String = this.replace("#", "##")

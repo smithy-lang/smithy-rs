@@ -66,4 +66,4 @@ fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = set
 fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
 fun RuntimeConfig.awsTypes(): CargoDependency = awsRuntimeDependency("aws-types")
 fun RuntimeConfig.awsConfig(): CargoDependency = awsRuntimeDependency("aws-config")
-fun RuntimeConfig.awsEndpoint() = awsRuntimeDependency("aws-endpoint")
+fun RuntimeConfig.awsEndpoint(): CargoDependency = awsRuntimeDependency("aws-endpoint")

@@ -12,19 +12,21 @@ publish = false
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
-"bytes" = "1"
-"http" = "0.2.1"
-"aws-smithy-types" = { path = "../aws-smithy-types" }
-"aws-smithy-json" = { path = "../aws-smithy-json" }
-"aws-smithy-xml" = { path = "../aws-smithy-xml" }
-"aws-smithy-http-server" = { path = "../aws-smithy-http-server" }
-"fastrand" = "1"
-"futures-util" = "0.3"
-"pin-project-lite" = "0.2"
-"tower" = { version = "0.4.11", default_features = false }
-"async-trait" = "0.1"
+bytes = "1"
+http = "0.2.1"
+aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-json = { path = "../aws-smithy-json" }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
+aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+fastrand = "1"
+futures-util = "0.3"
+once_cell = "1.15.0"
+pin-project-lite = "0.2"
+tower = { version = "0.4.11", default_features = false }
+async-trait = "0.1"
 regex = "1.5.5"
-"url" = "2.2.2"
+url = "2.2.2"
+urlencoding = "2.1.2"
 
 [dev-dependencies]
 proptest = "1"

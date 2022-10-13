@@ -33,12 +33,12 @@ data class VersionsManifest(
                 smithyRsRevision = toml.getString("smithy_rs_revision"),
                 awsDocSdkExamplesRevision = toml.getString("aws_doc_sdk_examples_revision"),
                 crates = toml.getTable("crates").entrySet().map { entry ->
-                    val value = (entry.value as Toml)
+                    val table = (entry.value as Toml)
                     entry.key to CrateVersion(
-                        category = value.getString("category"),
-                        version = value.getString("version"),
-                        sourceHash = value.getString("source_hash"),
-                        modelHash = value.getString("model_hash"),
+                        category = table.getString("category"),
+                        version = table.getString("version"),
+                        sourceHash = table.getString("source_hash"),
+                        modelHash = table.getString("model_hash"),
                     )
                 }.toMap(),
             )

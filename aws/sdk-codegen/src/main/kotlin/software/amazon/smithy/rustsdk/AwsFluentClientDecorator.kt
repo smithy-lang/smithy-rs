@@ -43,7 +43,7 @@ private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
     private val smithyHttpDep = CargoDependency.SmithyHttp(runtimeConfig)
 
-    val awsTypes = awsTypes(runtimeConfig).asType()
+    val awsTypes = runtimeConfig.awsTypes().asType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
     val awsSmithyClient = smithyClientDep.asType()
 

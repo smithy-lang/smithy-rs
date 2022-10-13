@@ -120,6 +120,7 @@ open class RustCrate(
                 writtenDependencies.add(dep.key())
                 this.withModule(dep.module) {
                     dep.renderer(it)
+                    dep.renderSubmodules(this)
                 }
             }
         }
@@ -152,7 +153,7 @@ open class RustCrate(
         moduleWriter: (RustWriter) -> Unit,
     ): RustCrate {
         val parts = namespace.split("::")
-        require(parts.size > 2) { "Cannot create root modules using withNonRootModule" }
+        require(parts.size > 2) { "Cannot create root modules using withNonRootModule (perhaps you forgot to prepend 'crate::'?)" }
         require(parts[0] == "crate") { "Namespace must start with crate::" }
 
         val fileName = "src/" + parts.filterIndexed { index, _ -> index > 0 }.joinToString("/") + ".rs"

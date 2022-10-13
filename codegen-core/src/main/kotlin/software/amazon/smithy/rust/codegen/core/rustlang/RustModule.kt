@@ -5,12 +5,22 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+
 data class RustModule(val name: String, val rustMetadata: RustMetadata, val documentation: String?) {
     fun render(writer: RustWriter) {
         documentation?.let { docs -> writer.docs(docs) }
         rustMetadata.render(writer)
         writer.write("mod $name;")
     }
+
+    private fun runtimeType() = RuntimeType(
+        name,
+        null,
+        "crate",
+    )
+
+    fun member(memberName: String) = runtimeType().member(memberName)
 
     companion object {
         fun default(name: String, visibility: Visibility, documentation: String? = null): RustModule {

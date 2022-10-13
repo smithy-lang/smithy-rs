@@ -15,12 +15,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -122,7 +122,7 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
 }
 
 class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val region = region(codegenContext.runtimeConfig)
+    private val region = codegenContext.runtimeConfig.awsTypes().asType().member("region")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) =
@@ -188,15 +188,10 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::Region;",
-                    region(runtimeConfig),
+                    runtimeConfig.awsTypes().asType().member("region"),
                 )
             }
             else -> emptySection
         }
     }
 }
-
-fun region(runtimeConfig: RuntimeConfig) =
-    RuntimeType("region", awsTypes(runtimeConfig), "aws_types")
-
-fun awsTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-types")

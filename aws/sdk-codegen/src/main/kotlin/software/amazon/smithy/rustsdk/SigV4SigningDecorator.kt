@@ -147,7 +147,10 @@ class SigV4SigningFeature(
 ) :
     OperationCustomization() {
     private val codegenScope =
-        arrayOf("sig_auth" to runtimeConfig.sigAuth().asType(), "aws_types" to awsTypes(runtimeConfig).asType())
+        arrayOf(
+            "sig_auth" to runtimeConfig.sigAuth().asType(),
+            "aws_types" to runtimeConfig.awsTypes().asType(),
+        )
 
     private val serviceIndex = ServiceIndex.of(model)
 

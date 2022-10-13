@@ -138,6 +138,16 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     this.write(contents.trim(), *args)
 }
 
+/**
+ * Convenience wrapper that tells Intellij that the contents of this block are Rust, sans newlines and trimming
+ */
+fun <T : AbstractCodeWriter<T>> T.rustInline(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
+    vararg args: Any,
+) {
+    this.writeInline(contents, *args)
+}
+
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
@@ -224,6 +234,21 @@ fun <T : AbstractCodeWriter<T>> T.rustBlock(
     openBlock("$header {", *args)
     block(this)
     closeBlock("}")
+    return this
+}
+
+/*
+ * Writes a Rust-style tuple, demarcated by parens
+ */
+fun <T : AbstractCodeWriter<T>> T.rustTuple(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}")
+    tupleName: String = "",
+    vararg args: Any,
+    block: T.() -> Unit,
+): T {
+    openBlock("$tupleName(", *args)
+    block(this)
+    closeBlock(")")
     return this
 }
 
@@ -387,7 +412,11 @@ class RustWriter private constructor(
                 ?.also { super.writeInline(it) }
         }
 
-        return super.write(content, *args)
+        return try {
+            return super.write(content, *args)
+        } catch (e: Exception) {
+            throw CodegenException("$e:\n$content")
+        }
     }
 
     /** Helper function to determine if a stack frame is relevant for debug purposes */

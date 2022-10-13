@@ -93,6 +93,7 @@ class PaginatorGenerator private constructor(
     private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
         paginatorName,
         module,
+        listOf(),
         generate(),
     )
 

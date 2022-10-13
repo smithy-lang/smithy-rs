@@ -10,30 +10,51 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.KnowledgeIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
+import software.amazon.smithy.rulesengine.language.model.Partition
+import software.amazon.smithy.rulesengine.language.stdlib.partition.DefaultPartitionDataProvider
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
+import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
+import software.amazon.smithy.rulesengine.traits.EndpointTestCase
+import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toRustName
 
-class EndpointRuleSetIndex(model: Model) : KnowledgeIndex {
+class EndpointsIndex(model: Model) : KnowledgeIndex {
 
     private val rulesets: HashMap<ServiceShape, EndpointRuleSet?> = HashMap()
+    private val tests: HashMap<ServiceShape, List<EndpointTestCase>?> = HashMap()
 
-    fun endpointRulesForService(serviceShape: ServiceShape) = rulesets.computeIfAbsent(
+    fun rulesetForService(serviceShape: ServiceShape) = rulesets.computeIfAbsent(
         serviceShape,
-    ) { serviceShape.getTrait<EndpointRuleSetTrait>() ?.ruleSet?.let { EndpointRuleSet.fromNode(it) } }
+    ) {
+        serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let {
+            // Create the result, cache the `.typecheck()` result for the ruleset, then return the ruleset
+            // `.typecheck()` must be called before we can check the `.type()` of anything within the ruleset.
+            EndpointRuleSet.fromNode(it).also { ruleset -> ruleset.typecheck() }
+        }
+    }
+
+    fun testCasesForService(serviceShape: ServiceShape) = tests.computeIfAbsent(
+        serviceShape,
+    ) { serviceShape.getTrait<EndpointTestsTrait>()?.testCases }
+
+    val partitions: List<Partition> by lazy {
+        DefaultPartitionDataProvider().loadPartitions().partitions()
+    }
 
     companion object {
-        fun of(model: Model): EndpointRuleSetIndex {
-            return model.getKnowledge(EndpointRuleSetIndex::class.java) { EndpointRuleSetIndex(it) }
+        fun of(model: Model): EndpointsIndex {
+            return model.getKnowledge(EndpointsIndex::class.java) { EndpointsIndex(it) }
         }
     }
 }
@@ -41,15 +62,15 @@ class EndpointRuleSetIndex(model: Model) : KnowledgeIndex {
 /**
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)
  */
-fun Identifier.rustName(): String {
-    return this.toString().toRustName()
-}
+internal fun Identifier.toRustName(): String = this.toString().toRustName()
+
+internal fun Condition.toRustName(): String? = this.result.orNull()?.toRustName()
 
 /**
  * Returns the memberName() for a given [Parameter]
  */
 fun Parameter.memberName(): String {
-    return name.rustName()
+    return name.toRustName()
 }
 
 fun ContextParamTrait.memberName(): String = this.name.toRustName()

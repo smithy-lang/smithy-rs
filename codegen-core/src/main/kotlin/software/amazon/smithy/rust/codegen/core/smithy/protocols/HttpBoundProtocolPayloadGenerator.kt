@@ -176,7 +176,7 @@ class HttpBoundProtocolPayloadGenerator(
         val contentType = when (target) {
             CodegenTarget.CLIENT -> httpBindingResolver.requestContentType(operationShape)
             CodegenTarget.SERVER -> httpBindingResolver.responseContentType(operationShape)
-        }
+        } ?: throw CodegenException("event streams must set a content type")
         val errorMarshallerConstructorFn = EventStreamErrorMarshallerGenerator(
             model,
             target,
@@ -184,7 +184,7 @@ class HttpBoundProtocolPayloadGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            contentType ?: throw CodegenException("event streams must set a content type"),
+            contentType,
         ).render()
         val marshallerConstructorFn = EventStreamMarshallerGenerator(
             model,
@@ -193,7 +193,7 @@ class HttpBoundProtocolPayloadGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            contentType ?: throw CodegenException("event streams must set a content type"),
+            contentType,
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the

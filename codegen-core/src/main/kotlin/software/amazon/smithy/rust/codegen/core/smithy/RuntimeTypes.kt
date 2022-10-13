@@ -80,10 +80,11 @@ data class RuntimeConfig(
          */
         fun fromNode(maybeNode: Optional<ObjectNode>): RuntimeConfig {
             val node = maybeNode.orElse(Node.objectNode())
-            val crateVersionMap = node.getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
-                val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
-                CrateVersionMap(map)
-            }
+            val crateVersionMap =
+                node.getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
+                    val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
+                    CrateVersionMap(map)
+                }
             val path = node.getStringMember("relativePath").orNull()?.value
             val runtimeCrateLocation = RuntimeCrateLocation(path = path, versions = crateVersionMap)
             return RuntimeConfig(
@@ -95,7 +96,11 @@ data class RuntimeConfig(
 
     val crateSrcPrefix: String = cratePrefix.replace("-", "_")
 
-    fun runtimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency {
+    fun runtimeCrate(
+        runtimeCrateName: String,
+        optional: Boolean = false,
+        scope: DependencyScope = DependencyScope.Compile,
+    ): CargoDependency {
         val crateName = "$cratePrefix-$runtimeCrateName"
         return CargoDependency(
             crateName,
@@ -211,7 +216,11 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
 
         fun ByteStream(runtimeConfig: RuntimeConfig) =
-            RuntimeType("ByteStream", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::byte_stream")
+            RuntimeType(
+                "ByteStream",
+                CargoDependency.SmithyHttp(runtimeConfig),
+                "${runtimeConfig.crateSrcPrefix}_http::byte_stream",
+            )
 
         fun Document(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("Document", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
@@ -301,9 +310,14 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun forInlineDependency(inlineDependency: InlineDependency) =
             RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
 
-        fun forInlineFun(name: String, module: RustModule, func: (RustWriter) -> Unit) = RuntimeType(
+        fun forInlineFun(
+            name: String,
+            module: RustModule,
+            extraDependencies: List<RustDependency> = listOf(),
+            func: (RustWriter) -> Unit,
+        ) = RuntimeType(
             name = name,
-            dependency = InlineDependency(name, module, listOf(), func),
+            dependency = InlineDependency(name, module, extraDependencies, func),
             namespace = "crate::${module.name}",
         )
 
@@ -321,5 +335,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
+
+        fun endpointLib(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.endpointLib(runtimeConfig))
     }
 }

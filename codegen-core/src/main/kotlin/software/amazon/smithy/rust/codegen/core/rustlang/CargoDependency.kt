@@ -9,8 +9,13 @@ import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.dq
+import java.nio.file.FileSystems
+import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.extension
+import kotlin.io.path.nameWithoutExtension
 
 sealed class DependencyScope {
     object Dev : DependencyScope()
@@ -67,6 +72,23 @@ class InlineDependency(
         return extraDependencies
     }
 
+    fun withSubmodule(name: String, filepath: Path) {
+        submodules.add(name to filepath)
+    }
+
+    private val submodules = mutableListOf<Pair<String, Path>>()
+
+    fun renderSubmodules(rustCrate: RustCrate) {
+        submodules.forEach { (name, filepath) ->
+            val namespace = "crate::${module.name}::$name"
+            val rustFile = this::class.java.getResource(filepath.toString())
+            check(rustFile != null) { "Rust submodule file $filepath was missing from the resource bundle!" }
+            rustCrate.withNonRootModule(namespace) {
+                it.raw(rustFile.readText())
+            }
+        }
+    }
+
     fun key() = "${module.name}::$name"
 
     companion object {
@@ -83,7 +105,11 @@ class InlineDependency(
             vararg additionalDependencies: RustDependency,
         ): InlineDependency {
             val module = RustModule.default(name, visibility)
-            val filename = if (name.endsWith(".rs")) { name } else { "$name.rs" }
+            val filename = if (name.endsWith(".rs")) {
+                name
+            } else {
+                "$name.rs"
+            }
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")
             check(rustFile != null) { "Rust file /$baseDir/src/$filename was missing from the resource bundle!" }
@@ -112,6 +138,36 @@ class InlineDependency(
 
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
+
+        fun endpointLib(runtimeConfig: RuntimeConfig): InlineDependency {
+            val moduleName = "endpoint_lib"
+            val module = forRustFile(
+                moduleName,
+                CargoDependency.Http,
+                CargoDependency.Url,
+                CargoDependency.Regex,
+                CargoDependency.smithyJson(runtimeConfig),
+                CargoDependency.PropTest,
+                CargoDependency.UrlEncoding,
+                CargoDependency.OnceCell,
+            )
+
+            this::class.java.getResource("/inlineable/src/$moduleName")?.let {
+                try {
+                    FileSystems.newFileSystem(it.toURI(), emptyMap<String, String>()).use { fs ->
+                        Files.walk(fs.getPath("/inlineable/src/$moduleName"))
+                            .filter { file -> file.extension == "rs" }
+                            .forEach { filePath ->
+                                module.withSubmodule(filePath.nameWithoutExtension, filePath)
+                            }
+                    }
+                } catch (e: Exception) {
+                    println("people are fighting over the endpoints module. this is probably fine.")
+                }
+            }
+
+            return module
+        }
     }
 }
 
@@ -199,15 +255,21 @@ data class CargoDependency(
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
+        val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.15.0"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2.0.0"))
-        val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1.0.0"), scope = DependencyScope.Dev)
+        val PrettyAssertions: CargoDependency =
+            CargoDependency("pretty_assertions", CratesIo("1.0.0"), scope = DependencyScope.Dev)
+        val PropTest: CargoDependency =
+            CargoDependency("proptest", CratesIo("1"), scope = DependencyScope.Dev)
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
         val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.16.0"))
         val TempFile: CargoDependency = CargoDependency("tempfile", CratesIo("3.2.0"), scope = DependencyScope.Dev)
         val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.7"))
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
+        val Url: CargoDependency = CargoDependency("url", CratesIo("2.2.2"))
+        val UrlEncoding: CargoDependency = CargoDependency("urlencoding", CratesIo("2.1.2"))
 
         fun SmithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
         fun SmithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("client")
@@ -218,6 +280,7 @@ data class CargoDependency(
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
         fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.runtimeCrate("protocol-test", scope = DependencyScope.Dev)
+
         fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
         fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")

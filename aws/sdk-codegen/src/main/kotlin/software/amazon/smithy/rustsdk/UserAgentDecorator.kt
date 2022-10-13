@@ -83,9 +83,9 @@ private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serv
     }
 }
 
-private fun RuntimeConfig.userAgentModule() = awsHttp().asType().member("user_agent")
-private fun RuntimeConfig.env(): RuntimeType = RuntimeType("Env", awsTypes(), "aws_types::os_shim_internal")
-private fun RuntimeConfig.appName(): RuntimeType = RuntimeType("AppName", awsTypes(this), "aws_types::app_name")
+private fun RuntimeConfig.userAgentModule(): RuntimeType = awsHttp().asType().member("user_agent")
+private fun RuntimeConfig.env(): RuntimeType = awsTypes().asType().member("os_shim_internal::Env")
+private fun RuntimeConfig.appName(): RuntimeType = awsTypes().asType().member("app_name::AppName")
 
 private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {

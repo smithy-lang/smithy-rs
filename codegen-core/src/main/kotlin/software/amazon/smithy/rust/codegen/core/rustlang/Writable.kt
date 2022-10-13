@@ -17,6 +17,14 @@ typealias Writable = RustWriter.() -> Unit
  */
 fun writable(w: Writable): Writable = w
 
+fun List<Writable>.flatten(): Writable {
+    return writable {
+        this@flatten.forEach {
+            it.invoke(this)
+        }
+    }
+}
+
 fun writable(w: String): Writable = writable { writeInline(w) }
 
 fun Writable.isEmpty(): Boolean {

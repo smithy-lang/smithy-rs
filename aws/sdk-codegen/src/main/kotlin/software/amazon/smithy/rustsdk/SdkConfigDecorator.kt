@@ -38,7 +38,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val codegenScope = arrayOf(
-            "SdkConfig" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("sdk_config::SdkConfig"),
+            "SdkConfig" to codegenContext.runtimeConfig.awsTypes().asType().member("sdk_config::SdkConfig"),
         )
         rustCrate.withModule(RustModule.Config) {
             // !!NOTE!! As more items are added to aws_types::SdkConfig, use them here to configure the config builder
@@ -75,7 +75,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
 
 class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val codegenScope = arrayOf(
-        "SdkConfig" to awsTypes(runtimeConfig = runtimeConfig).asType().member("sdk_config::SdkConfig"),
+        "SdkConfig" to runtimeConfig.awsTypes().asType().member("sdk_config::SdkConfig"),
     )
     override fun section(section: ServiceConfig): Writable {
         return when (section) {

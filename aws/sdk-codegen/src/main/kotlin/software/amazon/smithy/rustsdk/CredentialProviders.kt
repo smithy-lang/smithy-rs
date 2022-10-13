@@ -60,7 +60,7 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerato
 class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val defaultProvider = defaultProvider()
     private val codegenScope = arrayOf(
-        "credentials" to awsTypes(runtimeConfig).asType().member("credentials"),
+        "credentials" to runtimeConfig.awsTypes().asType().member("credentials"),
         "DefaultProvider" to defaultProvider,
     )
 
@@ -129,7 +129,7 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::Credentials;",
-                    awsTypes(runtimeConfig).asType(),
+                    runtimeConfig.awsTypes().asType(),
                 )
             }
 
