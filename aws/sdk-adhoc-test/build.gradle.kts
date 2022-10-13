@@ -29,6 +29,11 @@ buildscript {
     dependencies {
         classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
     }
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        google()
+    }
 }
 
 dependencies {

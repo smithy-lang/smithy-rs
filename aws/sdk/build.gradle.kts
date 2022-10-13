@@ -40,6 +40,11 @@ buildscript {
         classpath("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
         classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
     }
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        google()
+    }
 }
 
 dependencies {
