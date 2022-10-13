@@ -131,7 +131,7 @@ where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP s
 
 ### A) Outer Middleware
 
-The output of the Smithy service builder provides the user with a `Service<http::Request, Response = http::Response>` implementation. A `Layer` can be applied around this `Service`.
+The output of the Smithy service builder provides the user with a `Service<http::Request, Response = http::Response>` implementation. A `Layer` can be applied around the entire `Service`.
 
 ```rust
 // This is a HTTP `Service`.
@@ -163,7 +163,7 @@ let app /* : PokemonService<Route<B>> */ = PokemonService::builder()
     .layer(&trace_layer);
 ```
 
-Note that this middleware will _not_ be applied if routing fails. This means that the [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) in the example above does _not_ provide logs unless routing has completed.
+Note that requests pass through this middleware immediately _after_ routing succeeds and therefore will _not_ be encountered if routing fails. This means that the [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) in the example above does _not_ provide logs unless routing has completed. This contrasts to [middleware A](#a-outer-middleware), which _all_ requests/responses pass through when entering/leaving the service.
 
 ### C) Operation Specific HTTP Middleware
 
