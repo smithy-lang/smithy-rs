@@ -32,11 +32,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion") {
-        version {
-            branch = "rules-engine"
-        }
-    }
+    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
 }
 
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->

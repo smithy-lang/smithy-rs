@@ -2,13 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-
-sourceControl {
-    gitRepository(uri("https://github.com/skmcgrail/smithy.git")) {
-        producesModule("software.amazon.smithy:smithy-rules-engine")
-    }
-}
-
 rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
 
 include(":codegen-core")

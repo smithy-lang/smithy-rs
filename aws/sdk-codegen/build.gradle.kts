@@ -28,11 +28,7 @@ dependencies {
     implementation("org.jsoup:jsoup:1.14.3")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion") {
-        version {
-            branch = "rules-engine"
-        }
-    }
+    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
