@@ -161,7 +161,7 @@ jobs:
         # We also exclude all first-party crates that have a non-optional dependency on `ring`.
         - target: powerpc-unknown-linux-gnu
           non_aws_features: --features native-tls
-          aws_excludes: --exclude aws-inlineable --exclude aws-sigv4 --exclude aws-sig-auth
+          aws_excludes: --exclude aws-inlineable --exclude aws-sig-auth
     env:
       CROSS_CONFIG: Cross.toml
       OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu
