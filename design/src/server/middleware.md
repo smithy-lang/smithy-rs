@@ -83,7 +83,7 @@ Customers are then able to stack middleware by composing `Layer`s using combinat
 
 ## Applying Middleware
 
-One of the primary goals of Smithy Rust is to provide configurability and extensibility through the application of middleware. The customer is able to apply `Layer`s in a variety of key places during the request/response lifecycle. The following schematic labels each configurable middleware position from A to D:
+One of the primary goals is to provide configurability and extensibility through the application of middleware. The customer is able to apply `Layer`s in a variety of key places during the request/response lifecycle. The following schematic labels each configurable middleware position from A to D:
 
 ```mermaid
 stateDiagram-v2
