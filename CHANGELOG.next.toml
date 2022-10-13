@@ -158,5 +158,6 @@ author = "ethyi"
 
 [[smithy-rs]]
 message = "Enable local maven repo dependency override."
+references = ["smithy-rs#1852"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ogudavid"
