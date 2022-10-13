@@ -155,3 +155,9 @@ message = "Update aws-types zeroize to flexible version to prevent downstream ve
 references = ["smithy-rs#1817"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ethyi"
+
+[[aws-sdk-rust]]
+message = "Support Sigv4 signature generation on PowerPC."
+references = ["smithy-rs#1847"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "crisidev"
