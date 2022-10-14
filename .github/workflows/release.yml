@@ -13,7 +13,7 @@ env:
   rust_version: 1.61.0
 
 name: Release smithy-rs
-run_name: ${{ github.workflow }} - ${{ inputs.dry_run && "Dry run" || "Production run" }}
+run-name: ${{ github.workflow }} - ${{ inputs.dry_run && "Dry run" || "Production run" }}
 on:
   workflow_dispatch:
     inputs:
