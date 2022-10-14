@@ -7,7 +7,7 @@
 
 use crate::date_time::format_date;
 #[cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))]
-use hmac::{Hmac, Mac};
+use hmac::{digest::FixedOutput, Hmac, Mac};
 #[cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))]
 use sha2::{Digest, Sha256};
 
@@ -24,7 +24,7 @@ use std::time::SystemTime;
 pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    hex::encode(hasher.finalize())
+    hex::encode(hasher.finalize_fixed())
 }
 
 #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
@@ -41,7 +41,7 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
     let mut mac = Hmac::<Sha256>::new_from_slice(signing_key.as_ref())
         .expect("HMAC can take key of any size");
     mac.update(string_to_sign);
-    hex::encode(mac.finalize().into_bytes())
+    hex::encode(mac.finalize_fixed().into_bytes())
 }
 
 #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
@@ -70,25 +70,25 @@ pub fn generate_signing_key(
     let mut mac =
         Hmac::<Sha256>::new_from_slice(secret.as_ref()).expect("HMAC can take key of any size");
     mac.update(format_date(time).as_bytes());
-    let tag = mac.finalize();
+    let tag = mac.finalize_fixed();
 
     // sign region
     let mut mac =
         Hmac::<Sha256>::new_from_slice(&tag.into_bytes()).expect("HMAC can take key of any size");
     mac.update(region.as_bytes());
-    let tag = mac.finalize();
+    let tag = mac.finalize_fixed();
 
     // sign service
     let mut mac =
         Hmac::<Sha256>::new_from_slice(&tag.into_bytes()).expect("HMAC can take key of any size");
     mac.update(service.as_bytes());
-    let tag = mac.finalize();
+    let tag = mac.finalize_fixed();
 
     // sign request
     let mut mac =
         Hmac::<Sha256>::new_from_slice(&tag.into_bytes()).expect("HMAC can take key of any size");
     mac.update("aws4_request".as_bytes());
-    mac.finalize().into_bytes()
+    mac.finalize_fixed().into_bytes()
 }
 
 #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]

@@ -154,17 +154,29 @@ jobs:
       matrix:
         include:
         - target: i686-unknown-linux-gnu
-          non_aws_features: --all-features
-          aws_excludes: ''
+          build_smithy_rs_features: --all-features
+          build_aws_exclude: ''
+          build_smithy_rs_exclude: ''
+          test_smithy_rs_features: --all-features
+          test_aws_exclude: ''
+          test_smithy_rs_exclude: ''
         # We only test `native-tls` here because `rustls` depends on `ring` which in turn does not support powerpc
         # as a target platform (see https://github.com/briansmith/ring/issues/389)
         # We also exclude all first-party crates that have a non-optional dependency on `ring`.
         - target: powerpc-unknown-linux-gnu
-          non_aws_features: --features native-tls
-          aws_excludes: --exclude aws-inlineable
+          build_smithy_rs_features: --features native-tls
+          build_aws_exclude: --exclude aws-inlineable
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_features: ''
+          test_aws_exclude: --exclude aws-inlineable
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-client
         - target: powerpc64-unknown-linux-gnu
-          non_aws_features: --features native-tls
-          aws_excludes: --exclude aws-inlineable
+          build_smithy_rs_features: --features native-tls
+          build_aws_exclude: --exclude aws-inlineable
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_features: ''
+          test_aws_exclude: --exclude aws-inlineable
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-client
     env:
       CROSS_CONFIG: Cross.toml
       OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu
@@ -196,30 +208,30 @@ jobs:
             "OPENSSL_INCLUDE_DIR",
         ]
         EOF
-    - name: Build rust-runtime crates
+    - name: Build Smithy-rs rust-runtime crates
       uses: actions-rs/cargo@v1
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.non_aws_features }}
-    - name: Test rust-runtime crates
-      uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: test
-        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.non_aws_features }}
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
     - name: Build AWS rust-runtime crates
       uses: actions-rs/cargo@v1
       with:
         use-cross: true
         command: build
-        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.aws_excludes }} --workspace
+        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
+    - name: Test Smithy-rs rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: test
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
     - name: Test AWS rust-runtime crates
       uses: actions-rs/cargo@v1
       with:
         use-cross: true
         command: test
-        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.aws_excludes }} --workspace
+        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:

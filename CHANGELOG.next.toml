@@ -157,7 +157,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ethyi"
 
 [[aws-sdk-rust]]
-message = "Support Sigv4 signature generation on PowerPC."
+message = "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This architecture cannot compile ring, so the PowerPC implementation uses hmac + sha2 to achived the same result"
 references = ["smithy-rs#1847"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
+meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "crisidev"
