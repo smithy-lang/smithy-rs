@@ -26,10 +26,12 @@ on:
 jobs:
   main-branch-check:
     name: Check that workflow is running in main
-    if: ${{ github.ref_name != "main" }}
-    uses: actions/github-script@v6
-    script: |
-      core.setFailed("The release workflow can only be ran on main (current branch: ${{ github.ref_name }})")
+    steps:
+    - name: Main branch check
+      if: ${{ github.ref_name != "main" }}
+      uses: actions/github-script@v6
+      script: |
+        core.setFailed("The release workflow can only be ran on main (current branch: ${{ github.ref_name }})")
 
   # If a release is kicked off before an image is built after push to main,
   # or if a dry-run release is kicked off against a non-main branch to test
