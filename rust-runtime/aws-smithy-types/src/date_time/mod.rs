@@ -528,7 +528,7 @@ mod test {
 
     // TODO(understand why are we panic at 'overflow when subtracting duration from instant')
     // This happens only on 32bit architectures.
-    #[cfg(not(any(target_arch = "powerpc")))]
+    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn system_time_conversions() {
         // Check agreement
