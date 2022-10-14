@@ -156,10 +156,10 @@ jobs:
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
-          build_smithy_rs_exclude: ''
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
-          test_smithy_rs_exclude: ''
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
         # We only test `native-tls` here because `rustls` depends on `ring` which in turn does not support powerpc
         # as a target platform (see https://github.com/briansmith/ring/issues/389)
         # We also exclude all first-party crates that have a non-optional dependency on `ring`.

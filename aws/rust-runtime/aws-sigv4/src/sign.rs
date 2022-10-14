@@ -41,7 +41,7 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
     let mut mac = Hmac::<Sha256>::new_from_slice(signing_key.as_ref())
         .expect("HMAC can take key of any size");
     mac.update(string_to_sign);
-    hex::encode(mac.finalize_fixed().into_bytes())
+    hex::encode(mac.finalize_fixed())
 }
 
 #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
@@ -73,22 +73,19 @@ pub fn generate_signing_key(
     let tag = mac.finalize_fixed();
 
     // sign region
-    let mut mac =
-        Hmac::<Sha256>::new_from_slice(&tag.into_bytes()).expect("HMAC can take key of any size");
+    let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
     mac.update(region.as_bytes());
     let tag = mac.finalize_fixed();
 
     // sign service
-    let mut mac =
-        Hmac::<Sha256>::new_from_slice(&tag.into_bytes()).expect("HMAC can take key of any size");
+    let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
     mac.update(service.as_bytes());
     let tag = mac.finalize_fixed();
 
     // sign request
-    let mut mac =
-        Hmac::<Sha256>::new_from_slice(&tag.into_bytes()).expect("HMAC can take key of any size");
+    let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
     mac.update("aws4_request".as_bytes());
-    mac.finalize_fixed().into_bytes()
+    mac.finalize_fixed()
 }
 
 #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
