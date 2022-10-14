@@ -26,6 +26,7 @@ on:
 jobs:
   main-branch-check:
     name: Check that workflow is running in main
+    runs-on: ubuntu-latest
     steps:
     - name: Main branch check
       if: ${{ github.ref_name != 'main' }}
