@@ -162,6 +162,9 @@ jobs:
         - target: powerpc-unknown-linux-gnu
           non_aws_features: --features native-tls
           aws_excludes: --exclude aws-inlineable
+        - target: powerpc64-unknown-linux-gnu
+          non_aws_features: --features native-tls
+          aws_excludes: --exclude aws-inlineable
     env:
       CROSS_CONFIG: Cross.toml
       OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu
@@ -198,6 +201,12 @@ jobs:
       with:
         use-cross: true
         command: build
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.non_aws_features }}
+    - name: Test rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: test
         args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.non_aws_features }}
     - name: Build AWS rust-runtime crates
       uses: actions-rs/cargo@v1
