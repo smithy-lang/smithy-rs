@@ -48,7 +48,7 @@
 //! that aren't otherwise exposed by the `Client` builder interface.
 //!
 #![cfg_attr(
-    not(all(feature = "rustls", feature = "client-hyper", feature = "native-tls")),
+    not(all(feature = "rustls", feature = "client-hyper")),
     doc = "```no_run,ignore"
 )]
 #![cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
