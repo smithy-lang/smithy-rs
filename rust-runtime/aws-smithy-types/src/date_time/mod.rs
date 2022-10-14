@@ -526,8 +526,7 @@ mod test {
         assert!(DateTime::from_nanos(10_000_000_000_000_000_000_999_999_999_i128).is_err());
     }
 
-    // TODO(understand why are we panic at 'overflow when subtracting duration from instant')
-    // This happens only on 32bit architectures.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn system_time_conversions() {

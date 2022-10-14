@@ -95,8 +95,7 @@ mod tests {
     use crate::date_time::test_parsers::{parse_date, parse_date_time};
     use time::format_description::well_known::Rfc3339;
 
-    // TODO(understand why are we panic at 'overflow when subtracting duration from instant')
-    // This happens only on 32bit architectures.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn date_format() {
@@ -110,8 +109,7 @@ mod tests {
         assert_eq!("01000102", format_date(time));
     }
 
-    // TODO(understand why are we panic at 'overflow when subtracting duration from instant')
-    // This happens only on 32bit architectures.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn date_time_format() {
@@ -137,8 +135,7 @@ mod tests {
         assert_eq!("20150830", format_date(time));
     }
 
-    // TODO(understand why are we panic at 'overflow when subtracting duration from instant')
-    // This happens only on 32bit architectures.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn test_truncate_subsecs() {
