@@ -11,7 +11,6 @@ plugins {
     jacoco
 }
 repositories {
-    mavenLocal()
     mavenCentral()
     google()
 }
