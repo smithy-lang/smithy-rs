@@ -144,8 +144,8 @@ jobs:
         done
 
   # We make sure that Smithy-rs can be compiled on platforms that are not natively supported by GitHub actions.
-  # We do not run tests on those platforms (yet) because it'd require a more complicated setup involving architecture
-  # emulation via QEMU, likely to cause a significant degradation on CI completion time.
+  # We run as many tests we can on those platforms because they require a more complicated setup involving architecture
+  # emulation.
   test-exotic-platform-support:
     name: Exotic platform support
     runs-on: ubuntu-latest
@@ -153,6 +153,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+        # We always exclude aws-smithy-http-server-python since the Python framework is experimental.
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
@@ -160,22 +161,27 @@ jobs:
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
-        # We only test `native-tls` here because `rustls` depends on `ring` which in turn does not support powerpc
-        # as a target platform (see https://github.com/briansmith/ring/issues/389)
-        # We also exclude all first-party crates that have a non-optional dependency on `ring`.
         - target: powerpc-unknown-linux-gnu
+          # We only build the `native-tls` feature here because `rustls` depends on `ring` which in turn does not support
+          # powerpc as a target platform (see https://github.com/briansmith/ring/issues/389)
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
           test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
+          # We exclude for now aws-smithy-client from powerpc64 tests because Ubuntu dropped the support for cross
+          # architecture and building against OpenSSL inside cross requires more effort
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-client
         - target: powerpc64-unknown-linux-gnu
+          # We only build the `native-tls` feature here because `rustls` depends on `ring` which in turn does not support
+          # powerpc64 as a target platform (see https://github.com/briansmith/ring/issues/389)
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
           test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
+          # We exclude for now aws-smithy-client from powerpc64 tests because Ubuntu dropped the support for cross
+          # architecture and building against OpenSSL inside cross requires more effort
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-client
     env:
       CROSS_CONFIG: Cross.toml
