@@ -332,7 +332,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }
         }
 
-        val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
+        val err = if (StructureGenerator.hasFallibleBuilder(outputShape, symbolProvider)) {
             ".map_err(${format(errorSymbol)}::unhandled)?"
         } else ""
 

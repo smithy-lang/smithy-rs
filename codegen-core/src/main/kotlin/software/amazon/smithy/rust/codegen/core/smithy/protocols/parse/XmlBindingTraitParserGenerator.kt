@@ -475,7 +475,7 @@ class XmlBindingTraitParserGenerator(
                     rust("let _ = decoder;")
                 }
                 withBlock("Ok(builder.build()", ")") {
-                    if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+                    if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
                         // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
                         // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
                         // (because they're inputs, only outputs will be parsed!)
