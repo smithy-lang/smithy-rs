@@ -340,6 +340,8 @@ mod tests {
         assert_eq!(decoded_checksum, expected_checksum);
     }
 
+    // TODO(https://github.com/zowens/crc32c/issues/34)
+    #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
     #[test]
     fn test_crc32c_checksum() {
         let mut checksum = Crc32c::default();
