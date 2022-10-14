@@ -10,6 +10,7 @@ use smithy.framework#ValidationException
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
+        // TODO Rename as {Verb}[{Qualifier}]{Noun}: https://github.com/awslabs/smithy-rs/pull/1342#discussion_r980936650
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedRecursiveShapesOperation,

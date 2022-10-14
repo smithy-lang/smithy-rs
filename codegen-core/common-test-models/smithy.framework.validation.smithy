@@ -1,6 +1,8 @@
 // This file is a copy of
 // https://github.com/awslabs/smithy/blob/7b2a980c73e87af3214044fe9ca7c391fb269633/smithy-validation-model/model/smithy.framework.validation.smithy
 
+// TODO This file should be in the classpath.
+
 $version: "2.0"
 
 namespace smithy.framework

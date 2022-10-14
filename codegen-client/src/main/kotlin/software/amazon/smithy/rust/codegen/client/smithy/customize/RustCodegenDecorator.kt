@@ -44,6 +44,7 @@ interface RustCodegenDecorator<T, C : CodegenContext> {
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations
 
+    // This is only used by decorators for smithy-rs _clients_.
     fun operationCustomizations(
         codegenContext: C,
         operation: OperationShape,

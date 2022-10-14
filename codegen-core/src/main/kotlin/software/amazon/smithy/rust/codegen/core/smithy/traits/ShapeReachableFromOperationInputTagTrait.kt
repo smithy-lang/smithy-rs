@@ -18,6 +18,8 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
+// TODO Move to server.
+
 /**
  * Tag to indicate that an aggregate shape is reachable from operation input.
  *
