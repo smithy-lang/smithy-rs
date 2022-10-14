@@ -28,7 +28,7 @@ jobs:
     name: Check that workflow is running in main
     steps:
     - name: Main branch check
-      if: ${{ github.ref_name != "main" }}
+      if: ${{ github.ref_name != 'main' }}
       uses: actions/github-script@v6
       with:
         script: |
