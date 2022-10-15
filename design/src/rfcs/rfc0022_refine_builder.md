@@ -1,0 +1,556 @@
+RFC: Evolving the new service builder API
+========================
+
+> Status: Accepted
+>
+> Applies to: Server
+
+[RFC 20] introduced a new service builder API. 
+It supports fine-grained configuration at multiple levels (per-handler middlewares, router middlewares, plugins) while trying to prevent some misconfiguration issues at compile-time (i.e. missing operation handlers).  
+There is consensus that the new API is an improvement over the pre-existing `OperationRegistryBuilder`/`OperationRegistry`, which is now on its way to deprecation in one of the next releases.  
+
+This RFC builds on top of [RFC 20] to explore an alternative API design prior to its stabilisation.  
+The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code [here](https://github.com/LukeMathWalker/builder-experiments).
+
+## Overview
+
+Goals:
+- Maximise API ergonomics, with a particular focus on the developer experience for Rust beginners.
+
+Strategy:
+- Reduce type complexity, exposing a less generic API;
+- Provide clearer errors when the service builder is misconfigured.
+
+Trade-offs:
+- Reduce compile-time safety. Missing handlers will be detected at runtime instead of compile-time.
+
+Constraints:
+- There should be no significant degradation in runtime performance (i.e. startup time for applications).
+
+## Handling missing operations
+
+Let's start by reviewing the API proposed in [RFC 20]. We will use the [Pokemon service] as our driving example throughout the RFC.  
+This is what the startup code looks like:
+
+```rust
+#[tokio::main]
+pub async fn main() {
+    // [...]
+    let app = PokemonService::builder()
+        .get_pokemon_species(get_pokemon_species)
+        .get_storage(get_storage)
+        .get_server_statistics(get_server_statistics)
+        .capture_pokemon(capture_pokemon)
+        .do_nothing(do_nothing)
+        .check_health(check_health)
+        .build();
+
+    // Setup shared state and middlewares.
+    let shared_state = Arc::new(State::default());
+    let app = app.layer(&AddExtensionLayer::new(shared_state));
+
+    // Start the [`hyper::Server`].
+    let bind: SocketAddr = /* */;
+    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+    // [...]
+}
+```
+
+The builder is infallible: we are able to verify at compile-time that all handlers have been provided using the [typestate builder pattern].  
+
+### Compiler errors cannot be tuned
+
+What happens if we stray away from the happy path? We might forget, for example, to add the `check_health` handler.  
+The compiler greets us with this error:
+
+```text
+error[E0277]: the trait bound `MissingOperation: Upgradable<AwsRestJson1, CheckHealth, (), _, IdentityPlugin>` is not satisfied
+  --> pokemon-service/src/bin/pokemon-service.rs:38:10
+   |
+38 |         .build();
+   |          ^^^^^ the trait `Upgradable<AwsRestJson1, CheckHealth, (), _, IdentityPlugin>` is not implemented for `MissingOperation`
+   |
+   = help: the following other types implement trait `Upgradable<Protocol, Operation, Exts, B, Plugin>`:
+             FailOnMissingOperation
+             Operation<S, L>
+```
+
+The compiler complains that `MissingOperation` does not implement the `Upgradable` trait. Neither `MissingOperation` nor `Upgradable` appear in the startup code we looked at. This is likely to be the first time the developer sees those traits, assuming they haven't spent time getting familiar with `aws-smithy-http-server`'s internals.  
+The `help` section is unhelpful, if not actively misdirecting.  
+How can the developer figure out that the issue lies with `check_health`?  
+They need to inspect the generic parameters attached to `Upgradable` in the code label or the top-level error message - we see, among other things, a `CheckHealth` parameter. That is the hint they need to follow to move forward.
+
+We unfortunately do not have agency on the compiler error we just examined. Rust does not expose hooks for crate authors to tweak the errors returned when a type does not implement a trait we defined.  
+All implementations of the [typestate builder pattern] accept this shortcoming in exchange for compile-time safety.
+
+Is it a good tradeoff in our case? 
+
+### The cost of a runtime error
+
+If `build` returns an error, the HTTP server is never launched. The application fails to start.  
+
+Let's examine the cost of this runtime error along two dimensions:
+- Impact on developer productivity;
+- Impact on end users.
+
+We'd love for this issue to be caught on the developer machine - it provides the shortest feedback loop.  
+The issue won't be surfaced by a `cargo check` or `cargo build` invocation, as it happens with the typestate builder approach.  
+It should be surfaced by executing the application test suite, assuming that the developer has written at least a single integration test - e.g. a test that passes a request to the `call` method exposed by `PokemonService` or launches a full-blown instance of the application which is then probed via an HTTP client.  
+
+If there are no integration tests, the issue won't be detected on the developer machine nor in CI.  
+Nonetheless, it is unlikely to cause any end-user impact even if it manages to escape detection and reach production. The deployment will never complete if they are using a progressive rollout strategy: instances of the new version will crash as soon as they are launched, never getting a chance to mark themselves as healthy; all traffic will keep being handled by the old version, with no visible impact on end users of the application.
+
+Given the above, we think that the impact of a runtime error is low enough to be worth exploring designs that do not guarantee compile-safety for the builder API[^further-dev-productivity-improvements].  
+
+### Providing clear feedback
+
+Moving from a compile-time error to a runtime error does not require extensive refactoring.  
+The definition of `PokemonServiceBuilder` goes from:
+
+```rust
+pub struct PokemonServiceBuilder<
+    Op1,
+    Op2,
+    Op3,
+    Op4,
+    Op5,
+    Op6,
+    Exts1 = (),
+    Exts2 = (),
+    Exts3 = (),
+    Exts4 = (),
+    Exts5 = (),
+    Exts6 = (),
+    Pl = aws_smithy_http_server::plugin::IdentityPlugin,
+> {
+    check_health: Op1,
+    do_nothing: Op2,
+    get_pokemon_species: Op3,
+    get_server_statistics: Op4,
+    capture_pokemon: Op5,
+    get_storage: Op6,
+    #[allow(unused_parens)]
+    _exts: std::marker::PhantomData<(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)>,
+    plugin: Pl,
+}
+```
+
+to:
+
+```rust
+pub struct PokemonServiceBuilder<
+    Op1,
+    Op2,
+    Op3,
+    Op4,
+    Op5,
+    Op6,
+    Exts1 = (),
+    Exts2 = (),
+    Exts3 = (),
+    Exts4 = (),
+    Exts5 = (),
+    Exts6 = (),
+    Pl = aws_smithy_http_server::plugin::IdentityPlugin,
+> {
+    check_health: Option<Op1>,
+    do_nothing: Option<Op2>,
+    get_pokemon_species: Option<Op3>,
+    get_server_statistics: Option<Op4>,
+    capture_pokemon: Option<Op5>,
+    get_storage: Option<Op6>,
+    #[allow(unused_parens)]
+    _exts: std::marker::PhantomData<(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)>,
+    plugin: Pl,
+}
+```
+
+All operation fields are now `Option`-wrapped.  
+We introduce a new `MissingOperationsError` error to hold the names of the missing operations and their respective setter methods:
+
+```rust
+#[derive(Debug)]
+pub struct MissingOperationsError {
+    service_name: &'static str,
+    operation_names2setter_methods: HashMap<&'static str, &'static str>,
+}
+
+impl Display for MissingOperationsError { /* */ }
+impl std::error::Error for MissingOperationsError {}
+```
+
+which is then used in `build` as error type _(not shown here for brevity)_.  
+We can now try again to stray away from the happy path by forgetting to register a handler for the `CheckHealth` operation.  
+The code compiles just fine this time, but the application fails when launched via `cargo run`:
+
+```text
+<timestamp> ERROR pokemon_service: You must specify a handler for all operations attached to the `Pokemon` service.
+We are missing handlers for the following operations:
+- com.aws.example#CheckHealth
+
+Use the dedicated methods on `PokemonServiceBuilder` to register the missing handlers:
+- PokemonServiceBuilder::check_health
+```
+
+The error speaks the language of the domain, Smithy's interface definition language: it mentions operations, services, handlers.  
+Understanding the error requires no familiarity with `smithy-rs`' internal type machinery or advanced trait patterns in Rust.  
+We can also provide actionable suggestions: Rust beginners should be able to easily process the information, rectify the mistake and move on quickly. 
+
+## Simplifying `PokemonServiceBuilder`'s signature 
+
+Let's take a second look at the (updated) definition of `PokemonServiceBuilder`:
+
+```rust
+pub struct PokemonServiceBuilder<
+    Op1,
+    Op2,
+    Op3,
+    Op4,
+    Op5,
+    Op6,
+    Exts1 = (),
+    Exts2 = (),
+    Exts3 = (),
+    Exts4 = (),
+    Exts5 = (),
+    Exts6 = (),
+    Pl = aws_smithy_http_server::plugin::IdentityPlugin,
+> {
+    check_health: Option<Op1>,
+    do_nothing: Option<Op2>,
+    get_pokemon_species: Option<Op3>,
+    get_server_statistics: Option<Op4>,
+    capture_pokemon: Option<Op5>,
+    get_storage: Option<Op6>,
+    #[allow(unused_parens)]
+    _exts: std::marker::PhantomData<(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)>,
+    plugin: Pl,
+}
+```
+
+We have 13 generic parameters: 
+- 1 for plugins (`Pl`);
+- 2 for each operation (`OpX` and `ExtsX`);
+
+All those generic parameters were necessary when we were using the [typestate builder pattern]. They kept track of which operation handlers were missing: if any `OpX` was set to `MissingOperation` when calling `build` -> compilation error!  
+
+Do we still need all those generic parameters if we move forward with this RFC?  
+You might be asking yourselves: why do those generics bother us? Is there any harm in keeping them around?  
+We'll look at the impact of those generic parameters on two scenarios:
+- Branching in startup logic;
+- Breaking down a monolithic startup function into multiple smaller functions.
+
+### Branching -> "Incompatible types"
+
+Conditional statements appear quite often in the startup logic for an application (or in the setup code for its integration tests).  
+Let's consider a toy example: if a `check_database` flag is set to `true`, we want to register a different `check_health` handler - one that takes care of pinging the database to make sure it's up.  
+
+The "obvious" solution would look somewhat like this:
+
+```rust
+let check_database: bool = /* */;
+let app = if check_database {
+    app.check_health(check_health)
+} else {
+    app.check_health(check_health_with_database)
+};
+app.build();
+```
+
+The compiler is not pleased:
+
+```text
+error[E0308]: `if` and `else` have incompatible types
+  --> pokemon-service/src/bin/pokemon-service.rs:39:9
+   |
+36 |       let app = if check_database {
+   |  _______________-
+37 | |         app.check_health(check_health)
+   | |         ------------------------------ expected because of this
+38 | |     } else {
+39 | |         app.check_health(check_health_with_database)
+   | |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected fn item, found a different fn item
+40 | |     };
+   | |_____- `if` and `else` have incompatible types
+   |
+   = note: expected struct `PokemonServiceBuilder<Operation<IntoService<_, fn(CheckHealthInput) -> impl Future<Output =
+    CheckHealthOutput> {check_health}>>, _, _, _, _, _, _, _, _, _, _, _>`
+              found struct `PokemonServiceBuilder<Operation<IntoService<_, fn(CheckHealthInput) -> impl Future<Output =
+    CheckHealthOutput> {check_health_with_database}>>, _, _, _, _, _, _, _, _, _, _, _>`
+```
+
+The developer must be aware of the following facts to unpack the error message:
+1. The two branches of an `if`/`else` statement need to return the same type.
+2. Each function closure has a new unique type (represented as `fn(CheckHealthInput) -> impl Future<Output =
+    CheckHealthOutput> {check_health}` for `check_health`);
+3. The handler function type becomes part of the overall `PokemonServiceBuilder` type, a cog in the larger `Op1` generic parameter used to hold the handler for the `CheckHealth` operation (i.e. `Operation<IntoService<_, fn(CheckHealthInput) -> impl Future<Output =
+    CheckHealthOutput> {check_health}>>`);
+
+The second fact requires an intermediate understanding of Rust's closures and opaque types (`impl Trait`). It's quite likely to confuse Rust beginners.
+
+The developer has three options to move forward:
+1. Convert `check_health` and `check_health_with_database` into a common type that can be passed as a handler to `PokemonServiceBuilder::check_health`;
+2. Invoke the `build` method inside the two branches in order to return a "plain" `PokemonService<Route<B>>` from both branches.
+3. Embed the configuration parameter (`check_database`) in the application state, retrieve it inside `check_health` and perform the branching there.
+
+I can't easily see a way to accomplish 1) using the current API. Pursuing 2) is straight-forward with a single conditional:
+
+```rust
+let check_database: bool = /* */;
+let app = if check_database {
+    app.check_health(check_health).build()
+} else {
+    app.check_health(check_health_with_database).build()
+};
+```
+
+It becomes more cumbersome when we have more than a single conditional:
+
+```rust
+let check_database: bool = /* */;
+let include_cpu_statics: bool = /* */;
+match (check_database, include_cpu_statics) {
+    (true, true) => app
+        .check_health(check_health_with_database)
+        .get_server_statistics(get_server_statistics_with_cpu)
+        .build(),
+    (true, false) => app
+        .check_health(check_health_with_database)
+        .get_server_statistics(get_server_statistics)
+        .build(),
+    (false, true) => app
+        .check_health(check_health)
+        .get_server_statistics(get_server_statistics_with_cpu())
+        .build(),
+    (false, false) => app
+        .check_health(check_health)
+        .get_server_statistics(get_server_statistics)
+        .build(),
+}
+```
+
+A lot of repetition compared to the code for the "obvious" approach:
+
+```rust
+let check_database: bool = /* */;
+let include_cpu_statics: bool = /* */;
+let app = if check_database {
+    app.check_health(check_health)
+} else {
+    app.check_health(check_health_with_database)
+};
+let app = if include_cpu_statistics {
+    app.get_server_statistics(get_server_statistics_with_cpu)
+} else {
+    app.get_server_statistics(get_server_statistics)
+};
+app.build();
+```
+
+The obvious approach becomes viable if we stop embedding the handler function type in `PokemonServiceBuilder`'s overall type.
+
+### Refactoring into smaller functions -> Prepare for some type juggling!
+
+Services with a high number of routes can lead to fairly long startup routines.  
+Developers might be tempted to break down the startup routine into smaller functions, grouping together operations with common requirements (similar domain, same middlewares, etc.).
+
+What does the signature of those smaller functions look like?  
+The service builder must be one of the arguments if we want to register handlers. We must also return it to allow the orchestrating function to finish the application setup (our setters take ownership of `self`).
+
+A first sketch:
+
+```rust
+fn partial_setup(builder: PokemonServiceBuilder) -> PokemonServiceBuilder {
+    /* */
+}
+```
+
+The compiler demands to see those generic parameters in the signature:
+
+```text
+error[E0107]: missing generics for struct `PokemonServiceBuilder`
+  --> pokemon-service/src/bin/pokemon-service.rs:28:27
+   |
+28 | fn partial_setup(builder: PokemonServiceBuilder) -> PokemonServiceBuilder {
+   |                           ^^^^^^^^^^^^^^^^^^^^^ expected at least 6 generic arguments
+   |
+note: struct defined here, with at least 6 generic parameters: `Op1`, `Op2`, `Op3`, `Op4`, `Op5`, `Op6`
+
+error[E0107]: missing generics for struct `PokemonServiceBuilder`
+  --> pokemon-service/src/bin/pokemon-service.rs:28:53
+   |
+28 | fn partial_setup(builder: PokemonServiceBuilder) -> PokemonServiceBuilder {
+   |                                                     ^^^^^^^^^^^^^^^^^^^^^ expected at least 6 generic arguments
+   |
+note: struct defined here, with at least 6 generic parameters: `Op1`, `Op2`, `Op3`, `Op4`, `Op5`, `Op6`
+```
+
+We could try to nudge the compiler into inferring them:
+
+```rust
+fn partial_setup(
+    builder: PokemonServiceBuilder<_, _, _, _, _, _>,
+) -> PokemonServiceBuilder<_, _, _, _, _, _> {
+    /* */
+}
+```
+
+but that won't fly either:
+
+```text
+error[E0121]: the placeholder `_` is not allowed within types on item signatures for return types
+  --> pokemon-service/src/bin/pokemon-service.rs:30:28
+   |
+30 | ) -> PokemonServiceBuilder<_, _, _, _, _, _> {
+   |                            ^  ^  ^  ^  ^  ^ not allowed in type signatures
+   |                            |  |  |  |  |
+   |                            |  |  |  |  not allowed in type signatures
+   |                            |  |  |  not allowed in type signatures
+   |                            |  |  not allowed in type signatures
+   |                            |  not allowed in type signatures
+   |                            not allowed in type signatures
+```
+
+We must type it all out:
+
+```rust
+fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
+) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
+    builder
+}
+```
+
+That compiles, at last.  
+Let's try to register an operation handler now:
+
+```rust
+fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
+) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
+    builder.get_server_statistics(get_server_statistics)
+}
+```
+
+That looks innocent, but it doesn't fly:
+
+```text
+error[E0308]: mismatched types
+  --> pokemon-service/src/bin/pokemon-service.rs:31:5
+   |
+28 | fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
+   |                                 --- this type parameter
+29 |     builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
+30 | ) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
+   |      --------------------------------------------------- expected `PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>` because of return type
+31 |     builder.get_server_statistics(get_server_statistics)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected type parameter `Op4`, found struct `Operation`
+   |
+   = note: expected struct `PokemonServiceBuilder<_, _, _, Op4, _, _, _>`
+              found struct `PokemonServiceBuilder<_, _, _, Operation<IntoService<GetServerStatistics, fn(GetServerStatisticsInput, Extension<Arc<State>>) -> impl Future<Output = GetServerStatisticsOutput> {get_server_statistics}>>, _, _, _>
+```
+
+By registering a handler we have changed the corresponding `OpX` generic parameter.  
+Fixing this error requires some non-trivial type gymnastic - I gave up after trying for ~15 minutes. 
+
+### Cut them down: going from 2N+1 to 2 generic parameters
+
+The previous two examples should have convinced you that the 2N+1 generic parameters on `PokemonServiceBuilder` harm the ergonomics of our API.  
+Can we get rid of them?
+
+Yes! Let's look at one possible approach:
+
+```rust
+pub struct PokemonServiceBuilder<Body, Plugin> {
+    check_health: Option<Route<Body>>,
+    do_nothing: Option<Route<Body>>,
+    get_pokemon_species: Option<Route<Body>>,
+    get_server_statistics: Option<Route<Body>>,
+    capture_pokemon: Option<Route<Body>>,
+    get_storage: Option<Route<Body>>,
+    plugin: Plugin,
+}
+```
+
+We no longer store the raw handlers inside `PokemonServiceBuilder`.
+We eagerly upgrade the operation handlers to a `Route` instance when they are registered with the builder. The existing API performs the upgrade when `build` is called, forcing `PokemonServiceBuilder` to store the raw handlers and keep two generic parameters around (`OpX` and `ExtsX`) for each operation.  
+
+There is one downside to this alternative approach - all plugins must be specified upfront, when creating an instance of the builder.
+Plugins cannot be modified through `PokemonServiceBuilder`'s API if we want to guarantee that all operation handlers are upgraded to a `Route` using the same plugins.
+
+```rust
+impl PokemonService<()> {
+    /// Constructs a builder for [`PokemonService`].
+    pub fn builder<Body, Plugin>(plugin: Plugin) -> PokemonServiceBuilder<Body, Plugin> {
+        PokemonServiceBuilder {
+            check_health: None,
+            do_nothing: None,
+            get_pokemon_species: None,
+            get_server_statistics: None,
+            capture_pokemon: None,
+            get_storage: None,
+            plugin,
+        }
+    }
+}
+```
+
+In practice, this is unlikely to have any impact on developers using `smithy-rs`.  
+We have seen how cumbersome it is to break the startup logic into different functions using the current service builder API. Developers are most likely specifying all plugins and routes in the same function even if the current API allows them to intersperse route registrations and plugin registrations: they would simply have to re-order their registration statements to adopt the API proposed in this RFC.
+
+### Alternatives: boxed trait objects 
+
+Trait objects are another common approach to achieve type erasure: instead of storing the raw handler in `PokemonServiceBuilder`, we box it and cast it to a `dyn Upgradable<...>`.  
+Using trait objects would allow us to delay upgrading to `Route` until `build` is called, mimicking the behaviour of the current API and allowing developers to register plugins at any point before calling `build`.  
+Using trait objects would unfortunately have a non-zero runtime impact: we would be introducing an extra layer of indirection (double-boxing the handler), affecting the performance of our application at runtime.  
+Given the above, we do not suggest we fall back on trait objects to improve the ergonomics of our API.
+
+### Builder extensions: what now?
+
+The `Pluggable` trait was an interesting development out of [RFC 20]: it allows you to attach methods to a service builder using an extension trait.
+
+```rust
+/// An extension to service builders to add the `print()` function.
+pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable<PrintPlugin> {
+    /// Causes all operations to print the operation name when called.
+    ///
+    /// This works by applying the [`PrintPlugin`].
+    fn print(self) -> Self::Output
+        where
+            Self: Sized,
+    {
+        self.apply(PrintPlugin)
+    }
+}
+```
+
+This pattern needs to be revisited if we want to move forward with this RFC, since new plugins cannot be registered after the builder has been instantiated.  
+My recommendation would be to implement `Pluggable` for `PluginStack`, providing the same pattern ahead of the creation of the builder:
+
+```rust
+// Currently you'd have to go for `PluginStack::new(IdentityPlugin, IdentityPlugin)`,
+// but that can be smoothed out even if this RFC isn't approved.
+let plugin_stack = PluginStack::default()
+    // Use the extension method
+    .print();
+let app = PokemonService::builder(plugin_stack)
+    .get_pokemon_species(get_pokemon_species)
+    .get_storage(get_storage)
+    .get_server_statistics(get_server_statistics)
+    .capture_pokemon(capture_pokemon)
+    .do_nothing(do_nothing)
+    .build()?;
+```
+
+## Playing around with the design
+
+The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code [here](https://github.com/LukeMathWalker/builder-experiments).  
+
+## Changes checklist
+
+- [] Update `codegen-server` to generate the proposed service builder API
+
+[RFC 20]: rfc0020_service_builder.md
+[Pokemon service]: https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy
+[typestate builder pattern]: https://www.greyblake.com/blog/builder-with-typestate-in-rust/
+[^further-dev-productivity-improvements]: The impact of a runtime error on developer productivity can be further minimised by encouraging adoption of integration testing; this can be achieved, among other options, by authoring guides that highlight its benefits and provide implementation guidance.
