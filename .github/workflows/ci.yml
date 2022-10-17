@@ -205,11 +205,7 @@ jobs:
       run: |
         cat > Cross.toml << EOF
         [build]
-        pre-build = [
-          "dpkg --add-architecture i386",
-          "export DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install --assume-yes wget",
-          "wget -O /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh ${{ matrix.openssl_targets }}"
-        ]
+        pre-build = ["curl --output /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh ${{ matrix.openssl_targets }}"]
         [build.env]
         passthrough = ["OPENSSL_DIR"]
         EOF
