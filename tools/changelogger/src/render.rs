@@ -377,7 +377,10 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
             out.push_str("- @");
             out.push_str(&contributor_handle);
             if !contribution_references.is_empty() {
-                out.push_str(&format!(" ({})", contribution_references));
+                write!(&mut out, " ({})", contribution_references)
+                    // The `Write` implementation for `String` is infallible,
+                    // see https://doc.rust-lang.org/src/alloc/string.rs.html#2815
+                    .unwrap()
             }
             out.push('\n');
         }

@@ -241,16 +241,16 @@ Note that both traits are parameterized by `Protocol`. These [protocols](https:/
 
 ```rust
 /// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
-pub struct AwsRestJson1;
+pub struct RestJson1;
 
 /// [AWS REST XML Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html).
-pub struct AwsRestXml;
+pub struct RestXml;
 
 /// [AWS JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html).
-pub struct AwsJson10;
+pub struct AwsJson1_0;
 
 /// [AWS JSON 1.1 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html).
-pub struct AwsJson11;
+pub struct AwsJson1_1;
 ```
 
 ## Upgrading a Model Service
@@ -526,15 +526,15 @@ To finalize the build and construct the complete service, `PokemonService`, each
     /// Constructs a [`PokemonService`] from the arguments provided to the builder.
     pub fn build(self) -> PokemonService<Route>
     where
-        Op1: Upgradable<AwsRestJson1, CheckHealth>,
+        Op1: Upgradable<RestJson1, CheckHealth>,
         Op1::Service: tower::Service<http::Request, Error = Infallible>,
 
-        Op2: Upgradable<AwsRestJson1, DoNothing>,
+        Op2: Upgradable<RestJson1, DoNothing>,
         Op2::Service: tower::Service<http::Request, Error = Infallible>,
 
         /* ... */
 
-        Op6: Upgradable<AwsRestJson1, GetStorage>,
+        Op6: Upgradable<RestJson1, GetStorage>,
         Op6::Service: tower::Service<http::Request, Error = Infallible>,
 ```
 
@@ -599,10 +599,10 @@ The build method then proceeds as follows:
     /// Constructs a [`PokemonService`] from the arguments provided to the builder.
     pub fn build(self) -> PokemonService<Route>
     where
-        Op1: Upgradable<AwsRestJson1, CheckHealth>,
+        Op1: Upgradable<RestJson1, CheckHealth>,
         Op1::Service: tower::Service<http::Request, Error = Infallible>,
 
-        Op2: Upgradable<AwsRestJson1, DoNothing>,
+        Op2: Upgradable<RestJson1, DoNothing>,
         Op2::Service: tower::Service<http::Request, Error = Infallible>,
 
         /* ... */
@@ -630,7 +630,7 @@ where
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 #[derive(Clone)]
 pub struct PokemonService<S> {
-    router: RoutingService<RestRouter<S>, AwsRestJson1>,
+    router: RoutingService<RestRouter<S>, RestJson1>,
 }
 ```
 

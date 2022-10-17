@@ -15,8 +15,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
  * For a dependency that is used in the client, or in both the client and the server, use [CargoDependency] directly.
  */
 object PythonServerCargoDependency {
-    val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.16"), features = setOf("extension-module"))
-    val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.16"), features = setOf("attributes", "tokio-runtime"))
+    val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.17"), features = setOf("extension-module"))
+    val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.17"), features = setOf("attributes", "tokio-runtime"))
     val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
