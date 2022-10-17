@@ -498,9 +498,7 @@ impl<Body, Plugin> PokemonServiceBuilder<Body, Plugin> {
 ```
 
 The existing API performs the upgrade when `build` is called, forcing `PokemonServiceBuilder` to store the raw handlers and keep two generic parameters around (`OpX` and `ExtsX`) for each operation.  
-
-There is one downside to this alternative approach - all plugins must be specified upfront, when creating an instance of the builder.
-Plugins cannot be modified through `PokemonServiceBuilder`'s API if we want to guarantee that all operation handlers are upgraded to a `Route` using the same plugins.
+The proposed API requires plugins to be specified upfront, when creating an instance of the builder. They cannot be modified after a `PokemonServiceBuilder` instance has been built:
 
 ```rust
 impl PokemonService<()> {
@@ -519,8 +517,66 @@ impl PokemonService<()> {
 }
 ```
 
-In practice, this is unlikely to have any impact on developers using `smithy-rs`.  
+This constraint guarantees that all operation handlers are upgraded to a `Route` using the same set of plugins.  
+
+Having to specify all plugins upfront is unlikely to have a negative impact on developers currently using `smithy-rs`.  
 We have seen how cumbersome it is to break the startup logic into different functions using the current service builder API. Developers are most likely specifying all plugins and routes in the same function even if the current API allows them to intersperse route registrations and plugin registrations: they would simply have to re-order their registration statements to adopt the API proposed in this RFC.
+
+### Alternatives: allow new plugins to be registered after builder creation
+
+The new design prohibits the following invocation style:
+
+```rust
+let plugin = ColorPlugin::new();
+PokemonService::builder(plugin)
+    // [...]
+    .get_pokemon_species(get_pokemon_species)
+    // Add PrintPlugin
+    .print()
+    .get_storage(get_storage)
+    .build()
+```
+
+We could choose to remove this limitation and allow handlers to be upgraded using a different set of plugins depending on where they were registered.  
+In the snippet above, for example, we would have:
+
+- `get_pokemon_species` is upgraded using just the `ColorPlugin`;
+- `get_storage` is upgraded using both the `ColorPlugin` and the `PrintPlugin`.
+
+There are no technical obstacles preventing us from implementing this API, but I believe it could easily lead to confusion and runtime surprises due to a mismatch between what the developer might expect `PrintPlugin` to apply to (all handlers) and what it actually applies to (handlers registered after `.print()`).  
+
+We can provide developers with other mechanisms to register plugins for a single operation or a subset of operations without introducing ambiguity.  
+For attaching additional plugins to a single operation, we could introduce a blanket `Pluggable` implementation for all operations in `aws-smithy-http-server`:
+
+```rust
+impl<P, Op, Pl, S, L> Pluggable<Pl> for Operation<S, L> where Pl: Plugin<P, Op, S, L> {
+    type Output = Operation<Pl::Service, Pl::Layer>;
+
+    fn apply(self, new_plugin: Pl) -> Self::Output {
+       new_plugin.map(self)
+   }
+}
+```
+
+which would allow developers to invoke `op.apply(MyPlugin)` or call extensions methods such as `op.print()` where `op` is an `Operation`.  
+For attaching additional plugins to a subgroup of operations, instead, we could introduce nested builders:
+
+```rust
+let initial_plugins = ColorPlugin;
+let mut builder = PokemonService::builder(initial_plugins)
+    .get_pokemon_species(get_pokemon_species);
+let additional_plugins = PrintPlugin;
+// PrintPlugin will be applied to all handlers registered on the scoped builder returned by `scope`.
+let nested_builder = builder.scoped(additional_plugins)
+    .get_storage(get_storage)
+    .capture_pokemon(capture_pokemon)
+    // Register all the routes on the scoped builder with the parent builder.
+    // API names are definitely provisional and bikesheddable.
+    .attach(builder);
+let app = builder.build();
+```
+
+Both proposals are outside the scope of this RFC, but they are shown here for illustrative purposes.  
 
 ### Alternatives: boxed trait objects 
 
