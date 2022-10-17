@@ -359,7 +359,7 @@ where
 enum Routes {
     RestXml(Vec&lt;(Route, RequestSpec)&gt;),
     RestJson1(Vec&lt;(Route, RequestSpec)&gt;),
-    AwsJson10(TinyMap&lt;String, Route&gt;),
+    AwsJson1_0(TinyMap&lt;String, Route&gt;),
     AwsJson11(TinyMap&lt;String, Route&gt;),
 }
 
@@ -828,8 +828,8 @@ impl&lt;Op1, Op2&gt; OperationRegistryBuilder&lt;Op1, Op2&gt; {
 enum Routes {
     RestXml(/* Container */),
     RestJson1(/* Container */),
-    AwsJson10(/* Container */),
-    AwsJson11(/* Container */),
+    AwsJson1_0(/* Container */),
+    AwsJson1_1(/* Container */),
 }
 <span class="boring">}
 </span></code></pre></pre>
