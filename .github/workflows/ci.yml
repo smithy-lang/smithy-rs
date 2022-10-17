@@ -154,6 +154,8 @@ jobs:
       matrix:
         include:
         # We always exclude aws-smithy-http-server-python since the Python framework is experimental.
+        # We only build the `native-tls` feature here because `rustls` depends on `ring` which in turn
+        # does not support powerpc as a target platform (see https://github.com/briansmith/ring/issues/389)
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
@@ -161,32 +163,26 @@ jobs:
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          openssl_targets: linux-i686 i686-linux-gnu-
         - target: powerpc-unknown-linux-gnu
-          # We only build the `native-tls` feature here because `rustls` depends on `ring` which in turn does not support
-          # powerpc as a target platform (see https://github.com/briansmith/ring/issues/389)
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
-          test_smithy_rs_features: ''
+          test_smithy_rs_features: --features native-tls
           test_aws_exclude: --exclude aws-inlineable
-          # We exclude for now aws-smithy-client from powerpc64 tests because Ubuntu dropped the support for cross
-          # architecture and building against OpenSSL inside cross requires more effort
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-client
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          openssl_targets: linux-ppc powerpc-linux-gnu-
         - target: powerpc64-unknown-linux-gnu
-          # We only build the `native-tls` feature here because `rustls` depends on `ring` which in turn does not support
-          # powerpc64 as a target platform (see https://github.com/briansmith/ring/issues/389)
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
-          test_smithy_rs_features: ''
+          test_smithy_rs_features: --features native-tls
           test_aws_exclude: --exclude aws-inlineable
-          # We exclude for now aws-smithy-client from powerpc64 tests because Ubuntu dropped the support for cross
-          # architecture and building against OpenSSL inside cross requires more effort
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-client
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          openssl_targets: linux-ppc64 powerpc64-linux-gnu-
     env:
       CROSS_CONFIG: Cross.toml
-      OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu
-      OPENSSL_INCLUDE_DIR: /usr/include/i386-linux-gnu
+      OPENSSL_DIR: /openssl
     steps:
     - name: Checkout
       uses: actions/checkout@v1
@@ -204,15 +200,18 @@ jobs:
         target: ${{ matrix.target }}
     - name: Configure cross
       shell: bash
+      # configure and cross compile openssl locally to be able to run aws-smithy-client tests.
+      # since cross dropped support for openssl, we use the build script from version 0.16.
       run: |
         cat > Cross.toml << EOF
         [build]
-        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
-        [build.env]
-        passthrough = [
-            "OPENSSL_LIB_DIR",
-            "OPENSSL_INCLUDE_DIR",
+        pre-build = [
+          "dpkg --add-architecture i386",
+          "export DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install --assume-yes wget",
+          "wget -O /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh ${{ matrix.openssl_targets }}"
         ]
+        [build.env]
+        passthrough = ["OPENSSL_DIR"]
         EOF
     - name: Build Smithy-rs rust-runtime crates
       uses: actions-rs/cargo@v1
