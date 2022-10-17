@@ -71,7 +71,7 @@ mod tests {
                 "aws-sdk-dynamodb",
                 Version::parse("0.0.22-alpha").unwrap(),
             ),
-            package_path: env::current_dir().unwrap().into(),
+            package_path: env::current_dir().unwrap(),
         }
         .spawn()
         .await
@@ -86,7 +86,7 @@ mod tests {
                 "something",
                 Version::parse("0.0.22-alpha").unwrap(),
             ),
-            package_path: env::current_dir().unwrap().into(),
+            package_path: env::current_dir().unwrap(),
         }
         .spawn()
         .await;
@@ -108,7 +108,7 @@ mod tests {
                 "aws-sdk-dynamodb",
                 Version::parse("0.0.22-alpha").unwrap(),
             ),
-            package_path: env::current_dir().unwrap().into(),
+            package_path: env::current_dir().unwrap(),
         }
         .spawn()
         .await
