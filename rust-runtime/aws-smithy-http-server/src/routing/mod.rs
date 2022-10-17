@@ -16,8 +16,8 @@ use self::request_spec::RequestSpec;
 use crate::{
     body::{boxed, Body, BoxBody, HttpBody},
     proto::{
-        aws_json::router::AwsJsonRouter, aws_json_10::AwsJson10, aws_json_11::AwsJson11, rest::router::RestRouter,
-        rest_json_1::AwsRestJson1, rest_xml::AwsRestXml,
+        aws_json::router::AwsJsonRouter, aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest::router::RestRouter,
+        rest_json_1::RestJson1, rest_xml::RestXml,
     },
 };
 use crate::{error::BoxError, routers::RoutingService};
@@ -75,10 +75,10 @@ pub struct Router<B = Body> {
 /// directly found in the `X-Amz-Target` HTTP header.
 #[derive(Debug)]
 enum Routes<B = Body> {
-    RestXml(RoutingService<RestRouter<Route<B>>, AwsRestXml>),
-    RestJson1(RoutingService<RestRouter<Route<B>>, AwsRestJson1>),
-    AwsJson10(RoutingService<AwsJsonRouter<Route<B>>, AwsJson10>),
-    AwsJson11(RoutingService<AwsJsonRouter<Route<B>>, AwsJson11>),
+    RestXml(RoutingService<RestRouter<Route<B>>, RestXml>),
+    RestJson1(RoutingService<RestRouter<Route<B>>, RestJson1>),
+    AwsJson1_0(RoutingService<AwsJsonRouter<Route<B>>, AwsJson1_0>),
+    AwsJson1_1(RoutingService<AwsJsonRouter<Route<B>>, AwsJson1_1>),
 }
 
 impl<B> Clone for Router<B> {
@@ -90,11 +90,11 @@ impl<B> Clone for Router<B> {
             Routes::RestXml(routes) => Router {
                 routes: Routes::RestXml(routes.clone()),
             },
-            Routes::AwsJson10(routes) => Router {
-                routes: Routes::AwsJson10(routes.clone()),
+            Routes::AwsJson1_0(routes) => Router {
+                routes: Routes::AwsJson1_0(routes.clone()),
             },
-            Routes::AwsJson11(routes) => Router {
-                routes: Routes::AwsJson11(routes.clone()),
+            Routes::AwsJson1_1(routes) => Router {
+                routes: Routes::AwsJson1_1(routes.clone()),
             },
         }
     }
@@ -141,11 +141,11 @@ where
             Routes::RestXml(routes) => Router {
                 routes: Routes::RestXml(routes.map(|router| router.layer(layer).boxed())),
             },
-            Routes::AwsJson10(routes) => Router {
-                routes: Routes::AwsJson10(routes.map(|router| router.layer(layer).boxed())),
+            Routes::AwsJson1_0(routes) => Router {
+                routes: Routes::AwsJson1_0(routes.map(|router| router.layer(layer).boxed())),
             },
-            Routes::AwsJson11(routes) => Router {
-                routes: Routes::AwsJson11(routes.map(|router| router.layer(layer).boxed())),
+            Routes::AwsJson1_1(routes) => Router {
+                routes: Routes::AwsJson1_1(routes.map(|router| router.layer(layer).boxed())),
             },
         }
     }
@@ -219,7 +219,7 @@ where
         );
 
         Self {
-            routes: Routes::AwsJson10(svc),
+            routes: Routes::AwsJson1_0(svc),
         }
     }
 
@@ -244,7 +244,7 @@ where
         );
 
         Self {
-            routes: Routes::AwsJson11(svc),
+            routes: Routes::AwsJson1_1(svc),
         }
     }
 }
@@ -269,8 +269,8 @@ where
             Routes::RestJson1(routes) => routes.call(req),
             Routes::RestXml(routes) => routes.call(req),
             // AwsJson routes.
-            Routes::AwsJson10(routes) => routes.call(req),
-            Routes::AwsJson11(routes) => routes.call(req),
+            Routes::AwsJson1_0(routes) => routes.call(req),
+            Routes::AwsJson1_1(routes) => routes.call(req),
         };
         RouterFuture::new(fut)
     }
