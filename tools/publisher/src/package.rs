@@ -386,7 +386,7 @@ mod tests {
 
         let error = format!(
             "{}",
-            read_package(&path, manifest).err().expect("should fail")
+            read_package(&path, manifest).expect_err("should fail")
         );
         assert!(
             error.contains("Invalid crate version"),
@@ -517,8 +517,7 @@ mod tests {
                 &[("C", "1.2.0"), ("D", "1.3.0"), ("F", "1.4.0")],
             ),
         ])
-        .err()
-        .expect("fail");
+        .expect_err("fail");
         assert_eq!(
             "crate A has multiple versions: 1.1.0 and 1.0.0",
             format!("{}", error)

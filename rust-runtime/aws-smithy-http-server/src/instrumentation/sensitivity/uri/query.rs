@@ -131,7 +131,7 @@ mod tests {
         let originals = EXAMPLES.into_iter().chain(QUERY_STRING_EXAMPLES).map(Uri::from_static);
         for original in originals {
             if let Some(query) = original.query() {
-                let output = Query::new(&query, |_| QueryMarker::default()).to_string();
+                let output = Query::new(query, |_| QueryMarker::default()).to_string();
                 assert_eq!(output, query, "original = {original}");
             }
         }
@@ -142,7 +142,7 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Query::new(&original.query().unwrap(), |_| QueryMarker {
+            let output = Query::new(original.query().unwrap(), |_| QueryMarker {
                 key: true,
                 value: false,
             })
@@ -156,7 +156,7 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Query::new(&original.query().unwrap(), |_| QueryMarker {
+            let output = Query::new(original.query().unwrap(), |_| QueryMarker {
                 key: false,
                 value: true,
             })
@@ -170,7 +170,7 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Query::new(&original.query().unwrap(), |_| QueryMarker { key: true, value: true }).to_string();
+            let output = Query::new(original.query().unwrap(), |_| QueryMarker { key: true, value: true }).to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }
     }
@@ -180,7 +180,7 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = X_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = Query::new(&original.query().unwrap(), |key| QueryMarker {
+            let output = Query::new(original.query().unwrap(), |key| QueryMarker {
                 key: false,
                 value: key == "x",
             })

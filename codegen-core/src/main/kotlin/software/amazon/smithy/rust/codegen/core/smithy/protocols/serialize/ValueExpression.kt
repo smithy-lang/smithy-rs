@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
+
 sealed class ValueExpression {
     abstract val name: String
 
@@ -12,7 +14,7 @@ sealed class ValueExpression {
     data class Value(override val name: String) : ValueExpression()
 
     fun asValue(): String = when (this) {
-        is Reference -> "*$name"
+        is Reference -> autoDeref(name)
         is Value -> name
     }
 

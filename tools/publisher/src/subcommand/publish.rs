@@ -126,7 +126,7 @@ async fn is_published(handle: &PackageHandle) -> Result<bool> {
         3,
         Duration::from_secs(5),
         || async {
-            let expected_version = (&handle.version).to_string();
+            let expected_version = handle.version.to_string();
             let crate_info = match CRATES_IO_CLIENT.get_crate(&handle.name).await {
                 Ok(info) => info,
                 Err(Error::NotFound(_)) => return Ok(false),
@@ -260,9 +260,9 @@ mod test {
     #[tokio::test]
     async fn crate_published_works() {
         let handle = PackageHandle::new("aws-smithy-http", "0.27.0-alpha.1".parse().unwrap());
-        assert_eq!(is_published(&handle).await.expect("failed"), true);
+        assert!(is_published(&handle).await.expect("failed"));
         // we will never publish this version
         let handle = PackageHandle::new("aws-smithy-http", "0.21.0-alpha.1".parse().unwrap());
-        assert_eq!(is_published(&handle).await.expect("failed"), false);
+        assert!(!is_published(&handle).await.expect("failed"));
     }
 }

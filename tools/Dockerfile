@@ -45,12 +45,13 @@ RUN set -eux; \
 # Rust & Tools Installation Stage
 #
 FROM bare_base_image AS install_rust
-ARG rust_stable_version=1.61.0
+ARG rust_stable_version=1.62.0
 ARG rust_nightly_version=nightly-2022-07-25
 ARG cargo_deny_version=0.12.2
 ARG cargo_udeps_version=0.1.29
 ARG cargo_hack_version=0.5.14
 ARG cargo_minimal_versions_version=0.1.4
+ARG cargo_check_external_types_version=0.1.4
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
@@ -97,14 +98,14 @@ RUN set -eux; \
     cargo install cargo-deny --locked --version ${cargo_deny_version}; \
     cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}; \
     cargo install cargo-hack --locked --version ${cargo_hack_version}; \
-    cargo install cargo-minimal-versions --version ${cargo_minimal_versions_version}; \
+    cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}; \
+    cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
         git clone https://github.com/awslabs/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
     cargo install --locked --path tools/publisher; \
-    cargo install --locked --path tools/cargo-check-external-types; \
     cargo install --locked --path tools/changelogger; \
     cargo install --locked --path tools/crate-hasher; \
     cargo install --locked --path tools/sdk-lints; \
@@ -116,7 +117,7 @@ RUN set -eux; \
 # Final image
 #
 FROM bare_base_image AS final_image
-ARG rust_stable_version=1.61.0
+ARG rust_stable_version=1.62.0
 ARG rust_nightly_version=nightly-2022-07-25
 RUN set -eux; \
     yum -y updateinfo; \

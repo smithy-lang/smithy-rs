@@ -19,7 +19,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
@@ -285,11 +284,9 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
-        when (val shape = model.expectShape(member.target)) {
-            is StringShape -> if (shape.hasTrait<EnumTrait>()) {
+        when (model.expectShape(member.target)) {
+            is StringShape -> {
                 rust("$input.as_str()")
-            } else {
-                rust("$input.as_ref()")
             }
             is BooleanShape, is NumberShape -> {
                 rust(
@@ -444,7 +441,7 @@ class XmlBindingTraitSerializerGenerator(
      * ```
      *
      * If [member] is not an optional shape, generate code like:
-     * `{ .. Block }`
+     * `{ .. BLOCK }`
      *
      * [inner] is passed a new `ctx` object to use for code generation which handles the
      * potentially new name of the input.
@@ -462,7 +459,12 @@ class XmlBindingTraitSerializerGenerator(
             }
         } else {
             with(util) {
-                ignoreZeroValues(member, ValueExpression.Value(autoDeref(ctx.input))) {
+                val valueExpression = if (ctx.input.startsWith("&")) {
+                    ValueExpression.Reference(ctx.input)
+                } else {
+                    ValueExpression.Value(ctx.input)
+                }
+                ignoreZeroValues(member, valueExpression) {
                     inner(ctx)
                 }
             }
