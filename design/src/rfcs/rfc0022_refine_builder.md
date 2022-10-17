@@ -14,17 +14,25 @@ The API proposed in this RFC has been manually implemented for the Pokemon servi
 
 ## Overview
 
+Type-heavy builders can lead to a poor developer experience when it comes to writing function signatures, conditional branches and clarity of error messages.
+This RFC provides examples for the issues we are trying to mitigate and showcases an alternative design for the service builder, cutting generic parameters from 2*(N+1) to 2, where `N` is the number of operations on the service.  
+We rely on eagerly upgrading the registered handlers and operations to `Route<B>` to achieve this reduction.
+
 Goals:
+
 - Maximise API ergonomics, with a particular focus on the developer experience for Rust beginners.
 
 Strategy:
+
 - Reduce type complexity, exposing a less generic API;
 - Provide clearer errors when the service builder is misconfigured.
 
 Trade-offs:
+
 - Reduce compile-time safety. Missing handlers will be detected at runtime instead of compile-time.
 
 Constraints:
+
 - There should be no significant degradation in runtime performance (i.e. startup time for applications).
 
 ## Handling missing operations
