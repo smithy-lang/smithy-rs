@@ -323,7 +323,7 @@ mod rest_tests {
 
         #[inline]
         fn call(&mut self, req: Request<B>) -> Self::Future {
-            let body = boxed(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
+            let body = boxed(Body::from(format!("{} :: {}", self.0, req.uri())));
             let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
             Box::pin(fut)
         }

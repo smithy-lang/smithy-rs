@@ -82,7 +82,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
             .body(SdkBody::from("request body"))
             .unwrap(),
     )
-    .augment(|req, mut conf| {
+    .augment(|req, conf| {
         conf.insert(
             EndpointShim::from_resolver(aws_endpoint::partition::endpoint::Metadata {
                 uri_template: "test-service.{region}.amazonaws.com",
@@ -93,7 +93,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
             .resolve_endpoint(&Params::new(Some(Region::new("test-region")))),
         );
         aws_http::auth::set_provider(
-            &mut conf,
+            conf,
             SharedCredentialsProvider::new(Credentials::new(
                 "access_key",
                 "secret_key",
