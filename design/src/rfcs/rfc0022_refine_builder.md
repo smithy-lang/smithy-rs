@@ -488,7 +488,7 @@ impl<Body, Plugin> PokemonServiceBuilder<Body, Plugin> {
     pub fn get_pokemon_species<Handler, Extensions>(mut self, handler: Handler) -> Self
     /* Complex trait bounds */
     {
-        let route = Route::new(Operation::from_handler(handler).upgrade(&plugin));
+        let route = Route::new(Operation::from_handler(handler).upgrade(&self.plugin));
         self.get_pokemon_species = Some(route);
         self
     }
