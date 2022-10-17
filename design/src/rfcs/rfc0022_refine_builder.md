@@ -481,7 +481,23 @@ pub struct PokemonServiceBuilder<Body, Plugin> {
 ```
 
 We no longer store the raw handlers inside `PokemonServiceBuilder`.
-We eagerly upgrade the operation handlers to a `Route` instance when they are registered with the builder. The existing API performs the upgrade when `build` is called, forcing `PokemonServiceBuilder` to store the raw handlers and keep two generic parameters around (`OpX` and `ExtsX`) for each operation.  
+We eagerly upgrade the operation handlers to a `Route` instance when they are registered with the builder. 
+
+```rust
+impl<Body, Plugin> PokemonServiceBuilder<Body, Plugin> {
+    pub fn get_pokemon_species<Handler, Extensions>(mut self, handler: Handler) -> Self
+    /* Complex trait bounds */
+    {
+        let route = Route::new(Operation::from_handler(handler).upgrade(&plugin));
+        self.get_pokemon_species = Some(route);
+        self
+    }
+    
+    /* other setters and methods */
+}
+```
+
+The existing API performs the upgrade when `build` is called, forcing `PokemonServiceBuilder` to store the raw handlers and keep two generic parameters around (`OpX` and `ExtsX`) for each operation.  
 
 There is one downside to this alternative approach - all plugins must be specified upfront, when creating an instance of the builder.
 Plugins cannot be modified through `PokemonServiceBuilder`'s API if we want to guarantee that all operation handlers are upgraded to a `Route` using the same plugins.
