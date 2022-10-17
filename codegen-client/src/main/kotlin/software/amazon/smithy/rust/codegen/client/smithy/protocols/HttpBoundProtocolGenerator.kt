@@ -219,7 +219,7 @@ class HttpBoundProtocolTraitImplGenerator(
                                 if (errorShape.errorMessageMember() != null) {
                                     rust(
                                         """
-                                        if (&tmp.message).is_none() {
+                                        if tmp.message.is_none() {
                                             tmp.message = _error_message;
                                         }
                                         """,

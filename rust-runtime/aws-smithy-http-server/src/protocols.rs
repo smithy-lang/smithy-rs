@@ -181,7 +181,7 @@ mod tests {
                         );
                         assert_eq!(found_mime, invalid_mime.parse::<mime::Mime>().ok());
                     }
-                    _ => panic!("Unexpected `MissingContentTypeReason`: {}", e.to_string()),
+                    _ => panic!("Unexpected `MissingContentTypeReason`: {}", e),
                 },
             }
         }

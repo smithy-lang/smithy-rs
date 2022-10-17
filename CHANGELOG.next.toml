@@ -11,6 +11,25 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+
+[[smithy-rs]]
+message = "Bump MSRV to be 1.62.0."
+references = ["smithy-rs#1825"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "LukeMathWalker"
+
+[[smithy-rs]]
+message = "Bump pyo3 and pyo3-asyncio from 0.16.x to 0.17.0 for aws-smithy-http-server-python."
+references = ["smithy-rs#1825"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "LukeMathWalker"
+
+[[aws-sdk-rust]]
+message = "Bump MSRV to be 1.62.0."
+references = ["smithy-rs#1825"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "LukeMathWalker"
+
 [[smithy-rs]]
 message = """
 Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.

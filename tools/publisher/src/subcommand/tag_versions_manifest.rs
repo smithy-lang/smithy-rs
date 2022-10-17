@@ -86,7 +86,7 @@ mod tests {
         .unwrap();
 
         let expected = {
-            let mut expected = original.clone();
+            let mut expected = original;
             expected.release.as_mut().unwrap().tag = Some("some-release-tag".to_string());
             expected
         };
