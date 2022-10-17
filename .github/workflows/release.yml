@@ -13,6 +13,7 @@ env:
   rust_version: 1.61.0
 
 name: Release smithy-rs
+run-name: ${{ github.workflow }} - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
 on:
   workflow_dispatch:
     inputs:
@@ -23,12 +24,25 @@ on:
         default: true
 
 jobs:
+  main-branch-check:
+    name: Check that workflow is running in main
+    runs-on: ubuntu-latest
+    steps:
+    - name: Main branch check
+      if: ${{ github.ref_name != 'main' }}
+      uses: actions/github-script@v6
+      with:
+        script: |
+          core.setFailed("The release workflow can only be ran on main (current branch: ${{ github.ref_name }})")
+
   # If a release is kicked off before an image is built after push to main,
   # or if a dry-run release is kicked off against a non-main branch to test
   # automation changes, we'll need to build a base image to work against.
   # This job will be a no-op if an image was already built on main.
   acquire-base-image:
     name: Acquire Base Image
+    needs:
+    - main-branch-check
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
