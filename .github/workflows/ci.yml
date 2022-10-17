@@ -163,7 +163,7 @@ jobs:
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
-          openssl_targets: linux-x86_64 i686-linux-gnu-
+          openssl_targets: linux-generic32 i686-linux-gnu-
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
