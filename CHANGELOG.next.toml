@@ -184,5 +184,5 @@ author = "ogudavid"
 [[smithy-rs]]
 message = "Replace bool with enum for a function parameter of `label::fmt_string`."
 references = ["smithy-rs#1875"]
-meta = { "breaking" = yes, "tada" = false, "bug" = false, "target" = "client" }
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
