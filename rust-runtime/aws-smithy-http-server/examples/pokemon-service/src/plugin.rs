@@ -4,7 +4,7 @@
  */
 
 use aws_smithy_http_server::{
-    operation::{Operation, OperationShape},
+    operation::OperationShape,
     plugin::{Pluggable, Plugin},
 };
 use tower::{layer::util::Stack, Layer, Service};
@@ -56,15 +56,15 @@ impl<S> Layer<S> for PrintLayer {
 #[derive(Debug)]
 pub struct PrintPlugin;
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+impl<P, Op, ModelLayer, HttpLayer> Plugin<P, Op, ModelLayer, HttpLayer> for PrintPlugin
 where
     Op: OperationShape,
 {
-    type Service = S;
-    type Layer = Stack<L, PrintLayer>;
+    type ModelLayer = ModelLayer;
+    type HttpLayer = Stack<HttpLayer, PrintLayer>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(PrintLayer { name: Op::NAME })
+    fn map(&self, model_layer: ModelLayer, http_layer: HttpLayer) -> (Self::ModelLayer, Self::HttpLayer) {
+        (model_layer, Stack::new(http_layer, PrintLayer { name: Op::NAME }))
     }
 }
 

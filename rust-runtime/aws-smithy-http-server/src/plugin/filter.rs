@@ -5,7 +5,7 @@
 
 use tower::util::Either;
 
-use crate::operation::{Operation, OperationShape};
+use crate::operation::OperationShape;
 
 use super::Plugin;
 
@@ -24,27 +24,21 @@ impl<Inner, F> FilterByOperationName<Inner, F> {
     }
 }
 
-impl<P, Op, S, L, Inner, F> Plugin<P, Op, S, L> for FilterByOperationName<Inner, F>
+impl<P, Op, ModelLayer, HttpLayer, Inner, F> Plugin<P, Op, ModelLayer, HttpLayer> for FilterByOperationName<Inner, F>
 where
     F: Fn(&str) -> bool,
-    Inner: Plugin<P, Op, S, L>,
+    Inner: Plugin<P, Op, ModelLayer, HttpLayer>,
     Op: OperationShape,
 {
-    type Service = Either<Inner::Service, S>;
-    type Layer = Either<Inner::Layer, L>;
+    type ModelLayer = Either<Inner::ModelLayer, ModelLayer>;
+    type HttpLayer = Either<Inner::HttpLayer, HttpLayer>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+    fn map(&self, model_layer: ModelLayer, http_layer: HttpLayer) -> (Self::ModelLayer, Self::HttpLayer) {
         if (self.predicate)(Op::NAME) {
-            let Operation { inner, layer } = self.inner.map(input);
-            Operation {
-                inner: Either::A(inner),
-                layer: Either::A(layer),
-            }
+            let (model_layer, http_layer) = self.inner.map(model_layer, http_layer);
+            (Either::A(model_layer), Either::A(http_layer))
         } else {
-            Operation {
-                inner: Either::B(input.inner),
-                layer: Either::B(input.layer),
-            }
+            (Either::B(model_layer), Either::B(http_layer))
         }
     }
 }
