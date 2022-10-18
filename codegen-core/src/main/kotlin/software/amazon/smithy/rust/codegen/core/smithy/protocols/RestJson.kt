@@ -92,8 +92,8 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
+        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) {
+            rustTemplate(
                 """
                 pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
@@ -104,8 +104,8 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) {
+            rustTemplate(
                 """
                 pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate

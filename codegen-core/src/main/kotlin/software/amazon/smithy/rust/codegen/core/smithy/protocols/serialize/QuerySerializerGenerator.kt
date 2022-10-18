@@ -127,8 +127,8 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
-        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
-            writer.rustBlockTemplate(
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+            rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
@@ -139,7 +139,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                     rust("let _ = input;")
                 }
                 rust("let mut out = String::new();")
-                Attribute.AllowUnusedMut.render(writer)
+                Attribute.AllowUnusedMut.render(this)
                 rustTemplate(
                     "let mut writer = #{QueryWriter}::new(&mut out, ${action.dq()}, ${version.dq()});",
                     *codegenScope,
@@ -154,9 +154,9 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private fun RustWriter.serializeStructure(context: Context<StructureShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) { writer ->
-            software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(writer)
-            writer.rustBlockTemplate(
+        val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) {
+            Attribute.AllowUnusedMut.render(this)
+            rustBlockTemplate(
                 "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
                 *codegenScope,
@@ -248,7 +248,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private fun RustWriter.structWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         val prefix = context.shape.queryKeyName()
         safeName("scope").also { scopeName ->
-            software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+            Attribute.AllowUnusedMut.render(this)
             rust("let mut $scopeName = ${context.writerExpression}.prefix(${prefix.dq()});")
             inner(scopeName)
         }
@@ -265,7 +265,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             rust("let mut $listName = ${context.writerExpression}.start_list($flat, $memberOverride);")
             rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
                 val entryName = safeName("entry")
-                software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+                Attribute.AllowUnusedMut.render(this)
                 rust("let mut $entryName = $listName.entry();")
                 val targetShape = model.expectShape(context.shape.member.target)
                 serializeMemberValue(
@@ -292,7 +292,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                     else -> keyName
                 }
                 val entryName = safeName("entry")
-                software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+                Attribute.AllowUnusedMut.render(this)
                 rust("let mut $entryName = $mapName.entry($keyExpression);")
                 serializeMember(MemberContext(entryName, ValueExpression.Reference(valueName), context.shape.value))
             }
@@ -303,9 +303,9 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = RuntimeType.forInlineFun(fnName, querySerModule) { writer ->
-            software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(writer)
-            writer.rustBlockTemplate(
+        val unionSerializer = RuntimeType.forInlineFun(fnName, querySerModule) {
+            Attribute.AllowUnusedMut.render(this)
+            rustBlockTemplate(
                 "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to unionSymbol,
                 *codegenScope,

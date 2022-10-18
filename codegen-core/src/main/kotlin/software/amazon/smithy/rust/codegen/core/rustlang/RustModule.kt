@@ -5,7 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
-data class RustModule(val name: String, val rustMetadata: RustMetadata, val documentation: String?) {
+data class RustModule(val name: String, val rustMetadata: RustMetadata, val documentation: String? = null) {
     fun render(writer: RustWriter) {
         documentation?.let { docs -> writer.docs(docs) }
         rustMetadata.render(writer)

@@ -53,8 +53,9 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
         generator: KClass<T>
     ): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) { writer ->
-                generator.java.newInstance().render(writer,
+        return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
+                generator.java.newInstance().render(
+                    this,
                     model,
                     symbolProvider,
                     symbol,
@@ -71,20 +72,20 @@ fun OperationShape.errorSymbol(
     target: CodegenTarget,
 ): RuntimeType {
     val symbol = symbolProvider.toSymbol(this)
-    return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) { writer ->
+    return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
         when (target) {
             CodegenTarget.CLIENT -> CombinedErrorGenerator(
                 model,
                 symbolProvider,
                 symbol,
-                this.operationErrors(model).map { it.asStructureShape().get() },
-            ).render(writer)
+                operationErrors(model).map { it.asStructureShape().get() },
+            ).render(this)
             CodegenTarget.SERVER -> ServerCombinedErrorGenerator(
                 model,
                 symbolProvider,
                 symbol,
-                this.operationErrors(model).map { it.asStructureShape().get() },
-            ).render(writer)
+                operationErrors(model).map { it.asStructureShape().get() },
+            ).render(this)
         }
     }
 }
@@ -92,18 +93,18 @@ fun OperationShape.errorSymbol(
 fun UnionShape.eventStreamErrorSymbol(model: Model, symbolProvider: RustSymbolProvider, target: CodegenTarget): RuntimeType {
     val symbol = symbolProvider.toSymbol(this)
     val errorSymbol = RuntimeType("${symbol.name}Error", null, "crate::error")
-    return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) { writer ->
-        val errors = this.eventStreamErrors().map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
+    return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
+        val errors = this@eventStreamErrorSymbol.eventStreamErrors().map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
         when (target) {
             CodegenTarget.CLIENT ->
                 CombinedErrorGenerator(model, symbolProvider, symbol, errors).renderErrors(
-                    writer,
+                    this,
                     errorSymbol,
                     symbol,
                 )
             CodegenTarget.SERVER ->
                 ServerCombinedErrorGenerator(model, symbolProvider, symbol, errors).renderErrors(
-                    writer,
+                    this,
                     errorSymbol,
                     symbol,
                 )
