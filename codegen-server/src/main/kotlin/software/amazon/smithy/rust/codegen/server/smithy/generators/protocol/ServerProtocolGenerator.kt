@@ -11,11 +11,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
 open class ServerProtocolGenerator(
     codegenContext: CodegenContext,
-    protocol: Protocol,
+    val protocol: ServerProtocol,
     makeOperationGenerator: MakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) : ProtocolGenerator(codegenContext, protocol, makeOperationGenerator, traitGenerator) {

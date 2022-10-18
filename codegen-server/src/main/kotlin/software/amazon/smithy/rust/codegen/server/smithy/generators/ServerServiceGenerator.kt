@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -30,7 +29,7 @@ open class ServerServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ServerProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val protocol: ServerProtocol,
+    val protocol: ServerProtocol,
     private val codegenContext: CodegenContext,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
@@ -41,7 +40,7 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        rustCrate.withModule(DefaultPublicModules["operation"]!!) {
+        rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) {
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
         }
 
@@ -52,7 +51,7 @@ open class ServerServiceGenerator(
                 }
             }
         }
-        rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) {
+        rustCrate.withModule(RustModule.private("operation_handler", "Operation handlers definition and implementation.")) {
             renderOperationHandler(this, operations)
         }
         rustCrate.withModule(
@@ -88,10 +87,9 @@ open class ServerServiceGenerator(
         rustCrate.withModule(
             RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) {
-            val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
             ServerServiceGeneratorV2(
                 codegenContext,
-                serverProtocol,
+                protocol,
             ).render(this)
         }
 
@@ -108,7 +106,7 @@ open class ServerServiceGenerator(
 
     // Render operations handler.
     open fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationHandlerGenerator(codegenContext, operations).render(writer)
+        ServerOperationHandlerGenerator(codegenContext, protocol, operations).render(writer)
     }
 
     // Render operations registry.

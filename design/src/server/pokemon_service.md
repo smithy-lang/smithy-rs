@@ -1,4 +1,4 @@
-## Code generating the Pokémon Service
+# Generating the Pokémon Service
 
 This is an overview of client and server of the Pokémon service. It introduces:
 
@@ -10,7 +10,7 @@ All the code shown and linked to is from the repository at this commit: [db48039
 
 The Smithy model used to generate the code snippets is: [Pokémon][2]
 
-### Building the service
+## Building the service
 
 The entry point of a service is [main.rs][3]
 
@@ -59,37 +59,37 @@ let app: Router = OperationRegistryBuilder::default()
 
 Each of these operations is a function that can take any of these signatures.
 
-1.  If the operation is not fallible and does not share any state:
+1. If the operation is not fallible and does not share any state:
 
-```rust
-pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {...}
-```
+    ```rust
+    pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {...}
+    ```
 
-2.  If the operation is fallible and does not share any state:
+2. If the operation is fallible and does not share any state:
 
-```rust
-pub async fn capture_pokemon(
-    mut input: input::CapturePokemonOperationInput,
-) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {...}
-```
+    ```rust
+    pub async fn capture_pokemon(
+        mut input: input::CapturePokemonOperationInput,
+    ) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {...}
+    ```
 
-3.  If the operation is not fallible and shares some state:
+3. If the operation is not fallible and shares some state:
 
-```rust
-pub async fn get_server_statistics(
-    _input: input::GetServerStatisticsInput,
-    state: Extension<Arc<State>>,
-) -> output::GetServerStatisticsOutput {...}
-```
+    ```rust
+    pub async fn get_server_statistics(
+        _input: input::GetServerStatisticsInput,
+        state: Extension<Arc<State>>,
+    ) -> output::GetServerStatisticsOutput {...}
+    ```
 
-4.  If the operation is fallible and shares some state:
+4. If the operation is fallible and shares some state:
 
-```rust
-pub async fn get_storage(
-    input: input::GetStorageInput,
-    _state: Extension<Arc<State>>,
-) -> Result<output::GetStorageOutput, error::GetStorageError> {...}
-```
+    ```rust
+    pub async fn get_storage(
+        input: input::GetStorageInput,
+        _state: Extension<Arc<State>>,
+    ) -> Result<output::GetStorageOutput, error::GetStorageError> {...}
+    ```
 
 All of these are operations which implementors define; they are the business logic of the application. The rest is code generated.
 
@@ -150,9 +150,9 @@ aws_smithy_http_server::routing::Router::new_rest_json_router(vec![
 At this level, logging might be prohibited by the [`@sensitive`][10] trait. If there are no `@sensitive` shapes, the generated code looks like:
 
 ```rust
-let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new();
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
-let svc = aws_smithy_http_server::logging::InstrumentOperation::new(
+let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
+let svc = aws_smithy_http_server::instrumentation::InstrumentOperation::new(
     svc,
     "capture_pokemon_operation",
 )
@@ -164,20 +164,20 @@ Accessing the Pokédex is modeled as a restricted operation: a passcode is neede
 To not log the passcode, the code will be generated [here][11] as:
 
 ```rust
-let request_fmt = aws_smithy_http_server::logging::sensitivity::RequestFmt::new()
+let request_fmt = aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new()
     .header(|name: &http::header::HeaderName| {
         #[allow(unused_variables)]
         let name = name.as_str();
         let name_match = matches!(name, "passcode");
         let key_suffix = None;
         let value = name_match;
-        aws_smithy_http_server::logging::sensitivity::headers::HeaderMarker {
+        aws_smithy_http_server::instrumentation::sensitivity::headers::HeaderMarker {
             value,
             key_suffix,
         }
     })
     .label(|index: usize| matches!(index, 1));
-let response_fmt = aws_smithy_http_server::logging::sensitivity::ResponseFmt::new();
+let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
 ```
 
 Each route is a pair, [`BoxCloneService`][12] wrapping the service operation (the implementation) and

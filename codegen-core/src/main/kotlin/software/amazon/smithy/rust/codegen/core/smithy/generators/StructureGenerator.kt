@@ -64,7 +64,7 @@ open class StructureGenerator(
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
+            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
     }
 
@@ -110,6 +110,7 @@ open class StructureGenerator(
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
                     val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
@@ -152,7 +153,7 @@ open class StructureGenerator(
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
-        writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
+        writer.write("$memberName: #T,", memberSymbol)
     }
 
     open fun renderStructure() {

@@ -23,7 +23,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -68,7 +69,6 @@ class CodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = settings.codegenConfig.renameExceptions,
-                handleRustBoxing = true,
                 nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
             )
         val baseModel = baselineTransform(context.model)
@@ -81,10 +81,19 @@ class CodegenVisitor(
         symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
+
+        val clientPublicModules = setOf(
+            RustModule.Error,
+            RustModule.Model,
+            RustModule.Input,
+            RustModule.Output,
+            RustModule.Config,
+            RustModule.operation(Visibility.PUBLIC),
+        ).associateBy { it.name }
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
-            DefaultPublicModules,
+            clientPublicModules,
             codegenContext.settings.codegenConfig,
         )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
