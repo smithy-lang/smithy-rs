@@ -622,7 +622,18 @@ let builder = if check_database {
 let app = builder.build();
 ```
 
-or, in approach 2),
+The same cannot be done when conditionally registering a route, because on the `else` branch we cannot convert `MissingOperation` into a `Box<dyn Upgradable>` since `MissingOperation` doesn't implement `Upgradable` - the pillar on which we built all our compile-time safety story.
+
+```rust
+// This won't compile!
+let builder = if check_database {
+    builder.check_health_operation(Operation::from_handler(check_health).boxed())
+} else {
+    builder
+};
+```
+
+In approach 2), we can erase the whole builder in both branches:
 
 ```rust
 let check_database: bool = /* */;
