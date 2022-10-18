@@ -180,3 +180,9 @@ message = "Enable local maven repo dependency override."
 references = ["smithy-rs#1852"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ogudavid"
+
+[[aws-sdk-rust]]
+message = "Ability to override the IMDS client in `DefaultCredentialsChain`"
+references = ["aws-sdk-rust#625"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "kevinpark1217"
