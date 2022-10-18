@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -111,13 +112,14 @@ class XmlBindingTraitSerializerGenerator(
         val operationXmlName = xmlIndex.operationInputShapeName(operationShape)
             ?: throw CodegenException("operation must have a name if it has members")
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
-                // string and ensures that all closing tags get written
+                // Create a scope for writer. This ensures that:
+                // - The writer is dropped before returning the string
+                // - All closing tags get written
                 rustBlock("") {
                     rustTemplate(
                         """
@@ -143,13 +145,14 @@ class XmlBindingTraitSerializerGenerator(
         val target = model.expectShape(member.target)
         return RuntimeType.forInlineFun(fnName, xmlSerModule) {
             val t = symbolProvider.toSymbol(member).rustType().stripOuter<RustType.Option>().render(true)
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(input: &$t) -> std::result::Result<std::vec::Vec<u8>, #{Error}>",
                 *codegenScope,
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
-                // string and ensures that all closing tags get written
+                // Create a scope for writer. This ensures that:
+                // - The writer is dropped before returning the string
+                // - All closing tags get written
                 rustBlock("") {
                     rustTemplate(
                         """
@@ -178,8 +181,8 @@ class XmlBindingTraitSerializerGenerator(
 
     override fun unsetStructure(structure: StructureShape): RuntimeType {
         val fnName = "rest_xml_unset_payload"
-        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
-            writer.rustTemplate(
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+            rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
                     Vec::new()
@@ -200,13 +203,14 @@ class XmlBindingTraitSerializerGenerator(
         val operationXmlName = xmlIndex.operationOutputShapeName(operationShape)
             ?: throw CodegenException("operation must have a name if it has members")
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(output: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(outputShape),
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
-                // string and ensures that all closing tags get written
+                // Create a scope for writer. This ensures that:
+                // - The writer is dropped before returning the string
+                // - All closing tags get written
                 rustBlock("") {
                     rustTemplate(
                         """
@@ -230,13 +234,14 @@ class XmlBindingTraitSerializerGenerator(
             .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(error: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(errorShape),
             ) {
                 rust("let mut out = String::new();")
-                // create a scope for writer. This ensure that writer has been dropped before returning the
-                // string and ensures that all closing tags get written
+                // Create a scope for writer. This ensures that:
+                // - The writer is dropped before returning the string
+                // - All closing tags get written
                 rustBlock("") {
                     rustTemplate(
                         """
@@ -274,7 +279,7 @@ class XmlBindingTraitSerializerGenerator(
                 }
             }
         }
-        software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+        Attribute.AllowUnusedMut.render(this)
         rust("let mut scope = ${ctx.elementWriter}.finish();")
         val scopeCtx = Ctx.Scope("scope", ctx.input)
         members.dataMembers.forEach { member ->
@@ -359,7 +364,7 @@ class XmlBindingTraitSerializerGenerator(
         val structureSymbol = symbolProvider.toSymbol(structureShape)
         val fnName = symbolProvider.serializeFunctionName(structureShape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, xmlSerModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
                 *codegenScope,
@@ -379,7 +384,7 @@ class XmlBindingTraitSerializerGenerator(
         val fnName = symbolProvider.serializeFunctionName(unionShape)
         val unionSymbol = symbolProvider.toSymbol(unionShape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, xmlSerModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> Result<(), #{Error}>",
                 "Input" to unionSymbol,
                 *codegenScope,
