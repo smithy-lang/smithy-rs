@@ -4,33 +4,15 @@
  */
 
 //! Python-compatible middleware [http::Request] implementation.
+
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use aws_smithy_http_server::body::Body;
-use http::{Request, Version};
+use http::header::HeaderName;
+use http::{HeaderValue, Request};
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-
-/// Python compabible HTTP [Version].
-#[pyclass(name = "HttpVersion")]
-#[derive(PartialEq, PartialOrd, Copy, Clone, Eq, Ord, Hash)]
-pub struct PyHttpVersion(Version);
-
-#[pymethods]
-impl PyHttpVersion {
-    /// Extract the value of the HTTP [Version] into a string that
-    /// can be used by Python.
-    #[pyo3(text_signature = "($self)")]
-    fn value(&self) -> &str {
-        match self.0 {
-            Version::HTTP_09 => "HTTP/0.9",
-            Version::HTTP_10 => "HTTP/1.0",
-            Version::HTTP_11 => "HTTP/1.1",
-            Version::HTTP_2 => "HTTP/2.0",
-            Version::HTTP_3 => "HTTP/3.0",
-            _ => unreachable!(),
-        }
-    }
-}
 
 /// Python-compatible [Request] object.
 ///
@@ -41,83 +23,85 @@ impl PyHttpVersion {
 /// the body around).
 #[pyclass(name = "Request")]
 #[pyo3(text_signature = "(request)")]
-#[derive(Debug, Clone)]
-pub struct PyRequest {
-    #[pyo3(get, set)]
-    method: String,
-    #[pyo3(get, set)]
-    uri: String,
-    // TODO(investigate if using a PyDict can make the experience more idiomatic)
-    // I'd like to be able to do request.headers.get("my-header") and
-    // request.headers["my-header"] = 42 instead of implementing set_header() and get_header()
-    // under pymethods. The same applies to response.
-    pub(crate) headers: HashMap<String, String>,
-    version: Version,
-}
+#[derive(Debug)]
+pub struct PyRequest(Option<Request<Body>>);
 
 impl PyRequest {
     /// Create a new Python-compatible [Request] structure from the Rust side.
-    ///
-    /// This is done by cloning the headers, method, URI and HTTP version to let them be owned by Python.
-    pub fn new(request: &Request<Body>) -> Self {
-        Self {
-            method: request.method().to_string(),
-            uri: request.uri().to_string(),
-            headers: request
-                .headers()
-                .into_iter()
-                .map(|(k, v)| -> (String, String) {
-                    let name: String = k.as_str().to_string();
-                    let value: String = String::from_utf8_lossy(v.as_bytes()).to_string();
-                    (name, value)
-                })
-                .collect(),
-            version: request.version(),
-        }
+    pub fn new(request: Request<Body>) -> Self {
+        Self(Some(request))
+    }
+
+    pub fn take_inner(&mut self) -> Option<Request<Body>> {
+        self.0.take()
     }
 }
 
 #[pymethods]
 impl PyRequest {
-    #[new]
-    /// Create a new Python-compatible `Request` object from the Python side.
-    fn newpy(
-        method: String,
-        uri: String,
-        headers: Option<HashMap<String, String>>,
-        version: Option<PyHttpVersion>,
-    ) -> Self {
-        let version = version.map(|v| v.0).unwrap_or(Version::HTTP_11);
-        Self {
-            method,
-            uri,
-            headers: headers.unwrap_or_default(),
-            version,
-        }
+    /// Return the HTTP method of this request.
+    #[getter]
+    fn method(&self) -> PyResult<String> {
+        self.0
+            .as_ref()
+            .map(|req| req.method().to_string())
+            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
+    }
+
+    /// Return the URI of this request.
+    #[getter]
+    fn uri(&self) -> PyResult<String> {
+        self.0
+            .as_ref()
+            .map(|req| req.uri().to_string())
+            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
     }
 
     /// Return the HTTP version of this request.
-    #[pyo3(text_signature = "($self)")]
-    fn version(&self) -> String {
-        PyHttpVersion(self.version).value().to_string()
+    #[getter]
+    fn version(&self) -> PyResult<String> {
+        self.0
+            .as_ref()
+            .map(|req| format!("{:?}", req.version()))
+            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
     }
 
     /// Return the HTTP headers of this request.
     /// TODO(can we use `Py::clone_ref()` to prevent cloning the hashmap?)
-    #[pyo3(text_signature = "($self)")]
-    fn headers(&self) -> HashMap<String, String> {
-        self.headers.clone()
+    #[getter]
+    fn headers(&self) -> PyResult<HashMap<String, String>> {
+        self.0
+            .as_ref()
+            .map(|req| {
+                req.headers()
+                    .into_iter()
+                    .map(|(k, v)| -> (String, String) {
+                        let name: String = k.as_str().to_string();
+                        let value: String = String::from_utf8_lossy(v.as_bytes()).to_string();
+                        (name, value)
+                    })
+                    .collect()
+            })
+            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
     }
 
     /// Insert a new key/value into this request's headers.
+    /// TODO(investigate if using a PyDict can make the experience more idiomatic)
+    /// I'd like to be able to do request.headers.get("my-header") and
+    /// request.headers["my-header"] = 42 instead of implementing set_header() and get_header()
+    /// under pymethods. The same applies to response.
     #[pyo3(text_signature = "($self, key, value)")]
-    fn set_header(&mut self, key: &str, value: &str) {
-        self.headers.insert(key.to_string(), value.to_string());
-    }
-
-    /// Return a header value of this request.
-    #[pyo3(text_signature = "($self, key)")]
-    fn get_header(&self, key: &str) -> Option<&String> {
-        self.headers.get(key)
+    fn set_header(&mut self, key: &str, value: &str) -> PyResult<()> {
+        match self.0.as_mut() {
+            Some(ref mut req) => {
+                let key = HeaderName::from_str(key)
+                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+                let value = HeaderValue::from_str(value)
+                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+                req.headers_mut().insert(key, value);
+                Ok(())
+            }
+            None => return Err(PyRuntimeError::new_err("request is gone")),
+        }
     }
 }

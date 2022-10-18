@@ -15,6 +15,7 @@ use aws_smithy_http_server::{
 use aws_smithy_types::date_time::{ConversionError, DateTimeParseError};
 use pyo3::{create_exception, exceptions::PyException as BasePyException, prelude::*, PyErr};
 use thiserror::Error;
+use tower::BoxError;
 
 /// Python error that implements foreign errors.
 #[derive(Error, Debug)]
@@ -63,6 +64,12 @@ impl PyMiddlewareException {
 
 impl From<PyErr> for PyMiddlewareException {
     fn from(other: PyErr) -> Self {
+        Self::newpy(other.to_string(), None)
+    }
+}
+
+impl From<BoxError> for PyMiddlewareException {
+    fn from(other: BoxError) -> Self {
         Self::newpy(other.to_string(), None)
     }
 }

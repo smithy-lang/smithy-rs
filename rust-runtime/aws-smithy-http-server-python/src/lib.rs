@@ -23,9 +23,7 @@ pub use error::{PyError, PyMiddlewareException};
 #[doc(inline)]
 pub use logging::{py_tracing_event, PyTracingHandler};
 #[doc(inline)]
-pub use middleware::{
-    PyHttpVersion, PyMiddlewareLayer, PyMiddlewareType, PyMiddlewares, PyRequest, PyResponse,
-};
+pub use middleware::{PyMiddlewareHandler, PyMiddlewareLayer, PyRequest, PyResponse};
 #[doc(inline)]
 pub use server::{PyApp, PyHandler};
 #[doc(inline)]

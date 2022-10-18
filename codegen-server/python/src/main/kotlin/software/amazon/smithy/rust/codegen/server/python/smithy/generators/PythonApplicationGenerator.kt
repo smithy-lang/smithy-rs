@@ -96,6 +96,7 @@ class PythonApplicationGenerator(
         renderAppStruct(writer)
         renderAppDefault(writer)
         renderAppClone(writer)
+        renderAppImpl(writer)
         renderPyAppTrait(writer)
         renderPyMethods(writer)
     }
@@ -107,7 +108,7 @@ class PythonApplicationGenerator(
             ##[derive(Debug)]
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
-                middlewares: #{SmithyPython}::PyMiddlewares,
+                middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
@@ -141,7 +142,7 @@ class PythonApplicationGenerator(
                 fn default() -> Self {
                     Self {
                         handlers: Default::default(),
-                        middlewares: #{SmithyPython}::PyMiddlewares::new::<#{Protocol}>(vec![]),
+                        middlewares: vec![],
                         context: None,
                         workers: #{parking_lot}::Mutex::new(vec![]),
                     }
@@ -151,6 +152,30 @@ class PythonApplicationGenerator(
             "Protocol" to protocol.markerStruct(),
             *codegenScope,
         )
+    }
+
+    private fun renderAppImpl(writer: RustWriter) {
+        writer.rustBlockTemplate(
+            """
+            impl App
+            """,
+            *codegenScope,
+        ) {
+            rustTemplate(
+                """
+                // Check if a Python function is a coroutine. Since the function has not run yet,
+                // we cannot use `asyncio.iscoroutine()`, we need to use `inspect.iscoroutinefunction()`.
+                fn is_coroutine(&self, py: #{pyo3}::Python, func: &#{pyo3}::PyObject) -> #{pyo3}::PyResult<bool> {
+                    let inspect = py.import("inspect")?;
+                    // NOTE: that `asyncio.iscoroutine()` doesn't work here.
+                    inspect
+                        .call_method1("iscoroutinefunction", (func,))?
+                        .extract::<bool>()
+                }
+                """,
+                *codegenScope,
+            )
+        }
     }
 
     private fun renderPyAppTrait(writer: RustWriter) {
@@ -170,9 +195,6 @@ class PythonApplicationGenerator(
                 }
                 fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
                     &mut self.handlers
-                }
-                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
-                    &mut self.middlewares
                 }
                 """,
                 *codegenScope,
@@ -212,13 +234,25 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let middleware_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                    let service = #{tower}::ServiceBuilder::new()
-                        .boxed_clone()
-                        .layer(
-                            #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(self.middlewares.clone(), middleware_locals),
-                        )
-                        .service(builder.build());
+                    use #{tower}::{Layer, ServiceExt};
+                    let mut service = #{tower}::util::BoxCloneService::new(builder.build());
+                    let mut middlewares = self.middlewares.clone();
+                    // Reverse the middlewares, so they run with same order as they defined
+                    middlewares.reverse();
+                    for handler in middlewares {
+                        let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                        let name = handler.name.clone();
+                        let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
+                        service = #{tower}::util::BoxCloneService::new(layer.layer(service).map_err(move |err| {
+                            // TODO: correctly propogate errors.
+                            tracing::error!(
+                                err = %err,
+                                "'{}' middleware failed",
+                                name,
+                            );
+                            loop {}
+                        }));
+                    }
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
@@ -248,11 +282,23 @@ class PythonApplicationGenerator(
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
                    self.context = Some(context);
                 }
-                /// Register a request middleware function that will be run inside a Tower layer, without cloning the body.
+                /// Register a Python function to be executed inside a Tower middleware layer.
                 ##[pyo3(text_signature = "(${'$'}self, func)")]
-                pub fn request_middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                    use #{SmithyPython}::PyApp;
-                    self.register_middleware(py, func, #{SmithyPython}::PyMiddlewareType::Request)
+                pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    let name = func.getattr(py, "__name__")?.extract::<String>(py)?;
+                    let is_coroutine = self.is_coroutine(py, &func)?;
+                    let handler = #{SmithyPython}::PyMiddlewareHandler {
+                        name,
+                        func,
+                        is_coroutine,
+                    };
+                    tracing::info!(
+                        "registering middleware function `{}`, coroutine: {}",
+                        handler.name,
+                        handler.is_coroutine,
+                    );
+                    self.middlewares.push(handler);
+                    Ok(())
                 }
                 /// Main entrypoint: start the server on multiple workers.
                 ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]

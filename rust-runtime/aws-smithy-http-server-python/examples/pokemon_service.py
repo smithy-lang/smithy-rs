@@ -138,35 +138,37 @@ app.context(Context())
 # * Middleware raising any other exception will immediately terminate the
 #   request handling and return a protocol specific error, with HTTP status
 #   code 500.
-@app.request_middleware
-def check_content_type_header(request: Request):
-    content_type = request.get_header("content-type")
+@app.middleware
+async def check_content_type_header(request: Request, next):
+    content_type = request.headers.get("content-type")
     if content_type == "application/json":
         logging.debug("Found valid `application/json` content type")
     else:
         logging.warning(
-            f"Invalid content type {content_type}, dumping headers: {request.headers()}"
+            f"Invalid content type {content_type}, dumping headers: {request.headers}"
         )
+    return await next(request)
 
 
 # This middleware adds a new header called `x-amzn-answer` to the
 # request. We expect to see this header to be populated in the next
 # middleware.
-@app.request_middleware
-def add_x_amzn_answer_header(request: Request):
+@app.middleware
+async def add_x_amzn_answer_header(request: Request, next):
     request.set_header("x-amzn-answer", "42")
     logging.debug("Setting `x-amzn-answer` header to 42")
-    return request
+    return await next(request)
 
 
 # This middleware checks if the header `x-amzn-answer` is correctly set
 # to 42, otherwise it returns an exception with a set status code.
-@app.request_middleware
-async def check_x_amzn_answer_header(request: Request):
+@app.middleware
+async def check_x_amzn_answer_header(request: Request, next):
     # Check that `x-amzn-answer` is 42.
-    if request.get_header("x-amzn-answer") != "42":
+    if request.headers.get("x-amzn-answer") != "42":
         # Return an HTTP 401 Unauthorized if the content type is not JSON.
         raise MiddlewareException("Invalid answer", 401)
+    return await next(request)
 
 
 ###########################################################
@@ -232,4 +234,5 @@ async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context):
 def main():
     app.run(workers=1)
 
-main()
+if __name__ == '__main__':
+    main()
