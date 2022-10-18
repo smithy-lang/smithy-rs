@@ -8,16 +8,16 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.parse
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
-import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.EventStreamUnmarshallerGenerator
-import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.testutil.testRustSettings
-import software.amazon.smithy.rust.codegen.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.EventStreamTestModels
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.EventStreamTestTools
 
 class EventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
@@ -25,7 +25,7 @@ class EventStreamUnmarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase)
 
-        val codegenContext = CoreCodegenContext(
+        val codegenContext = CodegenContext(
             test.model,
             test.symbolProvider,
             test.serviceShape,
@@ -44,8 +44,8 @@ class EventStreamUnmarshallerGeneratorTest {
             target = testCase.target,
         )
 
-        test.project.lib { writer ->
-            writer.rust(
+        test.project.lib {
+            rust(
                 """
                 use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
                 use aws_smithy_types::{Blob, DateTime};
@@ -82,11 +82,11 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "message_with_blob",
                 test = """
                     let message = msg("event", "MessageWithBlob", "application/octet-stream", b"hello, world!");
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
+                    let result = ${format(generator.render())}().unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     assert_eq!(
                         TestStream::MessageWithBlob(
@@ -98,11 +98,11 @@ class EventStreamUnmarshallerGeneratorTest {
             )
 
             if (testCase.target == CodegenTarget.CLIENT) {
-                writer.unitTest(
+                unitTest(
                     "unknown_message",
                     """
                     let message = msg("event", "NewUnmodeledMessageType", "application/octet-stream", b"hello, world!");
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
+                    let result = ${format(generator.render())}().unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     assert_eq!(
                         TestStream::Unknown,
@@ -112,11 +112,11 @@ class EventStreamUnmarshallerGeneratorTest {
                 )
             }
 
-            writer.unitTest(
+            unitTest(
                 "message_with_string",
                 """
                 let message = msg("event", "MessageWithString", "text/plain", b"hello, world!");
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithString(MessageWithString::builder().data("hello, world!").build()),
@@ -125,7 +125,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_struct",
                 """
                 let message = msg(
@@ -134,7 +134,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     "${testCase.responseContentType}",
                     br#"${testCase.validTestStruct}"#
                 );
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithStruct(MessageWithStruct::builder().some_struct(
@@ -148,7 +148,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_union",
                 """
                 let message = msg(
@@ -157,7 +157,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     "${testCase.responseContentType}",
                     br#"${testCase.validTestUnion}"#
                 );
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(
@@ -168,7 +168,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_headers",
                 """
                 let message = msg("event", "MessageWithHeaders", "application/octet-stream", b"")
@@ -180,7 +180,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
                     .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithHeaders(MessageWithHeaders::builder()
@@ -199,12 +199,12 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_header_and_payload",
                 """
                 let message = msg("event", "MessageWithHeaderAndPayload", "application/octet-stream", b"payload")
                     .add_header(Header::new("header", HeaderValue::String("header".into())));
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithHeaderAndPayload(MessageWithHeaderAndPayload::builder()
@@ -217,7 +217,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_no_header_payload_traits",
                 """
                 let message = msg(
@@ -226,7 +226,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     "${testCase.responseContentType}",
                     br#"${testCase.validMessageWithNoHeaderPayloadTraits}"#
                 );
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithNoHeaderPayloadTraits(MessageWithNoHeaderPayloadTraits::builder()
@@ -243,7 +243,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 CodegenTarget.CLIENT -> listOf("TestStreamErrorKind::SomeError", ".kind")
                 CodegenTarget.SERVER -> listOf("TestStreamError::SomeError", "")
             }
-            writer.unitTest(
+            unitTest(
                 "some_error",
                 """
                 let message = msg(
@@ -252,7 +252,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     "${testCase.responseContentType}",
                     br#"${testCase.validSomeError}"#
                 );
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 match expect_error(result.unwrap())$kindSuffix {
                     $someError(err) => assert_eq!(Some("some error"), err.message()),
@@ -262,7 +262,7 @@ class EventStreamUnmarshallerGeneratorTest {
             )
 
             if (testCase.target == CodegenTarget.CLIENT) {
-                writer.unitTest(
+                unitTest(
                     "generic_error",
                     """
                     let message = msg(
@@ -271,7 +271,7 @@ class EventStreamUnmarshallerGeneratorTest {
                         "${testCase.responseContentType}",
                         br#"${testCase.validUnmodeledError}"#
                     );
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
+                    let result = ${format(generator.render())}().unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     match expect_error(result.unwrap())$kindSuffix {
                         TestStreamErrorKind::Unhandled(err) => {
@@ -283,7 +283,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 )
             }
 
-            writer.unitTest(
+            unitTest(
                 "bad_content_type",
                 """
                 let message = msg(
@@ -292,7 +292,7 @@ class EventStreamUnmarshallerGeneratorTest {
                     "wrong-content-type",
                     br#"${testCase.validTestStruct}"#
                 );
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                let result = ${format(generator.render())}().unmarshall(&message);
                 assert!(result.is_err(), "expected error, got: {:?}", result);
                 assert!(format!("{}", result.err().unwrap()).contains("expected :content-type to be"));
                 """,

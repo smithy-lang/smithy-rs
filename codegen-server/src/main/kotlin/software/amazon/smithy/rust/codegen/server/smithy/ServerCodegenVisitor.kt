@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -16,32 +17,38 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
-import software.amazon.smithy.rust.codegen.util.CommandFailed
-import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
+
+val DefaultServerPublicModules = setOf(
+    RustModule.Error,
+    RustModule.Model,
+    RustModule.Input,
+    RustModule.Output,
+    RustModule.Config,
+).associateBy { it.name }
 
 /**
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
@@ -49,7 +56,7 @@ import java.util.logging.Logger
  */
 open class ServerCodegenVisitor(
     context: PluginContext,
-    private val codegenDecorator: RustCodegenDecorator<ServerCodegenContext>,
+    private val codegenDecorator: RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext>,
 ) : ShapeVisitor.Default<Unit>() {
 
     protected val logger = Logger.getLogger(javaClass.name)
@@ -60,16 +67,15 @@ open class ServerCodegenVisitor(
     private val fileManifest = context.fileManifest
     protected var model: Model
     protected var codegenContext: ServerCodegenContext
-    protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ServerCodegenContext>
-    protected var protocolGenerator: ProtocolGenerator
+    protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>
+    protected var protocolGenerator: ServerProtocolGenerator
 
     init {
         val symbolVisitorConfig =
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
-                handleRequired = true,
-                handleRustBoxing = true,
+                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -93,7 +99,7 @@ open class ServerCodegenVisitor(
             settings,
         )
 
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultServerPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
@@ -103,16 +109,22 @@ open class ServerCodegenVisitor(
      */
     protected fun baselineTransform(model: Model) =
         model
+            // Flattens mixins out of the model and removes them from the model
+            .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
             // Normalize operations by adding synthetic input and output shapes to every operation
             .let(OperationNormalizer::transform)
-            // Drop unsupported event stream operations from the model
-            .let { RemoveEventStreamOperations.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
+
+    /**
+     * Exposure purely for unit test purposes.
+     */
+    internal fun baselineTransformInternalTest(model: Model) =
+        baselineTransform(model)
 
     /**
      * Execute code generation
@@ -167,12 +179,12 @@ open class ServerCodegenVisitor(
      */
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
-        rustCrate.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
+        rustCrate.useShapeWriter(shape) {
+            StructureGenerator(model, symbolProvider, this, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-            builderGenerator.render(writer)
-            writer.implBlock(shape, symbolProvider) {
+            builderGenerator.render(this)
+            this.implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
             }
         }
@@ -186,8 +198,8 @@ open class ServerCodegenVisitor(
     override fun stringShape(shape: StringShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                ServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
+            rustCrate.useShapeWriter(shape) {
+                ServerEnumGenerator(model, symbolProvider, this, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
     }
@@ -202,7 +214,7 @@ open class ServerCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         logger.info("[rust-server-codegen] Generating an union $shape")
         rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = false).render()
+            UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = false).render()
         }
     }
 
@@ -221,7 +233,7 @@ open class ServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext),
+            ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(codegenContext)),
             codegenContext,
         )
             .render()

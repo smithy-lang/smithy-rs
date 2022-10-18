@@ -10,19 +10,19 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.render
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.render
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * To share structures defined in Rust with Python, `pyo3` provides the `PyClass` trait.

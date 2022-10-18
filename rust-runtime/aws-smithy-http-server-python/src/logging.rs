@@ -4,87 +4,78 @@
  */
 
 //! Rust `tracing` and Python `logging` setup and utilities.
+use std::path::PathBuf;
 
 use pyo3::prelude::*;
+#[cfg(not(test))]
+use tracing::span;
 use tracing::Level;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::{prelude::*, EnvFilter};
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::{
+    fmt::{self, writer::MakeWriterExt},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+};
 
-/// Setup `tracing::subscriber` reading the log level from RUST_LOG environment variable
-/// and inject the custom Python `logger` into the interpreter.
-pub fn setup(py: Python, level: LogLevel) -> PyResult<()> {
-    let format = tracing_subscriber::fmt::layer()
-        .with_ansi(true)
-        .with_line_number(true)
-        .with_level(true);
-    match EnvFilter::try_from_default_env() {
-        Ok(filter) => {
-            let level: LogLevel = filter.to_string().into();
-            tracing_subscriber::registry()
-                .with(format)
-                .with(filter)
-                .init();
-            setup_python_logging(py, level)?;
+use crate::error::PyException;
+
+/// Setup tracing-subscriber to log on console or to a hourly rolling file.
+fn setup_tracing_subscriber(
+    level: Option<u8>,
+    logfile: Option<PathBuf>,
+) -> PyResult<Option<WorkerGuard>> {
+    let appender = match logfile {
+        Some(logfile) => {
+            let parent = logfile.parent().ok_or_else(|| {
+                PyException::new_err(format!(
+                    "Tracing setup failed: unable to extract dirname from path {}",
+                    logfile.display()
+                ))
+            })?;
+            let filename = logfile.file_name().ok_or_else(|| {
+                PyException::new_err(format!(
+                    "Tracing setup failed: unable to extract basename from path {}",
+                    logfile.display()
+                ))
+            })?;
+            let file_appender = tracing_appender::rolling::hourly(parent, filename);
+            let (appender, guard) = tracing_appender::non_blocking(file_appender);
+            Some((appender, guard))
         }
-        Err(_) => {
-            tracing_subscriber::registry()
-                .with(format)
-                .with(LevelFilter::from_level(level.into()))
-                .init();
-            setup_python_logging(py, level)?;
+        None => None,
+    };
+
+    let tracing_level = match level {
+        Some(40u8) => Level::ERROR,
+        Some(30u8) => Level::WARN,
+        Some(20u8) => Level::INFO,
+        Some(10u8) => Level::DEBUG,
+        None => Level::INFO,
+        _ => Level::TRACE,
+    };
+
+    match appender {
+        Some((appender, guard)) => {
+            let layer = Some(
+                fmt::Layer::new()
+                    .with_writer(appender.with_max_level(tracing_level))
+                    .with_ansi(true)
+                    .with_line_number(true)
+                    .with_level(true),
+            );
+            tracing_subscriber::registry().with(layer).init();
+            Ok(Some(guard))
         }
-    }
-    Ok(())
-}
-
-/// This custom logger enum exported to Python can be used to configure the
-/// both the Rust `tracing` and Python `logging` levels.
-/// We cannot export directly `tracing::Level` to Python.
-#[pyclass]
-#[derive(Debug, Clone, Copy)]
-pub enum LogLevel {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
-}
-
-/// `From<LogLevel>` is used to convert `LogLevel` to the correct string
-/// needed by Python `logging` module.
-impl From<LogLevel> for String {
-    fn from(other: LogLevel) -> String {
-        match other {
-            LogLevel::Error => "ERROR".into(),
-            LogLevel::Warn => "WARN".into(),
-            LogLevel::Info => "INFO".into(),
-            _ => "DEBUG".into(),
-        }
-    }
-}
-
-/// `From<String>` is used to covert `tracing::EnvFilter` into `LogLevel`.
-impl From<String> for LogLevel {
-    fn from(other: String) -> LogLevel {
-        match other.as_str() {
-            "error" => LogLevel::Error,
-            "warn" => LogLevel::Warn,
-            "info" => LogLevel::Info,
-            "debug" => LogLevel::Debug,
-            _ => LogLevel::Trace,
-        }
-    }
-}
-
-/// `From<LogLevel>` is used to covert `LogLevel` into `tracing::EnvFilter`.
-impl From<LogLevel> for Level {
-    fn from(other: LogLevel) -> Level {
-        match other {
-            LogLevel::Debug => Level::DEBUG,
-            LogLevel::Info => Level::INFO,
-            LogLevel::Warn => Level::WARN,
-            LogLevel::Error => Level::ERROR,
-            _ => Level::TRACE,
+        None => {
+            let layer = Some(
+                fmt::Layer::new()
+                    .with_writer(std::io::stdout.with_max_level(tracing_level))
+                    .with_ansi(true)
+                    .with_line_number(true)
+                    .with_level(true),
+            );
+            tracing_subscriber::registry().with(layer).init();
+            Ok(None)
         }
     }
 }
@@ -92,88 +83,116 @@ impl From<LogLevel> for Level {
 /// Modifies the Python `logging` module to deliver its log messages using [tracing::Subscriber] events.
 ///
 /// To achieve this goal, the following changes are made to the module:
-/// - A new builtin function `logging.python_tracing` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
+/// - A new builtin function `logging.py_tracing_event` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
 ///   is not exported in `logging.__all__`, as it is not intended to be called directly.
-/// - A new class `logging.RustTracing` provides a `logging.Handler` that delivers all records to `python_tracing`.
-/// - `logging.basicConfig` is changed to use `logging.HostHandler` by default.
-///
-/// Since any call like `logging.warn(...)` sets up logging via `logging.basicConfig`, all log messages are now
-/// delivered to `crate::logging`, which will send them to `tracing::event!`.
-fn setup_python_logging(py: Python, level: LogLevel) -> PyResult<()> {
-    let logging = py.import("logging")?;
-    logging.setattr("python_tracing", wrap_pyfunction!(python_tracing, logging)?)?;
+/// - A new class `logging.TracingHandler` provides a `logging.Handler` that delivers all records to `python_tracing`.
+#[pyclass(name = "TracingHandler")]
+#[derive(Debug)]
+pub struct PyTracingHandler {
+    _guard: Option<WorkerGuard>,
+}
 
-    let level: String = level.into();
-    let pycode = format!(
-        r#"
-class RustTracing(Handler):
+#[pymethods]
+impl PyTracingHandler {
+    #[new]
+    fn newpy(py: Python, level: Option<u8>, logfile: Option<PathBuf>) -> PyResult<Self> {
+        let _guard = setup_tracing_subscriber(level, logfile)?;
+        let logging = py.import("logging")?;
+        let root = logging.getattr("root")?;
+        root.setattr("level", level)?;
+        // TODO(Investigate why the file appender just create the file and does not write anything, event after holding the guard)
+        Ok(Self { _guard })
+    }
+
+    fn handler(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let logging = py.import("logging")?;
+        logging.setattr(
+            "py_tracing_event",
+            wrap_pyfunction!(py_tracing_event, logging)?,
+        )?;
+
+        let pycode = r#"
+class TracingHandler(Handler):
     """ Python logging to Rust tracing handler. """
-    def __init__(self, level=0):
-        super().__init__(level=level)
-
     def emit(self, record):
-        python_tracing(record)
-
-# Store the old basicConfig in the local namespace.
-oldBasicConfig = basicConfig
-
-def basicConfig(*pargs, **kwargs):
-    """ Reimplement basicConfig to hijack the root logger. """
-    if "handlers" not in kwargs:
-        kwargs["handlers"] = [RustTracing()]
-    kwargs["level"] = {level}
-    return oldBasicConfig(*pargs, **kwargs)
-"#,
-    );
-
-    py.run(&pycode, Some(logging.dict()), None)?;
-    let all = logging.index()?;
-    all.append("RustTracing")?;
-    Ok(())
+        py_tracing_event(
+            record.levelno, record.getMessage(), record.module,
+            record.filename, record.lineno, record.process
+        )
+"#;
+        py.run(pycode, Some(logging.dict()), None)?;
+        let all = logging.index()?;
+        all.append("TracingHandler")?;
+        let handler = logging.getattr("TracingHandler")?;
+        Ok(handler.call0()?.into_py(py))
+    }
 }
 
 /// Consumes a Python `logging.LogRecord` and emits a Rust [tracing::Event] instead.
 #[cfg(not(test))]
 #[pyfunction]
-#[pyo3(text_signature = "(record)")]
-fn python_tracing(record: &PyAny) -> PyResult<()> {
-    let level = record.getattr("levelno")?;
-    let message = record.getattr("getMessage")?.call0()?;
-    let module = record.getattr("module")?;
-    let filename = record.getattr("filename")?;
-    let line = record.getattr("lineno")?;
-    let pid = record.getattr("process")?;
-
-    match level.extract()? {
-        40u8 => tracing::event!(Level::ERROR, %pid, %module, %filename, %line, "{message}"),
-        30u8 => tracing::event!(Level::WARN, %pid, %module, %filename, %line, "{message}"),
-        20u8 => tracing::event!(Level::INFO, %pid, %module, %filename, %line, "{message}"),
-        10u8 => tracing::event!(Level::DEBUG, %pid, %module, %filename, %line, "{message}"),
-        _ => tracing::event!(Level::TRACE, %pid, %module, %filename, %line, "{message}"),
+#[pyo3(text_signature = "(level, record, message, module, filename, line, pid)")]
+pub fn py_tracing_event(
+    level: u8,
+    message: &str,
+    module: &str,
+    filename: &str,
+    lineno: usize,
+    pid: usize,
+) -> PyResult<()> {
+    let span = span!(
+        Level::TRACE,
+        "python",
+        pid = pid,
+        module = module,
+        filename = filename,
+        lineno = lineno
+    );
+    println!("message2: {message}");
+    let _guard = span.enter();
+    match level {
+        40 => tracing::error!("{message}"),
+        30 => tracing::warn!("{message}"),
+        20 => tracing::info!("{message}"),
+        10 => tracing::debug!("{message}"),
+        _ => tracing::trace!("{message}"),
     };
-
     Ok(())
 }
 
 #[cfg(test)]
 #[pyfunction]
-#[pyo3(text_signature = "(record)")]
-fn python_tracing(record: &PyAny) -> PyResult<()> {
-    let message = record.getattr("getMessage")?.call0()?;
+#[pyo3(text_signature = "(level, record, message, module, filename, line, pid)")]
+pub fn py_tracing_event(
+    _level: u8,
+    message: &str,
+    _module: &str,
+    _filename: &str,
+    _line: usize,
+    _pid: usize,
+) -> PyResult<()> {
     pretty_assertions::assert_eq!(message.to_string(), "a message");
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use pyo3::types::PyDict;
+
     use super::*;
 
     #[test]
     fn tracing_handler_is_injected_in_python() {
         crate::tests::initialize();
         Python::with_gil(|py| {
-            setup_python_logging(py, LogLevel::Info).unwrap();
+            let handler = PyTracingHandler::newpy(py, Some(10), None).unwrap();
+            let kwargs = PyDict::new(py);
+            kwargs
+                .set_item("handlers", vec![handler.handler(py).unwrap()])
+                .unwrap();
             let logging = py.import("logging").unwrap();
+            let basic_config = logging.getattr("basicConfig").unwrap();
+            basic_config.call((), Some(kwargs)).unwrap();
             logging.call_method1("info", ("a message",)).unwrap();
         });
     }

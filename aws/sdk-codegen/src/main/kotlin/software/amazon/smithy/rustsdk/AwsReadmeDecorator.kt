@@ -9,13 +9,14 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.rustlang.raw
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
-import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import java.util.logging.Logger
 
 // Use a sigil that should always be unique in the text to fix line breaks and spaces
@@ -26,11 +27,11 @@ private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
 /**
  * Generates a README.md for each service crate for display on crates.io.
  */
-class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class AwsReadmeDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
@@ -56,7 +57,7 @@ internal class AwsSdkReadmeGenerator {
     internal fun generateReadme(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
             ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
-        rustCrate.withFile("README.md") { writer ->
+        rustCrate.withFile("README.md") {
             val description = normalizeDescription(
                 codegenContext.moduleName,
                 codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
@@ -65,7 +66,7 @@ internal class AwsSdkReadmeGenerator {
             val snakeCaseModuleName = moduleName.replace('-', '_')
             val shortModuleName = moduleName.removePrefix("aws-sdk-")
 
-            writer.raw(
+            raw(
                 """
                 # $moduleName
 

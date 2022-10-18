@@ -31,7 +31,7 @@ hyper = "0.14.12"
 
 # ByteStream internals
 futures-core = "0.3.14"
-tokio = { version = "1.6", optional = true }
+tokio = { version = "1.8.4", optional = true }
 tokio-util = { version = "0.7", optional = true }
 
 [dev-dependencies]
@@ -40,7 +40,7 @@ futures-util = "0.3"
 hyper = { version = "0.14.12", features = ["stream"] }
 pretty_assertions = "1.2"
 proptest = "1"
-tokio = { version = "1.6", features = [
+tokio = { version = "1.8.4", features = [
   "macros",
   "rt",
   "rt-multi-thread",

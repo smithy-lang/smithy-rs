@@ -19,9 +19,7 @@ use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
 use tracing::info;
 
 lazy_static! {
@@ -61,40 +59,33 @@ pub async fn subcommand_publish(
     // Don't proceed unless the user confirms the plan
     confirm_plan(&batches, stats, *skip_confirmation)?;
 
-    // Use a semaphore to only allow a few concurrent publishes
-    let max_concurrency = num_cpus::get_physical();
-    let semaphore = Arc::new(Semaphore::new(max_concurrency));
-    info!(
-        "Will publish {} crates in parallel where possible.",
-        max_concurrency
-    );
     for batch in batches {
-        let mut tasks = Vec::new();
+        let mut any_published = false;
         for package in batch {
-            let permit = semaphore.clone().acquire_owned().await.unwrap();
-            tasks.push(tokio::spawn(async move {
-                // Only publish if it hasn't been published yet.
-                if !is_published(&package.handle).await? {
-                    publish(&package.handle, &package.crate_path).await?;
+            // Only publish if it hasn't been published yet.
+            if !is_published(&package.handle).await? {
+                publish(&package.handle, &package.crate_path).await?;
 
-                    // Sometimes it takes a little bit of time for the new package version
-                    // to become available after publish. If we proceed too quickly, then
-                    // the next package publish can fail if it depends on this package.
-                    wait_for_eventual_consistency(&package).await?;
-                    info!("Successfully published `{}`", package.handle);
-                } else {
-                    info!("`{}` was already published", package.handle);
-                }
-                correct_owner(&package).await?;
-                drop(permit);
-                Ok::<_, anyhow::Error>(())
-            }));
+                // Sometimes it takes a little bit of time for the new package version
+                // to become available after publish. If we proceed too quickly, then
+                // the next package publish can fail if it depends on this package.
+                wait_for_eventual_consistency(&package).await?;
+                info!("Successfully published `{}`", package.handle);
+                any_published = true;
+
+                // Keep things slow to avoid getting throttled by crates.io
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            } else {
+                info!("`{}` was already published", package.handle);
+            }
+            correct_owner(&package).await?;
         }
-        for task in tasks {
-            task.await??;
+        if any_published {
+            info!("Sleeping 30 seconds after completion of the batch");
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        } else {
+            info!("No packages in the batch needed publishing. Proceeding with the next batch immediately.")
         }
-        info!("sleeping 30 seconds after completion of the batch");
-        tokio::time::sleep(Duration::from_secs(30)).await;
     }
 
     Ok(())
@@ -115,8 +106,8 @@ async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
     info!("Publishing `{}`...", handle);
     run_with_retry(
         &format!("Publishing `{}`", handle),
-        3,
-        Duration::from_secs(5),
+        5,
+        Duration::from_secs(30),
         || async {
             cargo::Publish::new(handle.clone(), &crate_path)
                 .spawn()
@@ -135,7 +126,7 @@ async fn is_published(handle: &PackageHandle) -> Result<bool> {
         3,
         Duration::from_secs(5),
         || async {
-            let expected_version = (&handle.version).to_string();
+            let expected_version = handle.version.to_string();
             let crate_info = match CRATES_IO_CLIENT.get_crate(&handle.name).await {
                 Ok(info) => info,
                 Err(Error::NotFound(_)) => return Ok(false),
@@ -269,9 +260,9 @@ mod test {
     #[tokio::test]
     async fn crate_published_works() {
         let handle = PackageHandle::new("aws-smithy-http", "0.27.0-alpha.1".parse().unwrap());
-        assert_eq!(is_published(&handle).await.expect("failed"), true);
+        assert!(is_published(&handle).await.expect("failed"));
         // we will never publish this version
         let handle = PackageHandle::new("aws-smithy-http", "0.21.0-alpha.1".parse().unwrap());
-        assert_eq!(is_published(&handle).await.expect("failed"), false);
+        assert!(!is_published(&handle).await.expect("failed"));
     }
 }

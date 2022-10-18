@@ -7,24 +7,25 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.testutil.stubConfigCustomization
-import software.amazon.smithy.rust.codegen.testutil.unitTest
-import software.amazon.smithy.rust.codegen.util.runCommand
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.testutil.stubConfigCustomization
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 internal class EndpointConfigCustomizationTest {
     private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().asType().member("Params")
@@ -127,7 +128,7 @@ internal class EndpointConfigCustomizationTest {
 
     private fun validateEndpointCustomizationForService(service: String, test: ((RustCrate) -> Unit)? = null) {
         val (context, testDir) = generatePluginContext(model, service = service, runtimeConfig = AwsTestRuntimeConfig)
-        val codegenDecorator = object : RustCodegenDecorator<ClientCodegenContext> {
+        val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
             override val name: String = "tests and config"
             override val order: Byte = 0
             override fun configCustomizations(
@@ -151,7 +152,7 @@ internal class EndpointConfigCustomizationTest {
                 }
             }
 
-            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+            override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val customization = CombinedCodegenDecorator(listOf(RequiredCustomizations(), codegenDecorator))
@@ -174,7 +175,7 @@ internal class EndpointConfigCustomizationTest {
     fun `support region-specific endpoint overrides`() {
         validateEndpointCustomizationForService("test#TestService") { crate ->
             crate.lib {
-                it.unitTest("region_override") {
+                unitTest("region_override") {
                     rustTemplate(
                         """
                         let conf = crate::config::Config::builder().build();
@@ -193,7 +194,7 @@ internal class EndpointConfigCustomizationTest {
     fun `support region-agnostic services`() {
         validateEndpointCustomizationForService("test#NoRegions") { crate ->
             crate.lib {
-                it.unitTest("global_services") {
+                unitTest("global_services") {
                     rustTemplate(
                         """
                         let conf = crate::config::Config::builder().build();

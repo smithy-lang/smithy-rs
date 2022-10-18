@@ -3,11 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Retry support for aws-hyper
-//!
-//! The actual retry policy implementation will likely be replaced
-//! with the CRT implementation once the bindings exist. This
-//! implementation is intended to be _correct_ but not especially long lasting.
+//! Retry support
 //!
 //! Components:
 //! - [`Standard`]: Top level manager, intended to be associated with a [`Client`](crate::Client).
@@ -25,7 +21,7 @@ use crate::{SdkError, SdkSuccess};
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::operation::Operation;
-use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 
 use tracing::Instrument;
@@ -102,6 +98,11 @@ impl Config {
         self.initial_backoff = initial_backoff;
         self
     }
+
+    /// Returns true if retry is enabled with this config
+    pub fn has_retry(&self) -> bool {
+        self.max_attempts > 1
+    }
 }
 
 impl Default for Config {
@@ -134,13 +135,8 @@ const RETRY_COST: usize = 5;
 
 /// Manage retries for a service
 ///
-/// An implementation of the `standard` AWS retry strategy as specified in the SEP. A `Strategy` is scoped to a client.
+/// An implementation of the `standard` AWS retry strategy. A `Strategy` is scoped to a client.
 /// For an individual request, call [`Standard::new_request_policy()`](Standard::new_request_policy)
-///
-/// In the future, adding support for the adaptive retry strategy will be added by adding a `TokenBucket` to
-/// `CrossRequestRetryState`
-/// Its main functionality is via `new_request_policy` which creates a `RetryHandler` to manage the retry for
-/// an individual request.
 #[derive(Debug, Clone)]
 pub struct Standard {
     config: Config,
@@ -359,7 +355,7 @@ impl RetryHandler {
             sleep_future.await;
             next
         }
-        .instrument(tracing::info_span!("retry", kind = &debug(retry_kind)));
+        .instrument(tracing::debug_span!("retry", kind = &debug(retry_kind)));
         Some(check_send(Box::pin(fut)))
     }
 }
@@ -368,7 +364,7 @@ impl<Handler, R, T, E> tower::retry::Policy<Operation<Handler, R>, SdkSuccess<T>
     for RetryHandler
 where
     Handler: Clone,
-    R: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
+    R: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
 {
     type Future = BoxFuture<Self>;
 
@@ -377,8 +373,8 @@ where
         req: &Operation<Handler, R>,
         result: Result<&SdkSuccess<T>, &SdkError<E>>,
     ) -> Option<Self::Future> {
-        let policy = req.retry_policy();
-        let retry_kind = policy.classify(result);
+        let classifier = req.retry_classifier();
+        let retry_kind = classifier.classify_retry(result);
         self.retry_for(retry_kind)
     }
 

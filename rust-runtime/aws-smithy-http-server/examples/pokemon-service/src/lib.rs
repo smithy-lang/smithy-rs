@@ -10,7 +10,7 @@
 use std::{
     collections::HashMap,
     convert::TryInto,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{atomic::AtomicUsize, Arc},
 };
 
 use async_stream::stream;
@@ -18,6 +18,9 @@ use aws_smithy_http_server::Extension;
 use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
+
+#[doc(hidden)]
+pub mod plugin;
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
     "When several of these Pokémon gather, their electricity could build and cause lightning storms.";
@@ -30,10 +33,7 @@ const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
 
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
-    let format = tracing_subscriber::fmt::layer()
-        .with_ansi(true)
-        .with_line_number(true)
-        .with_level(true);
+    let format = tracing_subscriber::fmt::layer().pretty();
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
@@ -108,7 +108,7 @@ struct PokemonTranslations {
 #[derive(Debug)]
 pub struct State {
     pokemons_translations: HashMap<String, PokemonTranslations>,
-    call_count: AtomicU64,
+    call_count: AtomicUsize,
 }
 
 impl Default for State {
@@ -176,13 +176,16 @@ pub async fn get_pokemon_species(
     }
 }
 
-/// Retrieves the users storage
+/// Retrieves the users storage.
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
 ) -> Result<output::GetStorageOutput, error::GetStorageError> {
+    tracing::debug!("attempting to authenticate storage user");
+
     // We currently only support Ash and he has nothing stored
     if !(input.user == "ash" && input.passcode == "pikachu123") {
+        tracing::debug!("authentication failed");
         return Err(error::GetStorageError::NotAuthorized(error::NotAuthorized {}));
     }
     Ok(output::GetStorageOutput { collection: vec![] })
@@ -205,12 +208,12 @@ pub async fn get_server_statistics(
     output::GetServerStatisticsOutput { calls_count }
 }
 
-/// Attempts to capture a Pokémon
+/// Attempts to capture a Pokémon.
 pub async fn capture_pokemon(
-    mut input: input::CapturePokemonOperationInput,
-) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {
+    mut input: input::CapturePokemonInput,
+) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     if input.region != "Kanto" {
-        return Err(error::CapturePokemonOperationError::UnsupportedRegionError(
+        return Err(error::CapturePokemonError::UnsupportedRegionError(
             error::UnsupportedRegionError::builder().build(),
         ));
     }
@@ -266,20 +269,20 @@ pub async fn capture_pokemon(
             }
         }
     };
-    Ok(output::CapturePokemonOperationOutput::builder()
+    Ok(output::CapturePokemonOutput::builder()
         .events(output_stream.into())
         .build()
         .unwrap())
 }
 
 /// Empty operation used to benchmark the service.
-pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::EmptyOperationOutput {
-    output::EmptyOperationOutput {}
+pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutput {
+    output::DoNothingOutput {}
 }
 
 /// Operation used to show the service is running.
-pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {
-    output::HealthCheckOperationOutput {}
+pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
+    output::CheckHealthOutput {}
 }
 
 #[cfg(test)]

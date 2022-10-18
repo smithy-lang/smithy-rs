@@ -6,49 +6,73 @@
 package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestXmlFactory
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
+import java.util.logging.Logger
 
 /**
  * Top level decorator for S3
  */
-class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "S3ExtendedError"
+class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+    override val name: String = "S3"
     override val order: Byte = 0
+    private val logger: Logger = Logger.getLogger(javaClass.name)
+    private val invalidXmlRootAllowList = setOf(
+        // API returns GetObjectAttributes_Response_ instead of Output
+        ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
+    )
 
     private fun applies(serviceId: ShapeId) =
         serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
 
     override fun protocols(
         serviceId: ShapeId,
-        currentProtocols: ProtocolMap<ClientCodegenContext>,
-    ): ProtocolMap<ClientCodegenContext> =
+        currentProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>,
+    ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> =
         currentProtocols.letIf(applies(serviceId)) {
             it + mapOf(
-                RestXmlTrait.ID to RestXmlFactory { protocolConfig ->
+                RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
                     S3(protocolConfig)
                 },
             )
         }
+
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return model.letIf(applies(service.id)) {
+            ModelTransformer.create().mapShapes(model) { shape ->
+                shape.letIf(isInInvalidXmlRootAllowList(shape)) {
+                    logger.info("Adding AllowInvalidXmlRoot trait to $shape")
+                    (shape as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+                }
+            }
+        }
+    }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
@@ -57,12 +81,16 @@ class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
         it + S3PubUse()
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
+    private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
+        return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
+    }
 }
 
-class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
@@ -75,7 +103,7 @@ class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
         return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.private("xml_deser")) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
                 *errorScope,
             ) {
@@ -101,7 +129,12 @@ class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {
 
 class S3PubUse : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable = when (section) {
-        is LibRsSection.Body -> writable { rust("pub use #T::ErrorExt;", AwsRuntimeType.S3Errors) }
+        is LibRsSection.Body -> writable {
+            rust(
+                "pub use #T::ErrorExt;",
+                AwsRuntimeType.S3Errors,
+            )
+        }
         else -> emptySection
     }
 }

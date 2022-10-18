@@ -5,11 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
 
 /*
  * RestXml server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
@@ -19,7 +20,7 @@ class ServerRestXmlFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGen
     override fun protocol(codegenContext: ServerCodegenContext): Protocol = RestXml(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
-        ServerHttpBoundProtocolGenerator(codegenContext, RestXml(codegenContext))
+        ServerHttpBoundProtocolGenerator(codegenContext, ServerRestXmlProtocol(codegenContext))
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

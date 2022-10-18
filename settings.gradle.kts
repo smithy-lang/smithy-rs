@@ -5,8 +5,9 @@
 
 rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
 
-include(":codegen")
-include(":codegen-test")
+include(":codegen-core")
+include(":codegen-client")
+include(":codegen-client-test")
 include(":codegen-server")
 include(":codegen-server:python")
 include(":codegen-server-test")
@@ -16,3 +17,11 @@ include(":aws:sdk-codegen")
 include(":aws:sdk-adhoc-test")
 include(":aws:sdk")
 include(":aws:rust-runtime")
+
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        google()
+    }
+}

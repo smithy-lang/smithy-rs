@@ -61,6 +61,86 @@ pub trait SdkGenerator {
     fn generate_sdk(&self) -> Result<GeneratedSdk>;
 }
 
+#[derive(Default)]
+pub struct Builder {
+    previous_versions_manifest: Option<PathBuf>,
+    aws_doc_sdk_examples_revision: Option<CommitHash>,
+    examples_path: Option<PathBuf>,
+    fs: Option<Arc<dyn Fs>>,
+    reset_to_commit: Option<CommitHash>,
+    original_smithy_rs_path: Option<PathBuf>,
+    smithy_rs_revision_override: Option<CommitHash>,
+    settings: Option<CodeGenSettings>,
+}
+
+impl Builder {
+    pub fn previous_versions_manifest(mut self, path: impl Into<PathBuf>) -> Self {
+        self.previous_versions_manifest = Some(path.into());
+        self
+    }
+
+    pub fn aws_doc_sdk_examples_revision(mut self, revision: impl Into<CommitHash>) -> Self {
+        self.aws_doc_sdk_examples_revision = Some(revision.into());
+        self
+    }
+
+    pub fn examples_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.examples_path = Some(path.into());
+        self
+    }
+
+    pub fn fs(mut self, fs: Arc<dyn Fs>) -> Self {
+        self.fs = Some(fs);
+        self
+    }
+
+    pub fn reset_to_commit(mut self, maybe_commit: Option<CommitHash>) -> Self {
+        self.reset_to_commit = maybe_commit;
+        self
+    }
+
+    pub fn original_smithy_rs_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.original_smithy_rs_path = Some(path.into());
+        self
+    }
+
+    pub fn smithy_rs_revision_override(mut self, commit: impl Into<CommitHash>) -> Self {
+        self.smithy_rs_revision_override = Some(commit.into());
+        self
+    }
+
+    pub fn settings(mut self, settings: CodeGenSettings) -> Self {
+        self.settings = Some(settings);
+        self
+    }
+
+    pub fn build(self) -> Result<DefaultSdkGenerator> {
+        let temp_dir = tempfile::tempdir().context(here!("create temp dir"))?;
+        GitCLI::new(&self.original_smithy_rs_path.expect("required"))
+            .context(here!())?
+            .clone_to(temp_dir.path())
+            .context(here!())?;
+
+        let smithy_rs = GitCLI::new(&temp_dir.path().join("smithy-rs")).context(here!())?;
+        if let Some(smithy_rs_commit) = self.reset_to_commit {
+            smithy_rs
+                .hard_reset(smithy_rs_commit.as_ref())
+                .with_context(|| format!("failed to reset to {} in smithy-rs", smithy_rs_commit))?;
+        }
+
+        Ok(DefaultSdkGenerator {
+            previous_versions_manifest: self.previous_versions_manifest.expect("required"),
+            aws_doc_sdk_examples_revision: self.aws_doc_sdk_examples_revision.expect("required"),
+            examples_path: self.examples_path.expect("required"),
+            fs: self.fs.expect("required"),
+            smithy_rs: Box::new(smithy_rs) as Box<dyn Git>,
+            smithy_rs_revision_override: self.smithy_rs_revision_override.expect("required"),
+            settings: self.settings.expect("required"),
+            temp_dir: Arc::new(temp_dir),
+        })
+    }
+}
+
 /// SDK generator that creates a temporary directory and clones the given `smithy-rs` into it
 /// so that generation can safely be done in parallel for other commits.
 pub struct DefaultSdkGenerator {
@@ -69,43 +149,14 @@ pub struct DefaultSdkGenerator {
     examples_path: PathBuf,
     fs: Arc<dyn Fs>,
     smithy_rs: Box<dyn Git>,
+    smithy_rs_revision_override: CommitHash,
     settings: CodeGenSettings,
     temp_dir: Arc<tempfile::TempDir>,
 }
 
 impl DefaultSdkGenerator {
-    #[instrument(skip(fs))]
-    pub fn new(
-        previous_versions_manifest: &Path,
-        aws_doc_sdk_examples_revision: &CommitHash,
-        examples_path: &Path,
-        fs: Arc<dyn Fs>,
-        reset_to_commit: Option<CommitHash>,
-        original_smithy_rs_path: &Path,
-        settings: &CodeGenSettings,
-    ) -> Result<Self> {
-        let temp_dir = tempfile::tempdir().context(here!("create temp dir"))?;
-        GitCLI::new(original_smithy_rs_path)
-            .context(here!())?
-            .clone_to(temp_dir.path())
-            .context(here!())?;
-
-        let smithy_rs = GitCLI::new(&temp_dir.path().join("smithy-rs")).context(here!())?;
-        if let Some(smithy_rs_commit) = reset_to_commit {
-            smithy_rs
-                .hard_reset(smithy_rs_commit.as_ref())
-                .with_context(|| format!("failed to reset to {} in smithy-rs", smithy_rs_commit))?;
-        }
-
-        Ok(Self {
-            previous_versions_manifest: previous_versions_manifest.into(),
-            aws_doc_sdk_examples_revision: aws_doc_sdk_examples_revision.clone(),
-            examples_path: examples_path.into(),
-            fs,
-            smithy_rs: Box::new(smithy_rs) as Box<dyn Git>,
-            settings: settings.clone(),
-            temp_dir: Arc::new(temp_dir),
-        })
+    pub fn builder() -> Builder {
+        Builder::default()
     }
 
     /// Copies examples into smithy-rs.
@@ -133,6 +184,12 @@ impl DefaultSdkGenerator {
 
     fn do_aws_sdk_assemble(&self, attempt: u32) -> Result<()> {
         let mut command = Command::new("./gradlew");
+        // Use the latest smithy-rs commit hash for all the codegen versions so that commits
+        // that aren't actually making real changes aren't synced to the SDK
+        command.env(
+            "SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE",
+            self.smithy_rs_revision_override.as_ref(),
+        );
         command.arg("--no-daemon"); // Don't let Gradle continue running after the build
         command.arg("--no-parallel"); // Disable Gradle parallelism
         command.arg("--max-workers=1"); // Cap the Gradle workers at 1

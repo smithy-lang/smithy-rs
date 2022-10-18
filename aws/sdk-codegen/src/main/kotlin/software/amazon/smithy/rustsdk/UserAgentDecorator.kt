@@ -7,29 +7,30 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 /**
  * Inserts a UserAgent configuration into the operation
  */
-class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class UserAgentDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "UserAgent"
     override val order: Byte = 10
 
@@ -57,7 +58,7 @@ class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
         return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 

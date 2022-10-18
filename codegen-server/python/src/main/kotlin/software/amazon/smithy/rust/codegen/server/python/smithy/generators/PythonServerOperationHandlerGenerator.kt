@@ -6,16 +6,17 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationHandlerGenerator
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 /**
  * The Rust code responsible to run the Python business logic on the Python interpreter
@@ -32,11 +33,12 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * To call a Python coroutine, the same happens, but scheduled in a `tokio::Future`.
  */
 class PythonServerOperationHandlerGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
+    protocol: ServerProtocol,
     private val operations: List<OperationShape>,
-) : ServerOperationHandlerGenerator(coreCodegenContext, operations) {
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+) : ServerOperationHandlerGenerator(codegenContext, protocol, operations) {
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
@@ -90,16 +92,14 @@ class PythonServerOperationHandlerGenerator(
             rustTemplate(
                 """
                 #{tracing}::debug!("Executing Python handler function `$name()`");
-                #{tokio}::task::block_in_place(move || {
-                    #{pyo3}::Python::with_gil(|py| {
-                        let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
-                        let output = if handler.args == 1 {
-                            pyhandler.call1((input,))?
-                        } else {
-                            pyhandler.call1((input, state.0))?
-                        };
-                        output.extract::<$output>()
-                    })
+                #{pyo3}::Python::with_gil(|py| {
+                    let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
+                    let output = if handler.args == 1 {
+                        pyhandler.call1((input,))?
+                    } else {
+                        pyhandler.call1((input, state.0))?
+                    };
+                    output.extract::<$output>()
                 })
                 """,
                 *codegenScope,

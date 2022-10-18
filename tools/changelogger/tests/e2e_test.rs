@@ -6,6 +6,7 @@
 use changelogger::entry::ChangeSet;
 use changelogger::render::{subcommand_render, RenderArgs, EXAMPLE_ENTRY, USE_UPDATE_CHANGELOGS};
 use changelogger::split::{subcommand_split, SplitArgs};
+use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry};
 use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::shell::handle_failure;
 use std::fs;
@@ -105,7 +106,29 @@ fn split_aws_sdk_test() {
     create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
 
     fs::write(&source_path, SOURCE_TOML).unwrap();
-    fs::write(&dest_path, "overwrite-me").unwrap();
+
+    let mut original_dest_changelog = Changelog::new();
+    original_dest_changelog
+        .aws_sdk_rust
+        .push(HandAuthoredEntry {
+            message: "old-existing-entry-1".into(),
+            // this entry should get filtered out since it's too old
+            age: Some(5),
+            ..Default::default()
+        });
+    original_dest_changelog
+        .aws_sdk_rust
+        .push(HandAuthoredEntry {
+            message: "old-existing-entry-2".into(),
+            age: Some(2),
+            since_commit: Some("commit-old-existing-entry-2".into()),
+            ..Default::default()
+        });
+    fs::write(
+        &dest_path,
+        original_dest_changelog.to_json_string().unwrap(),
+    )
+    .unwrap();
 
     subcommand_split(&SplitArgs {
         source: source_path.clone(),
@@ -154,6 +177,18 @@ fn split_aws_sdk_test() {
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
+      "message": "old-existing-entry-2",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "",
+      "references": [],
+      "since-commit": "commit-old-existing-entry-2",
+      "age": 3
+    },
+    {
       "message": "Some change",
       "meta": {
         "bug": true,
@@ -165,7 +200,8 @@ fn split_aws_sdk_test() {
         "aws-sdk-rust#123",
         "smithy-rs#456"
       ],
-      "since-commit": "test-commit-hash"
+      "since-commit": "test-commit-hash",
+      "age": 1
     },
     {
       "message": "Some other change",
@@ -179,7 +215,8 @@ fn split_aws_sdk_test() {
         "aws-sdk-rust#234",
         "smithy-rs#567"
       ],
-      "since-commit": "test-commit-hash"
+      "since-commit": "test-commit-hash",
+      "age": 1
     }
   ],
   "aws-sdk-model": []
@@ -395,7 +432,7 @@ author = "rcoh"
 message = "Fourth change - client"
 references = ["smithy-rs#4"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "rcoh"
+author = "LukeMathWalker"
 "#;
     let tmp_dir = TempDir::new().unwrap();
     let source_path = tmp_dir.path().join("source.toml");

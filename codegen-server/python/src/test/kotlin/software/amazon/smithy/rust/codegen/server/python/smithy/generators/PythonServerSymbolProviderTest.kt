@@ -8,10 +8,11 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerSymbolVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestSymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 
 internal class PythonServerSymbolProviderTest {
     private val pythonBlobType = RustType.Opaque("Blob", "aws_smithy_http_server_python::types")

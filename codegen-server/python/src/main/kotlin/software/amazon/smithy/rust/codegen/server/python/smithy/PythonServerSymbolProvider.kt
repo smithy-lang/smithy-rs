@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.python.smithy.generators
+package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
@@ -15,20 +15,18 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.SymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.smithy.shape
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
-import software.amazon.smithy.rust.codegen.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rust.codegen.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 /**
  * Symbol visitor  allowing that recursively replace symbols in nested shapes.
@@ -43,8 +41,8 @@ import software.amazon.smithy.rust.codegen.util.isStreaming
  */
 class PythonServerSymbolVisitor(
     private val model: Model,
-    private val serviceShape: ServiceShape?,
-    private val config: SymbolVisitorConfig,
+    serviceShape: ServiceShape?,
+    config: SymbolVisitorConfig,
 ) : SymbolVisitor(model, serviceShape, config) {
     private val runtimeConfig = config().runtimeConfig
 

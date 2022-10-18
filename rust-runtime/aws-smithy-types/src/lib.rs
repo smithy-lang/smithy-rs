@@ -21,7 +21,6 @@ pub mod endpoint;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
-pub mod tristate;
 
 pub use crate::date_time::DateTime;
 
@@ -292,7 +291,7 @@ impl TryFrom<Number> for f64 {
                 }
             }
             Number::NegInt(v) => {
-                if -(1 << 53) <= v && v <= (1 << 53) {
+                if (-(1 << 53)..=(1 << 53)).contains(&v) {
                     Ok(v as Self)
                 } else {
                     Err(Self::Error::I64ToFloatLossyConversion(v))
@@ -317,7 +316,7 @@ impl TryFrom<Number> for f32 {
                 }
             }
             Number::NegInt(v) => {
-                if -(1 << 24) <= v && v <= (1 << 24) {
+                if (-(1 << 24)..=(1 << 24)).contains(&v) {
                     Ok(v as Self)
                 } else {
                     Err(Self::Error::I64ToFloatLossyConversion(v))

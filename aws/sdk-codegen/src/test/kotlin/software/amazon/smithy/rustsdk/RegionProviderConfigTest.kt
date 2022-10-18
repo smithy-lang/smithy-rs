@@ -6,10 +6,10 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.testutil.rustSettings
-import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
+import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.rustSettings
 
 internal class RegionProviderConfigTest {
     @Test

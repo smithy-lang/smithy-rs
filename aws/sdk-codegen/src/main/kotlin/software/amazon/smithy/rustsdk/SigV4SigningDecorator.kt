@@ -13,26 +13,27 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.smithy.letIf
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.hasEventStreamOperations
-import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rust.codegen.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * The SigV4SigningDecorator:
@@ -42,11 +43,11 @@ import software.amazon.smithy.rust.codegen.util.isInputEventStream
  * - sets a default `OperationSigningConfig` A future enhancement will customize this for specific services that need
  *   different behavior.
  */
-class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
-    private fun applies(coreCodegenContext: CoreCodegenContext): Boolean = coreCodegenContext.serviceShape.hasTrait<SigV4Trait>()
+    private fun applies(codegenContext: CodegenContext): Boolean = codegenContext.serviceShape.hasTrait<SigV4Trait>()
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -76,7 +77,7 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
@@ -179,10 +180,16 @@ class SigV4SigningFeature(
                 // some operations are either unsigned or optionally signed:
                 val authSchemes = serviceIndex.getEffectiveAuthSchemes(service, operation)
                 if (!authSchemes.containsKey(SigV4Trait.ID)) {
-                    rustTemplate("signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Disabled;", *codegenScope)
+                    rustTemplate(
+                        "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Disabled;",
+                        *codegenScope,
+                    )
                 } else {
                     if (operation.hasTrait<OptionalAuthTrait>()) {
-                        rustTemplate("signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Optional;", *codegenScope)
+                        rustTemplate(
+                            "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Optional;",
+                            *codegenScope,
+                        )
                     }
                 }
                 rustTemplate(

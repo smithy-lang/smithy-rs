@@ -8,12 +8,13 @@ package software.amazon.smithy.rustsdk.customize.ec2
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
-class Ec2Decorator : RustCodegenDecorator<ClientCodegenContext> {
+class Ec2Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "Ec2"
     override val order: Byte = 0
     private val ec2 = ShapeId.from("com.amazonaws.ec2#AmazonEC2")
@@ -26,10 +27,10 @@ class Ec2Decorator : RustCodegenDecorator<ClientCodegenContext> {
         // need to be boxed for the API to work properly
         return model.letIf(
             applies(service),
-            BoxPrimitiveShapes::processModel,
+            EC2MakePrimitivesOptional::processModel,
         )
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

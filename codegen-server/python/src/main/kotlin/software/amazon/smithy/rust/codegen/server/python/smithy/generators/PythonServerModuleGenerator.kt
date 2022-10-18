@@ -10,15 +10,15 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class PythonServerModuleGenerator(
     codegenContext: ServerCodegenContext,
@@ -35,8 +35,8 @@ class PythonServerModuleGenerator(
     fun render() {
         rustCrate.withModule(
             RustModule.public("python_module_export", "Export PyO3 symbols in the shared library"),
-        ) { writer ->
-            writer.rustBlockTemplate(
+        ) {
+            rustBlockTemplate(
                 """
                 ##[#{pyo3}::pymodule]
                 ##[#{pyo3}(name = "$libName")]
@@ -47,6 +47,8 @@ class PythonServerModuleGenerator(
                 renderPyCodegeneratedTypes()
                 renderPyWrapperTypes()
                 renderPySocketType()
+                renderPyLogging()
+                renderPyMiddlewareTypes()
                 renderPyApplicationType()
             }
         }
@@ -120,6 +122,43 @@ class PythonServerModuleGenerator(
                 "import sys; sys.modules['$libName.socket'] = socket"
             );
             m.add_submodule(socket)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    // Render Python shared socket type.
+    private fun RustWriter.renderPyLogging() {
+        rustTemplate(
+            """
+            let logging = #{pyo3}::types::PyModule::new(py, "logging")?;
+            logging.add_function(#{pyo3}::wrap_pyfunction!(#{SmithyPython}::py_tracing_event, m)?)?;
+            logging.add_class::<#{SmithyPython}::PyTracingHandler>()?;
+            #{pyo3}::py_run!(
+                py,
+                logging,
+                "import sys; sys.modules['$libName.logging'] = logging"
+            );
+            m.add_submodule(logging)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.renderPyMiddlewareTypes() {
+        rustTemplate(
+            """
+            let middleware = #{pyo3}::types::PyModule::new(py, "middleware")?;
+            middleware.add_class::<#{SmithyPython}::PyRequest>()?;
+            middleware.add_class::<#{SmithyPython}::PyResponse>()?;
+            middleware.add_class::<#{SmithyPython}::PyMiddlewareException>()?;
+            middleware.add_class::<#{SmithyPython}::PyHttpVersion>()?;
+            pyo3::py_run!(
+                py,
+                middleware,
+                "import sys; sys.modules['$libName.middleware'] = middleware"
+            );
+            m.add_submodule(middleware)?;
             """,
             *codegenScope,
         )

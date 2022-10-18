@@ -9,7 +9,7 @@ on:
   workflow_call:
 
 env:
-  rust_version: 1.58.1
+  rust_version: 1.62.0
   rust_toolchain_components: clippy,rustfmt
 
 jobs:
@@ -62,6 +62,7 @@ jobs:
         - action: check-aws-sdk-adhoc-tests
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
+        - action: check-core-codegen-unit-tests
         - action: check-rust-runtimes
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
@@ -96,6 +97,7 @@ jobs:
         test:
         - action: check-aws-config
         - action: check-aws-sdk-canary
+        - action: check-aws-sdk-cargo-deny
         - action: check-aws-sdk-services
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
         - action: check-aws-sdk-smoketest-unit-tests
@@ -141,6 +143,69 @@ jobs:
           popd &>/dev/null
         done
 
+  # We make sure that Smithy-rs can be compiled on platforms that are not natively supported by GitHub actions.
+  # We do not run tests on those platforms (yet) because it'd require a more complicated setup involving architecture
+  # emulation via QEMU, likely to cause a significant degradation on CI completion time.
+  test-exotic-platform-support:
+    name: Exotic platform support
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - target: i686-unknown-linux-gnu
+          non_aws_features: --all-features
+          aws_excludes: ''
+        # We only test `native-tls` here because `rustls` depends on `ring` which in turn does not support powerpc
+        # as a target platform (see https://github.com/briansmith/ring/issues/389)
+        # We also exclude all first-party crates that have a non-optional dependency on `ring`.
+        - target: powerpc-unknown-linux-gnu
+          non_aws_features: --features native-tls
+          aws_excludes: --exclude aws-inlineable --exclude aws-sigv4 --exclude aws-sig-auth
+    env:
+      CROSS_CONFIG: Cross.toml
+      OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu
+      OPENSSL_INCLUDE_DIR: /usr/include/i386-linux-gnu
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
+        target-dir: ./target
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        profile: minimal
+        override: true
+        target: ${{ matrix.target }}
+    - name: Configure cross
+      shell: bash
+      run: |
+        cat > Cross.toml << EOF
+        [build]
+        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
+        [build.env]
+        passthrough = [
+            "OPENSSL_LIB_DIR",
+            "OPENSSL_INCLUDE_DIR",
+        ]
+        EOF
+    - name: Build rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --exclude aws-smithy-http-server-python --workspace ${{ matrix.non_aws_features }}
+    - name: Build AWS rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.aws_excludes }} --workspace
+
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
@@ -164,6 +229,7 @@ jobs:
     - test-codegen
     - test-sdk
     - test-rust-windows
+    - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest

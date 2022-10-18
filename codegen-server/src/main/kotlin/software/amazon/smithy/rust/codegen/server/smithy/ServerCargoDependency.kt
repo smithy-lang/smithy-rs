@@ -4,11 +4,11 @@
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
  * Object used *exclusively* in the runtime of the server, for separation concerns.
@@ -24,7 +24,7 @@ object ServerCargoDependency {
     val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.13"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
-    val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.0"), scope = DependencyScope.Dev)
+    val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.8.4"), scope = DependencyScope.Dev)
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
 }

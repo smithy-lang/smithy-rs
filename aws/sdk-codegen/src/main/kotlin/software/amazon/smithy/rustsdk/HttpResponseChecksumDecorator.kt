@@ -8,17 +8,18 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.util.expectMember
-import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.orNull
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.util.expectMember
+import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 private fun HttpChecksumTrait.requestValidationModeMember(
     codegenContext: ClientCodegenContext,
@@ -28,7 +29,7 @@ private fun HttpChecksumTrait.requestValidationModeMember(
     return operationShape.inputShape(codegenContext.model).expectMember(requestValidationModeMember)
 }
 
-class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "HttpResponseChecksum"
     override val order: Byte = 0
 
@@ -40,7 +41,7 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientCodegenContext>
         return baseCustomizations + HttpResponseChecksumCustomization(codegenContext, operation)
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 

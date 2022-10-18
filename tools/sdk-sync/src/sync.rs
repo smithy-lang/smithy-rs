@@ -7,9 +7,10 @@ use self::gen::{CodeGenSettings, DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
 use anyhow::{bail, Context, Result};
-use smithy_rs_tool_common::git::{Commit, Git, GitCLI};
+use smithy_rs_tool_common::git::{Commit, CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, TryRecvError};
@@ -97,6 +98,7 @@ pub struct Sync {
     aws_doc_sdk_examples: Arc<dyn Git>,
     aws_sdk_rust: Arc<dyn Git>,
     smithy_rs: Arc<dyn Git>,
+    smithy_rs_head: CommitHash,
     fs: Arc<dyn Fs>,
     versions: Arc<dyn Versions>,
     previous_versions_manifest: Arc<PathBuf>,
@@ -124,10 +126,14 @@ impl Sync {
         )
         .context("failed to copy versions.toml to temp dir")?;
 
+        let smithy_rs = Arc::new(GitCLI::new(smithy_rs_path)?);
+        let smithy_rs_head = smithy_rs.get_head_revision().context(here!())?;
+
         Ok(Self {
             aws_doc_sdk_examples: Arc::new(GitCLI::new(aws_doc_sdk_examples_path)?),
             aws_sdk_rust,
-            smithy_rs: Arc::new(GitCLI::new(smithy_rs_path)?),
+            smithy_rs,
+            smithy_rs_head,
             fs,
             versions: Arc::new(DefaultVersions::new()),
             previous_versions_manifest,
@@ -149,6 +155,7 @@ impl Sync {
             aws_doc_sdk_examples: Arc::new(aws_doc_sdk_examples),
             aws_sdk_rust: Arc::new(aws_sdk_rust),
             smithy_rs: Arc::new(smithy_rs),
+            smithy_rs_head: "test-commit-hash".into(),
             fs: Arc::new(fs),
             versions: Arc::new(versions),
             previous_versions_manifest: Arc::new(PathBuf::from("doesnt-matter-for-tests")),
@@ -226,16 +233,16 @@ impl Sync {
             .context(here!())?;
 
         // Generate with the original examples
-        let sdk_gen = DefaultSdkGenerator::new(
-            &self.previous_versions_manifest,
-            &versions.aws_doc_sdk_examples_revision,
-            &self.aws_sdk_rust.path().join("examples"),
-            self.fs.clone(),
-            None,
-            self.smithy_rs.path(),
-            &self.codegen_settings,
-        )
-        .context(here!())?;
+        let sdk_gen = DefaultSdkGenerator::builder()
+            .previous_versions_manifest(self.previous_versions_manifest.as_ref())
+            .aws_doc_sdk_examples_revision(versions.aws_doc_sdk_examples_revision.clone())
+            .examples_path(&self.aws_sdk_rust.path().join("examples"))
+            .fs(self.fs.clone())
+            .original_smithy_rs_path(self.smithy_rs.path())
+            .smithy_rs_revision_override(self.smithy_rs_head.clone())
+            .settings(self.codegen_settings.clone())
+            .build()
+            .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
         self.copy_sdk(generated_sdk.path())
             .context(here!("failed to copy the SDK"))?;
@@ -282,6 +289,7 @@ impl Sync {
         let code_gen_paths = {
             let previous_versions_manifest = self.previous_versions_manifest.clone();
             let smithy_rs = self.smithy_rs.clone();
+            let smithy_rs_head = self.smithy_rs_head.clone();
             let examples_revision = versions.aws_doc_sdk_examples_revision.clone();
             let examples_path = self.aws_sdk_rust.path().join("examples");
             let fs = self.fs.clone();
@@ -303,16 +311,17 @@ impl Sync {
                         format!("couldn't find commit {} in smithy-rs", commit_hash)
                     })?;
 
-                    let sdk_gen = DefaultSdkGenerator::new(
-                        &previous_versions_manifest,
-                        &examples_revision,
-                        &examples_path,
-                        fs.clone(),
-                        Some(commit.hash.clone()),
-                        smithy_rs.path(),
-                        &codegen_settings,
-                    )
-                    .context(here!())?;
+                    let sdk_gen = DefaultSdkGenerator::builder()
+                        .previous_versions_manifest(previous_versions_manifest.as_ref())
+                        .aws_doc_sdk_examples_revision(examples_revision.clone())
+                        .examples_path(examples_path.clone())
+                        .fs(fs.clone())
+                        .reset_to_commit(Some(commit.hash.clone()))
+                        .original_smithy_rs_path(smithy_rs.path())
+                        .smithy_rs_revision_override(smithy_rs_head.clone())
+                        .settings(codegen_settings.clone())
+                        .build()
+                        .context(here!())?;
                     let sdk_path = sdk_gen.generate_sdk().context(here!())?;
                     progress.commits_completed.fetch_add(1, Ordering::Relaxed);
                     Ok((commit, sdk_path))
@@ -354,24 +363,22 @@ impl Sync {
             info!("No example changes to copy over.");
             return Ok(());
         }
-        let examples_head = example_revisions.iter().cloned().next().unwrap();
+        let examples_head = example_revisions.get(0).unwrap();
 
-        let sdk_gen = DefaultSdkGenerator::new(
-            &self.previous_versions_manifest,
-            &examples_head,
-            &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
-            self.fs.clone(),
-            None,
-            self.smithy_rs.path(),
-            &self.codegen_settings,
-        )
-        .context(here!())?;
+        let sdk_gen = DefaultSdkGenerator::builder()
+            .previous_versions_manifest(self.previous_versions_manifest.as_ref())
+            .aws_doc_sdk_examples_revision(examples_head.clone())
+            .examples_path(self.aws_doc_sdk_examples.path().join("rust_dev_preview"))
+            .fs(self.fs.clone())
+            .original_smithy_rs_path(self.smithy_rs.path())
+            .smithy_rs_revision_override(self.smithy_rs_head.clone())
+            .settings(self.codegen_settings.clone())
+            .build()
+            .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
         self.copy_sdk(generated_sdk.path())
             .context("failed to copy the SDK")?;
-        self.aws_sdk_rust
-            .stage(&PathBuf::from("."))
-            .context(here!())?;
+        self.aws_sdk_rust.stage(Path::new(".")).context(here!())?;
 
         let example_commits: Vec<Commit> = example_revisions
             .iter()
@@ -399,7 +406,7 @@ impl Sync {
             .map(|c| format!("{} <{}>", c.author_name, c.author_email))
             .collect();
         for author in authors {
-            commit_message.push_str(&format!("Co-authored-by: {}\n", author));
+            writeln!(&mut commit_message, "Co-authored-by: {}", author).unwrap();
         }
         commit_message
     }

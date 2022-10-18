@@ -9,9 +9,9 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class AdditionalErrorsDecoratorTest {
     private val baseModel = """

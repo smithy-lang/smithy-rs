@@ -36,3 +36,15 @@ use crate::body::BoxBody;
 
 #[doc(hidden)]
 pub type Response<T = BoxBody> = http::Response<T>;
+
+/// A protocol aware function taking `self` to [`http::Response`].
+pub trait IntoResponse<Protocol> {
+    /// Performs a conversion into a [`http::Response`].
+    fn into_response(self) -> http::Response<BoxBody>;
+}
+
+impl<P> IntoResponse<P> for std::convert::Infallible {
+    fn into_response(self) -> http::Response<BoxBody> {
+        match self {}
+    }
+}
