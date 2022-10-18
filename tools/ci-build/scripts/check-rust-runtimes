@@ -10,6 +10,15 @@ C_RESET='\033[0m'
 set -eux
 cd smithy-rs
 
+function run_cargo_cmd() {
+  local cargo_cmd=$1
+  local cargo_cmd_flags=$2
+  local nightly_override=$3
+
+    echo -e "## ${C_YELLOW}Running 'cargo $cargo_cmd' on ${runtime_path}...${C_RESET}"
+    cargo $nightly_override $cargo_cmd $cargo_cmd_flags
+}
+
 for runtime_path in \
     "rust-runtime" \
     "aws/rust-runtime"
@@ -17,17 +26,10 @@ do
     echo -e "# ${C_YELLOW}Testing ${runtime_path}...${C_RESET}"
     pushd "${runtime_path}" &>/dev/null
 
-    echo -e "## ${C_YELLOW}Running 'cargo clippy' on ${runtime_path}...${C_RESET}"
-    cargo clippy --all-features
-
-    echo -e "## ${C_YELLOW}Running 'cargo test' on ${runtime_path}...${C_RESET}"
-    cargo test --all-features
-
-    echo -e "## ${C_YELLOW}Running 'cargo doc' on ${runtime_path}...${C_RESET}"
-    cargo doc --no-deps --document-private-items --all-features
-
-    echo -e "## ${C_YELLOW}Running 'cargo minimal-versions check' on ${runtime_path}...${C_RESET}"
-    cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --all-features
+    run_cargo_cmd "clippy" "--all-features" ""
+    run_cargo_cmd "test" "--all-features" ""
+    run_cargo_cmd "doc" "--no-deps --document-private-items --all-features" ""
+    run_cargo_cmd "minimal-versions check" "--all-features" "+${RUST_NIGHTLY_VERSION}"
 
     for crate_path in *; do
         if [[ -f "${crate_path}/external-types.toml" ]]; then
