@@ -5,17 +5,17 @@ RFC: Evolving the new service builder API
 >
 > Applies to: Server
 
-[RFC 20] introduced a new service builder API. 
-It supports fine-grained configuration at multiple levels (per-handler middlewares, router middlewares, plugins) while trying to prevent some misconfiguration issues at compile-time (i.e. missing operation handlers).  
-There is consensus that the new API is an improvement over the pre-existing `OperationRegistryBuilder`/`OperationRegistry`, which is now on its way to deprecation in one of the next releases.  
+[RFC 20] introduced a new service builder API.
+It supports fine-grained configuration at multiple levels (per-handler middlewares, router middlewares, plugins) while trying to prevent some misconfiguration issues at compile-time (i.e. missing operation handlers).
+There is consensus that the new API is an improvement over the pre-existing `OperationRegistryBuilder`/`OperationRegistry`, which is now on its way to deprecation in one of the next releases.
 
-This RFC builds on top of [RFC 20] to explore an alternative API design prior to its stabilisation.  
+This RFC builds on top of [RFC 20] to explore an alternative API design prior to its stabilisation.
 The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code [here](https://github.com/LukeMathWalker/builder-experiments).
 
 ## Overview
 
 Type-heavy builders can lead to a poor developer experience when it comes to writing function signatures, conditional branches and clarity of error messages.
-This RFC provides examples for the issues we are trying to mitigate and showcases an alternative design for the service builder, cutting generic parameters from 2*(N+1) to 2, where `N` is the number of operations on the service.  
+This RFC provides examples for the issues we are trying to mitigate and showcases an alternative design for the service builder, cutting generic parameters from 2*(N+1) to 2, where `N` is the number of operations on the service.
 We rely on eagerly upgrading the registered handlers and operations to `Route<B>` to achieve this reduction.
 
 Goals:
@@ -37,7 +37,7 @@ Constraints:
 
 ## Handling missing operations
 
-Let's start by reviewing the API proposed in [RFC 20]. We will use the [Pokemon service] as our driving example throughout the RFC.  
+Let's start by reviewing the API proposed in [RFC 20]. We will use the [Pokemon service] as our driving example throughout the RFC.
 This is what the startup code looks like:
 
 ```rust
@@ -64,11 +64,11 @@ pub async fn main() {
 }
 ```
 
-The builder is infallible: we are able to verify at compile-time that all handlers have been provided using the [typestate builder pattern].  
+The builder is infallible: we are able to verify at compile-time that all handlers have been provided using the [typestate builder pattern].
 
 ### Compiler errors cannot be tuned
 
-What happens if we stray away from the happy path? We might forget, for example, to add the `check_health` handler.  
+What happens if we stray away from the happy path? We might forget, for example, to add the `check_health` handler.
 The compiler greets us with this error:
 
 ```text
@@ -83,36 +83,36 @@ error[E0277]: the trait bound `MissingOperation: Upgradable<AwsRestJson1, CheckH
              Operation<S, L>
 ```
 
-The compiler complains that `MissingOperation` does not implement the `Upgradable` trait. Neither `MissingOperation` nor `Upgradable` appear in the startup code we looked at. This is likely to be the first time the developer sees those traits, assuming they haven't spent time getting familiar with `aws-smithy-http-server`'s internals.  
-The `help` section is unhelpful, if not actively misdirecting.  
-How can the developer figure out that the issue lies with `check_health`?  
+The compiler complains that `MissingOperation` does not implement the `Upgradable` trait. Neither `MissingOperation` nor `Upgradable` appear in the startup code we looked at. This is likely to be the first time the developer sees those traits, assuming they haven't spent time getting familiar with `aws-smithy-http-server`'s internals.
+The `help` section is unhelpful, if not actively misdirecting.
+How can the developer figure out that the issue lies with `check_health`?
 They need to inspect the generic parameters attached to `Upgradable` in the code label or the top-level error message - we see, among other things, a `CheckHealth` parameter. That is the hint they need to follow to move forward.
 
-We unfortunately do not have agency on the compiler error we just examined. Rust does not expose hooks for crate authors to tweak the errors returned when a type does not implement a trait we defined.  
+We unfortunately do not have agency on the compiler error we just examined. Rust does not expose hooks for crate authors to tweak the errors returned when a type does not implement a trait we defined.
 All implementations of the [typestate builder pattern] accept this shortcoming in exchange for compile-time safety.
 
-Is it a good tradeoff in our case? 
+Is it a good tradeoff in our case?
 
 ### The cost of a runtime error
 
-If `build` returns an error, the HTTP server is never launched. The application fails to start.  
+If `build` returns an error, the HTTP server is never launched. The application fails to start.
 
 Let's examine the cost of this runtime error along two dimensions:
 - Impact on developer productivity;
 - Impact on end users.
 
-We'd love for this issue to be caught on the developer machine - it provides the shortest feedback loop.  
-The issue won't be surfaced by a `cargo check` or `cargo build` invocation, as it happens with the typestate builder approach.  
-It should be surfaced by executing the application test suite, assuming that the developer has written at least a single integration test - e.g. a test that passes a request to the `call` method exposed by `PokemonService` or launches a full-blown instance of the application which is then probed via an HTTP client.  
+We'd love for this issue to be caught on the developer machine - it provides the shortest feedback loop.
+The issue won't be surfaced by a `cargo check` or `cargo build` invocation, as it happens with the typestate builder approach.
+It should be surfaced by executing the application test suite, assuming that the developer has written at least a single integration test - e.g. a test that passes a request to the `call` method exposed by `PokemonService` or launches a full-blown instance of the application which is then probed via an HTTP client.
 
-If there are no integration tests, the issue won't be detected on the developer machine nor in CI.  
+If there are no integration tests, the issue won't be detected on the developer machine nor in CI.
 Nonetheless, it is unlikely to cause any end-user impact even if it manages to escape detection and reach production. The deployment will never complete if they are using a progressive rollout strategy: instances of the new version will crash as soon as they are launched, never getting a chance to mark themselves as healthy; all traffic will keep being handled by the old version, with no visible impact on end users of the application.
 
-Given the above, we think that the impact of a runtime error is low enough to be worth exploring designs that do not guarantee compile-safety for the builder API[^further-dev-productivity-improvements].  
+Given the above, we think that the impact of a runtime error is low enough to be worth exploring designs that do not guarantee compile-safety for the builder API[^further-dev-productivity-improvements].
 
 ### Providing clear feedback
 
-Moving from a compile-time error to a runtime error does not require extensive refactoring.  
+Moving from a compile-time error to a runtime error does not require extensive refactoring.
 The definition of `PokemonServiceBuilder` goes from:
 
 ```rust
@@ -173,7 +173,7 @@ pub struct PokemonServiceBuilder<
 }
 ```
 
-All operation fields are now `Option`-wrapped.  
+All operation fields are now `Option`-wrapped.
 We introduce a new `MissingOperationsError` error to hold the names of the missing operations and their respective setter methods:
 
 ```rust
@@ -187,8 +187,8 @@ impl Display for MissingOperationsError { /* */ }
 impl std::error::Error for MissingOperationsError {}
 ```
 
-which is then used in `build` as error type _(not shown here for brevity)_.  
-We can now try again to stray away from the happy path by forgetting to register a handler for the `CheckHealth` operation.  
+which is then used in `build` as error type _(not shown here for brevity)_.
+We can now try again to stray away from the happy path by forgetting to register a handler for the `CheckHealth` operation.
 The code compiles just fine this time, but the application fails when launched via `cargo run`:
 
 ```text
@@ -200,11 +200,11 @@ Use the dedicated methods on `PokemonServiceBuilder` to register the missing han
 - PokemonServiceBuilder::check_health
 ```
 
-The error speaks the language of the domain, Smithy's interface definition language: it mentions operations, services, handlers.  
-Understanding the error requires no familiarity with `smithy-rs`' internal type machinery or advanced trait patterns in Rust.  
-We can also provide actionable suggestions: Rust beginners should be able to easily process the information, rectify the mistake and move on quickly. 
+The error speaks the language of the domain, Smithy's interface definition language: it mentions operations, services, handlers.
+Understanding the error requires no familiarity with `smithy-rs`' internal type machinery or advanced trait patterns in Rust.
+We can also provide actionable suggestions: Rust beginners should be able to easily process the information, rectify the mistake and move on quickly.
 
-## Simplifying `PokemonServiceBuilder`'s signature 
+## Simplifying `PokemonServiceBuilder`'s signature
 
 Let's take a second look at the (updated) definition of `PokemonServiceBuilder`:
 
@@ -236,22 +236,22 @@ pub struct PokemonServiceBuilder<
 }
 ```
 
-We have 13 generic parameters: 
+We have 13 generic parameters:
 - 1 for plugins (`Pl`);
 - 2 for each operation (`OpX` and `ExtsX`);
 
-All those generic parameters were necessary when we were using the [typestate builder pattern]. They kept track of which operation handlers were missing: if any `OpX` was set to `MissingOperation` when calling `build` -> compilation error!  
+All those generic parameters were necessary when we were using the [typestate builder pattern]. They kept track of which operation handlers were missing: if any `OpX` was set to `MissingOperation` when calling `build` -> compilation error!
 
-Do we still need all those generic parameters if we move forward with this RFC?  
-You might be asking yourselves: why do those generics bother us? Is there any harm in keeping them around?  
+Do we still need all those generic parameters if we move forward with this RFC?
+You might be asking yourselves: why do those generics bother us? Is there any harm in keeping them around?
 We'll look at the impact of those generic parameters on two scenarios:
 - Branching in startup logic;
 - Breaking down a monolithic startup function into multiple smaller functions.
 
 ### Branching -> "Incompatible types"
 
-Conditional statements appear quite often in the startup logic for an application (or in the setup code for its integration tests).  
-Let's consider a toy example: if a `check_database` flag is set to `true`, we want to register a different `check_health` handler - one that takes care of pinging the database to make sure it's up.  
+Conditional statements appear quite often in the startup logic for an application (or in the setup code for its integration tests).
+Let's consider a toy example: if a `check_database` flag is set to `true`, we want to register a different `check_health` handler - one that takes care of pinging the database to make sure it's up.
 
 The "obvious" solution would look somewhat like this:
 
@@ -359,10 +359,10 @@ The obvious approach becomes viable if we stop embedding the handler function ty
 
 ### Refactoring into smaller functions -> Prepare for some type juggling!
 
-Services with a high number of routes can lead to fairly long startup routines.  
+Services with a high number of routes can lead to fairly long startup routines.
 Developers might be tempted to break down the startup routine into smaller functions, grouping together operations with common requirements (similar domain, same middlewares, etc.).
 
-What does the signature of those smaller functions look like?  
+What does the signature of those smaller functions look like?
 The service builder must be one of the arguments if we want to register handlers. We must also return it to allow the orchestrating function to finish the application setup (our setters take ownership of `self`).
 
 A first sketch:
@@ -429,7 +429,7 @@ fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
 }
 ```
 
-That compiles, at last.  
+That compiles, at last.
 Let's try to register an operation handler now:
 
 ```rust
@@ -458,12 +458,12 @@ error[E0308]: mismatched types
               found struct `PokemonServiceBuilder<_, _, _, Operation<IntoService<GetServerStatistics, fn(GetServerStatisticsInput, Extension<Arc<State>>) -> impl Future<Output = GetServerStatisticsOutput> {get_server_statistics}>>, _, _, _>
 ```
 
-By registering a handler we have changed the corresponding `OpX` generic parameter.  
-Fixing this error requires some non-trivial type gymnastic - I gave up after trying for ~15 minutes. 
+By registering a handler we have changed the corresponding `OpX` generic parameter.
+Fixing this error requires some non-trivial type gymnastic - I gave up after trying for ~15 minutes.
 
 ### Cut them down: going from 2N+1 to 2 generic parameters
 
-The previous two examples should have convinced you that the 2N+1 generic parameters on `PokemonServiceBuilder` harm the ergonomics of our API.  
+The previous two examples should have convinced you that the 2N+1 generic parameters on `PokemonServiceBuilder` harm the ergonomics of our API.
 Can we get rid of them?
 
 Yes! Let's look at one possible approach:
@@ -481,7 +481,7 @@ pub struct PokemonServiceBuilder<Body, Plugin> {
 ```
 
 We no longer store the raw handlers inside `PokemonServiceBuilder`.
-We eagerly upgrade the operation handlers to a `Route` instance when they are registered with the builder. 
+We eagerly upgrade the operation handlers to a `Route` instance when they are registered with the builder.
 
 ```rust
 impl<Body, Plugin> PokemonServiceBuilder<Body, Plugin> {
@@ -492,12 +492,12 @@ impl<Body, Plugin> PokemonServiceBuilder<Body, Plugin> {
         self.get_pokemon_species = Some(route);
         self
     }
-    
+
     /* other setters and methods */
 }
 ```
 
-The existing API performs the upgrade when `build` is called, forcing `PokemonServiceBuilder` to store the raw handlers and keep two generic parameters around (`OpX` and `ExtsX`) for each operation.  
+The existing API performs the upgrade when `build` is called, forcing `PokemonServiceBuilder` to store the raw handlers and keep two generic parameters around (`OpX` and `ExtsX`) for each operation.
 The proposed API requires plugins to be specified upfront, when creating an instance of the builder. They cannot be modified after a `PokemonServiceBuilder` instance has been built:
 
 ```rust
@@ -517,9 +517,9 @@ impl PokemonService<()> {
 }
 ```
 
-This constraint guarantees that all operation handlers are upgraded to a `Route` using the same set of plugins.  
+This constraint guarantees that all operation handlers are upgraded to a `Route` using the same set of plugins.
 
-Having to specify all plugins upfront is unlikely to have a negative impact on developers currently using `smithy-rs`.  
+Having to specify all plugins upfront is unlikely to have a negative impact on developers currently using `smithy-rs`.
 We have seen how cumbersome it is to break the startup logic into different functions using the current service builder API. Developers are most likely specifying all plugins and routes in the same function even if the current API allows them to intersperse route registrations and plugin registrations: they would simply have to re-order their registration statements to adopt the API proposed in this RFC.
 
 ### Alternatives: allow new plugins to be registered after builder creation
@@ -537,15 +537,15 @@ PokemonService::builder(plugin)
     .build()
 ```
 
-We could choose to remove this limitation and allow handlers to be upgraded using a different set of plugins depending on where they were registered.  
+We could choose to remove this limitation and allow handlers to be upgraded using a different set of plugins depending on where they were registered.
 In the snippet above, for example, we would have:
 
 - `get_pokemon_species` is upgraded using just the `ColorPlugin`;
 - `get_storage` is upgraded using both the `ColorPlugin` and the `PrintPlugin`.
 
-There are no technical obstacles preventing us from implementing this API, but I believe it could easily lead to confusion and runtime surprises due to a mismatch between what the developer might expect `PrintPlugin` to apply to (all handlers) and what it actually applies to (handlers registered after `.print()`).  
+There are no technical obstacles preventing us from implementing this API, but I believe it could easily lead to confusion and runtime surprises due to a mismatch between what the developer might expect `PrintPlugin` to apply to (all handlers) and what it actually applies to (handlers registered after `.print()`).
 
-We can provide developers with other mechanisms to register plugins for a single operation or a subset of operations without introducing ambiguity.  
+We can provide developers with other mechanisms to register plugins for a single operation or a subset of operations without introducing ambiguity.
 For attaching additional plugins to a single operation, we could introduce a blanket `Pluggable` implementation for all operations in `aws-smithy-http-server`:
 
 ```rust
@@ -558,7 +558,7 @@ impl<P, Op, Pl, S, L> Pluggable<Pl> for Operation<S, L> where Pl: Plugin<P, Op, 
 }
 ```
 
-which would allow developers to invoke `op.apply(MyPlugin)` or call extensions methods such as `op.print()` where `op` is an `Operation`.  
+which would allow developers to invoke `op.apply(MyPlugin)` or call extensions methods such as `op.print()` where `op` is an `Operation`.
 For attaching additional plugins to a subgroup of operations, instead, we could introduce nested builders:
 
 ```rust
@@ -576,14 +576,123 @@ let nested_builder = builder.scoped(additional_plugins)
 let app = builder.build();
 ```
 
-Both proposals are outside the scope of this RFC, but they are shown here for illustrative purposes.  
+Both proposals are outside the scope of this RFC, but they are shown here for illustrative purposes.
 
-### Alternatives: boxed trait objects 
+### Alternatives: lazy type erasure
 
-Trait objects are another common approach to achieve type erasure: instead of storing the raw handler in `PokemonServiceBuilder`, we box it and cast it to a `dyn Upgradable<...>`.  
-Using trait objects would allow us to delay upgrading to `Route` until `build` is called, mimicking the behaviour of the current API and allowing developers to register plugins at any point before calling `build`.  
-Using trait objects would unfortunately have a non-zero runtime impact: we would be introducing an extra layer of indirection (double-boxing the handler), affecting the performance of our application at runtime.  
-Given the above, we do not suggest we fall back on trait objects to improve the ergonomics of our API.
+A lot of our issues stem from type mismatch errors: we are encoding the type of our handlers into the overall type of the service builder and, as a consequence, we end up modifying that type every time we set a handler or modify its state.
+Type erasure is a common approach for mitigating these issues - reduce those generic parameters to a common type to avoid the mismatch errors.
+This whole RFC can be seen as a type erasure proposal - done eagerly, as soon as the handler is registered, using `Route<B>` as our "common type" after erasure.
+
+We could try to strike a different balance - i.e. avoid performing type erasure eagerly, but allow developers to erase types on demand.
+Based on my analysis, this could happen in two ways:
+
+1. We cast handlers into a `Box<dyn Upgradable>` to which we can later apply plugins;
+2. We upgrade registered handlers to `Route<B>` and apply plugins in the process (as this RFC proposes to do unconditionally).
+
+Let's ignore these implementation issues for the time being to focus on what the ergonomics would look like assuming we can actually perform type erasure.
+In practice, we are going to assume that:
+
+- In approach 1), we can call `.boxed()` on an operation and get a `Box<dyn Upgradable>` back;
+- In approach 2), we can call `.erase()` on the entire service builder and convert all registered operations to `Route<B>` while keeping the `MissingOperation` entries as they are. After `erase` has been called, you can no longer register plugins (or, alternatively, the plugins you register will only apply new handlers).
+
+#### Branching
+
+Going back to the branching example:
+
+```rust
+let check_database: bool = /* */;
+let builder = if check_database {
+    builder.check_health(check_health)
+} else {
+    builder.check_health(check_health_with_database)
+};
+let app = builder.build();
+```
+
+In approach 1), we could leverage the `.boxed()` method to convert the actual `OpX` type into a `Box<dyn Upgradable>`, thus ensuring that both branches return the same type:
+
+```rust
+let check_database: bool = /* */;
+let builder = if check_database {
+    builder.check_health_operation(Operation::from_handler(check_health).boxed())
+} else {
+    builder.check_health_operation(Operation::from_handler(check_health_with_database).boxed())
+};
+let app = builder.build();
+```
+
+or, in approach 2),
+
+```rust
+let check_database: bool = /* */;
+let boxed_builder = if check_database {
+    builder.check_health(check_health).erase()
+} else {
+    builder.check_health(check_health_with_database).erase()
+};
+let app = boxed_builder.build();
+```
+
+#### Refactoring into smaller functions
+
+Developers would still have to spell out all generic parameters when writing a function that takes in a builder as a parameter:
+
+```rust
+fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
+) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
+    builder
+}
+```
+
+Writing the signature after having modified the builder becomes easier though.
+In approach 1), they can explicitly change the touched operation parameters to the boxed variant:
+
+```rust
+fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
+) -> PokemonServiceBuilder<Op1, Op2, Op3, Box<dyn Upgradable>, Op5, Op6> {
+    builder.get_server_statistics(get_server_statistics)
+}
+```
+
+It becomes trickier in approach 2), since to retain compile-time safety on the builder we expect `erase` to map `MissingOperation` into `MissingOperation`. Therefore, we can't write something like this:
+
+```rust
+fn partial_setup<Body, Op1, Op2, Op3, Op4, Op5, Op6>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
+) -> PokemonServiceBuilder<Route<B>, Route<B>, Route<B>, Route<B>, Route<B>, Route<B>> {
+    builder.get_server_statistics(get_server_statistics).()
+}
+```
+
+The compiler would reject it since it can't guarantee that all other operations can be erased to a `Route<B>`. This is likely to require something along the lines of:
+
+```rust
+fn partial_setup<Body, Op1, Op2, Op3, Op4, Op5, Op6>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
+) -> PokemonServiceBuilder<<Op1 as TypeErase>::Erased, <Op2 as TypeErase>::Erased, <Op3 as TypeErase>::Erased, <Op4 as TypeErase>::Erased, <Op5 as TypeErase>::Erased, <Op6 as TypeErase>::Erased>
+where
+    // Omitting a bunch of likely needed additional generic parameters and bounds here
+    Op1: TypeErase,
+    Op2: TypeErase,
+    Op3: TypeErase,
+    Op4: TypeErase,
+    Op5: TypeErase,
+    Op6: TypeErase,
+{
+    builder.get_server_statistics(get_server_statistics).()
+}
+```
+
+#### Summary
+
+Approach 1) improves the ergonomics for both branching and refactoring to smaller functions. Nonetheless, you still need to spell out all generic parameters when passing the builder around as a function parameter - it quickly becomes unfeasible for larger services and tedious to keep up to date as new operations are introduced.
+Approach 2) improves the ergonomics for the branching scenario but it doesn't improve the refactoring scenario.
+
+Working out the implementation details, especially for 1), is non-trivial.
+Our current definition of `Upgradable` takes both `Exts` and `Operation` as generic parameters - we would not be able to perform type erasure as it stands. We would have to refactor our runtime crates to push those two parameters elsewhere (most likely into the `Operation` struct) to (maybe?) make type erasure possible.
 
 ### Builder extensions: what now?
 
@@ -604,7 +713,7 @@ pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable<PrintPlugin> {
 }
 ```
 
-This pattern needs to be revisited if we want to move forward with this RFC, since new plugins cannot be registered after the builder has been instantiated.  
+This pattern needs to be revisited if we want to move forward with this RFC, since new plugins cannot be registered after the builder has been instantiated.
 My recommendation would be to implement `Pluggable` for `PluginStack`, providing the same pattern ahead of the creation of the builder:
 
 ```rust
@@ -624,7 +733,7 @@ let app = PokemonService::builder(plugin_stack)
 
 ## Playing around with the design
 
-The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code [here](https://github.com/LukeMathWalker/builder-experiments).  
+The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code [here](https://github.com/LukeMathWalker/builder-experiments).
 
 ## Changes checklist
 
@@ -636,3 +745,4 @@ The API proposed in this RFC has been manually implemented for the Pokemon servi
 [Pokemon service]: https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy
 [typestate builder pattern]: https://www.greyblake.com/blog/builder-with-typestate-in-rust/
 [^further-dev-productivity-improvements]: The impact of a runtime error on developer productivity can be further minimised by encouraging adoption of integration testing; this can be achieved, among other options, by authoring guides that highlight its benefits and provide implementation guidance.
+[^boxing-issues]:
