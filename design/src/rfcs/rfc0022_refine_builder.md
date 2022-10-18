@@ -745,4 +745,3 @@ The API proposed in this RFC has been manually implemented for the Pokemon servi
 [Pokemon service]: https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy
 [typestate builder pattern]: https://www.greyblake.com/blog/builder-with-typestate-in-rust/
 [^further-dev-productivity-improvements]: The impact of a runtime error on developer productivity can be further minimised by encouraging adoption of integration testing; this can be achieved, among other options, by authoring guides that highlight its benefits and provide implementation guidance.
-[^boxing-issues]:
