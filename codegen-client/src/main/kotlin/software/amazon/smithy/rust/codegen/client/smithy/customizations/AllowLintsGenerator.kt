@@ -39,6 +39,9 @@ val AllowedClippyLints = listOf(
 
     // Some models have shapes that generate complex Rust types (e.g. nested collection and map shapes).
     "type_complexity",
+
+    // Determining if the expression is the last one (to remove return) can make codegen harder in some cases.
+    "needless_return",
 )
 
 val AllowedRustdocLints = listOf(

@@ -459,7 +459,12 @@ class XmlBindingTraitSerializerGenerator(
             }
         } else {
             with(util) {
-                ignoreZeroValues(member, ValueExpression.Value(autoDeref(ctx.input))) {
+                val valueExpression = if (ctx.input.startsWith("&")) {
+                    ValueExpression.Reference(ctx.input)
+                } else {
+                    ValueExpression.Value(ctx.input)
+                }
+                ignoreZeroValues(member, valueExpression) {
                     inner(ctx)
                 }
             }

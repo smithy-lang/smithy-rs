@@ -160,7 +160,7 @@ mod tests {
     use super::*;
 
     use aws_smithy_http_server::body::to_boxed;
-    use aws_smithy_http_server::proto::rest_json_1::AwsRestJson1;
+    use aws_smithy_http_server::proto::rest_json_1::RestJson1;
     use pyo3::prelude::*;
     use tower::{Service, ServiceBuilder, ServiceExt};
 
@@ -174,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn request_middlewares_are_chained_inside_layer() -> PyResult<()> {
         let locals = crate::tests::initialize();
-        let mut middlewares = PyMiddlewares::new::<AwsRestJson1>(vec![]);
+        let mut middlewares = PyMiddlewares::new::<RestJson1>(vec![]);
 
         Python::with_gil(|py| {
             let middleware = PyModule::new(py, "middleware").unwrap();
@@ -211,7 +211,7 @@ def second_middleware(request: Request):
         })?;
 
         let mut service = ServiceBuilder::new()
-            .layer(PyMiddlewareLayer::<AwsRestJson1>::new(middlewares, locals))
+            .layer(PyMiddlewareLayer::<RestJson1>::new(middlewares, locals))
             .service_fn(echo);
 
         let request = Request::get("/").body(Body::empty()).unwrap();

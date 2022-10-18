@@ -8,8 +8,7 @@
 use aws_smithy_http_server::{
     body::{to_boxed, BoxBody},
     proto::{
-        aws_json_10::AwsJson10, aws_json_11::AwsJson11, rest_json_1::AwsRestJson1,
-        rest_xml::AwsRestXml,
+        aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
     },
     response::IntoResponse,
 };
@@ -68,7 +67,7 @@ impl From<PyErr> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<AwsRestJson1> for PyMiddlewareException {
+impl IntoResponse<RestJson1> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)
@@ -79,7 +78,7 @@ impl IntoResponse<AwsRestJson1> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<AwsRestXml> for PyMiddlewareException {
+impl IntoResponse<RestXml> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)
@@ -89,7 +88,7 @@ impl IntoResponse<AwsRestXml> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<AwsJson10> for PyMiddlewareException {
+impl IntoResponse<AwsJson1_0> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)
@@ -100,7 +99,7 @@ impl IntoResponse<AwsJson10> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<AwsJson11> for PyMiddlewareException {
+impl IntoResponse<AwsJson1_1> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)

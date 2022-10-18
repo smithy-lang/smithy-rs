@@ -22,10 +22,10 @@
 //! [`RuntimeError::into_response`] method to render and send a response.
 
 use crate::extension::RuntimeErrorExtension;
-use crate::proto::aws_json_10::AwsJson10;
-use crate::proto::aws_json_11::AwsJson11;
-use crate::proto::rest_json_1::AwsRestJson1;
-use crate::proto::rest_xml::AwsRestXml;
+use crate::proto::aws_json_10::AwsJson1_0;
+use crate::proto::aws_json_11::AwsJson1_1;
+use crate::proto::rest_json_1::RestJson1;
+use crate::proto::rest_xml::RestXml;
 use crate::response::IntoResponse;
 use http::StatusCode;
 
@@ -72,31 +72,31 @@ impl RuntimeError {
 
 pub struct InternalFailureException;
 
-impl IntoResponse<AwsJson10> for InternalFailureException {
+impl IntoResponse<AwsJson1_0> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        IntoResponse::<AwsJson10>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+        IntoResponse::<AwsJson1_0>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-impl IntoResponse<AwsJson11> for InternalFailureException {
+impl IntoResponse<AwsJson1_1> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        IntoResponse::<AwsJson11>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+        IntoResponse::<AwsJson1_1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-impl IntoResponse<AwsRestJson1> for InternalFailureException {
+impl IntoResponse<RestJson1> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        IntoResponse::<AwsRestJson1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+        IntoResponse::<RestJson1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-impl IntoResponse<AwsRestXml> for InternalFailureException {
+impl IntoResponse<RestXml> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        IntoResponse::<AwsRestXml>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+        IntoResponse::<RestXml>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-impl IntoResponse<AwsRestJson1> for RuntimeError {
+impl IntoResponse<RestJson1> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
             .status(self.status_code())
@@ -115,7 +115,7 @@ impl IntoResponse<AwsRestJson1> for RuntimeError {
     }
 }
 
-impl IntoResponse<AwsRestXml> for RuntimeError {
+impl IntoResponse<RestXml> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
             .status(self.status_code())
@@ -136,7 +136,7 @@ impl IntoResponse<AwsRestXml> for RuntimeError {
     }
 }
 
-impl IntoResponse<AwsJson10> for RuntimeError {
+impl IntoResponse<AwsJson1_0> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
             .status(self.status_code())
@@ -155,7 +155,7 @@ impl IntoResponse<AwsJson10> for RuntimeError {
     }
 }
 
-impl IntoResponse<AwsJson11> for RuntimeError {
+impl IntoResponse<AwsJson1_1> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
             .status(self.status_code())
