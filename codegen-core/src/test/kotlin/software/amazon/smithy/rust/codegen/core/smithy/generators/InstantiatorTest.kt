@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -107,10 +108,10 @@ class InstantiatorTest {
     private val symbolProvider = testSymbolProvider(model)
     private val runtimeConfig = TestRuntimeConfig
 
-    fun RustWriter.test(block: RustWriter.() -> Unit) {
+    fun RustWriter.test(block: Writable) {
         raw("#[test]")
         rustBlock("fn inst()") {
-            block(this)
+            block()
         }
     }
 

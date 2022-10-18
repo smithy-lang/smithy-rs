@@ -357,24 +357,24 @@ object EventStreamTestTools {
                 .map { it.asStructureShape().get() }
                 .toList()
             when (testCase.target) {
-                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(it)
-                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(it)
+                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
+                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
             }
             for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
-                StructureGenerator(model, symbolProvider, it, shape as StructureShape).render(testCase.target)
+                StructureGenerator(model, symbolProvider, this, shape as StructureShape).render(testCase.target)
                 val builderGen = BuilderGenerator(model, symbolProvider, shape)
-                builderGen.render(it)
-                it.implBlock(shape, symbolProvider) {
+                builderGen.render(this)
+                implBlock(shape, symbolProvider) {
                     builderGen.renderConvenienceMethod(this)
                 }
             }
         }
         project.withModule(RustModule.public("model")) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-            recursivelyGenerateModels(model, symbolProvider, inputOutput, it, testCase.target)
+            recursivelyGenerateModels(model, symbolProvider, inputOutput, this, testCase.target)
         }
         project.withModule(RustModule.public("output")) {
-            operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+            operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
         return TestEventStreamProject(model, serviceShape, operationShape, unionShape, symbolProvider, project)
     }

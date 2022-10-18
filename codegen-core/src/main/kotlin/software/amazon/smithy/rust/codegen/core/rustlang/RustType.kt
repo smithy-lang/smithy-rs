@@ -51,7 +51,7 @@ sealed class RustType {
      * // Then, invoke the writable directly
      * t.invoke(writer)
      * // OR template it out
-     * writer.rustInlineTemplate("#{t:W}", "t" to t)
+     *rustInlineTemplate("#{t:W}", "t" to t)
      * ```
      *
      * When formatted, the converted type will appear as such:
@@ -378,15 +378,17 @@ sealed class Attribute {
     abstract fun render(writer: RustWriter)
 
     companion object {
+        val AllowDeadCode = Custom("allow(dead_code)")
+        val AllowDeprecated = Custom("allow(deprecated)")
+        val AllowUnusedMut = Custom("allow(unused_mut)")
+        val DocHidden = Custom("doc(hidden)")
+        val DocInline = Custom("doc(inline)")
+
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
          * indicates that more fields may be added in the future
          */
         val NonExhaustive = Custom("non_exhaustive")
-        val AllowUnusedMut = Custom("allow(unused_mut)")
-        val AllowDeadCode = Custom("allow(dead_code)")
-        val DocHidden = Custom("doc(hidden)")
-        val DocInline = Custom("doc(inline)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {

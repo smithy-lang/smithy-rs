@@ -424,7 +424,7 @@ class RustWriter private constructor(
         return "${prefix}_$n"
     }
 
-    fun first(preWriter: RustWriter.() -> Unit) {
+    fun first(preWriter: Writable) {
         preamble.add(preWriter)
     }
 
@@ -434,7 +434,7 @@ class RustWriter private constructor(
      * Callers must take care to use [this] when writing to ensure code is written to the right place:
      * ```kotlin
      * val writer = RustWriter.forModule("model")
-     * writer.withModule("nested") {
+     * writer.withModule(RustModule.public("nested")) {
      *   Generator(...).render(this) // GOOD
      *   Generator(...).render(writer) // WRONG!
      * }
@@ -443,17 +443,16 @@ class RustWriter private constructor(
      * The returned writer will inject any local imports into the module as needed.
      */
     fun withModule(
-        moduleName: String,
-        rustMetadata: RustMetadata = RustMetadata(visibility = Visibility.PUBLIC),
-        moduleWriter: RustWriter.() -> Unit,
+        module: RustModule,
+        moduleWriter: Writable,
     ): RustWriter {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
-        val innerWriter = RustWriter(this.filename, "${this.namespace}::$moduleName", printWarning = false)
+        val innerWriter = RustWriter(this.filename, "${this.namespace}::${module.name}", printWarning = false)
         moduleWriter(innerWriter)
-        rustMetadata.render(this)
-        rustBlock("mod $moduleName") {
+        module.rustMetadata.render(this)
+        rustBlock("mod ${module.name}") {
             writeWithNoFormatting(innerWriter.toString())
         }
         innerWriter.dependencies.forEach { addDependency(it) }
@@ -545,7 +544,8 @@ class RustWriter private constructor(
      */
     inner class RustWriteableInjector : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
-            val func = t as? RustWriter.() -> Unit ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
+            @Suppress("UNCHECKED_CAST")
+            val func = t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
             val innerWriter = RustWriter(filename, namespace, printWarning = false)
             func(innerWriter)
             innerWriter.dependencies.forEach { addDependency(it) }
