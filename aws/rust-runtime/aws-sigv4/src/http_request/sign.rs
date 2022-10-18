@@ -303,7 +303,6 @@ fn build_authorization_header(
 mod tests {
     use super::{sign, SigningInstructions};
     use crate::date_time::test_parsers::parse_date_time;
-    use crate::http_request::canonical_request::InvalidHeaderError;
     use crate::http_request::sign::SignableRequest;
     use crate::http_request::test::{
         make_headers_comparable, test_request, test_signed_request,
@@ -537,11 +536,7 @@ mod tests {
             .unwrap();
 
         let creq = crate::http_request::sign(SignableRequest::from(&req), &params);
-        assert!(creq
-            .err()
-            .unwrap()
-            .downcast_ref::<InvalidHeaderError>()
-            .is_some());
+        assert!(creq.is_err());
     }
 
     proptest! {
@@ -549,8 +544,8 @@ mod tests {
         // Only byte values between 32 and 255 (inclusive) are permitted, excluding byte 127, for
         // [HeaderValue](https://docs.rs/http/latest/http/header/struct.HeaderValue.html#method.from_bytes).
         fn test_sign_headers_no_panic(
-            left in proptest::collection::vec(32_u8..126, 0..100),
-            right in proptest::collection::vec(128_u8..255, 0..100),
+            left in proptest::collection::vec(32_u8..=126, 0..100),
+            right in proptest::collection::vec(128_u8..=255, 0..100),
         ) {
             let settings = SigningSettings::default();
             let params = SigningParams {
