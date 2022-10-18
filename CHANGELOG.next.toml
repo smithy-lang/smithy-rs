@@ -176,6 +176,12 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ethyi"
 
 [[smithy-rs]]
+message = "Enable local maven repo dependency override."
+references = ["smithy-rs#1852"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
 message = "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This architecture cannot compile ring, so the PowerPC implementation uses hmac + sha2 to achive the same result. We also updated the CI which is now running as many tests as possible against i686 and PowerPC 32 and 64 bit."
 references = ["smithy-rs#1847"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
