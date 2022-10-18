@@ -382,9 +382,9 @@ class StructureGeneratorTest {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
 
         val provider = testSymbolProvider(model)
-        RustWriter.forModule("test").let {
-            StructureGenerator(model, provider, it, struct).render()
-            it.toString().shouldNotContain("#[doc(hidden)]")
+        RustWriter.forModule("test").let { writer ->
+            StructureGenerator(model, provider, writer, struct).render()
+            writer.toString().shouldNotContain("#[doc(hidden)]")
         }
     }
 }
