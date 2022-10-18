@@ -80,7 +80,7 @@ internal class TopLevelErrorGeneratorTest {
         )
 
         rustCrate.lib {
-            Attribute.AllowDeprecated.render(this)
+            Attribute.AllowDeprecated.copy(container = true).render(this)
         }
         rustCrate.withModule(RustModule.Error) {
             for (shape in model.structureShapes) {
