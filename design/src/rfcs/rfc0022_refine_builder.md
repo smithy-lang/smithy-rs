@@ -582,7 +582,7 @@ Both proposals are outside the scope of this RFC, but they are shown here for il
 
 A lot of our issues stem from type mismatch errors: we are encoding the type of our handlers into the overall type of the service builder and, as a consequence, we end up modifying that type every time we set a handler or modify its state.
 Type erasure is a common approach for mitigating these issues - reduce those generic parameters to a common type to avoid the mismatch errors.
-This whole RFC can be seen as a type erasure proposal - done eagerly, as soon as the handler is registered, using `Route<B>` as our "common type" after erasure.
+This whole RFC can be seen as a type erasure proposal - done eagerly, as soon as the handler is registered, using `Option<Route<B>>` as our "common type" after erasure.
 
 We could try to strike a different balance - i.e. avoid performing type erasure eagerly, but allow developers to erase types on demand.
 Based on my analysis, this could happen in two ways:
