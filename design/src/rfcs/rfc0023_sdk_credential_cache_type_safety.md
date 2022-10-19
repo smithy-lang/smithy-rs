@@ -106,13 +106,13 @@ The configuration examples look identical to Option A.
 - :-1: It's possible to implement both `CacheCredentials` and `ProvideCredentials`, which
   breaks the type safety goals.
 
-Option C: `CredentialsCache` enum
----------------------------------
+Option C: `CredentialsCache` struct
+-----------------------------------
 
-The enum approach posits that customers don't need or want to implement custom credential caching,
+The struct approach posits that customers don't need or want to implement custom credential caching,
 but at the same time, doesn't make it impossible to add custom caching later.
 
-The idea is that there would be an enum called `CredentialsCache` that specifies the desired
+The idea is that there would be a struct called `CredentialsCache` that specifies the desired
 caching approach for a given credentials provider:
 
 ```rust
@@ -171,8 +171,8 @@ impl CredentialsCache {
 }
 ```
 
-Using an enum over a trait prevents custom caching implementations, but if customization is desired,
-a `Custom` variant could be added that has its own trait that customers implement.
+Using a struct over a trait prevents custom caching implementations, but if customization is desired,
+a `Custom` variant could be added to the inner enum that has its own trait that customers implement.
 
 The `SharedCredentialsProvider` needs to be updated to take a cache implementation rather
 than `impl ProvideCredentials + 'static`. A sealed trait could be added to facilitate this.
