@@ -175,7 +175,7 @@ internal class EndpointConfigCustomizationTest {
     fun `support region-specific endpoint overrides`() {
         validateEndpointCustomizationForService("test#TestService") { crate ->
             crate.lib {
-                it.unitTest("region_override") {
+                unitTest("region_override") {
                     rustTemplate(
                         """
                         let conf = crate::config::Config::builder().build();
@@ -194,7 +194,7 @@ internal class EndpointConfigCustomizationTest {
     fun `support region-agnostic services`() {
         validateEndpointCustomizationForService("test#NoRegions") { crate ->
             crate.lib {
-                it.unitTest("global_services") {
+                unitTest("global_services") {
                     rustTemplate(
                         """
                         let conf = crate::config::Config::builder().build();

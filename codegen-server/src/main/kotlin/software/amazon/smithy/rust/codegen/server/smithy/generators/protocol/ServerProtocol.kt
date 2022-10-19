@@ -99,10 +99,10 @@ class ServerAwsJsonProtocol(
     override fun markerStruct(): RuntimeType {
         return when (version) {
             is AwsJsonVersion.Json10 -> {
-                ServerRuntimeType.Protocol("AwsJson10", "aws_json_10", runtimeConfig)
+                ServerRuntimeType.Protocol("AwsJson1_0", "aws_json_10", runtimeConfig)
             }
             is AwsJsonVersion.Json11 -> {
-                ServerRuntimeType.Protocol("AwsJson11", "aws_json_11", runtimeConfig)
+                ServerRuntimeType.Protocol("AwsJson1_1", "aws_json_11", runtimeConfig)
             }
         }
     }
@@ -211,7 +211,7 @@ class ServerRestJsonProtocol(
         fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext)
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestJson1", "rest_json_1", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol("RestJson1", "rest_json_1", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -240,7 +240,7 @@ class ServerRestXmlProtocol(
         }
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("AwsRestXml", "rest_xml", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol("RestXml", "rest_xml", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 

@@ -57,7 +57,7 @@ internal class AwsSdkReadmeGenerator {
     internal fun generateReadme(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
             ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
-        rustCrate.withFile("README.md") { writer ->
+        rustCrate.withFile("README.md") {
             val description = normalizeDescription(
                 codegenContext.moduleName,
                 codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
@@ -66,7 +66,7 @@ internal class AwsSdkReadmeGenerator {
             val snakeCaseModuleName = moduleName.replace('-', '_')
             val shortModuleName = moduleName.removePrefix("aws-sdk-")
 
-            writer.raw(
+            raw(
                 """
                 # $moduleName
 

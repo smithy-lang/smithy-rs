@@ -20,7 +20,7 @@ class CrateLicenseDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.withFile("LICENSE") {
             val license = this::class.java.getResource("/LICENSE").readText()
-            it.raw(license)
+            raw(license)
         }
     }
 

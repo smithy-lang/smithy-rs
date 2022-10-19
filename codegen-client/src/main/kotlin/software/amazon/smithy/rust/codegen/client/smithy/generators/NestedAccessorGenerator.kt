@@ -34,7 +34,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
         val baseType = symbolProvider.toSymbol(path.last())
         val fnName = symbolProvider.lensName("", root, path)
         return RuntimeType.forInlineFun(fnName, module) {
-            it.rustTemplate(
+            rustTemplate(
                 """
                 pub(crate) fn $fnName(input: #{Input}) -> #{Output} {
                     #{body:W}
@@ -54,7 +54,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
         val fnName = symbolProvider.lensName("ref", root, path)
         val referencedType = baseType.mapRustType { (it as RustType.Option).referenced(lifetime = null) }
         return RuntimeType.forInlineFun(fnName, module) {
-            it.rustTemplate(
+            rustTemplate(
                 """
                 pub(crate) fn $fnName(input: &#{Input}) -> #{Output} {
                     #{body:W}
