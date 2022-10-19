@@ -112,6 +112,8 @@ fun serverTestCodegenContext(
 fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
     StructureGenerator(model, symbolProvider, writer, this).render(CodegenTarget.SERVER)
     val serverCodegenContext = serverTestCodegenContext(model)
+    // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
+    // regardless of the `publicConstrainedTypes` setting.
     val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this)
     modelBuilder.render(writer)
     writer.implBlock(this, symbolProvider) {

@@ -3,36 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy
+package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
-/**
- * This class is a copy of `InstantiatorTest` from the `codegen-client` project, but testing server-specific
- * functionality.
- */
 class ServerInstantiatorTest {
+    // This model started off from the one in `InstantiatorTest.kt` from `codegen-core`.
     private val model = """
         namespace com.test
         
@@ -76,6 +73,18 @@ class ServerInstantiatorTest {
             value: Integer
         }
 
+        union NestedUnion {
+            struct: NestedStruct,
+            int: Integer
+        }
+
+        structure NestedStruct {
+            @required
+            str: String,
+            @required
+            num: Integer
+        }
+        
         structure MyStructRequired {
             @required
             str: String,
@@ -98,29 +107,28 @@ class ServerInstantiatorTest {
             @required
             doc: Document
         }
-
-        union NestedUnion {
-            struct: NestedStruct,
-            int: Integer
-        }
-
-        structure NestedStruct {
-            @required
-            str: String,
-            @required
-            num: Integer
-        }
+        
+        @enum([
+            { value: "t2.nano" },
+            { value: "t2.micro" },
+        ])
+        string UnnamedEnum
+        
+        @enum([
+            {
+                value: "t2.nano",
+                name: "T2_NANO",
+            },
+            {
+                value: "t2.micro",
+                name: "T2_MICRO",
+            },
+        ])
+        string NamedEnum
     """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
 
-    private val symbolProvider = serverTestSymbolProvider(model)
-    private val runtimeConfig = TestRuntimeConfig
-
-    fun RustWriter.test(block: RustWriter.() -> Unit) {
-        raw("#[test]")
-        rustBlock("fn inst()") {
-            block(this)
-        }
-    }
+    private val codegenContext = serverTestCodegenContext(model)
+    private val symbolProvider = codegenContext.symbolProvider
 
     @Test
     fun `generate struct with missing required members`() {
@@ -128,11 +136,11 @@ class ServerInstantiatorTest {
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
         val union = model.lookup<UnionShape>("com.test#NestedUnion")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
+        val sut = ServerInstantiator(codegenContext)
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
-        project.withModule(ModelsModule) { writer ->
+        project.withModule(RustModule.Model) { writer ->
             structure.serverRenderWithModelBuilder(model, symbolProvider, writer)
             inner.serverRenderWithModelBuilder(model, symbolProvider, writer)
             nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, writer)
@@ -140,7 +148,7 @@ class ServerInstantiatorTest {
 
             writer.unitTest("server_instantiator_test") {
                 withBlock("let result = ", ";") {
-                    sut.render(this, structure, data, Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
+                    sut.render(this, structure, data)
                 }
 
                 rust(
@@ -155,11 +163,11 @@ class ServerInstantiatorTest {
                         ts: DateTime::from_secs(0),
                         byte: 0,
                         union: NestedUnion::Struct(NestedStruct {
-                            str: "".into(),
+                            str: "".to_owned(),
                             num: 0,
                         }),
                         structure: NestedStruct {
-                            str: "".into(),
+                            str: "".to_owned(),
                             num: 0,
                         },
                         list: Vec::new(),
@@ -169,6 +177,44 @@ class ServerInstantiatorTest {
                     assert_eq!(result, expected);
                     """,
                 )
+            }
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `generate named enums`() {
+        val shape = model.lookup<StringShape>("com.test#NamedEnum")
+        val sut = ServerInstantiator(codegenContext)
+        val data = Node.parse("t2.nano".dq())
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            EnumGenerator(model, symbolProvider, writer, shape, shape.expectTrait()).render()
+            writer.unitTest("generate_named_enums") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, shape, data)
+                }
+                rust("assert_eq!(result, NamedEnum::T2Nano);")
+            }
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `generate unnamed enums`() {
+        val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
+        val sut = ServerInstantiator(codegenContext)
+        val data = Node.parse("t2.nano".dq())
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            EnumGenerator(model, symbolProvider, writer, shape, shape.expectTrait()).render()
+            writer.unitTest("generate_unnamed_enums") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, shape, data)
+                }
+                rust("""assert_eq!(result, UnnamedEnum("t2.nano".to_owned()));""")
             }
         }
         project.compileAndTest()

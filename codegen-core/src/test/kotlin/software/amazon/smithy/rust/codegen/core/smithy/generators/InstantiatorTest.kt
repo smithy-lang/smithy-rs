@@ -6,30 +6,33 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class InstantiatorTest {
     private val model = """
         namespace com.test
+        
         @documentation("this documents the shape")
         structure MyStruct {
            foo: String,
@@ -81,172 +84,191 @@ class InstantiatorTest {
         }
     """.asSmithyModel().let { RecursiveShapeBoxer.transform(it) }
 
-    private val symbolProvider = testSymbolProvider(model)
-    private val runtimeConfig = TestRuntimeConfig
+    private val codegenContext = testCodegenContext(model)
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
 
-    fun RustWriter.test(block: RustWriter.() -> Unit) {
-        raw("#[test]")
-        rustBlock("fn inst()") {
-            block(this)
-        }
+    // This is the exact same behavior of the client.
+    private class BuilderKindBehavior(val codegenContext: CodegenContext): Instantiator.BuilderKindBehavior {
+        override fun hasFallibleBuilder(shape: StructureShape) =
+            StructureGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
+
+        override fun setterName(memberShape: MemberShape) = memberShape.setterName()
+
+        override fun doesSetterTakeInOption(memberShape: MemberShape) = true
     }
+
+    // This can be empty since the actual behavior is tested in `ClientInstantiatorTest` and `ServerInstantiatorTest`.
+    private fun enumFromStringFn(symbol: Symbol, data: String) = writable { }
 
     @Test
     fun `generate unions`() {
         val union = model.lookup<UnionShape>("com.test#MyUnion")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
-        val data = Node.parse(
-            """{
-            "stringVariant": "ok!"
-        }""",
-        )
-        val writer = RustWriter.forModule("model")
-        UnionGenerator(model, symbolProvider, writer, union).render()
-        writer.test {
-            writer.withBlock("let result = ", ";") {
-                sut.render(this, union, data)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+        val data = Node.parse("""{ "stringVariant": "ok!" }""")
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            UnionGenerator(model, symbolProvider, writer, union).render()
+            writer.unitTest("generate_unions") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, union, data)
+                }
+                rust("assert_eq!(result, MyUnion::StringVariant(\"ok!\".to_owned()));")
             }
-            writer.write("assert_eq!(result, MyUnion::StringVariant(\"ok!\".to_string()));")
         }
+        project.compileAndTest()
     }
 
     @Test
     fun `generate struct builders`() {
         val structure = model.lookup<StructureShape>("com.test#MyStruct")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
-        val writer = RustWriter.forModule("model")
-        structure.renderWithModelBuilder(model, symbolProvider, writer)
-        writer.test {
-            writer.withBlock("let result = ", ";") {
-                sut.render(this, structure, data)
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            structure.renderWithModelBuilder(model, symbolProvider, writer)
+            writer.unitTest("generate_struct_builders") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, structure, data)
+                }
+                rust(
+                    """
+                   assert_eq!(result.bar, 10); 
+                   assert_eq!(result.foo.unwrap(), "hello");
+                    """,
+                )
             }
-            writer.write("assert_eq!(result.bar, 10);")
-            writer.write("assert_eq!(result.foo.unwrap(), \"hello\");")
         }
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     @Test
     fun `generate builders for boxed structs`() {
         val structure = model.lookup<StructureShape>("com.test#WithBox")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
         val data = Node.parse(
-            """ {
-            "member": {
-                "member": { }
-            }, "value": 10
+            """
+            {
+                "member": {
+                    "member": { }
+                },
+                "value": 10
             }
-            """.trimIndent(),
+            """,
         )
-        val writer = RustWriter.forModule("model")
-        structure.renderWithModelBuilder(model, symbolProvider, writer)
-        writer.test {
-            withBlock("let result = ", ";") {
-                sut.render(this, structure, data)
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            structure.renderWithModelBuilder(model, symbolProvider, writer)
+            writer.unitTest("generate_builders_for_boxed_structs") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, structure, data)
+                }
+                rust(
+                    """
+                    assert_eq!(result, WithBox {
+                        value: Some(10),
+                        member: Some(Box::new(WithBox {
+                            value: None,
+                            member: Some(Box::new(WithBox { value: None, member: None })),
+                        }))
+                    });
+                    """,
+                )
             }
-            rust(
-                """
-                assert_eq!(result, WithBox {
-                    value: Some(10),
-                    member: Some(Box::new(WithBox {
-                        value: None,
-                        member: Some(Box::new(WithBox { value: None, member: None })),
-                    }))
-                });
-                """,
-            )
         }
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     @Test
     fun `generate lists`() {
-        val data = Node.parse(
-            """ [
-            "bar",
-            "foo"
-            ]
-            """,
-        )
-        val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
-        writer.test {
-            writer.withBlock("let result = ", ";") {
-                sut.render(writer, model.lookup("com.test#MyList"), data)
+        val data = Node.parse("""["bar", "foo"]""")
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            writer.unitTest("generate_lists") {
+                writer.withBlock("let result = ", ";") {
+                    sut.render(writer, model.lookup("com.test#MyList"), data)
+                }
+                writer.rust("""assert_eq!(result, vec!["bar".to_owned(), "foo".to_owned()]);""")
             }
-            writer.write("""assert_eq!(result, vec!["bar".to_string(), "foo".to_string()]);""")
         }
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     @Test
     fun `generate sparse lists`() {
-        val data = Node.parse(
-            """ [
-            "bar",
-            "foo",
-            null
-            ]
-            """,
-        )
-        val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
-        writer.test {
-            writer.withBlock("let result = ", ";") {
-                sut.render(writer, model.lookup("com.test#MySparseList"), data)
+        val data = Node.parse(""" [ "bar", "foo", null ] """)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            writer.unitTest("generate_sparse_lists") {
+                writer.withBlock("let result = ", ";") {
+                    sut.render(writer, model.lookup("com.test#MySparseList"), data)
+                }
+                writer.rust("""assert_eq!(result, vec![Some("bar".to_owned()), Some("foo".to_owned()), None]);""")
             }
-            writer.write("""assert_eq!(result, vec![Some("bar".to_string()), Some("foo".to_string()), None]);""")
         }
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     @Test
     fun `generate maps of maps`() {
         val data = Node.parse(
-            """{
-            "k1": { "map": {} },
-            "k2": { "map": { "k3": {} } },
-            "k3": { }
+            """
+            {
+                "k1": { "map": {} },
+                "k2": { "map": { "k3": {} } },
+                "k3": { }
             }
             """,
         )
-        val writer = RustWriter.forModule("model")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
-        val inner: StructureShape = model.lookup("com.test#Inner")
-        inner.renderWithModelBuilder(model, symbolProvider, writer)
-        writer.test {
-            writer.withBlock("let result = ", ";") {
-                sut.render(writer, model.lookup("com.test#NestedMap"), data)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+        val inner = model.lookup<StructureShape>("com.test#Inner")
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            inner.renderWithModelBuilder(model, symbolProvider, writer)
+            writer.unitTest("generate_maps_of_maps") {
+                writer.withBlock("let result = ", ";") {
+                    sut.render(writer, model.lookup("com.test#NestedMap"), data)
+                }
+                writer.rust(
+                    """
+                    assert_eq!(result.len(), 3);
+                    assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
+                    assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
+                    assert_eq!(result.get("k3").unwrap().map, None);
+                    """,
+                )
             }
-            writer.write(
-                """
-                assert_eq!(result.len(), 3);
-                assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
-                assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
-                assert_eq!(result.get("k3").unwrap().map, None);
-                """,
-            )
         }
-        writer.compileAndTest(clippy = true)
+        project.compileAndTest(runClippy = true)
     }
 
     @Test
     fun `blob inputs are binary data`() {
         // "Parameter values that contain binary data MUST be defined using values
         // that can be represented in plain text (for example, use "foo" and not "Zm9vCg==")."
-        val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
-        writer.test {
-            withBlock("let blob = ", ";") {
-                sut.render(
-                    this,
-                    BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
-                    StringNode.parse("foo".dq()),
-                )
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+
+        val project = TestWorkspace.testProject()
+        project.withModule(RustModule.Model) { writer ->
+            writer.unitTest("blob_inputs_are_binary_data") {
+                withBlock("let blob = ", ";") {
+                    sut.render(
+                        writer,
+                        BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
+                        StringNode.parse("foo".dq()),
+                    )
+                }
+                rust("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
             }
-            write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")
         }
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 }

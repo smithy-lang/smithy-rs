@@ -37,9 +37,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
@@ -55,6 +53,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
@@ -96,9 +95,7 @@ class ServerProtocolTestGenerator(
         inputT to outputT
     }
 
-    private val instantiator = with(codegenContext) {
-        Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
-    }
+    private val instantiator = ServerInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -522,7 +519,7 @@ class ServerProtocolTestGenerator(
 
         // Construct a dummy response.
         withBlock("let response = ", ";") {
-            instantiator.render(this, outputShape, Node.objectNode(), Instantiator.defaultContext().copy(defaultsForRequiredFields = true))
+            instantiator.render(this, outputShape, Node.objectNode())
         }
 
         if (operationShape.errors.isEmpty()) {
@@ -837,12 +834,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
-
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1302)
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", TestType.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", TestType.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", TestType.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", TestType.Response),
 
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),

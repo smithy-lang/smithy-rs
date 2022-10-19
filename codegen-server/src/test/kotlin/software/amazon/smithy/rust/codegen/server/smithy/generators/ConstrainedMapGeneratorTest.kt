@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -80,8 +79,7 @@ class ConstrainedMapGeneratorTest {
         project.withModule(ModelsModule) { writer ->
             render(codegenContext, writer, constrainedMapShape)
 
-            val instantiator =
-                Instantiator(symbolProvider, testCase.model, codegenContext.runtimeConfig, codegenContext.target)
+            val instantiator = ServerInstantiator(codegenContext)
             writer.rustBlock("##[cfg(test)] fn build_valid_map() -> std::collections::HashMap<String, String>") {
                 instantiator.render(this, constrainedMapShape, testCase.validMap)
             }
