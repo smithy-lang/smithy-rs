@@ -6,6 +6,7 @@
 use crate::entry::{ChangeSet, ChangelogEntries, ChangelogEntry};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use once_cell::sync::Lazy;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
@@ -35,10 +36,16 @@ pub const EXAMPLE_ENTRY: &str = r#"
 pub const USE_UPDATE_CHANGELOGS: &str =
     "<!-- Do not manually edit this file. Use the `changelogger` tool. -->";
 
-fn maintainers() -> Vec<&'static str> {
+static MAINTAINERS: Lazy<Vec<String>> = Lazy::new(|| {
     include_str!("../smithy-rs-maintainers.txt")
         .lines()
+        .map(|name| name.to_ascii_lowercase())
         .collect()
+});
+
+fn is_maintainer(name: &str) -> bool {
+    let name_lower = name.to_ascii_lowercase();
+    MAINTAINERS.iter().any(|name| *name == name_lower)
 }
 
 #[derive(Parser, Debug, Eq, PartialEq)]
@@ -181,8 +188,8 @@ fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
         .map(|t| t.to_string())
         .chain(entry.references.iter().map(to_md_link))
         .collect::<Vec<_>>();
-    if !maintainers().contains(&entry.author.to_ascii_lowercase().as_str()) {
-        references.push(format!("@{}", entry.author.to_ascii_lowercase()));
+    if !is_maintainer(&entry.author) {
+        references.push(format!("@{}", entry.author));
     };
     if !references.is_empty() {
         write!(meta, "({}) ", references.join(", ")).unwrap();
@@ -345,8 +352,8 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
 
     let mut external_contribs = entries
         .iter()
-        .filter_map(|entry| entry.hand_authored().map(|e| e.author.to_ascii_lowercase()))
-        .filter(|author| !maintainers().contains(&author.as_str()))
+        .filter_map(|entry| entry.hand_authored().map(|e| &e.author))
+        .filter(|author| !is_maintainer(author))
         .collect::<Vec<_>>();
     external_contribs.sort();
     external_contribs.dedup();
@@ -375,7 +382,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
             contribution_references.dedup();
             let contribution_references = contribution_references.as_slice().join(", ");
             out.push_str("- @");
-            out.push_str(&contributor_handle);
+            out.push_str(contributor_handle);
             if !contribution_references.is_empty() {
                 write!(&mut out, " ({})", contribution_references)
                     // The `Write` implementation for `String` is infallible,

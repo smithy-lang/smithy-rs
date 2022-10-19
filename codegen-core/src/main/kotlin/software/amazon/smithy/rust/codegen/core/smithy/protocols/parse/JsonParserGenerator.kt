@@ -20,9 +20,11 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -97,7 +99,7 @@ class JsonParserGenerator(
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to structureShape.builderSymbol(symbolProvider),
                 *codegenScope,
@@ -122,7 +124,7 @@ class JsonParserGenerator(
         check(shape is UnionShape || shape is StructureShape || shape is DocumentShape) { "payload parser should only be used on structures & unions" }
         val fnName = symbolProvider.deserializeFunctionName(shape) + "_payload"
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(input: &[u8]) -> Result<#{Shape}, #{Error}>",
                 *codegenScope,
                 "Shape" to symbolProvider.toSymbol(shape),
@@ -169,7 +171,7 @@ class JsonParserGenerator(
     }
 
     private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
-        it.rust(
+        rust(
             """
             pub fn or_empty_doc(data: &[u8]) -> &[u8] {
                 if data.is_empty() {
@@ -312,7 +314,7 @@ class JsonParserGenerator(
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have lists with names prefixed with `__listOf__`,
             // which become `__list_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 ##[allow(clippy::type_complexity, non_snake_case)]
                 pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
@@ -358,7 +360,7 @@ class JsonParserGenerator(
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have maps with names prefixed with `__mapOf__`,
             // which become `__map_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 ##[allow(clippy::type_complexity, non_snake_case)]
                 pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
@@ -398,7 +400,7 @@ class JsonParserGenerator(
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
@@ -407,7 +409,7 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startObjectOrNull {
-                    software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+                    Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                     deserializeStructInner(shape.members())
                     withBlock("Ok(Some(builder.build()", "))") {
@@ -430,7 +432,7 @@ class JsonParserGenerator(
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
@@ -508,7 +510,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.objectKeyLoop(hasMembers: Boolean, inner: RustWriter.() -> Unit) {
+    private fun RustWriter.objectKeyLoop(hasMembers: Boolean, inner: Writable) {
         if (!hasMembers) {
             rustTemplate("#{skip_to_end}(tokens)?;", *codegenScope)
         } else {
@@ -532,9 +534,9 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.startArrayOrNull(inner: RustWriter.() -> Unit) = startOrNull("array", inner)
-    private fun RustWriter.startObjectOrNull(inner: RustWriter.() -> Unit) = startOrNull("object", inner)
-    private fun RustWriter.startOrNull(objectOrArray: String, inner: RustWriter.() -> Unit) {
+    private fun RustWriter.startArrayOrNull(inner: Writable) = startOrNull("array", inner)
+    private fun RustWriter.startObjectOrNull(inner: Writable) = startOrNull("object", inner)
+    private fun RustWriter.startOrNull(objectOrArray: String, inner: Writable) {
         rustBlockTemplate("match tokens.next().transpose()?", *codegenScope) {
             rustBlockTemplate(
                 """

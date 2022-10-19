@@ -124,14 +124,14 @@ class JsonParserGeneratorTest {
         val errorParser = parserGenerator.errorParser(model.lookup("test#Error"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
-        project.lib { writer ->
-            writer.unitTest(
+        project.lib {
+            unitTest(
                 "json_parser",
                 """
                 use model::Choice;
 
                 // Generate the document serializer even though it's not tested directly
-                // ${writer.format(payloadGenerator)}
+                // ${format(payloadGenerator)}
 
                 let json = br#"
                     { "top":
@@ -143,62 +143,62 @@ class JsonParserGeneratorTest {
                     }
                 "#;
 
-                let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
+                let output = ${format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
                 let top = output.top.expect("top");
                 assert_eq!(Some(45), top.extra);
                 assert_eq!(Some("something".to_string()), top.field);
                 assert_eq!(Some(Choice::Int(5)), top.choice);
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 "empty_body",
                 """
                 // empty body
-                let output = ${writer.format(operationGenerator)}(b"", output::op_output::Builder::default()).unwrap().build();
+                let output = ${format(operationGenerator)}(b"", output::op_output::Builder::default()).unwrap().build();
                 assert_eq!(output.top, None);
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 "unknown_variant",
                 """
                 // unknown variant
                 let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
-                let output = ${writer.format(operationGenerator)}(input, output::op_output::Builder::default()).unwrap().build();
+                let output = ${format(operationGenerator)}(input, output::op_output::Builder::default()).unwrap().build();
                 assert!(output.top.unwrap().choice.unwrap().is_unknown());
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "empty_error",
                 """
                 // empty error
-                let error_output = ${writer.format(errorParser!!)}(b"", error::error::Builder::default()).unwrap().build();
+                let error_output = ${format(errorParser!!)}(b"", error::error::Builder::default()).unwrap().build();
                 assert_eq!(error_output.message, None);
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "error_with_message",
                 """
                 // error with message
-                let error_output = ${writer.format(errorParser)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
+                let error_output = ${format(errorParser)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
                 assert_eq!(error_output.message.expect("message should be set"), "hello");
                 """,
             )
         }
         project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
-            model.lookup<StructureShape>("test#EmptyStruct").renderWithModelBuilder(model, symbolProvider, it)
-            UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
+            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
+            model.lookup<StructureShape>("test#EmptyStruct").renderWithModelBuilder(model, symbolProvider, this)
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.public("output")) {
-            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
         project.withModule(RustModule.public("error")) {
-            model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, this)
         }
         project.compileAndTest()
     }

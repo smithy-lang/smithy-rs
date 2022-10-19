@@ -92,7 +92,7 @@ class AwsJsonSerializerGenerator(
             val inputShape = operationShape.inputShape(codegenContext.model)
             val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)
             serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
-                it.rustBlockTemplate(
+                rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                     *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
                 ) {
@@ -136,8 +136,8 @@ open class AwsJson(
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
+        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) {
+            rustTemplate(
                 """
                 pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
@@ -148,8 +148,8 @@ open class AwsJson(
         }
 
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) {
+            rustTemplate(
                 """
                 pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate

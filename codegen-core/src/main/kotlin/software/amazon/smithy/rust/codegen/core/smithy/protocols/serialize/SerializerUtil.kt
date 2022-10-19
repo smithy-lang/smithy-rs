@@ -13,10 +13,11 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 
 class SerializerUtil(private val model: Model) {
-    fun RustWriter.ignoreZeroValues(shape: MemberShape, value: ValueExpression, inner: RustWriter.() -> Unit) {
+    fun RustWriter.ignoreZeroValues(shape: MemberShape, value: ValueExpression, inner: Writable) {
         val expr = when (model.expectShape(shape.target)) {
             is FloatShape, is DoubleShape -> "${value.asValue()} != 0.0"
             is NumberShape -> "${value.asValue()} != 0"
