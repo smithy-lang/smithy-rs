@@ -233,6 +233,7 @@ Actionable errors are represented as enums. If an error variant has an error sou
 information, it must use a separate context struct that is referenced via tuple in the enum. For example:
 
 ```rust
+#[non_exhaustive]
 pub enum Error {
     // Good: This is exhaustive and uses a tuple, but its sole member is an extensible struct with private fields
     VariantA(VariantA),
