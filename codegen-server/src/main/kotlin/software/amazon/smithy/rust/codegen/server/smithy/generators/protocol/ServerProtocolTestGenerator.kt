@@ -565,19 +565,19 @@ class ServerProtocolTestGenerator(
                 rust("Ok(response)")
             }
 
-        checkRequestParams(inputShape, this)
+            checkRequestParams(inputShape, this)
 
-        // Construct a dummy response.
-        withBlock("let response = ", ";") {
-            instantiator.render(this, outputShape, Node.objectNode())
-        }
+            // Construct a dummy response.
+            withBlock("let response = ", ";") {
+                instantiator.render(this, outputShape, Node.objectNode())
+            }
 
-        if (operationShape.errors.isEmpty()) {
-            write("response")
-        } else {
-            write("Ok(response)")
+            if (operationShape.errors.isEmpty()) {
+                write("response")
+            } else {
+                write("Ok(response)")
+            }
         }
-    }
 
     /** Checks the request using the `OperationRegistryBuilder`. */
     private fun checkRequest(
