@@ -11,6 +11,25 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+
+[[smithy-rs]]
+message = "Bump MSRV to be 1.62.0."
+references = ["smithy-rs#1825"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "LukeMathWalker"
+
+[[smithy-rs]]
+message = "Bump pyo3 and pyo3-asyncio from 0.16.x to 0.17.0 for aws-smithy-http-server-python."
+references = ["smithy-rs#1825"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "LukeMathWalker"
+
+[[aws-sdk-rust]]
+message = "Bump MSRV to be 1.62.0."
+references = ["smithy-rs#1825"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "LukeMathWalker"
+
 [[smithy-rs]]
 message = """
 Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.
@@ -155,3 +174,21 @@ message = "Update aws-types zeroize to flexible version to prevent downstream ve
 references = ["smithy-rs#1817"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ethyi"
+
+[[smithy-rs]]
+message = "Enable local maven repo dependency override."
+references = ["smithy-rs#1852"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[aws-sdk-rust]]
+message = "Ability to override the IMDS client in `DefaultCredentialsChain`"
+references = ["aws-sdk-rust#625"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "kevinpark1217"
+
+[[aws-sdk-rust]]
+message = "Fix aws-sigv4 canonical request formatting fallibility."
+references = ["smithy-rs#1656"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"

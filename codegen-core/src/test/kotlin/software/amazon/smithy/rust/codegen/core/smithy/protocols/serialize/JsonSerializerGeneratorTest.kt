@@ -111,14 +111,14 @@ class JsonSerializerGeneratorTest {
         val documentGenerator = parserSerializer.documentSerializer()
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
-        project.lib { writer ->
-            writer.unitTest(
+        project.lib {
+            unitTest(
                 "json_serializers",
                 """
                 use model::{Top, Choice};
 
                 // Generate the document serializer even though it's not tested directly
-                // ${writer.format(documentGenerator)}
+                // ${format(documentGenerator)}
 
                 let input = crate::input::OpInput::builder().top(
                     Top::builder()
@@ -127,7 +127,7 @@ class JsonSerializerGeneratorTest {
                         .recursive(Top::builder().extra(55).build())
                         .build()
                 ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
                 assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
 
@@ -136,19 +136,19 @@ class JsonSerializerGeneratorTest {
                         .choice(Choice::Unknown)
                         .build()
                 ).build().unwrap();
-                let serialized = ${writer.format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
+                let serialized = ${format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
                 """,
             )
         }
         project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
-            UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
+            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.public("input")) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
         project.compileAndTest()
     }

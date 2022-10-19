@@ -17,8 +17,8 @@ open class AddRustTestsDecorator<T, C : CodegenContext>(
     override val order: Byte = 0
 
     override fun extras(codegenContext: C, rustCrate: RustCrate) {
-        rustCrate.withFile("tests/$testsFileName.rs") { writer ->
-            writer.testWritable()
+        rustCrate.withFile("tests/$testsFileName.rs") {
+            testWritable()
         }
     }
 

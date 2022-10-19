@@ -11,9 +11,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -82,17 +81,17 @@ class StructureGeneratorTest {
     fun `generate basic structures`() {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
-        project.useShapeWriter(inner) { writer ->
-            StructureGenerator(model, provider, writer, inner).render()
-            StructureGenerator(model, provider, writer, struct).render()
-            writer.unitTest(
+        project.useShapeWriter(inner) {
+            StructureGenerator(model, provider, this, inner).render()
+            StructureGenerator(model, provider, this, struct).render()
+            unitTest(
                 "struct_fields_optional",
                 """
                 let s: Option<MyStruct> = None;
                 s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
                 """,
             )
-            writer.toString().shouldContainInOrder(
+            toString().shouldContainInOrder(
                 "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct",
             )
         }
@@ -104,17 +103,17 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.rust("##![allow(deprecated)]")
-        writer.withModule("model") {
+        writer.withModule(RustModule.public("model")) {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
             innerGenerator.render()
         }
-        writer.withModule("structs") {
+        writer.withModule(RustModule.public("structs")) {
             val generator = StructureGenerator(model, provider, this, struct)
             generator.render()
         }
         // By putting the test in another module, it can't access the struct
         // fields if they are private
-        writer.withModule("inline") {
+        writer.withModule(RustModule.public("inline")) {
             raw("#[test]")
             rustBlock("fn test_public_fields()") {
                 write(
@@ -182,18 +181,11 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.docs("module docs")
-        writer
-            .withModule(
-                "model",
-                RustMetadata(
-                    // By attaching this lint, any missing documentation becomes a compiler error.
-                    additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")),
-                    visibility = Visibility.PUBLIC,
-                ),
-            ) {
-                StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
-                StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
-            }
+        Attribute.Custom("deny(missing_docs)").render(writer)
+        writer.withModule(RustModule.public("model")) {
+            StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
+            StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
+        }
 
         writer.compileAndTest()
     }
@@ -234,7 +226,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.rust("##![allow(deprecated)]")
-        writer.withModule("model") {
+        writer.withModule(RustModule.public("model")) {
             StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Baz")).render()
@@ -267,7 +259,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.rust("##![allow(deprecated)]")
-        writer.withModule("model") {
+        writer.withModule(RustModule.public("model")) {
             StructureGenerator(model, provider, this, model.lookup("test#Nested")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
@@ -316,13 +308,11 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(testModel)
         val project = TestWorkspace.testProject(provider)
 
-        project.useShapeWriter(inner) { writer ->
-            writer.withModule("model") {
-                StructureGenerator(testModel, provider, writer, testModel.lookup("test#One")).render()
-                StructureGenerator(testModel, provider, writer, testModel.lookup("test#Two")).render()
-            }
+        project.useShapeWriter(inner) {
+            StructureGenerator(testModel, provider, this, testModel.lookup("test#One")).render()
+            StructureGenerator(testModel, provider, this, testModel.lookup("test#Two")).render()
 
-            writer.rustBlock("fn compile_test_one(one: &crate::model::One)") {
+            rustBlock("fn compile_test_one(one: &crate::model::One)") {
                 rust(
                     """
                     let _: Option<&str> = one.field_string();
@@ -350,7 +340,7 @@ class StructureGeneratorTest {
                     """,
                 )
             }
-            writer.rustBlock("fn compile_test_two(two: &crate::model::Two)") {
+            rustBlock("fn compile_test_two(two: &crate::model::Two)") {
                 rust(
                     """
                     let _: Option<&crate::model::One> = two.one();
@@ -376,9 +366,9 @@ class StructureGeneratorTest {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
 
         val provider = testSymbolProvider(model)
-        RustWriter.forModule("test").let { writer ->
-            StructureGenerator(model, provider, writer, struct).render()
-            assertEquals(6, writer.toString().split("#[doc(hidden)]").size, "there should be 5 doc-hiddens")
+        RustWriter.forModule("test").let {
+            StructureGenerator(model, provider, it, struct).render()
+            assertEquals(6, it.toString().split("#[doc(hidden)]").size, "there should be 5 doc-hiddens")
         }
     }
 
