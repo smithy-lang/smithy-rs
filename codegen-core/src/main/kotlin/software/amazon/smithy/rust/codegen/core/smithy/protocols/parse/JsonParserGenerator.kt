@@ -413,7 +413,7 @@ class JsonParserGenerator(
                     rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                     deserializeStructInner(shape.members())
                     withBlock("Ok(Some(builder.build()", "))") {
-                        if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+                        if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
                             rustTemplate(
                                 """.map_err(|err| #{Error}::new(
                                 #{ErrorReason}::Custom(format!("{}", err).into()), None)

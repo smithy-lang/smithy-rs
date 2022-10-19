@@ -181,6 +181,18 @@ references = ["smithy-rs#1852"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ogudavid"
 
+[[aws-sdk-rust]]
+message = "Ability to override the IMDS client in `DefaultCredentialsChain`"
+references = ["aws-sdk-rust#625"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "kevinpark1217"
+
+[[aws-sdk-rust]]
+message = "Fix aws-sigv4 canonical request formatting fallibility."
+references = ["smithy-rs#1656"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
 [[smithy-rs]]
 message = "Replace bool with enum for a function parameter of `label::fmt_string`."
 references = ["smithy-rs#1875"]
