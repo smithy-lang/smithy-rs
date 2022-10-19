@@ -139,13 +139,13 @@ class ServerInstantiatorTest {
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            structure.renderWithModelBuilder(model, symbolProvider, writer, CodegenTarget.SERVER)
-            inner.renderWithModelBuilder(model, symbolProvider, writer, CodegenTarget.SERVER)
-            nestedStruct.renderWithModelBuilder(model, symbolProvider, writer, CodegenTarget.SERVER)
-            UnionGenerator(model, symbolProvider, writer, union).render()
+        project.withModule(RustModule.Model) {
+            structure.renderWithModelBuilder(model, symbolProvider, this, CodegenTarget.SERVER)
+            inner.renderWithModelBuilder(model, symbolProvider, this, CodegenTarget.SERVER)
+            nestedStruct.renderWithModelBuilder(model, symbolProvider, this, CodegenTarget.SERVER)
+            UnionGenerator(model, symbolProvider, this, union).render()
 
-            writer.unitTest("server_instantiator_test") {
+            unitTest("server_instantiator_test") {
                 withBlock("let result = ", ";") {
                     sut.render(this, structure, data)
                 }
@@ -188,9 +188,9 @@ class ServerInstantiatorTest {
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            EnumGenerator(model, symbolProvider, writer, shape, shape.expectTrait()).render()
-            writer.unitTest("generate_named_enums") {
+        project.withModule(RustModule.Model) {
+            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
                 }
@@ -207,9 +207,9 @@ class ServerInstantiatorTest {
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            EnumGenerator(model, symbolProvider, writer, shape, shape.expectTrait()).render()
-            writer.unitTest("generate_unnamed_enums") {
+        project.withModule(RustModule.Model) {
+            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
                 }

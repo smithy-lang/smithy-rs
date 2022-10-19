@@ -552,30 +552,13 @@ class ServerProtocolTestGenerator(
 
             // Construct a dummy response.
             withBlock("let response = ", ";") {
-                instantiator.render(
-                    this,
-                    outputShape,
-                    Node.objectNode(),
-                )
+                instantiator.render(this, outputShape, Node.objectNode())
             }
 
             if (operationShape.errors.isEmpty()) {
                 rust("response")
             } else {
                 rust("Ok(response)")
-            }
-
-            checkRequestParams(inputShape, this)
-
-            // Construct a dummy response.
-            withBlock("let response = ", ";") {
-                instantiator.render(this, outputShape, Node.objectNode())
-            }
-
-            if (operationShape.errors.isEmpty()) {
-                write("response")
-            } else {
-                write("Ok(response)")
             }
         }
 
