@@ -39,9 +39,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
@@ -57,6 +55,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
@@ -99,9 +98,7 @@ class ServerProtocolTestGenerator(
         inputT to outputT
     }
 
-    private val instantiator = with(codegenContext) {
-        Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
-    }
+    private val instantiator = serverInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -174,7 +171,7 @@ class ServerProtocolTestGenerator(
             operations.withIndex().forEach {
                 val (inputT, outputT) = operationInputOutputTypes[it.value]!!
                 val operationName = operationNames[it.index]
-                write(".$operationName((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )")
+                rust(".$operationName((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )")
             }
         }
 
@@ -353,7 +350,7 @@ class ServerProtocolTestGenerator(
             testModuleWriter.writeWithNoFormatting(testCase.documentation)
         }
 
-        testModuleWriter.write("Test ID: ${testCase.id}")
+        testModuleWriter.rust("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
 
         TokioTest.render(testModuleWriter)
@@ -442,7 +439,7 @@ class ServerProtocolTestGenerator(
         }
         writeInline("let output =")
         instantiator.render(this, shape, testCase.params)
-        write(";")
+        rust(";")
         val operationImpl = if (operationShape.allErrors(model).isNotEmpty()) {
             if (shape.hasTrait<ErrorTrait>()) {
                 val variant = symbolProvider.toSymbol(shape).name
@@ -555,18 +552,13 @@ class ServerProtocolTestGenerator(
 
             // Construct a dummy response.
             withBlock("let response = ", ";") {
-                instantiator.render(
-                    this,
-                    outputShape,
-                    Node.objectNode(),
-                    Instantiator.defaultContext().copy(defaultsForRequiredFields = true),
-                )
+                instantiator.render(this, outputShape, Node.objectNode())
             }
 
             if (operationShape.errors.isEmpty()) {
-                write("response")
+                rust("response")
             } else {
-                write("Ok(response)")
+                rust("Ok(response)")
             }
         }
 
@@ -759,7 +751,7 @@ class ServerProtocolTestGenerator(
             )
         } else {
             assertOk(rustWriter) {
-                rustWriter.write(
+                rustWriter.rust(
                     "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
@@ -815,7 +807,7 @@ class ServerProtocolTestGenerator(
             )
         }
         assertOk(rustWriter) {
-            write(
+            rust(
                 "#T($actualExpression, $variableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers"),
             )
@@ -836,7 +828,7 @@ class ServerProtocolTestGenerator(
             strSlice(this, params)
         }
         assertOk(rustWriter) {
-            rustWriter.write(
+            rustWriter.rust(
                 "#T($actualExpression, $expectedVariableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction),
             )
@@ -848,14 +840,14 @@ class ServerProtocolTestGenerator(
      * for pretty printing protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
-        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.rust("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
-        rustWriter.write(");")
+        rustWriter.rust(");")
     }
 
     private fun strSlice(writer: RustWriter, args: List<String>) {
         writer.withBlock("&[", "]") {
-            write(args.joinToString(",") { it.dq() })
+            rust(args.joinToString(",") { it.dq() })
         }
     }
 
