@@ -17,3 +17,11 @@ include(":aws:sdk-codegen")
 include(":aws:sdk-adhoc-test")
 include(":aws:sdk")
 include(":aws:rust-runtime")
+
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        google()
+    }
+}

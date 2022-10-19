@@ -12,17 +12,17 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 
 internal class InlineDependencyTest {
     private fun makeDep(name: String) = InlineDependency(name, RustModule.private("module")) {
-        it.rustBlock("fn foo()") {}
+        rustBlock("fn foo()") {}
     }
 
     @Test
     fun `equal dependencies should be equal`() {
-        val depa = makeDep("func")
-        val depb = makeDep("func")
-        depa.renderer shouldBe depb.renderer
-        depa.key() shouldBe depb.key()
+        val depA = makeDep("func")
+        val depB = makeDep("func")
+        depA.renderer shouldBe depB.renderer
+        depA.key() shouldBe depB.key()
 
-        depa.key() shouldNotBe makeDep("func2").key()
+        depA.key() shouldNotBe makeDep("func2").key()
     }
 
     @Test
@@ -30,7 +30,7 @@ internal class InlineDependencyTest {
         val dep = InlineDependency.idempotencyToken()
         val testWriter = RustWriter.root()
         testWriter.addDependency(CargoDependency.FastRand)
-        testWriter.withModule(dep.module.name) {
+        testWriter.withModule(dep.module.copy(rustMetadata = RustMetadata(visibility = Visibility.PUBLIC))) {
             dep.renderer(this)
         }
         testWriter.compileAndTest(
