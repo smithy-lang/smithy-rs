@@ -47,6 +47,7 @@ class Ec2QueryParserGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         // TODO We generate a `testCodegenContext` later on; we should pull out the symbol provider from there.
         val symbolProvider = testSymbolProvider(model)
+
         // TODO We should grep for all of these and move them somewhere central.
         fun builderSymbol(shape: StructureShape): Symbol =
             shape.builderSymbol(symbolProvider)

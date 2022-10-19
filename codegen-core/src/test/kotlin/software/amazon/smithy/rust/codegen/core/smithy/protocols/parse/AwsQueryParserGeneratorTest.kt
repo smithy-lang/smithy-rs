@@ -46,6 +46,7 @@ class AwsQueryParserGeneratorTest {
     fun `it modifies operation parsing to include Response and Result tags`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
+
         // TODO We should grep for all of these and move them somewhere central.
         fun builderSymbol(shape: StructureShape): Symbol =
             shape.builderSymbol(symbolProvider)

@@ -118,6 +118,7 @@ class JsonParserGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         // TODO We generate a `testCodegenContext` later on; we should pull out the symbol provider from there.
         val symbolProvider = testSymbolProvider(model)
+
         // TODO We should grep for all of these and move them somewhere central.
         fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
             false to symbolProvider.toSymbol(shape)

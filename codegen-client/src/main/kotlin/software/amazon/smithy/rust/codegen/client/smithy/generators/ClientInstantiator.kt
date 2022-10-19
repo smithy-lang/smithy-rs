@@ -15,15 +15,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
-import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 
 private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writable {
     rust("#T::from($data)", enumSymbol)
 }
 
 // TODO Move to a separate file.
-class ClientBuilderKindBehavior(val codegenContext: CodegenContext): Instantiator.BuilderKindBehavior {
+class ClientBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
     override fun hasFallibleBuilder(shape: StructureShape) =
         StructureGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
 

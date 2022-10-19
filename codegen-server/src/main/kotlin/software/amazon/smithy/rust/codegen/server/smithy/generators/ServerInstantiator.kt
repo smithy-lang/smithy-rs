@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -27,7 +25,7 @@ private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writa
 }
 
 // TODO Move to a separate file.
-class ServerBuilderKindBehavior(val codegenContext: CodegenContext): Instantiator.BuilderKindBehavior {
+class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
     override fun hasFallibleBuilder(shape: StructureShape): Boolean {
         // Only operation input builders take in unconstrained types.
         val takesInUnconstrainedTypes = shape.isReachableFromOperationInput()
