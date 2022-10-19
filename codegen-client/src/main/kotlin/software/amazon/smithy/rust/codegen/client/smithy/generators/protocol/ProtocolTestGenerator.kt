@@ -19,7 +19,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -65,7 +65,7 @@ class ProtocolTestGenerator(
     private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
 
-    private val instantiator = ClientInstantiator(codegenContext)
+    private val instantiator = clientInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),

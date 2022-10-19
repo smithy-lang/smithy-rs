@@ -19,7 +19,7 @@ private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writa
     )
 }
 
-class ServerInstantiator(val codegenContext: CodegenContext) :
+fun serverInstantiator(codegenContext: CodegenContext) =
     Instantiator(
         codegenContext.symbolProvider,
         codegenContext.model,

@@ -16,7 +16,7 @@ private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writa
     rust("#T::from($data)", enumSymbol)
 }
 
-class ClientInstantiator(val codegenContext: CodegenContext) :
+fun clientInstantiator(codegenContext: CodegenContext) =
     Instantiator(
         codegenContext.symbolProvider,
         codegenContext.model,

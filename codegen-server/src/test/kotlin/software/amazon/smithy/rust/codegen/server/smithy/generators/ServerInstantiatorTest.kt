@@ -135,7 +135,7 @@ class ServerInstantiatorTest {
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
         val union = model.lookup<UnionShape>("com.test#NestedUnion")
-        val sut = ServerInstantiator(codegenContext)
+        val sut = serverInstantiator(codegenContext)
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
@@ -184,7 +184,7 @@ class ServerInstantiatorTest {
     @Test
     fun `generate named enums`() {
         val shape = model.lookup<StringShape>("com.test#NamedEnum")
-        val sut = ServerInstantiator(codegenContext)
+        val sut = serverInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
@@ -203,7 +203,7 @@ class ServerInstantiatorTest {
     @Test
     fun `generate unnamed enums`() {
         val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
-        val sut = ServerInstantiator(codegenContext)
+        val sut = serverInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
