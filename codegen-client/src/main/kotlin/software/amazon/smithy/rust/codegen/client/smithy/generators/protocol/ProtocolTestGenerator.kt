@@ -23,8 +23,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstan
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -100,7 +102,7 @@ class ProtocolTestGenerator(
                     Attribute.Custom("allow(unreachable_code, unused_variables)"),
                 ),
             )
-            writer.withModule(testModuleName, moduleMeta) {
+            writer.withModule(RustModule(testModuleName, moduleMeta)) {
                 renderAllTestCases(allTests)
             }
         }
@@ -134,7 +136,7 @@ class ProtocolTestGenerator(
     private fun renderTestCaseBlock(
         testCase: HttpMessageTestCase,
         testModuleWriter: RustWriter,
-        block: RustWriter.() -> Unit,
+        block: Writable,
     ) {
         testModuleWriter.setNewlinePrefix("/// ")
         testCase.documentation.map {
@@ -449,9 +451,9 @@ class ProtocolTestGenerator(
 
     /**
      * wraps `inner` in a call to `aws_smithy_protocol_test::assert_ok`, a convenience wrapper
-     * for pretty prettying protocol test helper results
+     * for pretty printing protocol test helper results
      */
-    private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
+    private fun assertOk(rustWriter: RustWriter, inner: Writable) {
         rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")

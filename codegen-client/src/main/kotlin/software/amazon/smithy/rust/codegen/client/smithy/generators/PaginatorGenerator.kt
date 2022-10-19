@@ -257,7 +257,7 @@ class PaginatorGenerator private constructor(
         null
     } else {
         RuntimeType.forInlineFun("${paginatorName}Items", module) {
-            it.rustTemplate(
+            rustTemplate(
                 """
                 /// Flattened paginator for `$paginatorName`
                 ///

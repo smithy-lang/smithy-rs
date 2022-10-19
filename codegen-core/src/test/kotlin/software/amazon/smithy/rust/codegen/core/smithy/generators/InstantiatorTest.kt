@@ -95,9 +95,9 @@ class InstantiatorTest {
         val data = Node.parse("""{ "stringVariant": "ok!" }""")
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            UnionGenerator(model, symbolProvider, writer, union).render()
-            writer.unitTest("generate_unions") {
+        project.withModule(RustModule.Model) {
+            UnionGenerator(model, symbolProvider, this, union).render()
+            unitTest("generate_unions") {
                 withBlock("let result = ", ";") {
                     sut.render(this, union, data)
                 }
@@ -114,9 +114,9 @@ class InstantiatorTest {
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            structure.renderWithModelBuilder(model, symbolProvider, writer)
-            writer.unitTest("generate_struct_builders") {
+        project.withModule(RustModule.Model) {
+            structure.renderWithModelBuilder(model, symbolProvider, this)
+            unitTest("generate_struct_builders") {
                 withBlock("let result = ", ";") {
                     sut.render(this, structure, data)
                 }
@@ -147,9 +147,9 @@ class InstantiatorTest {
         )
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            structure.renderWithModelBuilder(model, symbolProvider, writer)
-            writer.unitTest("generate_builders_for_boxed_structs") {
+        project.withModule(RustModule.Model) {
+            structure.renderWithModelBuilder(model, symbolProvider, this)
+            unitTest("generate_builders_for_boxed_structs") {
                 withBlock("let result = ", ";") {
                     sut.render(this, structure, data)
                 }
@@ -175,12 +175,12 @@ class InstantiatorTest {
         val sut = Instantiator(symbolProvider, model, runtimeConfig, ::enumFromStringFn)
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            writer.unitTest("generate_lists") {
-                writer.withBlock("let result = ", ";") {
-                    sut.render(writer, model.lookup("com.test#MyList"), data)
+        project.withModule(RustModule.Model) {
+            unitTest("generate_lists") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, model.lookup("com.test#MyList"), data)
                 }
-                writer.rust("""assert_eq!(result, vec!["bar".to_owned(), "foo".to_owned()]);""")
+                rust("""assert_eq!(result, vec!["bar".to_owned(), "foo".to_owned()]);""")
             }
         }
         project.compileAndTest()
@@ -192,12 +192,12 @@ class InstantiatorTest {
         val sut = Instantiator(symbolProvider, model, runtimeConfig, ::enumFromStringFn)
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            writer.unitTest("generate_sparse_lists") {
-                writer.withBlock("let result = ", ";") {
-                    sut.render(writer, model.lookup("com.test#MySparseList"), data)
+        project.withModule(RustModule.Model) {
+            unitTest("generate_sparse_lists") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, model.lookup("com.test#MySparseList"), data)
                 }
-                writer.rust("""assert_eq!(result, vec![Some("bar".to_owned()), Some("foo".to_owned()), None]);""")
+                rust("""assert_eq!(result, vec![Some("bar".to_owned()), Some("foo".to_owned()), None]);""")
             }
         }
         project.compileAndTest()
@@ -218,13 +218,13 @@ class InstantiatorTest {
         val inner = model.lookup<StructureShape>("com.test#Inner")
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            inner.renderWithModelBuilder(model, symbolProvider, writer)
-            writer.unitTest("generate_maps_of_maps") {
-                writer.withBlock("let result = ", ";") {
-                    sut.render(writer, model.lookup("com.test#NestedMap"), data)
+        project.withModule(RustModule.Model) {
+            inner.renderWithModelBuilder(model, symbolProvider, this)
+            unitTest("generate_maps_of_maps") {
+                withBlock("let result = ", ";") {
+                    sut.render(this, model.lookup("com.test#NestedMap"), data)
                 }
-                writer.rust(
+                rust(
                     """
                     assert_eq!(result.len(), 3);
                     assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
@@ -244,11 +244,11 @@ class InstantiatorTest {
         val sut = Instantiator(symbolProvider, model, runtimeConfig, ::enumFromStringFn)
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            writer.unitTest("blob_inputs_are_binary_data") {
+        project.withModule(RustModule.Model) {
+            unitTest("blob_inputs_are_binary_data") {
                 withBlock("let blob = ", ";") {
                     sut.render(
-                        writer,
+                        this,
                         BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
                         StringNode.parse("foo".dq()),
                     )

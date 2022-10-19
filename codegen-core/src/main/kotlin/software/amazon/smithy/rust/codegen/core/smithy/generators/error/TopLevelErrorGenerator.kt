@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -51,20 +52,20 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
 
     private val sdkError = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.default("error_meta", visibility = Visibility.PRIVATE)) { writer ->
-            writer.renderDefinition()
-            writer.renderImplDisplay()
+        crate.withModule(RustModule.private("error_meta")) {
+            renderDefinition()
+            renderImplDisplay()
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
                 // operation errors
-                writer.renderImplFrom(operationShape.errorSymbol(model, symbolProvider, codegenContext.target), operationShape.errors)
+                renderImplFrom(operationShape.errorSymbol(model, symbolProvider, codegenContext.target), operationShape.errors)
             }
             // event stream errors
             operations.map { it.eventStreamErrors(codegenContext.model) }
                 .flatMap { it.entries }
                 .associate { it.key to it.value }
                 .forEach { (unionShape, errors) ->
-                    writer.renderImplFrom(
+                    renderImplFrom(
                         unionShape.eventStreamErrorSymbol(
                             model,
                             symbolProvider,
@@ -73,9 +74,9 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
                         errors.map { it.id },
                     )
                 }
-            writer.rust("impl #T for Error {}", RuntimeType.StdError)
+            rust("impl #T for Error {}", RuntimeType.StdError)
         }
-        crate.lib { it.rust("pub use error_meta::Error;") }
+        crate.lib { rust("pub use error_meta::Error;") }
     }
 
     private fun RustWriter.renderImplDisplay() {
@@ -125,8 +126,8 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
     private fun RustWriter.renderDefinition() {
         rust("/// All possible error types for this service.")
         RustMetadata(
-            additionalAttributes = listOf(software.amazon.smithy.rust.codegen.core.rustlang.Attribute.NonExhaustive),
-            visibility = software.amazon.smithy.rust.codegen.core.rustlang.Visibility.PUBLIC,
+            additionalAttributes = listOf(Attribute.NonExhaustive),
+            visibility = Visibility.PUBLIC,
         ).withDerives(RuntimeType.Debug).render(this)
         rustBlock("enum Error") {
             allErrors.forEach { error ->

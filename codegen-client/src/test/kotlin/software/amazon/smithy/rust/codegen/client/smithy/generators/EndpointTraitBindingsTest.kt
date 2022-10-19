@@ -68,15 +68,15 @@ internal class EndpointTraitBindingsTest {
         )
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.default("test", visibility = Visibility.PRIVATE)) {
-            it.rust(
+            rust(
                 """
                 struct GetStatusInput {
                     foo: Option<String>
                 }
                 """,
             )
-            it.implBlock(model.lookup("test#GetStatusInput"), sym) {
-                it.rustBlock(
+            implBlock(model.lookup("test#GetStatusInput"), sym) {
+                rustBlock(
                     "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
                     TestRuntimeConfig.smithyHttp(),
                     TestRuntimeConfig.operationBuildError(),
@@ -84,7 +84,7 @@ internal class EndpointTraitBindingsTest {
                     endpointBindingGenerator.render(this, "self")
                 }
             }
-            it.unitTest(
+            unitTest(
                 "valid_prefix",
                 """
                 let inp = GetStatusInput { foo: Some("test_value".to_string()) };
@@ -92,7 +92,7 @@ internal class EndpointTraitBindingsTest {
                 assert_eq!(prefix.as_str(), "test_valuea.data.");
                 """,
             )
-            it.unitTest(
+            unitTest(
                 "invalid_prefix",
                 """
                 // not a valid URI component
@@ -101,7 +101,7 @@ internal class EndpointTraitBindingsTest {
                 """,
             )
 
-            it.unitTest(
+            unitTest(
                 "unset_prefix",
                 """
                 // unset is invalid
@@ -110,7 +110,7 @@ internal class EndpointTraitBindingsTest {
                 """,
             )
 
-            it.unitTest(
+            unitTest(
                 "empty_prefix",
                 """
                 // empty is invalid
@@ -153,8 +153,8 @@ internal class EndpointTraitBindingsTest {
 
             override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 rustCrate.withFile("tests/validate_errors.rs") {
-                    TokioTest.render(it)
-                    it.rust(
+                    TokioTest.render(this)
+                    rust(
                         """
                         async fn test_endpoint_prefix() {
                             let conf = $moduleName::Config::builder().build();

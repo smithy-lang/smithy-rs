@@ -108,11 +108,11 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
             ),
             retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) { writer ->
-            renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
+        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) {
+            renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
-        rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
-            AwsFluentClientExtensions(types).render(writer)
+        rustCrate.withModule(FluentClientGenerator.clientModule) {
+            AwsFluentClientExtensions(types).render(this)
         }
         val awsSmithyClient = "aws-smithy-client"
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsSmithyClient/rustls")))
