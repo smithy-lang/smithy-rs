@@ -171,7 +171,7 @@ class ServerProtocolTestGenerator(
             operations.withIndex().forEach {
                 val (inputT, outputT) = operationInputOutputTypes[it.value]!!
                 val operationName = operationNames[it.index]
-                write(".$operationName((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )")
+                rust(".$operationName((|_| Box::pin(async { todo!() })) as Fun<$inputT, $outputT> )")
             }
         }
 
@@ -350,7 +350,7 @@ class ServerProtocolTestGenerator(
             testModuleWriter.writeWithNoFormatting(testCase.documentation)
         }
 
-        testModuleWriter.write("Test ID: ${testCase.id}")
+        testModuleWriter.rust("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
 
         TokioTest.render(testModuleWriter)
@@ -439,7 +439,7 @@ class ServerProtocolTestGenerator(
         }
         writeInline("let output =")
         instantiator.render(this, shape, testCase.params)
-        write(";")
+        rust(";")
         val operationImpl = if (operationShape.allErrors(model).isNotEmpty()) {
             if (shape.hasTrait<ErrorTrait>()) {
                 val variant = symbolProvider.toSymbol(shape).name
@@ -751,7 +751,7 @@ class ServerProtocolTestGenerator(
             )
         } else {
             assertOk(rustWriter) {
-                rustWriter.write(
+                rustWriter.rust(
                     "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
@@ -807,7 +807,7 @@ class ServerProtocolTestGenerator(
             )
         }
         assertOk(rustWriter) {
-            write(
+            rust(
                 "#T($actualExpression, $variableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers"),
             )
@@ -828,7 +828,7 @@ class ServerProtocolTestGenerator(
             strSlice(this, params)
         }
         assertOk(rustWriter) {
-            rustWriter.write(
+            rustWriter.rust(
                 "#T($actualExpression, $expectedVariableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction),
             )
@@ -840,14 +840,14 @@ class ServerProtocolTestGenerator(
      * for pretty printing protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
-        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.rust("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
-        rustWriter.write(");")
+        rustWriter.rust(");")
     }
 
     private fun strSlice(writer: RustWriter, args: List<String>) {
         writer.withBlock("&[", "]") {
-            write(args.joinToString(",") { it.dq() })
+            rust(args.joinToString(",") { it.dq() })
         }
     }
 
