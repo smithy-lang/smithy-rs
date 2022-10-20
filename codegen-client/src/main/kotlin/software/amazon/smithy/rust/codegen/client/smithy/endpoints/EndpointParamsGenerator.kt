@@ -93,6 +93,7 @@ class EndpointParamsGenerator(
 
         // Generate the impl block for the struct
         writer.rustBlock("impl Params") {
+            docs("Return a builder for [`Params`]")
             rust("pub fn builder() -> #T { Default::default() }", builder)
         }
     }

@@ -10,18 +10,32 @@ use http::uri::{Authority, Uri};
 
 use crate::operation::BuildError;
 
-pub type Result = std::result::Result<aws_smithy_types::endpoint::Endpoint, Error>;
+// TODO(Zelda) This referenced the smithy types version of `Endpoint` but that
+//    one looks weird so I'm going with the one in this module.
+pub type Result = std::result::Result<Endpoint, Error>;
 
 pub trait ResolveEndpoint<Params>: Send + Sync {
     fn resolve_endpoint(&self, params: &Params) -> Result;
 }
 
+// Implement the resolver trait for all closures and functions that take
+// `Params` and return a `std::result::Result<Endpoint, Error>`
+impl <Resolver, Params> ResolveEndpoint<Params> for Resolver
+where
+    Resolver: Fn(&Params) -> Result + Send + Sync
+{
+    fn resolve_endpoint(&self, params: &Params) -> Result {
+        (self)(params)
+    }
+}
+
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// Endpoint Resolution Error
 #[derive(Debug)]
 pub struct Error {
     message: String,
-    extra: Option<Box<dyn std::error::Error + Send + Sync>>,
+    extra: Option<BoxError>,
 }
 
 impl Error {
@@ -33,7 +47,7 @@ impl Error {
         }
     }
 
-    pub fn with_cause(self, cause: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
+    pub fn with_cause(self, cause: impl Into<BoxError>) -> Self {
         Self {
             extra: Some(cause.into()),
             ..self

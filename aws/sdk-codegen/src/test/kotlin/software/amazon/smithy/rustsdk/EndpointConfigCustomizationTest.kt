@@ -28,11 +28,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 internal class EndpointConfigCustomizationTest {
-    private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().asType().member("Params")
     private val codegenScope = arrayOf(
         "http" to CargoDependency.Http.asType(),
-        "PlaceholderParams" to placeholderEndpointParams,
-        "aws_types" to awsTypes(AwsTestRuntimeConfig).asType(),
+        "PlaceholderParams" to AwsTestRuntimeConfig.awsEndpoint().asType().member("Params"),
+        "aws_types" to AwsTestRuntimeConfig.awsTypes().asType(),
     )
 
     private val model = """

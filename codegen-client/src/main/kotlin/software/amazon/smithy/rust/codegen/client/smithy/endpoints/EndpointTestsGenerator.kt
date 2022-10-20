@@ -37,13 +37,13 @@ class EndpointTestsGenerator(
                         ##[test]
                         fn test_$index() {
                             let params = #{params:W}.unwrap();
-                            let endpoint = #{resolver}(params);
+                            let endpoint = #{resolver}(&params);
                             #{assertion:W}
                         }
                     """,
                         "assertion" to assertion(testCase),
                         "params" to params(testCase),
-                        "resolver" to EndpointsModule.member("resolve_endpoint"),
+                        "resolver" to EndpointsModule.member("inner_resolve_endpoint"),
                     )
                 }
             }

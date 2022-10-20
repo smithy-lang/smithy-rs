@@ -10,6 +10,7 @@
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
 use std::sync::Arc;
+use http::Uri;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
@@ -18,7 +19,6 @@ use aws_smithy_types::timeout::TimeoutConfig;
 
 use crate::app_name::AppName;
 use crate::credentials::SharedCredentialsProvider;
-use crate::endpoint::ResolveAwsEndpoint;
 use crate::region::Region;
 
 /// AWS Shared Configuration
@@ -27,7 +27,7 @@ pub struct SdkConfig {
     app_name: Option<AppName>,
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
-    endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    endpoint_uri: Option<Uri>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -44,7 +44,7 @@ pub struct Builder {
     app_name: Option<AppName>,
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
-    endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    endpoint_uri: Option<Uri>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -86,46 +86,23 @@ impl Builder {
         self
     }
 
-    /// Set the endpoint resolver to use when making requests
-    ///
-    /// # Examples
-    /// ```
-    /// use std::sync::Arc;
-    /// use aws_types::SdkConfig;
-    /// use aws_smithy_http::endpoint::Endpoint;
-    /// use http::Uri;
-    /// let config = SdkConfig::builder().endpoint_resolver(
-    ///     Endpoint::immutable(Uri::from_static("http://localhost:8080"))
-    /// ).build();
-    /// ```
-    pub fn endpoint_resolver(
+    // TODO(Zelda) Add docs
+    /// Override the endpoint URI, foregoing endpoint resolution
+    pub fn endpoint_uri(
         mut self,
-        endpoint_resolver: impl ResolveAwsEndpoint + 'static,
+        endpoint_uri: Uri,
     ) -> Self {
-        self.set_endpoint_resolver(Some(Arc::new(endpoint_resolver)));
+        self.set_endpoint_uri(Some(endpoint_uri));
         self
     }
 
-    /// Set the endpoint resolver to use when making requests
-    ///
-    /// # Examples
-    /// ```
-    /// use std::sync::Arc;
-    /// use aws_types::SdkConfig;
-    /// use aws_types::endpoint::ResolveAwsEndpoint;
-    /// fn endpoint_resolver_override() -> Option<Arc<dyn ResolveAwsEndpoint>> {
-    ///     // ...
-    ///     # None
-    /// }
-    /// let mut config = SdkConfig::builder();
-    /// config.set_endpoint_resolver(endpoint_resolver_override());
-    /// config.build();
-    /// ```
-    pub fn set_endpoint_resolver(
+    // TODO(Zelda) Add docs
+    /// Override the endpoint URI, foregoing endpoint resolution
+    pub fn set_endpoint_uri(
         &mut self,
-        endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+        endpoint_uri: Option<Uri>,
     ) -> &mut Self {
-        self.endpoint_resolver = endpoint_resolver;
+        self.endpoint_uri = endpoint_uri;
         self
     }
 
@@ -377,7 +354,7 @@ impl Builder {
             app_name: self.app_name,
             credentials_provider: self.credentials_provider,
             region: self.region,
-            endpoint_resolver: self.endpoint_resolver,
+            endpoint_uri: self.endpoint_uri,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
@@ -393,8 +370,8 @@ impl SdkConfig {
     }
 
     /// Configured endpoint resolver
-    pub fn endpoint_resolver(&self) -> Option<Arc<dyn ResolveAwsEndpoint>> {
-        self.endpoint_resolver.clone()
+    pub fn endpoint_uri(&self) -> Option<Uri> {
+        self.endpoint_uri.clone()
     }
 
     /// Configured retry config

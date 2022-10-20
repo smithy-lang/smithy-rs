@@ -16,7 +16,10 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -29,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustInline
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -59,11 +63,20 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + CreateEndpointParams(
-            codegenContext,
-            operation,
-            codegenContext.rootDecorator.builtInResolvers(codegenContext),
-        )
+        return baseCustomizations +
+            CreateEndpointParams(
+                codegenContext,
+                operation,
+                codegenContext.rootDecorator.builtInResolvers(codegenContext),
+            ) +
+            ResolveEndpointDuringOperationCreation(codegenContext.runtimeConfig)
+    }
+
+    override fun configCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
+    ): List<ConfigCustomization> {
+        return baseCustomizations + ConfigureEndpointResolver(codegenContext)
     }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
@@ -78,14 +91,25 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
             val endpointRuleSetVisitor = EndpointRuleSetVisitor(codegenContext.runtimeConfig, endpointRuleSet)
             val endpointParamsGenerator = EndpointParamsGenerator(endpointRuleSet.parameters.toList())
             rustCrate.withModule(EndpointsModule) { writer ->
+                // TODO(Zelda) Is it possible to avoid using `#[allow(unused_variables, dead_code, unreachable_code)]`?
                 writer.rustTemplate(
                     """
                     mod partition_metadata;
 
+                    /// The result of resolving an endpoint. Contains either a valid endpoint or an error
+                    /// explaining why a valid endpoint could not be resolved.
                     pub type EndpointResult = Result<#{Endpoint}, #{Error}>;
 
-                    pub(crate) fn resolve_endpoint(
-                        params: #{Params},
+                     pub(crate) fn resolve_endpoint(
+                        params: &#{Params},
+                    ) -> Result<#{Endpoint}, #{SmithyEndpointError}> {
+                        inner_resolve_endpoint(&params)
+                            .map_err(|e| #{SmithyEndpointError}::message("endpoint resolution failed").with_cause(e))
+                    }
+
+                    ##[allow(unused_variables, dead_code, unreachable_code)]
+                    fn inner_resolve_endpoint(
+                        params: &#{Params},
                     ) -> EndpointResult {
                         #{Helpers:W}
                         #{DestructuredParams:W}
@@ -94,13 +118,14 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
 
                         // TODO How can we include the parameters in this error message?
                         ##[allow(unreachable_code)]
-                        return Err(crate::endpoints::Error::endpoint_resolution("No rules matched.".into()));
+                        return Err(#{Error}::endpoint_resolution("No rules matched.".into()));
                     }
                     """,
                     "Endpoint" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
                         .member("endpoint::Endpoint"),
                     "Error" to endpointParamsGenerator.error,
                     "Params" to endpointParamsGenerator.params,
+                    "SmithyEndpointError" to codegenContext.runtimeConfig.smithyHttp().member("endpoint::Error"),
                     "Helpers" to helpers(endpointLib),
                     "DestructuredParams" to destructuredParams(endpointRuleSet),
                     "Rules" to endpointRuleSetVisitor.visitRuleset(),
@@ -245,11 +270,113 @@ class CreateEndpointParams(
         memberParams.forEach { (memberShape, param) ->
             rust(
                 ".${setterName(param.name)}(${section.input}.${
-                codegenContext.symbolProvider.toMemberName(
-                    memberShape,
-                )
+                    codegenContext.symbolProvider.toMemberName(
+                        memberShape,
+                    )
                 }.as_ref())",
             )
+        }
+    }
+}
+
+class ResolveEndpointDuringOperationCreation(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
+    override fun section(section: OperationSection): Writable {
+        return when (section) {
+            is OperationSection.MutateRequest -> writable {
+                // insert the endpoint resolution _result_ into the bag (note that this won't bail if endpoint resolution failed)
+                rustTemplate(
+                    """
+                    let endpoint_result = endpoint_params
+                        .map_err(|e| #{Error}::message("No endpoint params were provided").with_cause(e))
+                        .and_then(|p| ${section.config}.endpoint_resolver.resolve_endpoint(&p));
+    
+                    ${section.request}.properties_mut().insert::<Result<#{Endpoint}, #{Error}>>(endpoint_result);
+                    """,
+                    "Error" to runtimeConfig.smithyHttp().member("endpoint::Error"),
+                    "Endpoint" to runtimeConfig.smithyHttp().member("endpoint::Endpoint"),
+                )
+            }
+
+            else -> emptySection
+        }
+    }
+}
+
+/**
+ * Add the endpoint resolver to the config
+ */
+class ConfigureEndpointResolver(
+    codegenContext: ClientCodegenContext,
+) : ConfigCustomization() {
+    private val moduleUseName = codegenContext.moduleUseName()
+    private val codegenScope = arrayOf(
+        "EndpointResolver" to codegenContext.runtimeConfig.smithyHttp().member("endpoint::ResolveEndpoint"),
+        "Params" to EndpointsModule.member("Params"),
+        "resolve_endpoint" to EndpointsModule.member("resolve_endpoint"),
+    )
+
+    override fun section(section: ServiceConfig): Writable {
+        return when (section) {
+            is ServiceConfig.ConfigStruct -> writable {
+                rustTemplate(
+                    "pub (crate) endpoint_resolver: std::sync::Arc<dyn #{EndpointResolver}<#{Params}>>,",
+                    *codegenScope,
+                )
+            }
+
+            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.BuilderStruct -> writable {
+                rustTemplate(
+                    "endpoint_resolver: Option<std::sync::Arc<dyn #{EndpointResolver}<#{Params}>>>,",
+                    *codegenScope,
+                )
+            }
+
+            is ServiceConfig.BuilderImpl -> writable {
+                rustTemplate(
+                    """
+                    /// Overrides the endpoint resolver to use when making requests.
+                    ///
+                    /// When unset, the client will used a generated endpoint resolver based on the endpoint metadata
+                    /// for `$moduleUseName`.
+                    ///
+                    /// ## Examples
+                    /// ```no_run
+                    /// use aws_types::region::Region;
+                    /// use $moduleUseName::config::{Builder, Config};
+                    /// use $moduleUseName::Endpoint;
+                    /// use $moduleUseName::endpoints::Params;
+                    ///
+                    /// let config = $moduleUseName::Config::builder()
+                    ///     .endpoint_resolver(
+                    ///         |_: &'_ Params| Ok(Endpoint::immutable("http://localhost:8080".parse().expect("valid URI")))
+                    ///     ).build();
+                    /// ```
+                    pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{EndpointResolver}<#{Params}> + 'static) -> Self {
+                        self.endpoint_resolver = Some(std::sync::Arc::new(endpoint_resolver));
+                        self
+                    }
+
+                    /// Sets the endpoint resolver to use when making requests.
+                    pub fn set_endpoint_resolver(&mut self, endpoint_resolver: Option<std::sync::Arc<dyn #{EndpointResolver}<#{Params}>>>) -> &mut Self {
+                        self.endpoint_resolver = endpoint_resolver;
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+
+            is ServiceConfig.BuilderBuild -> writable {
+                rustTemplate(
+                    """
+                    endpoint_resolver: self.endpoint_resolver.unwrap_or_else(|| std::sync::Arc::new(#{resolve_endpoint})),
+                    """,
+                    *codegenScope,
+                )
+            }
+
+            else -> emptySection
         }
     }
 }

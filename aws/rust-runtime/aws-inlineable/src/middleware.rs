@@ -7,7 +7,7 @@
 
 pub use aws_smithy_client::retry::Config as RetryConfig;
 
-use aws_endpoint::AwsEndpointStage;
+use aws_endpoint::v2::AwsEndpointStage;
 use aws_http::auth::CredentialsStage;
 use aws_http::recursion_detection::RecursionDetectionStage;
 use aws_http::user_agent::UserAgentStage;
@@ -56,7 +56,7 @@ impl DefaultMiddleware {
 fn base() -> ServiceBuilder<DefaultMiddlewareStack> {
     let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
     let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
-    let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+    let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage::default());
     let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
     let recursion_detection = MapRequestLayer::for_mapper(RecursionDetectionStage::new());
     // These layers can be considered as occurring in order, that is:

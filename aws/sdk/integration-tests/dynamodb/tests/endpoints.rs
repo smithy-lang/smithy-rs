@@ -12,7 +12,7 @@ use http::Uri;
 async fn endpoints_can_be_overridden_globally() {
     let shared_config = aws_types::SdkConfig::builder()
         .region(Region::new("us-east-4"))
-        .endpoint_resolver(Endpoint::immutable(
+        .endpoint_resolver(|_| Endpoint::immutable(
             "http://localhost:8000".parse().unwrap(),
         ))
         .build();
@@ -35,7 +35,7 @@ async fn endpoints_can_be_overridden_locally() {
         .build();
     let conf = aws_sdk_dynamodb::config::Builder::from(&shared_config)
         .credentials_provider(Credentials::new("asdf", "asdf", None, None, "test"))
-        .endpoint_resolver(Endpoint::immutable(
+        .endpoint_resolver(|_| Endpoint::immutable(
             "http://localhost:8000".parse().unwrap(),
         ))
         .build();
