@@ -3,15 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::deserialize::error::{DeserializeError as Error, DeserializeErrorKind as ErrorKind};
 use aws_smithy_types::Number;
+use ErrorKind::*;
 
-mod error;
+pub mod error;
 pub mod token;
 
-pub use error::{Error, ErrorReason};
 pub use token::{EscapeError, EscapedStr, Offset, Token};
-
-use ErrorReason::*;
 
 /// JSON token parser as a Rust iterator
 ///
@@ -96,13 +95,13 @@ impl<'a> JsonTokenIterator<'a> {
     }
 
     /// Creates an error at the given `offset` in the stream.
-    fn error_at(&self, offset: usize, reason: ErrorReason) -> Error {
-        Error::new(reason, Some(offset))
+    fn error_at(&self, offset: usize, kind: ErrorKind) -> Error {
+        Error::new(kind, Some(offset))
     }
 
     /// Creates an error at the current offset in the stream.
-    fn error(&self, reason: ErrorReason) -> Error {
-        self.error_at(self.index, reason)
+    fn error(&self, kind: ErrorKind) -> Error {
+        self.error_at(self.index, kind)
     }
 
     /// Advances until it hits a non-whitespace character or the end of the slice.
@@ -504,11 +503,12 @@ fn must_not_be_finite(f: f64) -> Result<f64, ()> {
 
 #[cfg(test)]
 mod tests {
+    use crate::deserialize::error::{DeserializeError as Error, DeserializeErrorKind as ErrorKind};
     use crate::deserialize::token::test::{
         end_array, end_object, object_key, start_array, start_object, value_bool, value_null,
         value_number, value_string,
     };
-    use crate::deserialize::{json_token_iter, Error, ErrorReason, EscapedStr, Token};
+    use crate::deserialize::{json_token_iter, EscapedStr, Token};
     use aws_smithy_types::Number;
     use proptest::prelude::*;
 
@@ -655,7 +655,7 @@ mod tests {
             let tokens: Vec<Result<Token, Error>> = json_token_iter(input).collect();
             assert_eq!(
                 vec![Err(Error::new(
-                    ErrorReason::UnexpectedToken(token, msg),
+                    ErrorKind::UnexpectedToken(token, msg),
                     Some(offset)
                 ))],
                 tokens,
@@ -667,7 +667,7 @@ mod tests {
         let invalid_number = |input, offset| {
             let tokens: Vec<Result<Token, Error>> = json_token_iter(input).collect();
             assert_eq!(
-                vec![Err(Error::new(ErrorReason::InvalidNumber, Some(offset)))],
+                vec![Err(Error::new(ErrorKind::InvalidNumber, Some(offset)))],
                 tokens,
                 "input: \"{}\"",
                 std::str::from_utf8(input).unwrap(),
@@ -699,7 +699,7 @@ mod tests {
         assert_eq!(start_array(1), iter.next());
         assert_eq!(value_null(2), iter.next());
         assert_eq!(
-            Some(Err(Error::new(ErrorReason::UnexpectedEos, Some(7)))),
+            Some(Err(Error::new(ErrorKind::UnexpectedEos, Some(7)))),
             iter.next()
         );
     }
@@ -761,7 +761,7 @@ mod tests {
         assert_eq!(value_string(11, "trailing"), iter.next());
         assert_eq!(
             Some(Err(Error::new(
-                ErrorReason::UnexpectedToken('}', "'\"'"),
+                ErrorKind::UnexpectedToken('}', "'\"'"),
                 Some(23),
             ))),
             iter.next()
@@ -775,7 +775,7 @@ mod tests {
         assert_eq!(start_object(1), iter.next());
         assert_eq!(object_key(2, "test"), iter.next());
         assert_eq!(
-            Some(Err(Error::new(ErrorReason::UnexpectedEos, Some(9),))),
+            Some(Err(Error::new(ErrorKind::UnexpectedEos, Some(9),))),
             iter.next()
         );
         assert_eq!(None, iter.next());

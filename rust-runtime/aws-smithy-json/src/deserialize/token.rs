@@ -3,15 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::deserialize::error::{Error, ErrorReason};
+use crate::deserialize::error::{DeserializeError as Error, DeserializeErrorKind as ErrorKind};
+use crate::deserialize::must_not_be_finite;
 use crate::escape::unescape_string;
+pub use crate::escape::EscapeError;
 use aws_smithy_types::date_time::Format;
+use aws_smithy_types::primitive::Parse;
 use aws_smithy_types::{base64, Blob, DateTime, Document, Number};
 use std::borrow::Cow;
-
-use crate::deserialize::must_not_be_finite;
-pub use crate::escape::EscapeError;
-use aws_smithy_types::primitive::Parse;
 use std::collections::HashMap;
 use std::iter::Peekable;
 
@@ -44,7 +43,7 @@ pub struct Offset(pub usize);
 impl Offset {
     /// Creates a custom error from the offset
     pub fn error(&self, msg: Cow<'static, str>) -> Error {
-        Error::new(ErrorReason::Custom(msg), Some(self.0))
+        Error::new(ErrorKind::Custom(msg), Some(self.0))
     }
 }
 
@@ -117,7 +116,7 @@ macro_rules! expect_fn {
                     Err(token.error(Cow::Borrowed(concat!("expected ", stringify!($token)))))
                 }
                 None => Err(Error::new(
-                    ErrorReason::Custom(Cow::Borrowed(concat!("expected ", stringify!($token)))),
+                    ErrorKind::Custom(Cow::Borrowed(concat!("expected ", stringify!($token)))),
                     None,
                 )),
             }
@@ -168,7 +167,7 @@ pub fn expect_number_or_null(
         Some(Token::ValueNumber { value, .. }) => Ok(Some(value)),
         Some(Token::ValueString { value, offset }) => match value.to_unescaped() {
             Err(err) => Err(Error::new(
-                ErrorReason::Custom(format!("expected a valid string, escape was invalid: {}", err).into()), Some(offset.0))
+                ErrorKind::Custom(format!("expected a valid string, escape was invalid: {}", err).into()), Some(offset.0))
             ),
             Ok(v) => f64::parse_smithy_primitive(v.as_ref())
                 // disregard the exact error
@@ -179,7 +178,7 @@ pub fn expect_number_or_null(
                 // convert to a helpful error
                 .map_err(|_| {
                     Error::new(
-                        ErrorReason::Custom(Cow::Owned(format!(
+                        ErrorKind::Custom(Cow::Owned(format!(
                         "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `{}`",
                         v
                     ))),
@@ -199,7 +198,7 @@ pub fn expect_blob_or_null(token: Option<Result<Token<'_>, Error>>) -> Result<Op
         Some(value) => Some(Blob::new(base64::decode(value.as_escaped_str()).map_err(
             |err| {
                 Error::new(
-                    ErrorReason::Custom(Cow::Owned(format!("failed to decode base64: {}", err))),
+                    ErrorKind::Custom(Cow::Owned(format!("failed to decode base64: {}", err))),
                     None,
                 )
             },
@@ -221,14 +220,12 @@ pub fn expect_timestamp_or_null(
             .map(|v| {
                 if v.is_nan() {
                     Err(Error::new(
-                        ErrorReason::Custom(Cow::Owned("NaN is not a valid epoch".to_string())),
+                        ErrorKind::Custom(Cow::Owned("NaN is not a valid epoch".to_string())),
                         None,
                     ))
                 } else if v.is_infinite() {
                     Err(Error::new(
-                        ErrorReason::Custom(Cow::Owned(
-                            "Infinity is not a valid epoch".to_string(),
-                        )),
+                        ErrorKind::Custom(Cow::Owned("Infinity is not a valid epoch".to_string())),
                         None,
                     ))
                 } else {
@@ -241,7 +238,7 @@ pub fn expect_timestamp_or_null(
             .transpose()
             .map_err(|err| {
                 Error::new(
-                    ErrorReason::Custom(Cow::Owned(format!("failed to parse timestamp: {}", err))),
+                    ErrorKind::Custom(Cow::Owned(format!("failed to parse timestamp: {}", err))),
                     None,
                 )
             })?,
@@ -359,7 +356,7 @@ fn skip_inner<'a>(
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::deserialize::error::ErrorReason::UnexpectedToken;
+    use crate::deserialize::error::DeserializeErrorKind::UnexpectedToken;
     use crate::deserialize::json_token_iter;
 
     pub fn start_array<'a>(offset: usize) -> Option<Result<Token<'a>, Error>> {
@@ -512,7 +509,7 @@ pub mod test {
     fn test_expect_start_object() {
         assert_eq!(
             Err(Error::new(
-                ErrorReason::Custom("expected StartObject".into()),
+                ErrorKind::Custom("expected StartObject".into()),
                 Some(2)
             )),
             expect_start_object(value_bool(2, true))
@@ -524,7 +521,7 @@ pub mod test {
     fn test_expect_start_array() {
         assert_eq!(
             Err(Error::new(
-                ErrorReason::Custom("expected StartArray".into()),
+                ErrorKind::Custom("expected StartArray".into()),
                 Some(2)
             )),
             expect_start_array(value_bool(2, true))
@@ -563,7 +560,7 @@ pub mod test {
             expect_number_or_null(value_string(0, "Infinity"))
         );
         assert_eq!(
-            Err(Error::new(ErrorReason::Custom("only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `123`".into()), Some(0))),
+            Err(Error::new(ErrorKind::Custom("only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `123`".into()), Some(0))),
             expect_number_or_null(value_string(0, "123"))
         );
         match expect_number_or_null(value_string(0, "NaN")) {
@@ -598,7 +595,7 @@ pub mod test {
         for &invalid in &["NaN", "Infinity", "-Infinity"] {
             assert_eq!(
                 Err(Error::new(
-                    ErrorReason::Custom(Cow::Owned(format!(
+                    ErrorKind::Custom(Cow::Owned(format!(
                         "{} is not a valid epoch",
                         invalid.replace('-', "")
                     ))),
@@ -623,7 +620,7 @@ pub mod test {
             expect_timestamp_or_null(value_string(0, "2015-10-21T07:28:00Z"), Format::DateTime)
         );
         let err = Error::new(
-            ErrorReason::Custom(
+            ErrorKind::Custom(
                 "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `wrong`".into(),
             ),
             Some(0),

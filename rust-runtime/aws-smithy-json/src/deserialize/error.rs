@@ -8,8 +8,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str::Utf8Error;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ErrorReason {
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub(in crate::deserialize) enum DeserializeErrorKind {
     Custom(Cow<'static, str>),
     ExpectedLiteral(String),
     InvalidEscape(char),
@@ -20,73 +21,86 @@ pub enum ErrorReason {
     UnexpectedEos,
     UnexpectedToken(char, &'static str),
 }
-use ErrorReason::*;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Error {
-    reason: ErrorReason,
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub struct DeserializeError {
+    kind: DeserializeErrorKind,
     offset: Option<usize>,
 }
 
-impl Error {
-    pub fn new(reason: ErrorReason, offset: Option<usize>) -> Self {
-        Error { reason, offset }
+impl DeserializeError {
+    pub(in crate::deserialize) fn new(kind: DeserializeErrorKind, offset: Option<usize>) -> Self {
+        Self { kind, offset }
     }
 
     /// Returns a custom error without an offset.
-    pub fn custom(message: impl Into<Cow<'static, str>>) -> Error {
-        Error::new(ErrorReason::Custom(message.into()), None)
+    pub fn custom(message: impl Into<Cow<'static, str>>) -> Self {
+        Self::new(DeserializeErrorKind::Custom(message.into()), None)
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for DeserializeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use DeserializeErrorKind::*;
+        match &self.kind {
+            UnescapeFailed(source) => Some(source),
+            Custom(_)
+            | ExpectedLiteral(_)
+            | InvalidEscape(_)
+            | InvalidNumber
+            | InvalidUtf8
+            | UnexpectedControlCharacter(_)
+            | UnexpectedToken(..)
+            | UnexpectedEos => None,
+        }
+    }
+}
 
-impl fmt::Display for Error {
+impl fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DeserializeErrorKind::*;
         if let Some(offset) = self.offset {
             write!(f, "Error at offset {}: ", offset)?;
         }
-        match &self.reason {
-            Custom(msg) => write!(f, "failed to parse JSON: {}", msg),
-            ExpectedLiteral(literal) => write!(f, "expected literal: {}", literal),
-            InvalidEscape(escape) => write!(f, "invalid JSON escape: \\{}", escape),
+        match &self.kind {
+            Custom(msg) => write!(f, "failed to parse JSON: {msg}"),
+            ExpectedLiteral(literal) => write!(f, "expected literal: {literal}"),
+            InvalidEscape(escape) => write!(f, "invalid JSON escape: \\{escape}"),
             InvalidNumber => write!(f, "invalid number"),
             InvalidUtf8 => write!(f, "invalid UTF-8 codepoint in JSON stream"),
-            UnescapeFailed(err) => write!(f, "failed to unescape JSON string: {}", err),
+            UnescapeFailed(_) => write!(f, "failed to unescape JSON string"),
             UnexpectedControlCharacter(value) => write!(
                 f,
-                "encountered unescaped control character in string: 0x{:X}",
-                value
+                "encountered unescaped control character in string: 0x{value:X}"
             ),
-            UnexpectedToken(token, expected) => write!(
-                f,
-                "unexpected token '{}'. Expected one of {}",
-                token, expected
-            ),
+            UnexpectedToken(token, expected) => {
+                write!(f, "unexpected token '{token}'. Expected one of {expected}",)
+            }
             UnexpectedEos => write!(f, "unexpected end of stream"),
         }
     }
 }
 
-impl From<Utf8Error> for ErrorReason {
+impl From<Utf8Error> for DeserializeErrorKind {
     fn from(_: Utf8Error) -> Self {
-        InvalidUtf8
+        DeserializeErrorKind::InvalidUtf8
     }
 }
 
-impl From<EscapeError> for Error {
+impl From<EscapeError> for DeserializeError {
     fn from(err: EscapeError) -> Self {
-        Error {
-            reason: ErrorReason::UnescapeFailed(err),
+        Self {
+            kind: DeserializeErrorKind::UnescapeFailed(err),
             offset: None,
         }
     }
 }
 
-impl From<aws_smithy_types::TryFromNumberError> for Error {
+impl From<aws_smithy_types::TryFromNumberError> for DeserializeError {
     fn from(_: aws_smithy_types::TryFromNumberError) -> Self {
-        Error {
-            reason: ErrorReason::InvalidNumber,
+        Self {
+            kind: DeserializeErrorKind::InvalidNumber,
             offset: None,
         }
     }

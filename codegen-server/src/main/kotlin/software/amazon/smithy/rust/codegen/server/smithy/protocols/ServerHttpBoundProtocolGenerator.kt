@@ -1246,12 +1246,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         if (model.expectShape(binding.member.target) is StringShape) {
             return ServerRuntimeType.RequestRejection(runtimeConfig)
         }
-        when (codegenContext.protocol) {
+        return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                return CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
+                CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::error::DeserializeError")
             }
             RestXmlTrait.ID -> {
-                return CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlError")
+                CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

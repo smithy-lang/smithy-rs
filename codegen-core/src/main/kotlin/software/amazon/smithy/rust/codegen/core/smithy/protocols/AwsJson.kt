@@ -114,7 +114,7 @@ open class AwsJson(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
+        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::error::DeserializeError"),
         "Response" to RuntimeType.http.member("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
