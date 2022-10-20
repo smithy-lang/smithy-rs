@@ -45,7 +45,7 @@ Smithy Rust is built on top of [`tower`](https://github.com/tower-rs/tower).
 
 The `tower` library is centered around two main interfaces, the [`Service`](https://docs.rs/tower/latest/tower/trait.Service.html) trait and the [`Layer`](https://docs.rs/tower/latest/tower/trait.Layer.html) trait.
 
-The `Service` trait can be thought of as an asynchronous function from a request to a response coupled with a mechanism to handle back pressure, while the `Layer` trait can be thought of as a way of way of decorating a `Service`, transforming either the request or response.
+The `Service` trait can be thought of as an asynchronous function from a request to a response, `async fn(Request) -> Result<Response, Error>`, coupled with a mechanism to [handle back pressure](https://docs.rs/tower/latest/tower/trait.Service.html#backpressure), while the `Layer` trait can be thought of as a way of decorating a `Service`, transforming either the request or response.
 
 Middleware in `tower` typically conforms to the following pattern, a `Service` implementation of the form
 
