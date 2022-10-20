@@ -65,8 +65,8 @@ class EventStreamErrorMarshallerGenerator(
         val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
-        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
-            inlineWriter.renderMarshaller(marshallerType, unionSymbol)
+        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) {
+            renderMarshaller(marshallerType, unionSymbol)
         }
     }
 

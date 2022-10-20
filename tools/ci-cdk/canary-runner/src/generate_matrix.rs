@@ -16,6 +16,7 @@ const KNOWN_YANKED_RELEASE_TAGS: &[&str] = &[
     // There wasn't a release on this date, so this is fine for testing
     "release-2022-07-04",
     // Add release tags here to get the canary passing after yanking a release
+    "release-2022-10-13",
 ];
 
 #[derive(Debug, Parser, Eq, PartialEq)]

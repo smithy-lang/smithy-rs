@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -72,13 +73,13 @@ class BuilderGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
-        writer.withModule(segments.last()) {
+        writer.withModule(RustModule.public(segments.last())) {
             renderBuilder(this)
         }
     }
 
     private fun renderBuildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape, symbolProvider)
+        val fallibleBuilder = StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
         val returnType = when (fallibleBuilder) {
             true -> "Result<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"

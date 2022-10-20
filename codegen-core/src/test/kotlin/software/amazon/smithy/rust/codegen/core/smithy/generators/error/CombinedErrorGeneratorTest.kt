@@ -50,15 +50,15 @@ class CombinedErrorGeneratorTest {
     @Test
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.public("error")) { writer ->
+        project.withModule(RustModule.public("error")) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
-                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer)
+                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, this)
             }
             val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
             val generator = CombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(model.lookup("error#Greeting")), errors)
-            generator.render(writer)
+            generator.render(this)
 
-            writer.unitTest(
+            unitTest(
                 name = "generates_combined_error_enums",
                 test = """
                     let kind = GreetingErrorKind::InvalidGreeting(InvalidGreeting::builder().message("an error").build());

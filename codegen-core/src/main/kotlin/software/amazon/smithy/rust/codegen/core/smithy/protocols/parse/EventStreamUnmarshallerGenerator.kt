@@ -79,8 +79,8 @@ class EventStreamUnmarshallerGenerator(
 
     fun render(): RuntimeType {
         val unmarshallerType = unionShape.eventStreamUnmarshallerType()
-        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
-            inlineWriter.renderUnmarshaller(unmarshallerType, unionSymbol)
+        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", eventStreamSerdeModule) {
+            renderUnmarshaller(unmarshallerType, unionSymbol)
         }
     }
 
