@@ -9,11 +9,11 @@ use crate::proto::aws_json::router::Error;
 use crate::response::IntoResponse;
 use crate::routers::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
-use super::AwsJson11;
+use super::AwsJson1_1;
 
 pub use crate::proto::aws_json::router::*;
 
-impl IntoResponse<AwsJson11> for Error {
+impl IntoResponse<AwsJson1_1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::MethodNotAllowed => method_disallowed(),

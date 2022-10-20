@@ -103,7 +103,7 @@ class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
         return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.private("xml_deser")) {
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
                 *errorScope,
             ) {

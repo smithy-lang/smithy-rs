@@ -35,8 +35,8 @@ class PythonServerModuleGenerator(
     fun render() {
         rustCrate.withModule(
             RustModule.public("python_module_export", "Export PyO3 symbols in the shared library"),
-        ) { writer ->
-            writer.rustBlockTemplate(
+        ) {
+            rustBlockTemplate(
                 """
                 ##[#{pyo3}::pymodule]
                 ##[#{pyo3}(name = "$libName")]

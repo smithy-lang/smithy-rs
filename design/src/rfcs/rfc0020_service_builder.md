@@ -231,7 +231,7 @@ pub struct Route {
 enum Routes {
     RestXml(Vec<(Route, RequestSpec)>),
     RestJson1(Vec<(Route, RequestSpec)>),
-    AwsJson10(TinyMap<String, Route>),
+    AwsJson1_0(TinyMap<String, Route>),
     AwsJson11(TinyMap<String, Route>),
 }
 
@@ -729,8 +729,8 @@ Currently there is a single `Router` structure, described in [Router](#router), 
 enum Routes {
     RestXml(/* Container */),
     RestJson1(/* Container */),
-    AwsJson10(/* Container */),
-    AwsJson11(/* Container */),
+    AwsJson1_0(/* Container */),
+    AwsJson1_1(/* Container */),
 }
 ```
 
