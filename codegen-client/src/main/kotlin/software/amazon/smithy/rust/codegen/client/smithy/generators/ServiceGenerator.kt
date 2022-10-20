@@ -40,34 +40,34 @@ class ServiceGenerator(
     fun render() {
         val operations = index.getContainedOperations(clientCodegenContext.serviceShape).sortedBy { it.id }
         operations.map { operation ->
-            rustCrate.useShapeWriter(operation) { operationWriter ->
-                rustCrate.useShapeWriter(operation.inputShape(clientCodegenContext.model)) { inputWriter ->
+            rustCrate.useShapeWriter(operation) operationWriter@{
+                rustCrate.useShapeWriter(operation.inputShape(clientCodegenContext.model)) inputWriter@{
                     // Render the operation shape & serializers input `input.rs`
                     protocolGenerator.renderOperation(
-                        operationWriter,
-                        inputWriter,
+                        this@operationWriter,
+                        this@inputWriter,
                         operation,
                         decorator.operationCustomizations(clientCodegenContext, operation, listOf()),
                     )
 
                     // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
-                    ProtocolTestGenerator(clientCodegenContext, protocolSupport, operation, operationWriter).render()
+                    ProtocolTestGenerator(clientCodegenContext, protocolSupport, operation, this@operationWriter).render()
                 }
             }
         }
 
         TopLevelErrorGenerator(clientCodegenContext, operations).render(rustCrate)
 
-        rustCrate.withModule(RustModule.Config) { writer ->
+        rustCrate.withModule(RustModule.Config) {
             ServiceConfigGenerator.withBaseBehavior(
                 clientCodegenContext,
                 extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf()),
-            ).render(writer)
+            ).render(this)
         }
 
         rustCrate.lib {
-            Attribute.DocInline.render(it)
-            it.write("pub use config::Config;")
+            Attribute.DocInline.render(this)
+            write("pub use config::Config;")
         }
     }
 }

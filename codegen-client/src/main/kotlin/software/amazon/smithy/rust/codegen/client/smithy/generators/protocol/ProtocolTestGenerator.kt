@@ -19,11 +19,14 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -31,9 +34,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
@@ -64,9 +65,7 @@ class ProtocolTestGenerator(
     private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
 
-    private val instantiator = with(codegenContext) {
-        Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
-    }
+    private val instantiator = clientInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
@@ -103,7 +102,7 @@ class ProtocolTestGenerator(
                     Attribute.Custom("allow(unreachable_code, unused_variables)"),
                 ),
             )
-            writer.withModule(testModuleName, moduleMeta) {
+            writer.withModule(RustModule(testModuleName, moduleMeta)) {
                 renderAllTestCases(allTests)
             }
         }
@@ -137,7 +136,7 @@ class ProtocolTestGenerator(
     private fun renderTestCaseBlock(
         testCase: HttpMessageTestCase,
         testModuleWriter: RustWriter,
-        block: RustWriter.() -> Unit,
+        block: Writable,
     ) {
         testModuleWriter.setNewlinePrefix("/// ")
         testCase.documentation.map {
@@ -452,9 +451,9 @@ class ProtocolTestGenerator(
 
     /**
      * wraps `inner` in a call to `aws_smithy_protocol_test::assert_ok`, a convenience wrapper
-     * for pretty prettying protocol test helper results
+     * for pretty printing protocol test helper results
      */
-    private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
+    private fun assertOk(rustWriter: RustWriter, inner: Writable) {
         rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")

@@ -118,8 +118,8 @@ class HttpBindingGenerator(
         check(binding.location == HttpLocation.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = "deser_header_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
-            writer.rustBlock(
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+            rustBlock(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
@@ -139,7 +139,7 @@ class HttpBindingGenerator(
         check(target is MapShape)
         val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
         val inner = RuntimeType.forInlineFun("${fnName}_inner", httpSerdeModule) {
-            it.rustBlock(
+            rustBlock(
                 "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
                 RuntimeType.http,
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
@@ -149,8 +149,8 @@ class HttpBindingGenerator(
             }
         }
         val returnTypeSymbol = outputSymbol.mapRustType { it.asOptional() }
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
-            writer.rustBlock(
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+            rustBlock(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 returnTypeSymbol,
@@ -185,10 +185,10 @@ class HttpBindingGenerator(
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
         val fnName = "deser_payload_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
             if (binding.member.isStreaming(model)) {
                 val outputT = symbolProvider.toSymbol(binding.member)
-                rustWriter.rustBlock(
+                rustBlock(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
                     outputT,
@@ -206,7 +206,7 @@ class HttpBindingGenerator(
                 // The output needs to be Optional when deserializing the payload body or the caller signature
                 // will not match.
                 val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
-                rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
+                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
                     deserializePayloadBody(
                         binding,
                         errorT,
@@ -433,7 +433,7 @@ class HttpBindingGenerator(
         }
 
         val fnName = "add_headers_${shape.id.getName(service).toSnakeCase()}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
             // If the shape is an operation shape, the input symbol of the generated function is the input or output
             // shape, which is the shape holding the header-bound data.
             val shapeSymbol = symbolProvider.toSymbol(
@@ -452,7 +452,7 @@ class HttpBindingGenerator(
                 HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder,
                 "Shape" to shapeSymbol,
             )
-            rustWriter.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub fn $fnName(
                     input: &#{Shape},

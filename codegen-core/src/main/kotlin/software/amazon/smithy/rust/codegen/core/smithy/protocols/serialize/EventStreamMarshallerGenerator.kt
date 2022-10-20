@@ -24,6 +24,7 @@ import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -66,8 +67,8 @@ open class EventStreamMarshallerGenerator(
         val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
-        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
-            inlineWriter.renderMarshaller(marshallerType, unionSymbol)
+        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) {
+            renderMarshaller(marshallerType, unionSymbol)
         }
     }
 
@@ -227,7 +228,7 @@ open class EventStreamMarshallerGenerator(
         inputExpr: String,
         someName: String,
         writeSomeCase: RustWriter.(String) -> Unit,
-        writeNoneCase: (RustWriter.() -> Unit)? = null,
+        writeNoneCase: (Writable)? = null,
     ) {
         if (optional) {
             rustBlock("if let Some($someName) = $inputExpr") {
