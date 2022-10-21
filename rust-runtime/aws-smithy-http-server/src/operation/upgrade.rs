@@ -223,8 +223,6 @@ where
 /// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
 pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
-    type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
-
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
     fn upgrade(self, plugin: &Plugin) -> Route<B>;
 }
@@ -262,8 +260,6 @@ where
     <<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service: Clone + Send + 'static,
     <<<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service as tower::Service<http::Request<B>>>::Future: Send + 'static,
 {
-    type Service = <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service;
-
     /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
@@ -290,8 +286,6 @@ where
     InternalFailureException: IntoResponse<P>,
     P: Send + 'static,
 {
-    type Service = MissingFailure<P>;
-
     fn upgrade(self, _plugin: &Pl) -> Route<B> {
         Route::new(MissingFailure { _protocol: PhantomData })
     }
