@@ -179,10 +179,6 @@ jobs:
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
     env:
       CROSS_CONFIG: Cross.toml
-      OPENSSL_DIR: /openssl
-      # TODO: It'd be nice to only set these, conditionally, when building for i686
-      OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu
-      OPENSSL_INCLUDE_DIR: /usr/include/i386-linux-gnu
     steps:
     - name: Checkout
       uses: actions/checkout@v1
@@ -198,9 +194,18 @@ jobs:
         profile: minimal
         override: true
         target: ${{ matrix.target }}
+    - name: Sets OpenSSL env vars on i686
+      run: |
+        echo "OPENSSL_LIB_DIR=/usr/lib/i386-linux-gnu" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=/usr/include/i386-linux-gnu" >> $GITHUB_ENV
+      if: matrix.target == 'i686-unknown-linux-gnu'
+    - name: Sets OpenSSL env vars on ppc and ppc64
+      run: |
+        echo "OPENSSL_DIR=/openssl" >> $GITHUB_ENV
+      if: matrix.target != 'i686-unknown-linux-gnu'
     - name: Configure cross
       shell: bash
-      # configure and cross compile openssl locally to be able to run aws-smithy-client tests.
+      # configure and cross compile openssl locally on ppc and ppc64 to be able to run aws-smithy-client tests.
       # since cross dropped support for openssl, we use the build script from version 0.16.
       run: |
         cat > Cross.toml << EOF
