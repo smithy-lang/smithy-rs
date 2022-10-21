@@ -15,7 +15,8 @@ use smithy.framework#ValidationException
 service MiscService {
     operations: [
         TypeComplexityOperation,
-        InnerRequiredShapeOperation,
+        RequiredInnerShapeOperation,
+        RequiredHeaderCollectionOperation,
         ResponseCodeRequiredOperation,
         ResponseCodeHttpFallbackOperation,
         ResponseCodeDefaultOperation,
@@ -54,14 +55,14 @@ map MapA {
 
 /// This operation tests that (de)serializing required values from a nested
 /// shape works correctly.
-@http(uri: "/innerRequiredShapeOperation", method: "POST")
-operation InnerRequiredShapeOperation {
-    input: InnerRequiredShapeOperationInputOutput,
-    output: InnerRequiredShapeOperationInputOutput,
+@http(uri: "/requiredInnerShapeOperation", method: "POST")
+operation RequiredInnerShapeOperation {
+    input: RequiredInnerShapeOperationInputOutput,
+    output: RequiredInnerShapeOperationInputOutput,
     errors: [ValidationException],
 }
 
-structure InnerRequiredShapeOperationInputOutput {
+structure RequiredInnerShapeOperationInputOutput {
     inner: InnerShape
 }
 
@@ -232,3 +233,27 @@ structure ResponseCodeRequiredOutput {
     }
 ])
 operation AcceptHeaderStarService {}
+
+@http(uri: "/required-header-collection-operation", method: "GET")
+operation RequiredHeaderCollectionOperation {
+    input: RequiredHeaderCollectionOperationInputOutput,
+    output: RequiredHeaderCollectionOperationInputOutput,
+}
+
+structure RequiredHeaderCollectionOperationInputOutput {
+    @required
+    @httpHeader("X-Required-List")
+    requiredHeaderList: HeaderList,
+
+    @required
+    @httpHeader("X-Required-Set")
+    requiredHeaderSet: HeaderSet,
+}
+
+list HeaderList {
+    member: String
+}
+
+set HeaderSet {
+    member: String
+}
