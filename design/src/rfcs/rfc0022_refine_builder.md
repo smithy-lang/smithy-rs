@@ -578,7 +578,7 @@ let app = builder.build();
 
 Both proposals are outside the scope of this RFC, but they are shown here for illustrative purposes.
 
-### Alternatives: lazy type erasure
+### Alternatives: lazy and eager-on-demand type erasure
 
 A lot of our issues stem from type mismatch errors: we are encoding the type of our handlers into the overall type of the service builder and, as a consequence, we end up modifying that type every time we set a handler or modify its state.
 Type erasure is a common approach for mitigating these issues - reduce those generic parameters to a common type to avoid the mismatch errors.
@@ -587,14 +587,45 @@ This whole RFC can be seen as a type erasure proposal - done eagerly, as soon as
 We could try to strike a different balance - i.e. avoid performing type erasure eagerly, but allow developers to erase types on demand.
 Based on my analysis, this could happen in two ways:
 
-1. We cast handlers into a `Box<dyn Upgradable>` to which we can later apply plugins;
-2. We upgrade registered handlers to `Route<B>` and apply plugins in the process (as this RFC proposes to do unconditionally).
+1. We cast handlers into a `Box<dyn Upgradable<Protocol, Operation, Exts, Body, Plugin>>` to which we can later apply plugins (lazy type erasure);
+2. We upgrade registered handlers to `Route<B>` and apply plugins in the process (eager type erasure on-demand).
 
 Let's ignore these implementation issues for the time being to focus on what the ergonomics would look like assuming we can actually perform type erasure.
 In practice, we are going to assume that:
 
-- In approach 1), we can call `.boxed()` on an operation and get a `Box<dyn Upgradable>` back;
+- In approach 1), we can call `.boxed()` on a registered operation and get a `Box<dyn Upgradable>` back;
 - In approach 2), we can call `.erase()` on the entire service builder and convert all registered operations to `Route<B>` while keeping the `MissingOperation` entries as they are. After `erase` has been called, you can no longer register plugins (or, alternatively, the plugins you register will only apply new handlers).
+
+We are going to explore both approaches under the assumption that we want to preserve compile-time verification for missing handlers. If we are willing to abandon compile-time verification, we get better ergonomics since all `OpX` and `ExtsX` generic parameters can be erased (i.e. we no longer need to worry about `MissingOperation`).
+
+#### On `Box<dyn Upgradable<Protocol, Operation, Exts, Body, Plugin>>`
+
+This is the current definition of the `Upgradable` trait:
+
+```rust
+/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
+/// canonical associated types.
+pub trait Upgradable<Protocol, Operation, Exts, Body, Plugin> {
+    type Service: Service<http::Request<Body>, Response = http::Response<BoxBody>>;
+
+    /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
+    fn upgrade(self, plugin: &Plugin) -> Self::Service;
+}
+```
+
+In order to perform type erasure, we need to determine:
+
+- what type parameters we are going to pass as generic arguments to `Upgradable`;
+- what type we are going to use for the associated type `Service`.
+
+We have:
+
+- there is a single known protocol for a service, therefore we can set `Protocol` to its concrete type (e.g. `AwsRestJson1`);
+- each handler refers to a different operation, therefore we cannot erase the `Operation` and the `Exts` parameters;
+- both `Body` and `Plugin` appear as generic parameters on the service builder itself, therefore we can set them to the same type;
+- we can use `Route<B>` to normalize the `Service` associated type.
+
+The above leaves us with two unconstrained type parameters, `Operation` and `Exts`, for each operation. Those unconstrained type parameters leak into the type signature of the service builder itself. We therefore find ourselves having, again, 2N+2 type parameters.
 
 #### Branching
 
@@ -633,7 +664,7 @@ let builder = if check_database {
 };
 ```
 
-In approach 2), we can erase the whole builder in both branches:
+In approach 2), we can erase the whole builder in both branches when they both register a route:
 
 ```rust
 let check_database: bool = /* */;
@@ -645,14 +676,16 @@ let boxed_builder = if check_database {
 let app = boxed_builder.build();
 ```
 
+but, like in approach 1), we will still get a type mismatch error if one of the two branches leaves the route unset.
+
 #### Refactoring into smaller functions
 
 Developers would still have to spell out all generic parameters when writing a function that takes in a builder as a parameter:
 
 ```rust
-fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
-    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
-) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
+fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin>,
+) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin> {
     builder
 }
 ```
@@ -661,9 +694,12 @@ Writing the signature after having modified the builder becomes easier though.
 In approach 1), they can explicitly change the touched operation parameters to the boxed variant:
 
 ```rust
-fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
-    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
-) -> PokemonServiceBuilder<Op1, Op2, Op3, Box<dyn Upgradable>, Op5, Op6> {
+fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6, Exts4, Body, Plugin>(
+    builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin, Exts4=Exts4>,
+) -> PokemonServiceBuilder<
+        Op1, Op2, Op3, Box<dyn Upgradable<AwsRestJson1, GetServerStatistics, Exts4, Body, Plugin>>,
+        Op5, Op6, Body, Plugin, Body, Plugin, Exts4=Exts
+    > {
     builder.get_server_statistics(get_server_statistics)
 }
 ```
@@ -699,11 +735,8 @@ where
 
 #### Summary
 
-Approach 1) improves the ergonomics for both branching and refactoring to smaller functions. Nonetheless, you still need to spell out all generic parameters when passing the builder around as a function parameter - it quickly becomes unfeasible for larger services and tedious to keep up to date as new operations are introduced.
-Approach 2) improves the ergonomics for the branching scenario but it doesn't improve the refactoring scenario.
-
-Working out the implementation details, especially for 1), is non-trivial.
-Our current definition of `Upgradable` takes both `Exts` and `Operation` as generic parameters - we would not be able to perform type erasure as it stands. We would have to refactor our runtime crates to push those two parameters elsewhere (most likely into the `Operation` struct) to (maybe?) make type erasure possible.
+Both approaches force us to have a number of generic parameters that scales linearly with the number of operations on the service, affecting the ergonomics of the resulting API in both the branching and the refactoring scenarios.
+We believe that the ergonomics advantages of the proposal advanced by this RFC outweigh the limitation of having to specify your plugins upfront, when creating the builder instance.
 
 ### Builder extensions: what now?
 
