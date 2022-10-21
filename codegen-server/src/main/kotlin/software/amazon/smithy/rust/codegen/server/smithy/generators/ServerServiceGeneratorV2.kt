@@ -152,7 +152,7 @@ class ServerServiceGeneratorV2(
     private val buildConstraints = operations.zip(builderOps).zip(extensionTypes).map { (first, exts) ->
         val (operation, type) = first
         // TODO(https://github.com/awslabs/smithy-rs/issues/1713#issue-1365169734): The `Error = Infallible` is an
-        // excess requirement to stay at parity with existing builder.
+        //  excess requirement to stay at parity with existing builder.
         writable {
             rustTemplate(
                 """
@@ -162,11 +162,7 @@ class ServerServiceGeneratorV2(
                     $exts,
                     B,
                     Pl,
-                >,
-                $type::Service: Clone + Send + 'static,
-                <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
-
-                $type::Service: #{Tower}::Service<#{Http}::Request<B>, Error = std::convert::Infallible>
+                >
                 """,
                 "Marker" to protocol.markerStruct(),
                 *codegenScope,

@@ -123,7 +123,7 @@ class ServerAwsJsonProtocol(
                     """
                     (
                         String::from("$serviceName.$operationName"),
-                        #{SmithyHttpServer}::routing::Route::new(#{OperationValue:W})
+                        #{OperationValue:W}
                     ),
                     """,
                     "OperationValue" to operationValue,
@@ -184,7 +184,7 @@ private fun restRouterConstruction(
                 """
                 (
                     #{Key:W},
-                    #{SmithyHttpServer}::routing::Route::new(#{OperationValue:W})
+                    #{OperationValue:W}
                 ),
                 """,
                 "Key" to key,

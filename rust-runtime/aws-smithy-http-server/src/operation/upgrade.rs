@@ -21,6 +21,7 @@ use crate::{
     plugin::Plugin,
     request::{FromParts, FromRequest},
     response::IntoResponse,
+    routing::Route,
     runtime_error::InternalFailureException,
 };
 
@@ -225,7 +226,7 @@ pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     type Service: Service<http::Request<B>, Response = http::Response<BoxBody>>;
 
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
-    fn upgrade(self, plugin: &Plugin) -> Self::Service;
+    fn upgrade(self, plugin: &Plugin) -> Route<B>;
 }
 
 impl<P, Op, Exts, B, Pl, S, L, PollError> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
@@ -255,6 +256,11 @@ where
     // The signature of the output is correct
     <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service:
         Service<http::Request<B>, Response = http::Response<BoxBody>>,
+
+    // For `Route::new` for the resulting service
+    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service: tower::Service<http::Request<B>, Error = std::convert::Infallible>,
+    <<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service: Clone + Send + 'static,
+    <<<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service as tower::Service<http::Request<B>>>::Future: Send + 'static,
 {
     type Service = <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service;
 
@@ -262,10 +268,10 @@ where
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self, plugin: &Pl) -> Self::Service {
+    fn upgrade(self, plugin: &Pl) -> Route<B> {
         let mapped = plugin.map(self);
         let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
-        layer.layer(mapped.inner)
+        Route::new(layer.layer(mapped.inner))
     }
 }
 
@@ -282,11 +288,12 @@ pub struct FailOnMissingOperation;
 impl<P, Op, Exts, B, Pl> Upgradable<P, Op, Exts, B, Pl> for FailOnMissingOperation
 where
     InternalFailureException: IntoResponse<P>,
+    P: Send + 'static,
 {
     type Service = MissingFailure<P>;
 
-    fn upgrade(self, _plugin: &Pl) -> Self::Service {
-        MissingFailure { _protocol: PhantomData }
+    fn upgrade(self, _plugin: &Pl) -> Route<B> {
+        Route::new(MissingFailure { _protocol: PhantomData })
     }
 }
 
