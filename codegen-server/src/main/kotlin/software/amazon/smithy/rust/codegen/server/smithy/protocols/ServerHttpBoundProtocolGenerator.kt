@@ -43,9 +43,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
@@ -74,6 +72,8 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -767,7 +767,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
-        val err = if (StructureGenerator.serverHasFallibleBuilder(inputShape, model, symbolProvider, takeInUnconstrainedTypes = true)) {
+        val err = if (ServerBuilderGenerator.serverHasFallibleBuilder(
+                inputShape,
+                model,
+                symbolProvider,
+                takeInUnconstrainedTypes = true,
+            )
+        ) {
             "?"
         } else ""
         rustTemplate("input.build()$err", *codegenScope)

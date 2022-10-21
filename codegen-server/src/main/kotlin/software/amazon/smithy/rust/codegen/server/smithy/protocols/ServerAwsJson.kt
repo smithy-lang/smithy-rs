@@ -15,9 +15,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSection
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -56,9 +56,9 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
  * AwsJson requires errors to be serialized in server responses with an additional `__type` field. This
  * customization writes the right field depending on the version of the AwsJson protocol.
  */
-class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCustomization() {
-    override fun section(section: JsonSection): Writable = when (section) {
-        is JsonSection.ServerError -> writable {
+class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonSerializerCustomization() {
+    override fun section(section: JsonSerializerSection): Writable = when (section) {
+        is JsonSerializerSection.ServerError -> writable {
             if (section.structureShape.hasTrait<ErrorTrait>()) {
                 val typeId = when (awsJsonVersion) {
                     // AwsJson 1.0 wants the whole shape ID (namespace#Shape).
@@ -71,7 +71,7 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
                 rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
             }
         }
-        is JsonSection.BeforeIteratingOverMap -> emptySection
+        is JsonSerializerSection.BeforeIteratingOverMap -> emptySection
     }
 }
 

@@ -39,6 +39,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -48,13 +50,25 @@ import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.deserializeFunctionName
-import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
+
+/**
+ * Class describing a JSON parser section that can be used in a customization.
+ */
+sealed class JsonParserSection(name: String) : Section(name) {
+    // TODO Docs
+    data class BeforeBoxingDeserializedMember(val shape: MemberShape) : JsonParserSection("BeforeBoxingDeserializedMember")
+}
+
+/**
+ * Customization for the JSON parser.
+ */
+typealias JsonParserCustomization = NamedSectionGenerator<JsonParserSection>
 
 class JsonParserGenerator(
     codegenContext: CodegenContext,
@@ -76,6 +90,7 @@ class JsonParserGenerator(
      *  this function should just need to return a `Symbol` as opposed to a pair.
      */
     private val returnSymbolToParse: (Shape) -> Pair<Boolean, Symbol>,
+    private val customizations: List<JsonParserCustomization> = listOf(),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -272,13 +287,17 @@ class JsonParserGenerator(
         }
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isRustBoxed()) {
-            if (codegenTarget == CodegenTarget.SERVER &&
-                model.expectShape(memberShape.container).isStructureShape &&
-                memberShape.targetCanReachConstrainedShape(model, symbolProvider)
-            ) {
-                // Before boxing, convert into `MaybeConstrained` if the target can reach a constrained shape.
-                rust(".map(|x| x.into())")
+            for (customization in customizations) {
+                customization.section(JsonParserSection.BeforeBoxingDeserializedMember(memberShape))(this)
             }
+            // TODO Remove
+//            if (codegenTarget == CodegenTarget.SERVER &&
+//                model.expectShape(memberShape.container).isStructureShape &&
+//                memberShape.targetCanReachConstrainedShape(model, symbolProvider)
+//            ) {
+//                // Before boxing, convert into `MaybeConstrained` if the target can reach a constrained shape.
+//                rust(".map(|x| x.into())")
+//            }
             rust(".map(Box::new)")
         }
     }

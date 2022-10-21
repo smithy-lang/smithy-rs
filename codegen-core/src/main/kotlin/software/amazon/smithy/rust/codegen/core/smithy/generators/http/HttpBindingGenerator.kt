@@ -13,10 +13,12 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -40,7 +42,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -51,7 +52,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -82,6 +82,8 @@ sealed class HttpBindingSection(name: String) : Section(name) {
     //  Addressed in https://github.com/awslabs/smithy-rs/pull/1841
     data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: Shape) :
         HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
+    data class AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(val memberShape: MemberShape) :
+        HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
 }
 
 typealias HttpBindingCustomization = NamedSectionGenerator<HttpBindingSection>
@@ -154,11 +156,13 @@ class HttpBindingGenerator(
 
     fun generateDeserializePrefixHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpBinding.Location.PREFIX_HEADERS)
-        val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER && binding.member.targetCanReachConstrainedShape(model, symbolProvider)
+        // TODO Remove
+//        val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER && binding.member.targetCanReachConstrainedShape(model, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(binding.member)
-        if (!returnUnconstrainedType) {
-            check(outputSymbol.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputSymbol.rustType() }
-        }
+        // TODO Remove
+//        if (!returnUnconstrainedType) {
+//            check(outputSymbol.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputSymbol.rustType() }
+//        }
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
         val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
@@ -193,11 +197,17 @@ class HttpBindingGenerator(
                     headerUtil, inner,
                 )
 
-                if (returnUnconstrainedType) {
-                    // If the map shape has constrained string keys or values, we need to wrap the deserialized hash map
-                    // in the corresponding unconstrained wrapper tuple struct.
-                    rust("let out = out.map(#T);", outputSymbol.mapRustType { it.stripOuter<RustType.Option>() })
+                for (customization in customizations) {
+                    customization.section(
+                        HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(binding.member),
+                    )(this)
                 }
+                // TODO Remove
+//                if (returnUnconstrainedType) {
+//                    // If the map shape has constrained string keys or values, we need to wrap the deserialized hash map
+//                    // in the corresponding unconstrained wrapper tuple struct.
+//                    rust("let out = out.map(#T);", outputSymbol.mapRustType { it.stripOuter<RustType.Option>() })
+//                }
                 rust("out.map(Some)")
             }
         }
@@ -406,6 +416,7 @@ class HttpBindingGenerator(
                     })
                     """,
                 )
+            // TODO Is this arm reachable? Nothing should render to a `HashSet`.
             is RustType.HashSet ->
                 rust(
                     """
@@ -417,10 +428,10 @@ class HttpBindingGenerator(
                     """,
                 )
             else -> {
-                val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER &&
-                    targetShape is CollectionShape &&
-                    targetShape.canReachConstrainedShape(model, symbolProvider)
-                if (returnUnconstrainedType) {
+                if (targetShape is ListShape) {
+                    // This is a constrained list shape and we must therefore be generating a server SDK.
+                    check(codegenTarget == CodegenTarget.SERVER)
+                    check(rustType is RustType.Opaque)
                     rust(
                         """
                         Ok(if !$parsedValue.is_empty() {
@@ -432,6 +443,23 @@ class HttpBindingGenerator(
                         symbolProvider.toSymbol(targetShape),
                     )
                 } else {
+                    check(targetShape is SimpleShape)
+                    // TODO Remove
+//                val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER &&
+//                    targetShape is CollectionShape &&
+//                    targetShape.canReachConstrainedShape(model, symbolProvider)
+//                if (returnUnconstrainedType) {
+//                    rust(
+//                        """
+//                        Ok(if !$parsedValue.is_empty() {
+//                            Some(#T($parsedValue))
+//                        } else {
+//                            None
+//                        })
+//                        """,
+//                        symbolProvider.toSymbol(targetShape),
+//                    )
+//                } else {
                     rustTemplate(
                         """
                         if $parsedValue.len() > 1 {
@@ -443,6 +471,7 @@ class HttpBindingGenerator(
                         """,
                         "header_util" to headerUtil,
                     )
+//                }
                 }
             }
         }

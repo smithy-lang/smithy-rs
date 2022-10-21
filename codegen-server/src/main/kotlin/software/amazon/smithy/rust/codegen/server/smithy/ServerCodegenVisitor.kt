@@ -33,11 +33,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.Unconstrained
-import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer

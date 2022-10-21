@@ -22,13 +22,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.Unconstrained
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
-import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol

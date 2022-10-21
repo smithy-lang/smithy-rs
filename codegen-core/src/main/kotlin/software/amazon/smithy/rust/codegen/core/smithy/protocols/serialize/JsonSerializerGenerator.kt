@@ -51,26 +51,27 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
- * Class describing a JSON section that can be used in a customization.
+ * Class describing a JSON serializer section that can be used in a customization.
  */
-sealed class JsonSection(name: String) : Section(name) {
+sealed class JsonSerializerSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
-    data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
+    data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSerializerSection("ServerError")
 
-    data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSection("BeforeIteratingOverMap")
+    // TODO Docs
+    data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSerializerSection("BeforeIteratingOverMap")
 }
 
 /**
- * JSON customization.
+ * Customization for the JSON serializer.
  */
-typealias JsonCustomization = NamedSectionGenerator<JsonSection>
+typealias JsonSerializerCustomization = NamedSectionGenerator<JsonSerializerSection>
 
 class JsonSerializerGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
-    private val customizations: List<JsonCustomization> = listOf(),
+    private val customizations: List<JsonSerializerCustomization> = listOf(),
 ) : StructuredDataSerializerGenerator {
     private data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
@@ -184,7 +185,7 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
-                customizations.forEach { customization -> customization.section(JsonSection.ServerError(structureShape, "object"))(this) }
+                customizations.forEach { customization -> customization.section(JsonSerializerSection.ServerError(structureShape, "object"))(this) }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
@@ -424,7 +425,7 @@ class JsonSerializerGenerator(
         val keyName = safeName("key")
         val valueName = safeName("value")
         for (customization in customizations) {
-            customization.section(JsonSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(this)
+            customization.section(JsonSerializerSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(this)
         }
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyExpression = "$keyName.as_str()"

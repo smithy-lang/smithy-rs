@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGenerator
@@ -82,6 +81,8 @@ open class StructureGenerator(
         /**
          * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
          * fallible builder to be constructed.
+         *
+         * TODO Move this to `BuilderGenerator`.
          */
         fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
             // All operation inputs should have fallible builders in case a new required field is added in the future.
@@ -95,31 +96,12 @@ open class StructureGenerator(
                     }
 
         /**
-         * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
-         * fallible builder to be constructed.
-         *
-         * TODO Move this to `codegen-server`. I can't yet because we need to split `Instantiator.kt`.
-         */
-        fun serverHasFallibleBuilder(
-            structureShape: StructureShape,
-            model: Model,
-            symbolProvider: SymbolProvider,
-            takeInUnconstrainedTypes: Boolean,
-        ): Boolean =
-            if (takeInUnconstrainedTypes) {
-                structureShape.canReachConstrainedShape(model, symbolProvider)
-            } else {
-                structureShape
-                    .members()
-                    .map { symbolProvider.toSymbol(it) }
-                    .any { !it.isOptional() }
-            }
-
-        /**
          * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGeneratorWithoutPublicConstrainedTypes],
          * requires a fallible builder to be constructed.
          *
          * This builder only enforces the `required` trait.
+         *
+         * TODO Move this to `codegen-server`, to ServerBuilderGeneratorWithoutPublicConstrainedTypes
          */
         fun serverHasFallibleBuilderWithoutPublicConstrainedTypes(
             structureShape: StructureShape,

@@ -27,6 +27,7 @@ class ServerResponseBindingGenerator(
     private val codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
 ) {
+    // TODO Why is this not using serverBuilderSymbol like `ServerRequestBindingGenerator`?
     private fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(codegenContext.symbolProvider)
 
     private val httpBindingGenerator =
@@ -48,7 +49,7 @@ class ServerResponseBindingGenerator(
 }
 
 /**
- * A customization to, just before we iterate over a _constrained_ map shape that is bound to HTTP headers via
+ * A customization to, just before we iterate over a _constrained_ map shape that is bound to HTTP response headers via
  * `@httpPrefixHeaders`, unwrap the wrapper newtype and take a shared reference to the actual `std::collections::HashMap`
  * within it.
  */
@@ -65,5 +66,6 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
                 rust("let ${section.variableName} = &${section.variableName}.0;")
             }
         }
+        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders -> emptySection
     }
 }

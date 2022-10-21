@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
-import software.amazon.smithy.rust.codegen.core.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder

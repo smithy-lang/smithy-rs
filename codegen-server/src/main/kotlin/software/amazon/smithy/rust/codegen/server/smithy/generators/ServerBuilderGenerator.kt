@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolProvider
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -30,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -38,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -46,7 +46,9 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
+import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 
 /**
@@ -86,6 +88,29 @@ class ServerBuilderGenerator(
     codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
 ) {
+    companion object {
+        /**
+         * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
+         * fallible builder to be constructed.
+         *
+         * TODO Rename to `hasFallibleBuilder`, make sure usages are using it as `ServerBuilderGenerator.hasFallibleBuilder`.
+         */
+        fun serverHasFallibleBuilder(
+            structureShape: StructureShape,
+            model: Model,
+            symbolProvider: SymbolProvider,
+            takeInUnconstrainedTypes: Boolean,
+        ): Boolean =
+            if (takeInUnconstrainedTypes) {
+                structureShape.canReachConstrainedShape(model, symbolProvider)
+            } else {
+                structureShape
+                    .members()
+                    .map { symbolProvider.toSymbol(it) }
+                    .any { !it.isOptional() }
+            }
+    }
+
     private val takeInUnconstrainedTypes = shape.isReachableFromOperationInput()
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -98,8 +123,7 @@ class ServerBuilderGenerator(
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val moduleName = builderSymbol.namespace.split(builderSymbol.namespaceDelimiter).last()
-    private val isBuilderFallible =
-        StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
+    private val isBuilderFallible = serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
 

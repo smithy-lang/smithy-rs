@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 
@@ -34,7 +33,7 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
     override fun hasFallibleBuilder(shape: StructureShape): Boolean {
         // Only operation input builders take in unconstrained types.
         val takesInUnconstrainedTypes = shape.isReachableFromOperationInput()
-        return StructureGenerator.serverHasFallibleBuilder(
+        return ServerBuilderGenerator.serverHasFallibleBuilder(
             shape,
             codegenContext.model,
             codegenContext.symbolProvider,

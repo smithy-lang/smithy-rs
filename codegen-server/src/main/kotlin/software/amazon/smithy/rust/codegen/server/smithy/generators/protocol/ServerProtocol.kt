@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
@@ -26,16 +25,20 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
 private fun allOperations(codegenContext: CodegenContext): List<OperationShape> {
     val index = TopDownIndex.of(codegenContext.model)
@@ -109,7 +112,16 @@ class ServerAwsJsonProtocol(
             } else {
                 false to codegenContext.symbolProvider.toSymbol(shape)
             }
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
+        return JsonParserGenerator(
+            codegenContext,
+            httpBindingResolver,
+            ::awsJsonFieldName,
+            ::builderSymbol,
+            ::returnSymbolToParse,
+            listOf(
+                ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(serverCodegenContext),
+            ),
+        )
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
@@ -240,7 +252,18 @@ class ServerRestJsonProtocol(
             } else {
                 false to codegenContext.symbolProvider.toSymbol(shape)
             }
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
+        return JsonParserGenerator(
+            codegenContext,
+            httpBindingResolver,
+            ::restJsonFieldName,
+            ::builderSymbol,
+            ::returnSymbolToParse,
+            listOf(
+                ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(
+                    serverCodegenContext,
+                ),
+            ),
+        )
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
@@ -295,4 +318,23 @@ class ServerRestXmlProtocol(
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 
     override fun serverContentTypeCheckNoModeledInput() = true
+}
+
+/**
+ * A customization to, just before we box a recursive member that we've deserialized into `Option<T>`, convert it into
+ * `MaybeConstrained` if the target shape can reach a constrained shape.
+ */
+class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(val codegenContext: ServerCodegenContext) :
+    JsonParserCustomization() {
+    override fun section(section: JsonParserSection): Writable = when (section) {
+        is JsonParserSection.BeforeBoxingDeserializedMember -> writable {
+            // We're only interested in _structure_ member shapes that can reach constrained shapes.
+            if (
+                codegenContext.model.expectShape(section.shape.container) is StructureShape &&
+                section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
+            ) {
+                rust(".map(|x| x.into())")
+            }
+        }
+    }
 }
