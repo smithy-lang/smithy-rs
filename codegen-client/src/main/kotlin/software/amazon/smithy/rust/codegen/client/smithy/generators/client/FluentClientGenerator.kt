@@ -86,8 +86,8 @@ class FluentClientGenerator(
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
-        crate.withModule(clientModule) { writer ->
-            renderFluentClient(writer)
+        crate.withModule(clientModule) {
+            renderFluentClient(this)
         }
 
         CustomizableOperationGenerator(
@@ -195,7 +195,7 @@ class FluentClientGenerator(
                     outputFieldsHead += " with field(s):"
                 }
 
-                rustTemplate(
+                writer.rustTemplate(
                     """
                     /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
                     ///
@@ -207,7 +207,7 @@ class FluentClientGenerator(
                     """,
                 )
 
-                rust(
+                writer.rust(
                     """
                     pub fn ${
                     clientOperationFnName(
@@ -221,7 +221,7 @@ class FluentClientGenerator(
                 )
             }
         }
-        writer.withModule("fluent_builders") {
+        writer.withModule(RustModule.public("fluent_builders")) {
             docs(
                 """
                 Utilities to ergonomically construct a request to the service.

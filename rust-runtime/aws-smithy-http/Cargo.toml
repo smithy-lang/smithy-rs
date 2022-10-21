@@ -24,6 +24,7 @@ http-body = "0.4.4"
 once_cell = "1.10"
 percent-encoding = "2.1.0"
 pin-project-lite = "0.2.9"
+pin-utils = "0.1.0"
 tracing = "0.1"
 
 # We are using hyper for our streaming body implementation, but this is an internal detail.

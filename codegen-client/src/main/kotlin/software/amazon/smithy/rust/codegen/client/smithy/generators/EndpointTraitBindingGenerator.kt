@@ -86,7 +86,7 @@ class EndpointTraitBindings(
                     )
                     "${label.content} = $field"
                 }
-                writer.rustTemplate(
+                rustTemplate(
                     "#{EndpointPrefix}::new(format!($formatLiteral, ${args.joinToString()}))",
                     "EndpointPrefix" to endpointPrefix,
                 )

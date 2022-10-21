@@ -192,3 +192,15 @@ message = "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This arc
 references = ["smithy-rs#1847"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "crisidev"
+
+[[aws-sdk-rust]]
+message = "Ability to override the IMDS client in `DefaultCredentialsChain`"
+references = ["aws-sdk-rust#625"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "kevinpark1217"
+
+[[aws-sdk-rust]]
+message = "Fix aws-sigv4 canonical request formatting fallibility."
+references = ["smithy-rs#1656"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"

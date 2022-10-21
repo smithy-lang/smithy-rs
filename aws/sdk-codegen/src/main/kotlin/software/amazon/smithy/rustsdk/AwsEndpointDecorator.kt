@@ -257,7 +257,7 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
         val rest = partitions.drop(1)
         val fnName = "endpoint_resolver"
         return RuntimeType.forInlineFun(fnName, RustModule.private("aws_endpoint")) {
-            it.rustBlockTemplate("pub fn $fnName() -> impl #{ResolveAwsEndpoint}", *codegenScope) {
+            rustBlockTemplate("pub fn $fnName() -> impl #{ResolveAwsEndpoint}", *codegenScope) {
                 withBlockTemplate("#{PartitionResolver}::new(", ")", *codegenScope) {
                     renderPartition(base)
                     rust(",")
