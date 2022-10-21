@@ -5,8 +5,13 @@
 
 //! Python error definition.
 
-use aws_smithy_http_server::protocols::Protocol;
-use aws_smithy_http_server::{body::to_boxed, response::Response};
+use aws_smithy_http_server::{
+    body::{to_boxed, BoxBody},
+    proto::{
+        aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
+    },
+    response::IntoResponse,
+};
 use aws_smithy_types::date_time::{ConversionError, DateTimeParseError};
 use pyo3::{create_exception, exceptions::PyException as BasePyException, prelude::*, PyErr};
 use thiserror::Error;
@@ -62,39 +67,50 @@ impl From<PyErr> for PyMiddlewareException {
     }
 }
 
-impl PyMiddlewareException {
-    /// Convert the exception into a [Response], following the [Protocol] specification.
-    pub(crate) fn into_response(self, protocol: Protocol) -> Response {
-        let body = to_boxed(match protocol {
-            Protocol::RestJson1 => self.json_body(),
-            Protocol::RestXml => self.xml_body(),
-            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#empty-body-serialization
-            Protocol::AwsJson10 => self.json_body(),
-            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
-            Protocol::AwsJson11 => self.json_body(),
-        });
-
-        let mut builder = http::Response::builder();
-        builder = builder.status(self.status_code);
-
-        match protocol {
-            Protocol::RestJson1 => {
-                builder = builder
-                    .header("Content-Type", "application/json")
-                    .header("X-Amzn-Errortype", "MiddlewareException");
-            }
-            Protocol::RestXml => builder = builder.header("Content-Type", "application/xml"),
-            Protocol::AwsJson10 => {
-                builder = builder.header("Content-Type", "application/x-amz-json-1.0")
-            }
-            Protocol::AwsJson11 => {
-                builder = builder.header("Content-Type", "application/x-amz-json-1.1")
-            }
-        }
-
-        builder.body(body).expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+impl IntoResponse<RestJson1> for PyMiddlewareException {
+    fn into_response(self) -> http::Response<BoxBody> {
+        http::Response::builder()
+            .status(self.status_code)
+            .header("Content-Type", "application/json")
+            .header("X-Amzn-Errortype", "MiddlewareException")
+            .body(to_boxed(self.json_body()))
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }
+}
 
+impl IntoResponse<RestXml> for PyMiddlewareException {
+    fn into_response(self) -> http::Response<BoxBody> {
+        http::Response::builder()
+            .status(self.status_code)
+            .header("Content-Type", "application/xml")
+            .body(to_boxed(self.xml_body()))
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+    }
+}
+
+impl IntoResponse<AwsJson1_0> for PyMiddlewareException {
+    fn into_response(self) -> http::Response<BoxBody> {
+        http::Response::builder()
+            .status(self.status_code)
+            .header("Content-Type", "application/x-amz-json-1.0")
+            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#empty-body-serialization
+            .body(to_boxed(self.json_body()))
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+    }
+}
+
+impl IntoResponse<AwsJson1_1> for PyMiddlewareException {
+    fn into_response(self) -> http::Response<BoxBody> {
+        http::Response::builder()
+            .status(self.status_code)
+            .header("Content-Type", "application/x-amz-json-1.1")
+            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
+            .body(to_boxed(self.json_body()))
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+    }
+}
+
+impl PyMiddlewareException {
     /// Serialize the body into a JSON object.
     fn json_body(&self) -> String {
         let mut out = String::new();

@@ -70,7 +70,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -177,10 +176,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     if ! #{SmithyHttpServer}::protocols::accept_header_classifier(req, ${contentType.dq()}) {
-                        return Err(#{RuntimeError} {
-                            protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                            kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
-                        })
+                        return Err(#{RuntimeError}::NotAcceptable)
                     }
                     """,
                     *codegenScope,
@@ -200,10 +196,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             if #{SmithyHttpServer}::protocols::content_type_header_classifier(req, $expectedRequestContentType).is_err() {
-                                return Err(#{RuntimeError} {
-                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                    kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::UnsupportedMediaType,
-                                })
+                                return Err(#{RuntimeError}::UnsupportedMediaType)
                             }
                             """,
                             *codegenScope,
@@ -230,12 +223,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     #{parse_request}(req)
                         .await
                         .map($inputName)
-                        .map_err(
-                            |err| #{RuntimeError} {
-                                protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                kind: err.into()
-                            }
-                        )
+                        .map_err(Into::into)
                 }
             }
 
@@ -282,12 +270,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Self::Output(o) => {
                         match #{serialize_response}(o) {
                             Ok(response) => response,
-                            Err(e) => {
-                                #{RuntimeError} {
-                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                    kind: e.into()
-                                }.into_response()
-                            }
+                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                         }
                     },
                     Self::Error(err) => {
@@ -296,12 +279,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(err.name()));
                                 response
                             },
-                            Err(e) => {
-                                #{RuntimeError} {
-                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                    kind: e.into()
-                                }.into_response()
-                            }
+                            Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                         }
                     }
                 }
@@ -346,12 +324,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 match #{serialize_response}(self.0) {
                     Ok(response) => response,
-                    Err(e) => {
-                        #{RuntimeError} {
-                            protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                            kind: e.into()
-                        }.into_response()
-                    }
+                    Err(e) => #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
                 }
                 """.trimIndent()
 
@@ -429,9 +402,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val inputSymbol = symbolProvider.toSymbol(inputShape)
 
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
+            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
             // The last conversion trait bound is needed by the `hyper::body::to_bytes(body).await?` call.
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
                     ##[allow(unused_variables)] request: &mut #{SmithyHttpServer}::request::RequestParts<B>
@@ -464,12 +437,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
 
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
+            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
 
             // Note we only need to take ownership of the output in the case that it contains streaming members.
-            // However we currently always take ownership here, but worth noting in case in the future we want
+            // However, we currently always take ownership here, but worth noting in case in the future we want
             // to generate different signatures for streaming vs non-streaming for some reason.
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub fn $fnName(
                     ##[allow(unused_variables)] output: #{O}
@@ -495,8 +468,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_error"
         val errorSymbol = operationShape.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
-            it.rustBlockTemplate(
+            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            rustBlockTemplate(
                 "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
                 "E" to errorSymbol,
@@ -535,7 +508,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                     val bindings = httpBindingResolver.errorResponseBindings(it)
 
-                    software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+                    Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
                     serverRenderResponseHeaders(operationShape, variantShape)
 
@@ -571,7 +544,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+        Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
@@ -738,7 +711,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
-        software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+        Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
@@ -777,7 +750,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
-        val err = if (StructureGenerator.fallibleBuilder(inputShape, symbolProvider)) {
+        val err = if (StructureGenerator.hasFallibleBuilder(inputShape, symbolProvider)) {
             "?"
         } else ""
         rustTemplate("input.build()$err", *codegenScope)
@@ -1143,8 +1116,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
         val symbol = output.extractSymbolFromOption()
-        return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
-            writer.rustBlockTemplate(
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) {
+            rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
                 *codegenScope,
                 "O" to output,
@@ -1215,7 +1188,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                 }
 
-                writer.write(
+                rust(
                     """
                     Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """,

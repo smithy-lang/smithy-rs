@@ -15,6 +15,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.asRef
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -39,9 +40,9 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
-fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
+fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
-        block(this)
+        block()
     }
 }
 
@@ -63,13 +64,13 @@ open class StructureGenerator(
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
+            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
     }
 
     companion object {
         /** Returns whether a structure shape requires a fallible builder to be generated. */
-        fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
+        fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
             // All operation inputs should have fallible builders in case a new required field is added in the future.
             structureShape.hasTrait<SyntheticInputTrait>() ||
                 structureShape
@@ -109,6 +110,7 @@ open class StructureGenerator(
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
                     val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
@@ -151,7 +153,7 @@ open class StructureGenerator(
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
-        writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
+        writer.write("$memberName: #T,", memberSymbol)
     }
 
     open fun renderStructure() {

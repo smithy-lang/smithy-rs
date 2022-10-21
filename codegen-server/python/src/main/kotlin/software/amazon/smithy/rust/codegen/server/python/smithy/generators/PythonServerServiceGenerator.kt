@@ -34,13 +34,13 @@ class PythonServerServiceGenerator(
     }
 
     override fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
-        PythonServerOperationHandlerGenerator(context, operations).render(writer)
+        PythonServerOperationHandlerGenerator(context, protocol, operations).render(writer)
     }
 
     override fun renderExtras(operations: List<OperationShape>) {
-        rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) { writer ->
-            PythonApplicationGenerator(context, operations)
-                .render(writer)
+        rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) {
+            PythonApplicationGenerator(context, protocol, operations)
+                .render(this)
         }
     }
 }

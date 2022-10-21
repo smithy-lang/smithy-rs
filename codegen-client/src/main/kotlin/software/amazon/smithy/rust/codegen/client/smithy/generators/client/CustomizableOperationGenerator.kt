@@ -35,13 +35,13 @@ class CustomizableOperationGenerator(
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.operation(Visibility.PUBLIC)) { writer ->
-            writer.docs("Operation customization and supporting types")
-            writer.rust("pub mod customize;")
+        crate.withModule(RustModule.operation(Visibility.PUBLIC)) {
+            docs("Operation customization and supporting types")
+            rust("pub mod customize;")
         }
 
-        crate.withNonRootModule(CUSTOMIZE_MODULE) { writer ->
-            writer.rustTemplate(
+        crate.withNonRootModule(CUSTOMIZE_MODULE) {
+            rustTemplate(
                 """
                 pub use #{Operation};
                 pub use #{ClassifyRetry};
@@ -51,10 +51,10 @@ class CustomizableOperationGenerator(
                 "ClassifyRetry" to smithyHttp.member("retry::ClassifyRetry"),
                 "RetryKind" to smithyTypes.member("retry::RetryKind"),
             )
-            renderCustomizableOperationModule(writer)
+            renderCustomizableOperationModule(this)
 
             if (includeFluentClient) {
-                renderCustomizableOperationSend(writer)
+                renderCustomizableOperationSend(this)
             }
         }
     }
@@ -110,7 +110,7 @@ class CustomizableOperationGenerator(
                 }
 
                 /// Convenience for `map_request` where infallible direct mutation of request is acceptable
-                pub fn mutate_request<E>(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
+                pub fn mutate_request(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
                     self.map_request(|mut req| {
                         f(&mut req);
                         Result::<_, Infallible>::Ok(req)

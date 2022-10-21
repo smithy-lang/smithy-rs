@@ -53,7 +53,7 @@ Smithy provides an out-the-box middleware which:
 - Opens a DEBUG level span, prior to request handling, including the operation name and request URI and headers.
 - Emits a DEBUG level event, after to request handling, including the response headers and status code.
 
-This is applied by default and can be enabled and disabled by filtering on `aws_smithy_http_server::logging`.
+This is applied by default and can be enabled and disabled by filtering on `aws_smithy_http_server::instrumentation`.
 
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
 
@@ -83,21 +83,21 @@ RUST_LOG=aws_smithy_http_server=debug,pokemon_service=debug cargo r
 and then using `cargo t` to run integration tests against the server, yields the following logs:
 
 ```text
-  2022-09-27T09:13:35.372517Z DEBUG aws_smithy_http_server::logging::service: response, headers: {"content-type": "application/json", "content-length": "17"}, status_code: 200 OK
+  2022-09-27T09:13:35.372517Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {"content-type": "application/json", "content-length": "17"}, status_code: 200 OK
     at /smithy-rs/rust-runtime/aws-smithy-http-server/src/logging/service.rs:47
-    in aws_smithy_http_server::logging::service::request with operation: get_server_statistics, method: GET, uri: /stats, headers: {"host": "localhost:13734"}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_server_statistics, method: GET, uri: /stats, headers: {"host": "localhost:13734"}
 
   2022-09-27T09:13:35.374104Z DEBUG pokemon_service: attempting to authenticate storage user
     at pokemon-service/src/lib.rs:184
-    in aws_smithy_http_server::logging::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
 
   2022-09-27T09:13:35.374152Z DEBUG pokemon_service: authentication failed
     at pokemon-service/src/lib.rs:188
-    in aws_smithy_http_server::logging::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
 
-  2022-09-27T09:13:35.374230Z DEBUG aws_smithy_http_server::logging::service: response, headers: {"content-type": "application/json", "x-amzn-errortype": "NotAuthorized", "content-length": "2"}, status_code: 401 Unauthorized
+  2022-09-27T09:13:35.374230Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {"content-type": "application/json", "x-amzn-errortype": "NotAuthorized", "content-length": "2"}, status_code: 401 Unauthorized
     at /smithy-rs/rust-runtime/aws-smithy-http-server/src/logging/service.rs:47
-    in aws_smithy_http_server::logging::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
 ```
 
 ## Interactions with Sensitivity

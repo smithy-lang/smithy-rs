@@ -10,7 +10,6 @@ import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -24,7 +23,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = false,
-    handleRustBoxing = true,
     nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
 )
 
@@ -71,7 +69,7 @@ fun serverTestCodegenContext(
     protocolShapeId: ShapeId? = null,
 ): ServerCodegenContext = ServerCodegenContext(
     model,
-    testSymbolProvider(model),
+    serverTestSymbolProvider(model),
     serviceShape
         ?: model.serviceShapes.firstOrNull()
         ?: ServiceShape.builder().version("test").id("test#Service").build(),

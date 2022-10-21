@@ -53,15 +53,15 @@ class ServerCombinedErrorGeneratorTest {
     @Test
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.public("error")) { writer ->
+        project.withModule(RustModule.public("error")) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
-                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer, CodegenTarget.SERVER)
+                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, this, CodegenTarget.SERVER)
             }
             val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
             val generator = ServerCombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(model.lookup("error#Greeting")), errors)
-            generator.render(writer)
+            generator.render(this)
 
-            writer.unitTest(
+            unitTest(
                 name = "generates_combined_error_enums",
                 test = """
                     let variant = InvalidGreeting::builder().message("an error").build();
@@ -87,7 +87,7 @@ class ServerCombinedErrorGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "generates_converters_into_combined_error_enums",
                 test = """
                     let variant = InvalidGreeting { message: String::from("an error") };
