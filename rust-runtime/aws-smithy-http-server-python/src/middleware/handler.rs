@@ -66,7 +66,7 @@ impl PyMiddlewareHandler {
         req: Request<Body>,
         next: PyNextInner,
         locals: TaskLocals,
-    ) -> Result<Response<BoxBody>, BoxError> {
+    ) -> PyResult<Response<BoxBody>> {
         let py_req = PyRequest::new(req);
         let py_next = PyNext::new(next);
 

@@ -2,9 +2,9 @@ use aws_smithy_http_server::body::to_boxed;
 use aws_smithy_http_server::proto::rest_json_1::RestJson1;
 use aws_smithy_http_server_python::{
     middleware::{PyMiddlewareHandler, PyMiddlewareLayer},
-    PyResponse,
+    PyMiddlewareException, PyResponse,
 };
-use http::{Request, Response};
+use http::{Request, Response, StatusCode};
 use hyper::Body;
 use pretty_assertions::assert_eq;
 use pyo3::{
@@ -112,6 +112,97 @@ def middleware(request, next):
         .await
         .unwrap();
     assert_eq!(body, "hello client from Python");
+    Ok(())
+}
+
+#[pyo3_asyncio::tokio::test]
+async fn convert_exception_from_middleware_to_protocol_specific_response() -> PyResult<()> {
+    let locals = Python::with_gil(|py| {
+        Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
+    })?;
+    let py_handler = Python::with_gil(|py| {
+        let locals = PyDict::new(py);
+        py.run(
+            r#"
+def middleware(request, next):
+    raise RuntimeError("fail")
+"#,
+            None,
+            Some(locals),
+        )?;
+        Ok::<_, PyErr>(locals.get_item("middleware").unwrap().into())
+    })?;
+    let handler = PyMiddlewareHandler {
+        func: py_handler,
+        name: "middleware".to_string(),
+        is_coroutine: false,
+    };
+
+    let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
+    let (mut service, _handle) = mock::spawn_with(|svc| {
+        let svc = svc.map_err(|err| panic!("service failed: {err}"));
+        let svc = layer.layer(svc);
+        svc
+    });
+    assert_ready_ok!(service.poll_ready());
+
+    let request = Request::builder()
+        .body(Body::from("hello server"))
+        .expect("could not create request");
+    let response = service.call(request);
+
+    let response = response.await.unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    assert_eq!(body, r#"{"message":"RuntimeError: fail"}"#);
+    Ok(())
+}
+
+#[pyo3_asyncio::tokio::test]
+async fn uses_status_code_and_message_from_middleware_exception() -> PyResult<()> {
+    let locals = Python::with_gil(|py| {
+        Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
+    })?;
+    let py_handler = Python::with_gil(|py| {
+        let globals = [(
+            "MiddlewareException",
+            py.get_type::<PyMiddlewareException>(),
+        )]
+        .into_py_dict(py);
+        let locals = PyDict::new(py);
+        py.run(
+            r#"
+def middleware(request, next):
+    raise MiddlewareException("access denied", 401)
+"#,
+            Some(globals),
+            Some(locals),
+        )?;
+        Ok::<_, PyErr>(locals.get_item("middleware").unwrap().into())
+    })?;
+    let handler = PyMiddlewareHandler {
+        func: py_handler,
+        name: "middleware".to_string(),
+        is_coroutine: false,
+    };
+
+    let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
+    let (mut service, _handle) = mock::spawn_with(|svc| {
+        let svc = svc.map_err(|err| panic!("service failed: {err}"));
+        let svc = layer.layer(svc);
+        svc
+    });
+    assert_ready_ok!(service.poll_ready());
+
+    let request = Request::builder()
+        .body(Body::from("hello server"))
+        .expect("could not create request");
+    let response = service.call(request);
+
+    let response = response.await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    assert_eq!(body, r#"{"message":"access denied"}"#);
     Ok(())
 }
 
