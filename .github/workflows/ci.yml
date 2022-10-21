@@ -163,7 +163,6 @@ jobs:
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
-          openssl_targets: linux-generic32 i686-linux-gnu-
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
@@ -171,7 +170,6 @@ jobs:
           test_smithy_rs_features: --features native-tls
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
-          openssl_targets: linux-ppc powerpc-linux-gnu-
         - target: powerpc64-unknown-linux-gnu
           build_smithy_rs_features: --features native-tls
           build_aws_exclude: --exclude aws-inlineable
@@ -179,10 +177,12 @@ jobs:
           test_smithy_rs_features: --features native-tls
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
-          openssl_targets: linux-ppc64 powerpc64-linux-gnu-
     env:
       CROSS_CONFIG: Cross.toml
       OPENSSL_DIR: /openssl
+      # TODO: It'd be nice to only set these, conditionally, when building for i686
+      OPENSSL_LIB_DIR: /usr/lib/i386-linux-gnu
+      OPENSSL_INCLUDE_DIR: /usr/include/i386-linux-gnu
     steps:
     - name: Checkout
       uses: actions/checkout@v1
@@ -204,9 +204,20 @@ jobs:
       # since cross dropped support for openssl, we use the build script from version 0.16.
       run: |
         cat > Cross.toml << EOF
-        [build]
-        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh ${{ matrix.openssl_targets }}"]
-        [build.env]
+        [target.i686-unknown-linux-gnu]
+        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
+        [target.i686-unknown-linux-gnu.env]
+        passthrough = [
+            "OPENSSL_LIB_DIR",
+            "OPENSSL_INCLUDE_DIR",
+        ]
+        [target.powerpc-unknown-linux-gnu]
+        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
+        [target.powerpc-unknown-linux-gnu.env]
+        passthrough = ["OPENSSL_DIR"]
+        [target.powerpc64-unknown-linux-gnu	]
+        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
+        [target.powerpc64-unknown-linux-gnu	.env]
         passthrough = ["OPENSSL_DIR"]
         EOF
     - name: Build Smithy-rs rust-runtime crates
