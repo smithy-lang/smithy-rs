@@ -767,7 +767,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
-        val err = if (ServerBuilderGenerator.serverHasFallibleBuilder(
+        val err = if (ServerBuilderGenerator.hasFallibleBuilder(
                 inputShape,
                 model,
                 symbolProvider,

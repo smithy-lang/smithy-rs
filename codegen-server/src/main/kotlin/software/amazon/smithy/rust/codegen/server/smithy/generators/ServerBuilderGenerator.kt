@@ -40,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -49,6 +48,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled
 
 /**
@@ -92,10 +92,8 @@ class ServerBuilderGenerator(
         /**
          * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
          * fallible builder to be constructed.
-         *
-         * TODO Rename to `hasFallibleBuilder`, make sure usages are using it as `ServerBuilderGenerator.hasFallibleBuilder`.
          */
-        fun serverHasFallibleBuilder(
+        fun hasFallibleBuilder(
             structureShape: StructureShape,
             model: Model,
             symbolProvider: SymbolProvider,
@@ -123,7 +121,7 @@ class ServerBuilderGenerator(
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val moduleName = builderSymbol.namespace.split(builderSymbol.namespaceDelimiter).last()
-    private val isBuilderFallible = serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
+    private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
 

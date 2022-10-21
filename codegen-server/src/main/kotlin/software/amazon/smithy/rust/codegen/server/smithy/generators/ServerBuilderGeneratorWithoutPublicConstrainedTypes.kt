@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -22,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -45,6 +45,23 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     codegenContext: ServerCodegenContext,
     shape: StructureShape,
 ) {
+    companion object {
+        /**
+         * Returns whether a structure shape, whose builder has been generated with
+         * [ServerBuilderGeneratorWithoutPublicConstrainedTypes], requires a fallible builder to be constructed.
+         *
+         * This builder only enforces the `required` trait.
+         */
+        fun hasFallibleBuilder(
+            structureShape: StructureShape,
+            symbolProvider: SymbolProvider,
+        ): Boolean =
+            structureShape
+                .members()
+                .map { symbolProvider.toSymbol(it) }
+                .any { !it.isOptional() }
+    }
+
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val members: List<MemberShape> = shape.allMembers.values.toList()
@@ -52,8 +69,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
     private val moduleName = builderSymbol.namespace.split("::").last()
-    private val isBuilderFallible =
-        StructureGenerator.serverHasFallibleBuilderWithoutPublicConstrainedTypes(shape, symbolProvider)
+    private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
 

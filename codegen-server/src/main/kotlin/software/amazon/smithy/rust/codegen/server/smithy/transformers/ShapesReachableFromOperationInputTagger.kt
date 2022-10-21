@@ -13,8 +13,8 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.core.smithy.traits.ShapeReachableFromOperationInputTagTrait
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFromOperationInputTagTrait
 
 /**
  * Tag shapes reachable from operation input with the

@@ -11,7 +11,6 @@ import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -22,7 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -135,11 +134,15 @@ open class AwsJson(
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         // TODO We should grep for all of these and move them somewhere central.
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.builderSymbol(codegenContext.symbolProvider)
         fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
             false to codegenContext.symbolProvider.toSymbol(shape)
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
+        return JsonParserGenerator(
+            codegenContext,
+            httpBindingResolver,
+            ::awsJsonFieldName,
+            builderSymbolFn(codegenContext.symbolProvider),
+            ::returnSymbolToParse,
+        )
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =

@@ -6,12 +6,11 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -48,13 +47,10 @@ class Ec2QueryParserGeneratorTest {
         // TODO We generate a `testCodegenContext` later on; we should pull out the symbol provider from there.
         val symbolProvider = testSymbolProvider(model)
 
-        // TODO We should grep for all of these and move them somewhere central.
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.builderSymbol(symbolProvider)
         val parserGenerator = Ec2QueryParserGenerator(
             testCodegenContext(model),
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
-            ::builderSymbol,
+            builderSymbolFn(symbolProvider),
         )
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))

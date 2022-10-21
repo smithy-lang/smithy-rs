@@ -78,9 +78,7 @@ enum class HttpMessageType {
  * Class describing an HTTP binding (de)serialization section that can be used in a customization.
  */
 sealed class HttpBindingSection(name: String) : Section(name) {
-    // TODO `shape` should be `MapShape`. See the instantiator site, which is working with a `Shape` instead (and should not be).
-    //  Addressed in https://github.com/awslabs/smithy-rs/pull/1841
-    data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: Shape) :
+    data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: MapShape) :
         HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
     data class AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")

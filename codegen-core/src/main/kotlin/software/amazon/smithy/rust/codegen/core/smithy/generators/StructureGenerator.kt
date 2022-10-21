@@ -94,23 +94,6 @@ open class StructureGenerator(
                         // generate a fallible builder.
                         !it.isOptional() && !it.canUseDefault()
                     }
-
-        /**
-         * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGeneratorWithoutPublicConstrainedTypes],
-         * requires a fallible builder to be constructed.
-         *
-         * This builder only enforces the `required` trait.
-         *
-         * TODO Move this to `codegen-server`, to ServerBuilderGeneratorWithoutPublicConstrainedTypes
-         */
-        fun serverHasFallibleBuilderWithoutPublicConstrainedTypes(
-            structureShape: StructureShape,
-            symbolProvider: SymbolProvider,
-        ): Boolean =
-            structureShape
-                .members()
-                .map { symbolProvider.toSymbol(it) }
-                .any { !it.isOptional() }
     }
 
     /**

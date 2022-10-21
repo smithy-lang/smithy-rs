@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.traits
+package software.amazon.smithy.rust.codegen.server.smithy.traits
 
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -18,12 +18,10 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
-// TODO Move to server.
-
 /**
  * Tag to indicate that an aggregate shape is reachable from operation input.
  *
- * See the [AggregateShapesReachableFromOperationInputTagger] model transform for how it's used.
+ * See the [ShapesReachableFromOperationInputTagger] model transform for how it's used.
  */
 class ShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.objectNode()) {
     companion object {

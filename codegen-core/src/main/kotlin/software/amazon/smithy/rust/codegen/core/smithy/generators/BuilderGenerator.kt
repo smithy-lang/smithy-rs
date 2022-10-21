@@ -39,6 +39,10 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 // TODO This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`. It's not as easy as it seems.
 
+fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
+    structureShape.builderSymbol(symbolProvider)
+}
+
 fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
     val structureSymbol = symbolProvider.toSymbol(this)
     val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
