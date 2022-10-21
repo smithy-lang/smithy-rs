@@ -13,7 +13,7 @@ use pyo3::{
 };
 use pyo3_asyncio::TaskLocals;
 use tokio_test::assert_ready_ok;
-use tower::layer::util::Stack;
+use tower::{layer::util::Stack, Layer, ServiceExt};
 use tower_test::mock;
 
 #[pyo3_asyncio::tokio::test]
@@ -39,8 +39,12 @@ async def identity_middleware(request, next):
         is_coroutine: true,
     };
 
-    let (mut service, mut handle) =
-        mock::spawn_layer(PyMiddlewareLayer::<RestJson1>::new(handler, locals));
+    let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
+    let (mut service, mut handle) = mock::spawn_with(|svc| {
+        let svc = svc.map_err(|err| panic!("service failed: {err}"));
+        let svc = layer.layer(svc);
+        svc
+    });
     assert_ready_ok!(service.poll_ready());
 
     let th = tokio::spawn(async move {
@@ -91,8 +95,12 @@ def middleware(request, next):
         is_coroutine: false,
     };
 
-    let (mut service, _handle) =
-        mock::spawn_layer(PyMiddlewareLayer::<RestJson1>::new(handler, locals));
+    let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
+    let (mut service, _handle) = mock::spawn_with(|svc| {
+        let svc = svc.map_err(|err| panic!("service failed: {err}"));
+        let svc = layer.layer(svc);
+        svc
+    });
     assert_ready_ok!(service.poll_ready());
 
     let request = Request::builder()
@@ -143,10 +151,15 @@ def second_middleware(request, next):
         is_coroutine: false,
     };
 
-    let (mut service, _handle) = mock::spawn_layer(Stack::new(
+    let layer = Stack::new(
         PyMiddlewareLayer::<RestJson1>::new(second_handler, locals.clone()),
         PyMiddlewareLayer::<RestJson1>::new(first_handler, locals.clone()),
-    ));
+    );
+    let (mut service, _handle) = mock::spawn_with(|svc| {
+        let svc = svc.map_err(|err| panic!("service failed: {err}"));
+        let svc = layer.layer(svc);
+        svc
+    });
     assert_ready_ok!(service.poll_ready());
 
     let request = Request::builder()

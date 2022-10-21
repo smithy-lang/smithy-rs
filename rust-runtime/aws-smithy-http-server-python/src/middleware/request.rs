@@ -101,7 +101,7 @@ impl PyRequest {
                 req.headers_mut().insert(key, value);
                 Ok(())
             }
-            None => return Err(PyRuntimeError::new_err("request is gone")),
+            None => Err(PyRuntimeError::new_err("request is gone")),
         }
     }
 }

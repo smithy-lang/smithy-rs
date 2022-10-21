@@ -4,7 +4,9 @@
  */
 
 //! Tower layer implementation of Python middleware handling.
+
 use std::{
+    convert::Infallible,
     marker::PhantomData,
     task::{Context, Poll},
 };
@@ -16,7 +18,7 @@ use aws_smithy_http_server::{
 use futures::{future::BoxFuture, TryFutureExt};
 use http::{Request, Response};
 use pyo3_asyncio::TaskLocals;
-use tower::{util::BoxService, BoxError, Layer, Service, ServiceExt};
+use tower::{util::BoxService, Layer, Service, ServiceExt};
 
 use super::PyMiddlewareHandler;
 use crate::PyMiddlewareException;
@@ -85,16 +87,21 @@ impl<S> PyMiddlewareService<S> {
 
 impl<S> Service<Request<Body>> for PyMiddlewareService<S>
 where
-    S: Service<Request<Body>, Response = Response<BoxBody>> + Clone + Send + 'static,
-    S::Error: Into<BoxError>,
+    S: Service<Request<Body>, Response = Response<BoxBody>, Error = Infallible>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send,
 {
     type Response = S::Response;
-    type Error = BoxError;
+    // We are making `Service` `Infallible` because we convert errors to responses via
+    // `PyMiddlewareException::into_response` which has `IntoResponse<Protocol>` bound,
+    // so we always return a protocol specific error response instead of erroring out.
+    type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(|err| err.into())
+        self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {

@@ -234,25 +234,22 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    use #{tower}::{Layer, ServiceExt};
                     let mut service = #{tower}::util::BoxCloneService::new(builder.build());
-                    let mut middlewares = self.middlewares.clone();
-                    // Reverse the middlewares, so they run with same order as they defined
-                    middlewares.reverse();
-                    for handler in middlewares {
-                        let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                        let name = handler.name.clone();
-                        let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
-                        service = #{tower}::util::BoxCloneService::new(layer.layer(service).map_err(move |err| {
-                            // TODO: correctly propogate errors.
-                            tracing::error!(
-                                err = %err,
-                                "'{}' middleware failed",
-                                name,
-                            );
-                            loop {}
-                        }));
+
+                    {
+                        use #{tower}::Layer;
+                        tracing::debug!("adding middlewares to rust python router");
+                        let mut middlewares = self.middlewares.clone();
+                        // Reverse the middlewares, so they run with same order as they defined
+                        middlewares.reverse();
+                        for handler in middlewares {
+                            tracing::debug!("adding python middleware '{}'", &handler.name);
+                            let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                            let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
+                            service = #{tower}::util::BoxCloneService::new(layer.layer(service));
+                        }
                     }
+
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
