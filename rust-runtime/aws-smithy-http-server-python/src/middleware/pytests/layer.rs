@@ -238,3 +238,57 @@ def second_middleware(request, next):
     assert_eq!(body, "hello client from Python second middleware");
     Ok(())
 }
+
+#[pyo3_asyncio::tokio::test]
+async fn fails_if_req_is_used_after_calling_next() -> PyResult<()> {
+    let locals = Python::with_gil(|py| {
+        Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
+    })?;
+    let handler = Python::with_gil(|py| {
+        let locals = PyDict::new(py);
+        py.run(
+            r#"
+async def middleware(request, next):
+    uri = request.uri
+    response = await next(request)
+    uri = request.uri # <- fails
+    return response
+"#,
+            None,
+            Some(locals),
+        )?;
+        let handler = locals.get_item("middleware").unwrap().into();
+        Ok::<_, PyErr>(PyMiddlewareHandler::new(py, handler)?)
+    })?;
+
+    let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
+    let (mut service, mut handle) = mock::spawn_with(|svc| {
+        let svc = svc.map_err(|err| panic!("service failed: {err}"));
+        let svc = layer.layer(svc);
+        svc
+    });
+    assert_ready_ok!(service.poll_ready());
+
+    let th = tokio::spawn(async move {
+        let (req, send_response) = handle.next_request().await.unwrap();
+        let req_body = hyper::body::to_bytes(req.into_body()).await.unwrap();
+        assert_eq!(req_body, "hello server");
+        send_response.send_response(
+            Response::builder()
+                .body(to_boxed("hello client"))
+                .expect("could not create response"),
+        );
+    });
+
+    let request = Request::builder()
+        .body(Body::from("hello server"))
+        .expect("could not create request");
+    let response = service.call(request);
+
+    let response = response.await.unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    assert_eq!(body, r#"{"message":"RuntimeError: request is gone"}"#);
+    th.await.unwrap();
+    Ok(())
+}

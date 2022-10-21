@@ -36,10 +36,10 @@ impl PyNext {
         let req = py_req
             .borrow_mut(py)
             .take_inner()
-            .ok_or_else(|| PyRuntimeError::new_err("already called"))?;
+            .ok_or(PyMiddlewareError::RequestGone)?;
         let mut inner = self
             .take_inner()
-            .ok_or_else(|| PyRuntimeError::new_err("already called"))?;
+            .ok_or(PyMiddlewareError::NextAlreadyCalled)?;
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let res = inner
                 .call(req)
@@ -105,6 +105,6 @@ impl PyMiddlewareHandler {
             Ok::<_, PyErr>(py_res.take_inner())
         })?;
 
-        response.ok_or_else(|| PyMiddlewareError::ResponseAlreadyGone.into())
+        response.ok_or_else(|| PyMiddlewareError::ResponseGone.into())
     }
 }

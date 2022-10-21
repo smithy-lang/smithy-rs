@@ -40,6 +40,8 @@ mod tests {
 
     #[test]
     fn function_metadata() -> PyResult<()> {
+        pyo3::prepare_freethreaded_python();
+
         Python::with_gil(|py| {
             let module = PyModule::from_code(
                 py,

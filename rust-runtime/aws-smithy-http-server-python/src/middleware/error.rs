@@ -1,22 +1,19 @@
-use std::error::Error;
-use std::fmt;
-
 use pyo3::{exceptions::PyRuntimeError, PyErr};
+use thiserror::Error;
 
-#[derive(Debug)]
+/// Possible middleware errors that might arise.
+#[derive(Error, Debug)]
 pub enum PyMiddlewareError {
-    ResponseAlreadyGone,
+    /// Returned when `next` is called multiple times.
+    #[error("next already called")]
+    NextAlreadyCalled,
+    /// Returned when request is accessed after `next` is called.
+    #[error("request is gone")]
+    RequestGone,
+    /// Returned when response is called after it is returned.
+    #[error("response is gone")]
+    ResponseGone,
 }
-
-impl fmt::Display for PyMiddlewareError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Self::ResponseAlreadyGone => write!(f, "response is already consumed"),
-        }
-    }
-}
-
-impl Error for PyMiddlewareError {}
 
 impl From<PyMiddlewareError> for PyErr {
     fn from(err: PyMiddlewareError) -> PyErr {
