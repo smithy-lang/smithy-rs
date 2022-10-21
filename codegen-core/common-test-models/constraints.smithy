@@ -93,6 +93,7 @@ operation QueryParamsTargetingMapOfListOfEnumStringOperation {
 operation HttpPrefixHeadersTargetingLengthMapOperation {
     input: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
     output: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
+    errors: [ValidationException],
 }
 
 @http(uri: "/http-prefix-headers-targeting-map-of-enum-string-operation", method: "POST")

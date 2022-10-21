@@ -56,7 +56,7 @@ class InlineDependency(
     name: String,
     val module: RustModule,
     private val extraDependencies: List<RustDependency> = listOf(),
-    val renderer: (RustWriter) -> Unit,
+    val renderer: Writable,
 ) : RustDependency(name) {
     override fun version(): String {
         // just need a version that won't crash
@@ -87,8 +87,8 @@ class InlineDependency(
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")
             check(rustFile != null) { "Rust file /$baseDir/src/$filename was missing from the resource bundle!" }
-            return InlineDependency(name, module, additionalDependencies.toList()) { writer ->
-                writer.raw(rustFile.readText())
+            return InlineDependency(name, module, additionalDependencies.toList()) {
+                raw(rustFile.readText())
             }
         }
 

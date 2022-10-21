@@ -71,31 +71,31 @@ class ConstrainedStringGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) { writer ->
-            ConstrainedStringGenerator(codegenContext, writer, constrainedStringShape).render()
+        project.withModule(ModelsModule) {
+            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
 
-            writer.unitTest(
+            unitTest(
                 name = "parse_success",
                 test = """
                     let string = String::from("${testCase.validString}");
                     let _constrained = ConstrainedString::parse(string).unwrap();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "try_from_success",
                 test = """
                     let string = String::from("${testCase.validString}");
                     let _constrained: ConstrainedString = string.try_into().unwrap();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "parse_fail",
                 test = """
                     let string = String::from("${testCase.invalidString}");
                     let _constrained = ConstrainedString::parse(string).unwrap_err();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "try_from_fail",
                 test = """
                     let string = String::from("${testCase.invalidString}");
@@ -103,7 +103,7 @@ class ConstrainedStringGeneratorTest {
                     constrained_res.unwrap_err();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "inner",
                 test = """
                     let string = String::from("${testCase.validString}");
@@ -112,7 +112,7 @@ class ConstrainedStringGeneratorTest {
                     assert_eq!(constrained.inner(), "${testCase.validString}");
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "into_inner",
                 test = """
                     let string = String::from("${testCase.validString}");

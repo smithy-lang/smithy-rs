@@ -30,7 +30,7 @@ class ClientBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
     override fun doesSetterTakeInOption(memberShape: MemberShape) = true
 }
 
-class ClientInstantiator(val codegenContext: CodegenContext) :
+fun clientInstantiator(codegenContext: CodegenContext) =
     Instantiator(
         codegenContext.symbolProvider,
         codegenContext.model,

@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -51,7 +52,7 @@ class PubCrateConstrainedMapGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
-        val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
+        val moduleName = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
         val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
         val valueShape = model.expectShape(shape.value.target)
@@ -71,7 +72,7 @@ class PubCrateConstrainedMapGenerator(
             "From" to RuntimeType.From,
         )
 
-        writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
+        writer.withModule(RustModule(moduleName, RustMetadata(visibility = Visibility.PUBCRATE))) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]

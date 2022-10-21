@@ -59,8 +59,8 @@ class Ec2QueryParserGeneratorTest {
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
 
-        project.lib { writer ->
-            writer.unitTest(
+        project.lib {
+            unitTest(
                 "valid_input",
                 """
                 let xml = br#"
@@ -68,7 +68,7 @@ class Ec2QueryParserGeneratorTest {
                     <someVal>Some value</someVal>
                 </someOperationResponse>
                 "#;
-                let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
+                let output = ${format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
                 assert_eq!(output.some_attribute, Some(5));
                 assert_eq!(output.some_val, Some("Some value".to_string()));
                 """,
@@ -76,12 +76,12 @@ class Ec2QueryParserGeneratorTest {
         }
 
         project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#SomeOutput").renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<StructureShape>("test#SomeOutput").renderWithModelBuilder(model, symbolProvider, this)
         }
 
         project.withModule(RustModule.public("output")) {
             model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
-                .renderWithModelBuilder(model, symbolProvider, it)
+                .renderWithModelBuilder(model, symbolProvider, this)
         }
         project.compileAndTest()
     }

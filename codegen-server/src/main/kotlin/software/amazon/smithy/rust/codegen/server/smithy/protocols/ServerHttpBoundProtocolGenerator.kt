@@ -404,9 +404,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val inputSymbol = symbolProvider.toSymbol(inputShape)
 
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
+            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
             // The last conversion trait bound is needed by the `hyper::body::to_bytes(body).await?` call.
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
                     ##[allow(unused_variables)] request: &mut #{SmithyHttpServer}::request::RequestParts<B>
@@ -439,12 +439,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
 
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
+            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
 
             // Note we only need to take ownership of the output in the case that it contains streaming members.
-            // However we currently always take ownership here, but worth noting in case in the future we want
+            // However, we currently always take ownership here, but worth noting in case in the future we want
             // to generate different signatures for streaming vs non-streaming for some reason.
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub fn $fnName(
                     ##[allow(unused_variables)] output: #{O}
@@ -470,8 +470,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_error"
         val errorSymbol = operationShape.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
-            it.rustBlockTemplate(
+            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            rustBlockTemplate(
                 "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
                 "E" to errorSymbol,
@@ -1153,8 +1153,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun generateParseStrFn(binding: HttpBindingDescriptor, percentDecoding: Boolean): RuntimeType {
         val output = unconstrainedShapeSymbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
-        return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
-            writer.rustBlockTemplate(
+        return RuntimeType.forInlineFun(fnName, operationDeserModule) {
+            rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
                 *codegenScope,
                 "O" to output,
@@ -1215,7 +1215,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         )
                     }
                 }
-                writer.rust("Ok(${symbolProvider.wrapOptional(binding.member, "value")})")
+                rust(
+                    """
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
+                    """,
+                )
             }
         }
     }

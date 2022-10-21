@@ -76,39 +76,39 @@ class ConstrainedMapGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) { writer ->
-            render(codegenContext, writer, constrainedMapShape)
+        project.withModule(ModelsModule) {
+            render(codegenContext, this, constrainedMapShape)
 
-            val instantiator = ServerInstantiator(codegenContext)
-            writer.rustBlock("##[cfg(test)] fn build_valid_map() -> std::collections::HashMap<String, String>") {
+            val instantiator = serverInstantiator(codegenContext)
+            rustBlock("##[cfg(test)] fn build_valid_map() -> std::collections::HashMap<String, String>") {
                 instantiator.render(this, constrainedMapShape, testCase.validMap)
             }
-            writer.rustBlock("##[cfg(test)] fn build_invalid_map() -> std::collections::HashMap<String, String>") {
+            rustBlock("##[cfg(test)] fn build_invalid_map() -> std::collections::HashMap<String, String>") {
                 instantiator.render(this, constrainedMapShape, testCase.invalidMap)
             }
 
-            writer.unitTest(
+            unitTest(
                 name = "parse_success",
                 test = """
                     let map = build_valid_map();
                     let _constrained = ConstrainedMap::parse(map).unwrap();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "try_from_success",
                 test = """
                     let map = build_valid_map();
                     let _constrained: ConstrainedMap = map.try_into().unwrap();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "parse_fail",
                 test = """
                     let map = build_invalid_map();
                     let _constrained = ConstrainedMap::parse(map).unwrap_err();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "try_from_fail",
                 test = """
                     let map = build_invalid_map();
@@ -116,7 +116,7 @@ class ConstrainedMapGeneratorTest {
                     constrained_res.unwrap_err();
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "inner",
                 test = """
                     let map = build_valid_map();
@@ -125,7 +125,7 @@ class ConstrainedMapGeneratorTest {
                     assert_eq!(constrained.inner(), &map);
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "into_inner",
                 test = """
                     let map = build_valid_map();

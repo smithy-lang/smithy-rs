@@ -49,7 +49,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 class EventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
     /** Function that maps a StructureShape into its builder symbol */
@@ -83,8 +83,8 @@ class EventStreamUnmarshallerGenerator(
 
     fun render(): RuntimeType {
         val unmarshallerType = unionShape.eventStreamUnmarshallerType()
-        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
-            inlineWriter.renderUnmarshaller(unmarshallerType, unionSymbol)
+        return RuntimeType.forInlineFun("${unmarshallerType.name}::new", eventStreamSerdeModule) {
+            renderUnmarshaller(unmarshallerType, unionSymbol)
         }
     }
 

@@ -115,12 +115,12 @@ class PythonServerCodegenVisitor(
      */
     override fun structureShape(shape: StructureShape) {
         logger.info("[python-server-codegen] Generating a structure $shape")
-        rustCrate.useShapeWriter(shape) { writer ->
+        rustCrate.useShapeWriter(shape) {
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, codegenContext.symbolProvider, writer, shape).render(CodegenTarget.SERVER)
+            PythonServerStructureGenerator(model, codegenContext.symbolProvider, this, shape).render(CodegenTarget.SERVER)
 
-            renderStructureShapeBuilder(shape, writer)
+            renderStructureShapeBuilder(shape, this)
         }
     }
 

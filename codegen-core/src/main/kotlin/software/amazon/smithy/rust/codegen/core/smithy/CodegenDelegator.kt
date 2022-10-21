@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsGenerator
@@ -55,14 +56,14 @@ open class RustCrate(
     /**
      * Write into the module that this shape is [locatedIn]
      */
-    fun useShapeWriter(shape: Shape, f: (RustWriter) -> Unit) {
+    fun useShapeWriter(shape: Shape, f: Writable) {
         inner.useShapeWriter(shape, f)
     }
 
     /**
      * Write directly into lib.rs
      */
-    fun lib(moduleWriter: (RustWriter) -> Unit) {
+    fun lib(moduleWriter: Writable) {
         inner.useFileWriter("src/lib.rs", "crate", moduleWriter)
     }
 
@@ -119,7 +120,7 @@ open class RustCrate(
             unloadedDependencies().forEach { dep ->
                 writtenDependencies.add(dep.key())
                 this.withModule(dep.module) {
-                    dep.renderer(it)
+                    dep.renderer(this)
                 }
             }
         }
@@ -130,7 +131,7 @@ open class RustCrate(
      */
     fun withModule(
         module: RustModule,
-        moduleWriter: (RustWriter) -> Unit,
+        moduleWriter: Writable,
     ): RustCrate {
         val moduleName = module.name
         modules[moduleName] = module
@@ -149,7 +150,7 @@ open class RustCrate(
      */
     fun withNonRootModule(
         namespace: String,
-        moduleWriter: (RustWriter) -> Unit,
+        moduleWriter: Writable,
     ): RustCrate {
         val parts = namespace.split("::")
         require(parts.size > 2) { "Cannot create root modules using withNonRootModule" }
@@ -163,7 +164,7 @@ open class RustCrate(
     /**
      * Create a new file directly
      */
-    fun withFile(filename: String, fileWriter: (RustWriter) -> Unit) {
+    fun withFile(filename: String, fileWriter: Writable) {
         inner.useFileWriter(filename) {
             fileWriter(it)
         }
@@ -203,8 +204,8 @@ fun WriterDelegator<RustWriter>.finalize(
     features: List<Feature>,
     requireDocs: Boolean,
 ) {
-    this.useFileWriter("src/lib.rs", "crate::lib") { writer ->
-        LibRsGenerator(settings, model, modules, libRsCustomizations, requireDocs).render(writer)
+    this.useFileWriter("src/lib.rs", "crate::lib") {
+        LibRsGenerator(settings, model, modules, libRsCustomizations, requireDocs).render(it)
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }

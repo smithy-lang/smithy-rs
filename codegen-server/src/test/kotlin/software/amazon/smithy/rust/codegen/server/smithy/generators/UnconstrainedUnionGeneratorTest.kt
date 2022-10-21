@@ -42,18 +42,18 @@ class UnconstrainedUnionGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(RustModule.public("model")) { writer ->
-            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(model, symbolProvider, writer)
+        project.withModule(RustModule.public("model")) {
+            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(model, symbolProvider, this)
         }
 
-        project.withModule(ModelsModule) { writer ->
-            UnionGenerator(model, symbolProvider, writer, unionShape, renderUnknownVariant = false).render()
+        project.withModule(ModelsModule) {
+            UnionGenerator(model, symbolProvider, this, unionShape, renderUnknownVariant = false).render()
         }
-        project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
-            project.withModule(ModelsModule) { modelsModuleWriter ->
-                UnconstrainedUnionGenerator(codegenContext, unconstrainedModuleWriter, modelsModuleWriter, unionShape).render()
+        project.withModule(RustModule.private("unconstrained")) unconstrainedModuleWriter@{
+            project.withModule(ModelsModule) modelsModuleWriter@{
+                UnconstrainedUnionGenerator(codegenContext, this@unconstrainedModuleWriter, this@modelsModuleWriter, unionShape).render()
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_fail_to_constrain",
                     test = """
                         let builder = crate::model::Structure::builder();
@@ -70,7 +70,7 @@ class UnconstrainedUnionGeneratorTest {
                         """,
                 )
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_succeed_to_constrain",
                     test = """
                         let builder = crate::model::Structure::builder().required_member(String::from("david"));
@@ -85,7 +85,7 @@ class UnconstrainedUnionGeneratorTest {
                         """,
                 )
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_converts_into_constrained",
                     test = """
                         let builder = crate::model::Structure::builder();

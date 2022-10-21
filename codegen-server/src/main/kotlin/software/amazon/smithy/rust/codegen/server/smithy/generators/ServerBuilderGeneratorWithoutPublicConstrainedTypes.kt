@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -66,7 +67,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
-        writer.withModule(moduleName) {
+        writer.withModule(RustModule.public(moduleName)) {
             renderBuilder(this)
         }
     }

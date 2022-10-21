@@ -139,8 +139,8 @@ class HttpBindingGenerator(
         check(binding.location == HttpLocation.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = "deser_header_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
-            writer.rustBlock(
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+            rustBlock(
                 "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
@@ -163,7 +163,7 @@ class HttpBindingGenerator(
         check(target is MapShape)
         val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
         val inner = RuntimeType.forInlineFun("${fnName}_inner", httpSerdeModule) {
-            it.rustBlock(
+            rustBlock(
                 "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
                 RuntimeType.http,
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
@@ -173,8 +173,8 @@ class HttpBindingGenerator(
             }
         }
         val returnTypeSymbol = outputSymbol.mapRustType { it.asOptional() }
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
-            writer.rustBlock(
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
+            rustBlock(
                 "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 returnTypeSymbol,
@@ -215,10 +215,10 @@ class HttpBindingGenerator(
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
         val fnName = "deser_payload_${fnName(operationShape, binding)}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
             if (binding.member.isStreaming(model)) {
                 val outputT = symbolProvider.toSymbol(binding.member)
-                rustWriter.rustBlock(
+                rustBlock(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
                     outputT,
@@ -236,7 +236,7 @@ class HttpBindingGenerator(
                 // The output needs to be Optional when deserializing the payload body or the caller signature
                 // will not match.
                 val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
-                rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
+                rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
                     deserializePayloadBody(
                         binding,
                         errorT,
@@ -375,10 +375,6 @@ class HttpBindingGenerator(
                 headerUtil,
             )
         } else {
-            check(coreShape.isStringShape) {
-                "The `httpHeader` trait can be applied to structure members that target a `boolean`, `number`, `string`, or " +
-                    "`timestamp`; or a `structure` member that targets a list/set of these types. Found $coreShape."
-            }
             rust(
                 "let $parsedValue: Vec<${coreType.render()}> = #T::read_many_from_str(headers)?;",
                 headerUtil,
@@ -484,7 +480,7 @@ class HttpBindingGenerator(
         }
 
         val fnName = "add_headers_${shape.id.getName(service).toSnakeCase()}"
-        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
             // If the shape is an operation shape, the input symbol of the generated function is the input or output
             // shape, which is the shape holding the header-bound data.
             val shapeSymbol = symbolProvider.toSymbol(
@@ -503,7 +499,7 @@ class HttpBindingGenerator(
                 HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder,
                 "Shape" to shapeSymbol,
             )
-            rustWriter.rustBlockTemplate(
+            rustBlockTemplate(
                 """
                 pub fn $fnName(
                     input: &#{Shape},
@@ -522,19 +518,25 @@ class HttpBindingGenerator(
     }
 
     private fun RustWriter.renderHeaders(httpBinding: HttpBinding) {
+        check(httpBinding.location == HttpLocation.HEADER)
         val memberShape = httpBinding.member
-        val memberType = model.expectShape(memberShape.target)
+        val targetShape = model.expectShape(memberShape.target)
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
-        ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
-            val isListHeader = memberType is CollectionShape
-            listForEach(memberType, field) { innerField, targetId ->
+        ifSet(targetShape, memberSymbol, "&input.$memberName") { field ->
+            listForEach(targetShape, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
                 if (innerMemberType.isPrimitive()) {
                     val encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
                     rust("let mut encoder = #T::from(${autoDeref(innerField)});", encoder)
                 }
-                val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField, isListHeader)
+                val formatted = headerFmtFun(
+                    this,
+                    innerMemberType,
+                    memberShape,
+                    innerField,
+                    isListHeader = targetShape is CollectionShape,
+                )
                 val safeName = safeName("formatted")
                 write("let $safeName = $formatted;")
                 rustBlock("if !$safeName.is_empty()") {
@@ -556,25 +558,17 @@ class HttpBindingGenerator(
     }
 
     private fun RustWriter.renderPrefixHeader(httpBinding: HttpBinding) {
+        check(httpBinding.location == HttpLocation.PREFIX_HEADERS)
         val memberShape = httpBinding.member
-        val memberType = model.expectShape(memberShape.target)
+        val targetShape = model.expectShape(memberShape.target, MapShape::class.java)
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
-        val target = when (memberType) {
-            is CollectionShape -> model.expectShape(memberType.member.target)
-            is MapShape -> model.expectShape(memberType.value.target)
-            else -> UNREACHABLE("unexpected member for prefix headers: $memberType")
-        }
-        ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
-            // TODO How can this be a collection shape? Makes no sense, `httpPrefixHeaders` is for map shapes.
-            //  Addressed in https://github.com/awslabs/smithy-rs/pull/1841
-            val listHeader = memberType is CollectionShape
-            customizations.forEach { customization ->
+        val valueTargetShape = model.expectShape(targetShape.value.target)
+
+        ifSet(targetShape, memberSymbol, "&input.$memberName") { field ->
+            for (customization in customizations) {
                 customization.section(
-                    HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(
-                        field,
-                        memberType,
-                    ),
+                    HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(field, targetShape),
                 )(this)
             }
             rustTemplate(
@@ -584,13 +578,16 @@ class HttpBindingGenerator(
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
                     })?;
-                    let header_value = ${headerFmtFun(this, target, memberShape, "v", listHeader)};
+                    let header_value = ${headerFmtFun(this, valueTargetShape, memberShape, "v", isListHeader = false)};
                     let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                         #{build_error}::InvalidField {
                             field: "$memberName",
-                            details: format!("`{}` cannot be used as a header value: {}", ${
-                memberShape.redactIfNecessary(model, "v")
-                }, err)}
+                            details: format!(
+                                "`{}` cannot be used as a header value: {}", 
+                                ${memberShape.redactIfNecessary(model, "v")},
+                                err,
+                            )
+                        }
                     })?;
                     builder = builder.header(header_name, header_value);
                 }

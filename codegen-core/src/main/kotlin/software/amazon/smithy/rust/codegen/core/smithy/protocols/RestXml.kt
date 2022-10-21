@@ -58,8 +58,8 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     }
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) { writer ->
-            writer.rustBlockTemplate(
+        RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) {
+            rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
                 *errorScope,
             ) {
@@ -68,8 +68,8 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) { writer ->
-            writer.rustBlockTemplate(
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) {
+            rustBlockTemplate(
                 "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
                 *errorScope,
             ) {

@@ -49,22 +49,27 @@ class UnconstrainedCollectionGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(RustModule.public("model")) { writer ->
-            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
+        project.withModule(RustModule.public("model")) {
+            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, this)
         }
 
-        project.withModule(RustModule.private("constrained")) { writer ->
+        project.withModule(RustModule.private("constrained")) {
             listOf(listA, listB).forEach {
-                PubCrateConstrainedCollectionGenerator(codegenContext, writer, it).render()
+                PubCrateConstrainedCollectionGenerator(codegenContext, this, it).render()
             }
         }
-        project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
-            project.withModule(ModelsModule) { modelsModuleWriter ->
+        project.withModule(RustModule.private("unconstrained")) unconstrainedModuleWriter@{
+            project.withModule(ModelsModule) modelsModuleWriter@{
                 listOf(listA, listB).forEach {
-                    UnconstrainedCollectionGenerator(codegenContext, unconstrainedModuleWriter, modelsModuleWriter, it).render()
+                    UnconstrainedCollectionGenerator(
+                        codegenContext,
+                        this@unconstrainedModuleWriter,
+                        this@modelsModuleWriter,
+                        it,
+                    ).render()
                 }
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "list_a_unconstrained_fail_to_constrain_with_first_error",
                     test = """
                     let c_builder1 = crate::model::StructureC::builder().int(69);
@@ -84,7 +89,7 @@ class UnconstrainedCollectionGeneratorTest {
                     """,
                 )
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "list_a_unconstrained_succeed_to_constrain",
                     test = """
                     let c_builder = crate::model::StructureC::builder().int(69).string(String::from("david"));
@@ -102,7 +107,7 @@ class UnconstrainedCollectionGeneratorTest {
                     """,
                 )
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "list_a_unconstrained_converts_into_constrained",
                     test = """
                     let c_builder = crate::model::StructureC::builder();

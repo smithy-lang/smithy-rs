@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -61,7 +62,7 @@ class UnconstrainedCollectionGenerator(
         val constraintViolationName = constraintViolationSymbol.name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        unconstrainedModuleWriter.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
+        unconstrainedModuleWriter.withModule(RustModule(module, RustMetadata(visibility = Visibility.PUBCRATE))) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
@@ -103,8 +104,10 @@ class UnconstrainedCollectionGenerator(
             Visibility.PUBCRATE
         }
         modelsModuleWriter.withModule(
-            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-            RustMetadata(visibility = constraintViolationVisibility),
+            RustModule(
+                constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
+                RustMetadata(visibility = constraintViolationVisibility),
+            ),
         ) {
             // The first component of the tuple struct is the index in the collection where the first constraint
             // violation was found.

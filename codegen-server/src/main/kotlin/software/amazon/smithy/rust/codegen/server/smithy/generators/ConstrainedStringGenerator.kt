@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -152,8 +153,8 @@ class ConstrainedStringGenerator(
             "TryFrom" to RuntimeType.TryFrom,
         )
 
-        val constraintViolationModule = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
-        writer.withModule(constraintViolationModule, RustMetadata(visibility = constrainedTypeVisibility)) {
+        val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
+        writer.withModule(RustModule(constraintViolationModuleName, RustMetadata(visibility = constrainedTypeVisibility))) {
             rust(
                 """
                 ##[derive(Debug, PartialEq)]

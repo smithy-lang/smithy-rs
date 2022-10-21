@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -306,7 +307,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun forInlineDependency(inlineDependency: InlineDependency) =
             RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
 
-        fun forInlineFun(name: String, module: RustModule, func: (RustWriter) -> Unit) = RuntimeType(
+        fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
             name = name,
             dependency = InlineDependency(name, module, listOf(), func),
             namespace = "crate::${module.name}",

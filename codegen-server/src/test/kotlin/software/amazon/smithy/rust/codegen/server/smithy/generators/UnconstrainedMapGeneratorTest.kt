@@ -51,24 +51,24 @@ class UnconstrainedMapGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(RustModule.public("model")) { writer ->
-            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
+        project.withModule(RustModule.public("model")) {
+            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, this)
         }
 
-        project.withModule(RustModule.private("constrained")) { writer ->
+        project.withModule(RustModule.private("constrained")) {
             listOf(mapA, mapB).forEach {
-                PubCrateConstrainedMapGenerator(codegenContext, writer, it).render()
+                PubCrateConstrainedMapGenerator(codegenContext, this, it).render()
             }
         }
-        project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
-            project.withModule(ModelsModule) { modelsModuleWriter ->
+        project.withModule(RustModule.private("unconstrained")) unconstrainedModuleWriter@{
+            project.withModule(ModelsModule) modelsModuleWriter@{
                 listOf(mapA, mapB).forEach {
-                    UnconstrainedMapGenerator(codegenContext, unconstrainedModuleWriter, it).render()
+                    UnconstrainedMapGenerator(codegenContext, this@unconstrainedModuleWriter, it).render()
 
-                    MapConstraintViolationGenerator(codegenContext, modelsModuleWriter, it).render()
+                    MapConstraintViolationGenerator(codegenContext, this@modelsModuleWriter, it).render()
                 }
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "map_a_unconstrained_fail_to_constrain_with_some_error",
                     test = """
                         let c_builder1 = crate::model::StructureC::builder().int(69);
@@ -107,7 +107,7 @@ class UnconstrainedMapGeneratorTest {
                         """,
                 )
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "map_a_unconstrained_succeed_to_constrain",
                     test = """
                     let c_builder = crate::model::StructureC::builder().int(69).string(String::from("david"));
@@ -138,7 +138,7 @@ class UnconstrainedMapGeneratorTest {
                     """,
                 )
 
-                unconstrainedModuleWriter.unitTest(
+                this@unconstrainedModuleWriter.unitTest(
                     name = "map_a_unconstrained_converts_into_constrained",
                     test = """
                     let c_builder = crate::model::StructureC::builder();

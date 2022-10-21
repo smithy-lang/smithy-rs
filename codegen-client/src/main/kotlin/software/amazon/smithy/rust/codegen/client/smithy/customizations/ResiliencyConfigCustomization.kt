@@ -227,8 +227,8 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
 
 class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) {
     fun extras(rustCrate: RustCrate) {
-        rustCrate.withModule(RustModule.Config) { writer ->
-            writer.rustTemplate(
+        rustCrate.withModule(RustModule.Config) {
+            rustTemplate(
                 """
                 pub use #{sleep}::{AsyncSleep, Sleep};
 

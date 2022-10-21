@@ -56,7 +56,12 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
     HttpBindingCustomization() {
     override fun section(section: HttpBindingSection): Writable = when (section) {
         is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders -> writable {
-            if (workingWithPublicConstrainedWrapperTupleType(section.shape, codegenContext.model, codegenContext.settings.codegenConfig.publicConstrainedTypes)) {
+            if (workingWithPublicConstrainedWrapperTupleType(
+                    section.shape,
+                    codegenContext.model,
+                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                )
+            ) {
                 rust("let ${section.variableName} = &${section.variableName}.0;")
             }
         }

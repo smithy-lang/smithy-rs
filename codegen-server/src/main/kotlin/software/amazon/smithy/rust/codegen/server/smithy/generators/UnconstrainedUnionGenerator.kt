@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -70,13 +71,13 @@ class UnconstrainedUnionGenerator(
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
+        val moduleName = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val name = symbol.name
         val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
-        unconstrainedModuleWriter.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
+        unconstrainedModuleWriter.withModule(RustModule(moduleName, RustMetadata(visibility = Visibility.PUBCRATE))) {
             rustBlock(
                 """
                 ##[allow(clippy::enum_variant_names)]
@@ -133,8 +134,10 @@ class UnconstrainedUnionGenerator(
             Visibility.PUBCRATE
         }
         modelsModuleWriter.withModule(
-            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-            RustMetadata(visibility = constraintViolationVisibility),
+            RustModule(
+                constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
+                RustMetadata(visibility = constraintViolationVisibility),
+            ),
         ) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)
             rustBlock("pub${ if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate)" else "" } enum $constraintViolationName") {

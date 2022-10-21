@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -63,8 +64,10 @@ class MapConstraintViolationGenerator(
             Visibility.PUBCRATE
         }
         modelsModuleWriter.withModule(
-            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-            RustMetadata(visibility = constraintViolationVisibility),
+            RustModule(
+                constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
+                RustMetadata(visibility = constraintViolationVisibility),
+            ),
         ) {
             // TODO(https://github.com/awslabs/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
             //  types here. One will just have variants for each constraint trait on the map shape, for use by the user.

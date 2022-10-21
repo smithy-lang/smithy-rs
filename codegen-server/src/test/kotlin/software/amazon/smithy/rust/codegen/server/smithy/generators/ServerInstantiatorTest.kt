@@ -134,17 +134,17 @@ class ServerInstantiatorTest {
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
         val union = model.lookup<UnionShape>("com.test#NestedUnion")
-        val sut = ServerInstantiator(codegenContext)
+        val sut = serverInstantiator(codegenContext)
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            structure.serverRenderWithModelBuilder(model, symbolProvider, writer)
-            inner.serverRenderWithModelBuilder(model, symbolProvider, writer)
-            nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, writer)
-            UnionGenerator(model, symbolProvider, writer, union).render()
+        project.withModule(RustModule.Model) {
+            structure.serverRenderWithModelBuilder(model, symbolProvider, this)
+            inner.serverRenderWithModelBuilder(model, symbolProvider, this)
+            nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, this)
+            UnionGenerator(model, symbolProvider, this, union).render()
 
-            writer.unitTest("server_instantiator_test") {
+            unitTest("server_instantiator_test") {
                 withBlock("let result = ", ";") {
                     sut.render(this, structure, data)
                 }
@@ -183,13 +183,13 @@ class ServerInstantiatorTest {
     @Test
     fun `generate named enums`() {
         val shape = model.lookup<StringShape>("com.test#NamedEnum")
-        val sut = ServerInstantiator(codegenContext)
+        val sut = serverInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            EnumGenerator(model, symbolProvider, writer, shape, shape.expectTrait()).render()
-            writer.unitTest("generate_named_enums") {
+        project.withModule(RustModule.Model) {
+            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
                 }
@@ -202,13 +202,13 @@ class ServerInstantiatorTest {
     @Test
     fun `generate unnamed enums`() {
         val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
-        val sut = ServerInstantiator(codegenContext)
+        val sut = serverInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) { writer ->
-            EnumGenerator(model, symbolProvider, writer, shape, shape.expectTrait()).render()
-            writer.unitTest("generate_unnamed_enums") {
+        project.withModule(RustModule.Model) {
+            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
                 }
