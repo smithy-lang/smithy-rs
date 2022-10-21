@@ -21,7 +21,7 @@ async fn identity_middleware() -> PyResult<()> {
     let locals = Python::with_gil(|py| {
         Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
     })?;
-    let py_handler = Python::with_gil(|py| {
+    let handler = Python::with_gil(|py| {
         let module = PyModule::from_code(
             py,
             r#"
@@ -31,14 +31,9 @@ async def identity_middleware(request, next):
             "",
             "",
         )?;
-        Ok::<_, PyErr>(module.getattr("identity_middleware")?.into())
+        let handler = module.getattr("identity_middleware")?.into();
+        Ok::<_, PyErr>(PyMiddlewareHandler::new(py, handler)?)
     })?;
-    let handler = PyMiddlewareHandler {
-        func: py_handler,
-        name: "identity_middleware".to_string(),
-        is_coroutine: true,
-    };
-
     let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
     let (mut service, mut handle) = mock::spawn_with(|svc| {
         let svc = svc.map_err(|err| panic!("service failed: {err}"));
@@ -76,7 +71,7 @@ async fn returning_response_from_python_middleware() -> PyResult<()> {
     let locals = Python::with_gil(|py| {
         Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
     })?;
-    let py_handler = Python::with_gil(|py| {
+    let handler = Python::with_gil(|py| {
         let globals = [("Response", py.get_type::<PyResponse>())].into_py_dict(py);
         let locals = PyDict::new(py);
         py.run(
@@ -87,13 +82,9 @@ def middleware(request, next):
             Some(globals),
             Some(locals),
         )?;
-        Ok::<_, PyErr>(locals.get_item("middleware").unwrap().into())
+        let handler = locals.get_item("middleware").unwrap().into();
+        Ok::<_, PyErr>(PyMiddlewareHandler::new(py, handler)?)
     })?;
-    let handler = PyMiddlewareHandler {
-        func: py_handler,
-        name: "middleware".to_string(),
-        is_coroutine: false,
-    };
 
     let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
     let (mut service, _handle) = mock::spawn_with(|svc| {
@@ -120,7 +111,7 @@ async fn convert_exception_from_middleware_to_protocol_specific_response() -> Py
     let locals = Python::with_gil(|py| {
         Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
     })?;
-    let py_handler = Python::with_gil(|py| {
+    let handler = Python::with_gil(|py| {
         let locals = PyDict::new(py);
         py.run(
             r#"
@@ -130,13 +121,9 @@ def middleware(request, next):
             None,
             Some(locals),
         )?;
-        Ok::<_, PyErr>(locals.get_item("middleware").unwrap().into())
+        let handler = locals.get_item("middleware").unwrap().into();
+        Ok::<_, PyErr>(PyMiddlewareHandler::new(py, handler)?)
     })?;
-    let handler = PyMiddlewareHandler {
-        func: py_handler,
-        name: "middleware".to_string(),
-        is_coroutine: false,
-    };
 
     let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
     let (mut service, _handle) = mock::spawn_with(|svc| {
@@ -163,7 +150,7 @@ async fn uses_status_code_and_message_from_middleware_exception() -> PyResult<()
     let locals = Python::with_gil(|py| {
         Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
     })?;
-    let py_handler = Python::with_gil(|py| {
+    let handler = Python::with_gil(|py| {
         let globals = [(
             "MiddlewareException",
             py.get_type::<PyMiddlewareException>(),
@@ -178,13 +165,9 @@ def middleware(request, next):
             Some(globals),
             Some(locals),
         )?;
-        Ok::<_, PyErr>(locals.get_item("middleware").unwrap().into())
+        let handler = locals.get_item("middleware").unwrap().into();
+        Ok::<_, PyErr>(PyMiddlewareHandler::new(py, handler)?)
     })?;
-    let handler = PyMiddlewareHandler {
-        func: py_handler,
-        name: "middleware".to_string(),
-        is_coroutine: false,
-    };
 
     let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
     let (mut service, _handle) = mock::spawn_with(|svc| {
@@ -211,7 +194,7 @@ async fn nested_middlewares() -> PyResult<()> {
     let locals = Python::with_gil(|py| {
         Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
     })?;
-    let (first_py_handler, second_py_handler) = Python::with_gil(|py| {
+    let (first_handler, second_handler) = Python::with_gil(|py| {
         let globals = [("Response", py.get_type::<PyResponse>())].into_py_dict(py);
         let locals = PyDict::new(py);
 
@@ -226,21 +209,12 @@ def second_middleware(request, next):
             Some(globals),
             Some(locals),
         )?;
-        Ok::<_, PyErr>((
-            locals.get_item("first_middleware").unwrap().into(),
-            locals.get_item("second_middleware").unwrap().into(),
-        ))
+        let first_handler =
+            PyMiddlewareHandler::new(py, locals.get_item("first_middleware").unwrap().into())?;
+        let second_handler =
+            PyMiddlewareHandler::new(py, locals.get_item("second_middleware").unwrap().into())?;
+        Ok::<_, PyErr>((first_handler, second_handler))
     })?;
-    let first_handler = PyMiddlewareHandler {
-        func: first_py_handler,
-        name: "first_middleware".to_string(),
-        is_coroutine: true,
-    };
-    let second_handler = PyMiddlewareHandler {
-        func: second_py_handler,
-        name: "second_middleware".to_string(),
-        is_coroutine: false,
-    };
 
     let layer = Stack::new(
         PyMiddlewareLayer::<RestJson1>::new(second_handler, locals.clone()),

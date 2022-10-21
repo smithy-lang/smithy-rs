@@ -96,7 +96,6 @@ class PythonApplicationGenerator(
         renderAppStruct(writer)
         renderAppDefault(writer)
         renderAppClone(writer)
-        renderAppImpl(writer)
         renderPyAppTrait(writer)
         renderPyMethods(writer)
     }
@@ -152,30 +151,6 @@ class PythonApplicationGenerator(
             "Protocol" to protocol.markerStruct(),
             *codegenScope,
         )
-    }
-
-    private fun renderAppImpl(writer: RustWriter) {
-        writer.rustBlockTemplate(
-            """
-            impl App
-            """,
-            *codegenScope,
-        ) {
-            rustTemplate(
-                """
-                // Check if a Python function is a coroutine. Since the function has not run yet,
-                // we cannot use `asyncio.iscoroutine()`, we need to use `inspect.iscoroutinefunction()`.
-                fn is_coroutine(&self, py: #{pyo3}::Python, func: &#{pyo3}::PyObject) -> #{pyo3}::PyResult<bool> {
-                    let inspect = py.import("inspect")?;
-                    // NOTE: that `asyncio.iscoroutine()` doesn't work here.
-                    inspect
-                        .call_method1("iscoroutinefunction", (func,))?
-                        .extract::<bool>()
-                }
-                """,
-                *codegenScope,
-            )
-        }
     }
 
     private fun renderPyAppTrait(writer: RustWriter) {
@@ -282,13 +257,7 @@ class PythonApplicationGenerator(
                 /// Register a Python function to be executed inside a Tower middleware layer.
                 ##[pyo3(text_signature = "(${'$'}self, func)")]
                 pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                    let name = func.getattr(py, "__name__")?.extract::<String>(py)?;
-                    let is_coroutine = self.is_coroutine(py, &func)?;
-                    let handler = #{SmithyPython}::PyMiddlewareHandler {
-                        name,
-                        func,
-                        is_coroutine,
-                    };
+                    let handler = #{SmithyPython}::PyMiddlewareHandler::new(py, func)?;
                     tracing::info!(
                         "registering middleware function `{}`, coroutine: {}",
                         handler.name,

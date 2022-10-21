@@ -17,6 +17,7 @@ pub mod middleware;
 mod server;
 mod socket;
 pub mod types;
+pub(crate) mod util;
 
 #[doc(inline)]
 pub use error::{PyError, PyMiddlewareException};

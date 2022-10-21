@@ -105,8 +105,11 @@ where
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let clone = self.inner.clone();
-        let inner = std::mem::replace(&mut self.inner, clone);
+        let inner = {
+            // https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
+            let clone = self.inner.clone();
+            std::mem::replace(&mut self.inner, clone)
+        };
         let handler = self.handler.clone();
         let handler_name = handler.name.clone();
         let next = BoxService::new(inner.map_err(|err| err.into()));

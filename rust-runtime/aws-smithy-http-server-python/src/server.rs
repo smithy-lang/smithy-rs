@@ -17,7 +17,7 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::{util::BoxCloneService, ServiceBuilder};
 
-use crate::PySocket;
+use crate::{util::func_metadata, PySocket};
 
 /// A Python handler function representation.
 ///
@@ -28,6 +28,7 @@ use crate::PySocket;
 #[derive(Debug, Clone)]
 pub struct PyHandler {
     pub func: PyObject,
+    // Number of args is needed to decide whether handler accepts context as an argument
     pub args: usize,
     pub is_coroutine: bool,
 }
@@ -258,16 +259,6 @@ event_loop.add_signal_handler(signal.SIGINT,
         Ok(())
     }
 
-    // Check if a Python function is a coroutine. Since the function has not run yet,
-    // we cannot use `asyncio.iscoroutine()`, we need to use `inspect.iscoroutinefunction()`.
-    fn is_coroutine(&self, py: Python, func: &PyObject) -> PyResult<bool> {
-        let inspect = py.import("inspect")?;
-        // NOTE: that `asyncio.iscoroutine()` doesn't work here.
-        inspect
-            .call_method1("iscoroutinefunction", (func,))?
-            .extract::<bool>()
-    }
-
     /// Register a Python function to be executed inside the Smithy Rust handler.
     ///
     /// There are some information needed to execute the Python code from a Rust handler,
@@ -275,17 +266,11 @@ event_loop.add_signal_handler(signal.SIGINT,
     /// the number of arguments available, which tells us if the handler wants the state to be
     /// passed or not.
     fn register_operation(&mut self, py: Python, name: &str, func: PyObject) -> PyResult<()> {
-        let is_coroutine = self.is_coroutine(py, &func)?;
-        // Find number of expected methods (a Python implementation could not accept the context).
-        let inspect = py.import("inspect")?;
-        let func_args = inspect
-            .call_method1("getargs", (func.getattr(py, "__code__")?,))?
-            .getattr("args")?
-            .extract::<Vec<String>>()?;
+        let func_metadata = func_metadata(py, &func)?;
         let handler = PyHandler {
             func,
-            is_coroutine,
-            args: func_args.len(),
+            is_coroutine: func_metadata.is_coroutine,
+            args: func_metadata.num_args,
         };
         tracing::info!(
             "Registering handler function `{name}`, coroutine: {}, arguments: {}",

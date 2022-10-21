@@ -11,6 +11,8 @@ use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyFunction};
 use pyo3_asyncio::TaskLocals;
 use tower::{util::BoxService, BoxError, Service};
 
+use crate::util::func_metadata;
+
 use super::{PyMiddlewareError, PyRequest, PyResponse};
 
 type PyNextInner = BoxService<Request<Body>, Response<BoxBody>, BoxError>;
@@ -56,11 +58,19 @@ impl PyNext {
 pub struct PyMiddlewareHandler {
     pub name: String,
     pub func: PyObject,
-    // TODO: use `inspect.iscoroutinefunction(object)` to detect if it is coroutine?
     pub is_coroutine: bool,
 }
 
 impl PyMiddlewareHandler {
+    pub fn new(py: Python, func: PyObject) -> PyResult<Self> {
+        let func_metadata = func_metadata(py, &func)?;
+        Ok(Self {
+            name: func_metadata.name,
+            func,
+            is_coroutine: func_metadata.is_coroutine,
+        })
+    }
+
     pub async fn call(
         self,
         req: Request<Body>,
