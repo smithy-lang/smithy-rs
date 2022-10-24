@@ -872,31 +872,41 @@ class ServerProtocolTestGenerator(
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>(
-            // Headers.
+            // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
 
-            FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", TestType.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
 
+            // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
+            FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
+            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
+
+            // Work in progress PR, see https://github.com/awslabs/smithy-rs/pull/1294.
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
             FailingTest(
                 RestJson,
                 "RestJsonHeaderMalformedStringInvalidBase64MediaType_case1",
                 TestType.MalformedRequest,
             ),
-            FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
+
+            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
+
+            // No longer relevant, sets don't exist in Smithy 2.0.
+            // See https://awslabs.github.io/smithy/2.0/guides/migrating-idl-1-to-2.html#convert-set-shapes-to-list-shapes.
+            FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedSetDuplicateBlobs", TestType.MalformedRequest),
 
+            FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
+
+            // Tests involving constraint traits, which are not yet implemented.
+            // See https://github.com/awslabs/smithy-rs/pull/1342.
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
