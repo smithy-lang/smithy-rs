@@ -28,7 +28,6 @@ private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writa
     )
 }
 
-// TODO Move to a separate file.
 class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
     override fun hasFallibleBuilder(shape: StructureShape): Boolean {
         // Only operation input builders take in unconstrained types.
@@ -41,9 +40,9 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         )
     }
 
-    override fun setterName(memberShape: MemberShape) = codegenContext.symbolProvider.toMemberName(memberShape)
+    override fun setterName(memberShape: MemberShape): String = codegenContext.symbolProvider.toMemberName(memberShape)
 
-    override fun doesSetterTakeInOption(memberShape: MemberShape) =
+    override fun doesSetterTakeInOption(memberShape: MemberShape): Boolean =
         codegenContext.symbolProvider.toSymbol(memberShape).isOptional()
 }
 

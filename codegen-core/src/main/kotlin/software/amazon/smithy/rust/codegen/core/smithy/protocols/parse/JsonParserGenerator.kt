@@ -61,7 +61,6 @@ import software.amazon.smithy.utils.StringUtils
  * Class describing a JSON parser section that can be used in a customization.
  */
 sealed class JsonParserSection(name: String) : Section(name) {
-    // TODO Docs
     data class BeforeBoxingDeserializedMember(val shape: MemberShape) : JsonParserSection("BeforeBoxingDeserializedMember")
 }
 
@@ -89,7 +88,7 @@ class JsonParserGenerator(
      * TODO Try to store whether a symbol is unconstrained or not as a property on the `Symbol` itself, and so then
      *  this function should just need to return a `Symbol` as opposed to a pair.
      */
-    private val returnSymbolToParse: (Shape) -> Pair<Boolean, Symbol>,
+    private val returnSymbolToParse: (Shape) -> Pair<Boolean, Symbol> = { shape -> false to codegenContext.symbolProvider.toSymbol(shape) },
     private val customizations: List<JsonParserCustomization> = listOf(),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
@@ -290,14 +289,6 @@ class JsonParserGenerator(
             for (customization in customizations) {
                 customization.section(JsonParserSection.BeforeBoxingDeserializedMember(memberShape))(this)
             }
-            // TODO Remove
-//            if (codegenTarget == CodegenTarget.SERVER &&
-//                model.expectShape(memberShape.container).isStructureShape &&
-//                memberShape.targetCanReachConstrainedShape(model, symbolProvider)
-//            ) {
-//                // Before boxing, convert into `MaybeConstrained` if the target can reach a constrained shape.
-//                rust(".map(|x| x.into())")
-//            }
             rust(".map(Box::new)")
         }
     }

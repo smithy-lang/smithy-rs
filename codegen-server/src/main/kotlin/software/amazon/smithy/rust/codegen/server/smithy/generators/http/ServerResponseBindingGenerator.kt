@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
 class ServerResponseBindingGenerator(
@@ -27,8 +28,7 @@ class ServerResponseBindingGenerator(
     private val codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
 ) {
-    // TODO Why is this not using serverBuilderSymbol like `ServerRequestBindingGenerator`?
-    private fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(codegenContext.symbolProvider)
+    private fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
 
     private val httpBindingGenerator =
         HttpBindingGenerator(

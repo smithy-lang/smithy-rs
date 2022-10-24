@@ -91,9 +91,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         fun builderSymbol(shape: StructureShape): Symbol =
             shape.builderSymbol(codegenContext.symbolProvider)
-        fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
-            false to codegenContext.symbolProvider.toSymbol(shape)
-        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, ::builderSymbol, ::returnSymbolToParse)
+        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, ::builderSymbol)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =

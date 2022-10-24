@@ -46,15 +46,6 @@ fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, 
     }
 }
 
-// TODO Is this used?
-fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): String {
-    return if (member.getMemberTrait(model, SensitiveTrait::class.java).isPresent) {
-        "*** Sensitive Data Redacted ***".dq()
-    } else {
-        safeToPrint
-    }
-}
-
 open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,

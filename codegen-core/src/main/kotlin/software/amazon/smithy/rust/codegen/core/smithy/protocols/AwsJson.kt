@@ -133,15 +133,11 @@ open class AwsJson(
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        // TODO We should grep for all of these and move them somewhere central.
-        fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
-            false to codegenContext.symbolProvider.toSymbol(shape)
         return JsonParserGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
             builderSymbolFn(codegenContext.symbolProvider),
-            ::returnSymbolToParse,
         )
     }
 

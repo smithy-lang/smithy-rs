@@ -44,7 +44,6 @@ class Ec2QueryParserGeneratorTest {
     @Test
     fun `it modifies operation parsing to include Response and Result tags`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        // TODO We generate a `testCodegenContext` later on; we should pull out the symbol provider from there.
         val symbolProvider = testSymbolProvider(model)
 
         val parserGenerator = Ec2QueryParserGenerator(

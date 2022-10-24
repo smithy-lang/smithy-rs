@@ -288,12 +288,13 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
+        val memberName = symbolProvider.toMemberName(member)
         val parser = protocol.structuredDataParser(operationShape).payloadParser(member)
         rustTemplate(
             """
             #{parser}(&message.payload()[..])
                 .map_err(|err| {
-                    #{Error}::Unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
+                    #{Error}::Unmarshalling(format!("failed to unmarshall $memberName: {}", err))
                 })?
             """,
             "parser" to parser,
@@ -328,7 +329,6 @@ class EventStreamUnmarshallerGenerator(
             }
             rust(header)
             for (member in syntheticUnion.errorMembers) {
-                // TODO `member.memberName` needs further investigation https://github.com/awslabs/smithy-rs/pull/1342#discussion_r983792584
                 rustBlock("${member.memberName.dq()} $matchOperator ") {
                     // TODO(EventStream): Errors on the operation can be disjoint with errors in the union,
                     //  so we need to generate a new top-level Error type for each event stream union.

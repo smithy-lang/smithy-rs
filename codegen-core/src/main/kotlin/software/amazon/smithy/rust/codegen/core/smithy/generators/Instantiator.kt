@@ -62,16 +62,14 @@ open class Instantiator(
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
     private val runtimeConfig: RuntimeConfig,
-    /**
-     * TODO Docs
-     */
+    /** Behavior of the builder type used for structure shapes. */
     private val builderKindBehavior: BuilderKindBehavior,
     /**
      * A function that given a symbol for an enum shape and a string, returns a writable to instantiate the enum with
      * the string value.
      **/
     private val enumFromStringFn: (Symbol, String) -> Writable,
-    /** Fill out required fields with a default value **/
+    /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
 ) {
     data class Ctx(
@@ -80,6 +78,10 @@ open class Instantiator(
         val lowercaseMapKeys: Boolean = false,
     )
 
+    /**
+     * Client and server structures have different builder types. `Instantiator` needs to know how the builder
+     * type behaves to generate code for it.
+     */
     interface BuilderKindBehavior {
         fun hasFallibleBuilder(shape: StructureShape): Boolean
         fun setterName(memberShape: MemberShape): String
@@ -175,7 +177,7 @@ open class Instantiator(
             writer.conditionalBlock(
                 "Some(",
                 ")",
-                // TODO Document the order is important
+                // The conditions are not commutative: note client builders always take in `Option<T>`.
                 conditional = symbol.isOptional() ||
                     (model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(memberShape)),
             ) {

@@ -20,14 +20,13 @@ private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writa
     rust("#T::from($data)", enumSymbol)
 }
 
-// TODO Move to a separate file.
 class ClientBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
-    override fun hasFallibleBuilder(shape: StructureShape) =
+    override fun hasFallibleBuilder(shape: StructureShape): Boolean =
         StructureGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
 
-    override fun setterName(memberShape: MemberShape) = memberShape.setterName()
+    override fun setterName(memberShape: MemberShape): String = memberShape.setterName()
 
-    override fun doesSetterTakeInOption(memberShape: MemberShape) = true
+    override fun doesSetterTakeInOption(memberShape: MemberShape): Boolean = true
 }
 
 fun clientInstantiator(codegenContext: CodegenContext) =
