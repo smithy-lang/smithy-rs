@@ -86,6 +86,7 @@ class ConstrainedStringGenerator(
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
+        // TODO `parse` is usually `&str -> Result<T, E>`: https://github.com/awslabs/smithy-rs/pull/1342#discussion_r983283531
         writer.rustTemplate(
             """
             impl $name {

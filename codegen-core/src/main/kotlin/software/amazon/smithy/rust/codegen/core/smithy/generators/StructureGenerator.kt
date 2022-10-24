@@ -68,25 +68,6 @@ open class StructureGenerator(
         }
     }
 
-    companion object {
-        /**
-         * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
-         * fallible builder to be constructed.
-         *
-         * TODO Move this to `BuilderGenerator`.
-         */
-        fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
-            // All operation inputs should have fallible builders in case a new required field is added in the future.
-            structureShape.hasTrait<SyntheticInputTrait>() ||
-                structureShape
-                    .members()
-                    .map { symbolProvider.toSymbol(it) }.any {
-                        // If any members are not optional && we can't use a default, we need to
-                        // generate a fallible builder.
-                        !it.isOptional() && !it.canUseDefault()
-                    }
-    }
-
     /**
      * Search for lifetimes used by the members of the struct and generate a declaration.
      * e.g. `<'a, 'b>`

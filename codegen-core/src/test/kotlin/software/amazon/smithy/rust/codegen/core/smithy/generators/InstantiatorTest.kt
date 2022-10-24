@@ -91,7 +91,7 @@ class InstantiatorTest {
     // This is the exact same behavior of the client.
     private class BuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
         override fun hasFallibleBuilder(shape: StructureShape) =
-            StructureGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
+            BuilderGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
 
         override fun setterName(memberShape: MemberShape) = memberShape.setterName()
 

@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -477,7 +478,7 @@ class XmlBindingTraitParserGenerator(
                     rust("let _ = decoder;")
                 }
                 withBlock("Ok(builder.build()", ")") {
-                    if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+                    if (BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
                         // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
                         // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
                         // (because they're inputs, only outputs will be parsed!)
