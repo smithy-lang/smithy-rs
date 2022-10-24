@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -22,7 +23,7 @@ private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writa
 
 class ClientBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
     override fun hasFallibleBuilder(shape: StructureShape): Boolean =
-        StructureGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
+        BuilderGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
 
     override fun setterName(memberShape: MemberShape): String = memberShape.setterName()
 
