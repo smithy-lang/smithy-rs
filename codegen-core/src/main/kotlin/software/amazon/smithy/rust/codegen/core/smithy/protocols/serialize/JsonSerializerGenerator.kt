@@ -57,7 +57,7 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSerializerSection("ServerError")
 
-    // TODO Docs
+    /** Mutate a map prior to it being serialized. **/
     data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSerializerSection("BeforeIteratingOverMap")
 }
 
