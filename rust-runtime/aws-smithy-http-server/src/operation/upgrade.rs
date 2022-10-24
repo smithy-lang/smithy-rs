@@ -256,9 +256,9 @@ where
         Service<http::Request<B>, Response = http::Response<BoxBody>>,
 
     // For `Route::new` for the resulting service
-    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service: tower::Service<http::Request<B>, Error = std::convert::Infallible>,
+    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service: Service<http::Request<B>, Error = Infallible>,
     <<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service: Clone + Send + 'static,
-    <<<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service as tower::Service<http::Request<B>>>::Future: Send + 'static,
+    <<<Pl as Plugin<P, Op, S, L>>::Layer as Layer<Upgrade<P, Op, Exts, B, <Pl as Plugin<P, Op, S, L>>::Service>>>::Service as Service<http::Request<B>>>::Future: Send + 'static,
 {
     /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
