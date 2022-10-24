@@ -37,7 +37,33 @@ async fn accessing_request_properties() -> PyResult<()> {
     })
 }
 
-// #[pyo3_asyncio::tokio::test]
-// async fn accessing_request_body() -> PyResult<()> {
-//     todo!()
-// }
+#[pyo3_asyncio::tokio::test]
+async fn accessing_and_changing_request_body() -> PyResult<()> {
+    let request = Request::builder()
+        .body(Body::from("hello world"))
+        .expect("could not build request");
+    let py_request = PyRequest::new(request);
+
+    Python::with_gil(|py| {
+        let module = PyModule::from_code(
+            py,
+            r#"
+async def handler(req):
+    # TODO: why we need to wrap with `bytes`?
+    assert bytes(await req.body) == b"hello world"
+
+    req.body = b"hello world from middleware"
+    assert bytes(await req.body) == b"hello world from middleware"
+"#,
+            "",
+            "",
+        )?;
+        let handler = module.getattr("handler")?;
+
+        let output = handler.call1((py_request,))?;
+        Ok::<_, PyErr>(pyo3_asyncio::tokio::into_future(output))
+    })??
+    .await?;
+
+    Ok(())
+}

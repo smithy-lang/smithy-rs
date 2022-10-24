@@ -7,33 +7,43 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use aws_smithy_http_server::body::Body;
 use http::header::HeaderName;
+use http::request::Parts;
 use http::{HeaderValue, Request};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use tokio::sync::Mutex;
+
+use super::PyMiddlewareError;
 
 /// Python-compatible [Request] object.
-///
-/// For performance reasons, there is not support yet to pass the body to the Python middleware,
-/// as it requires to consume and clone the body, which is a very expensive operation.
-///
-/// TODO(if customers request for it, we can implemented an opt-in functionality to also pass
-/// the body around).
 #[pyclass(name = "Request")]
 #[pyo3(text_signature = "(request)")]
 #[derive(Debug)]
-pub struct PyRequest(Option<Request<Body>>);
+pub struct PyRequest {
+    parts: Option<Parts>,
+    body: Option<Arc<Mutex<Option<Body>>>>,
+}
 
 impl PyRequest {
     /// Create a new Python-compatible [Request] structure from the Rust side.
     pub fn new(request: Request<Body>) -> Self {
-        Self(Some(request))
+        let (parts, body) = request.into_parts();
+        Self {
+            parts: Some(parts),
+            body: Some(Arc::new(Mutex::new(Some(body)))),
+        }
     }
 
     pub fn take_inner(&mut self) -> Option<Request<Body>> {
-        self.0.take()
+        let parts = self.parts.take()?;
+        let body = self.body.take()?;
+        let body = Arc::try_unwrap(body).ok()?;
+        let body = body.into_inner().take()?;
+        Some(Request::from_parts(parts, body))
     }
 }
 
@@ -42,47 +52,48 @@ impl PyRequest {
     /// Return the HTTP method of this request.
     #[getter]
     fn method(&self) -> PyResult<String> {
-        self.0
+        self.parts
             .as_ref()
-            .map(|req| req.method().to_string())
-            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
+            .map(|parts| parts.method.to_string())
+            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
     }
 
     /// Return the URI of this request.
     #[getter]
     fn uri(&self) -> PyResult<String> {
-        self.0
+        self.parts
             .as_ref()
-            .map(|req| req.uri().to_string())
-            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
+            .map(|parts| parts.uri.to_string())
+            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
     }
 
     /// Return the HTTP version of this request.
     #[getter]
     fn version(&self) -> PyResult<String> {
-        self.0
+        self.parts
             .as_ref()
-            .map(|req| format!("{:?}", req.version()))
-            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
+            .map(|parts| format!("{:?}", parts.version))
+            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
     }
 
     /// Return the HTTP headers of this request.
     /// TODO(can we use `Py::clone_ref()` to prevent cloning the hashmap?)
     #[getter]
     fn headers(&self) -> PyResult<HashMap<String, String>> {
-        self.0
+        self.parts
             .as_ref()
-            .map(|req| {
-                req.headers()
-                    .into_iter()
+            .map(|parts| {
+                parts
+                    .headers
+                    .iter()
                     .map(|(k, v)| -> (String, String) {
-                        let name: String = k.as_str().to_string();
+                        let name: String = k.to_string();
                         let value: String = String::from_utf8_lossy(v.as_bytes()).to_string();
                         (name, value)
                     })
                     .collect()
             })
-            .ok_or_else(|| PyRuntimeError::new_err("request is gone"))
+            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
     }
 
     /// Insert a new key/value into this request's headers.
@@ -92,16 +103,53 @@ impl PyRequest {
     /// under pymethods. The same applies to response.
     #[pyo3(text_signature = "($self, key, value)")]
     fn set_header(&mut self, key: &str, value: &str) -> PyResult<()> {
-        match self.0.as_mut() {
-            Some(ref mut req) => {
+        match self.parts.as_mut() {
+            Some(parts) => {
                 let key = HeaderName::from_str(key)
                     .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
                 let value = HeaderValue::from_str(value)
                     .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-                req.headers_mut().insert(key, value);
+                parts.headers.insert(key, value);
                 Ok(())
             }
-            None => Err(PyRuntimeError::new_err("request is gone")),
+            None => Err(PyMiddlewareError::RequestGone.into()),
+        }
+    }
+
+    /// Return the HTTP body of this request.
+    /// Note that this is a costly operation because the whole request body is cloned.
+    #[getter]
+    fn body<'p>(&mut self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let body = self
+            .body
+            .as_mut()
+            .map(|b| b.clone())
+            .ok_or(PyMiddlewareError::RequestGone)?;
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let body = {
+                let mut body_guard = body.lock().await;
+                let body = body_guard.take().ok_or(PyMiddlewareError::RequestGone)?;
+                let body = hyper::body::to_bytes(body)
+                    .await
+                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+                let buf = body.clone();
+                body_guard.replace(Body::from(body));
+                buf
+            };
+            // TODO: can we use `PyBytes` here?
+            Ok(body.to_vec())
+        })
+    }
+
+    /// Set the HTTP body of this request.
+    #[setter]
+    fn set_body(&mut self, buf: &[u8]) -> PyResult<()> {
+        match self.body.as_mut() {
+            Some(body) => {
+                *body = Arc::new(Mutex::new(Some(Body::from(buf.to_owned()))));
+                Ok(())
+            }
+            None => Err(PyMiddlewareError::RequestGone.into()),
         }
     }
 }

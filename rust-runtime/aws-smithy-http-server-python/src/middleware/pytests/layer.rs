@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http_server::body::to_boxed;
-use aws_smithy_http_server::proto::rest_json_1::RestJson1;
+use aws_smithy_http_server::{body::to_boxed, proto::rest_json_1::RestJson1};
 use aws_smithy_http_server_python::{
     middleware::{PyMiddlewareHandler, PyMiddlewareLayer},
     PyMiddlewareException, PyResponse,
@@ -241,6 +240,59 @@ def second_middleware(request, next):
         .await
         .unwrap();
     assert_eq!(body, "hello client from Python second middleware");
+    Ok(())
+}
+
+#[pyo3_asyncio::tokio::test]
+async fn changes_req_body() -> PyResult<()> {
+    let locals = Python::with_gil(|py| {
+        Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
+    })?;
+    let handler = Python::with_gil(|py| {
+        let module = PyModule::from_code(
+            py,
+            r#"
+async def middleware(request, next):
+    body = bytes(await request.body).decode()
+    body_reversed = body[::-1]
+    request.body = body_reversed.encode()
+    return await next(request)
+"#,
+            "",
+            "",
+        )?;
+        let handler = module.getattr("middleware")?.into();
+        Ok::<_, PyErr>(PyMiddlewareHandler::new(py, handler)?)
+    })?;
+    let layer = PyMiddlewareLayer::<RestJson1>::new(handler, locals);
+    let (mut service, mut handle) = mock::spawn_with(|svc| {
+        let svc = svc.map_err(|err| panic!("service failed: {err}"));
+        let svc = layer.layer(svc);
+        svc
+    });
+    assert_ready_ok!(service.poll_ready());
+
+    let th = tokio::spawn(async move {
+        let (req, send_response) = handle.next_request().await.unwrap();
+        let req_body = hyper::body::to_bytes(req.into_body()).await.unwrap();
+        assert_eq!(req_body, "hello server".chars().rev().collect::<String>());
+        send_response.send_response(
+            Response::builder()
+                .body(to_boxed("hello client"))
+                .expect("could not create response"),
+        );
+    });
+
+    let request = Request::builder()
+        .body(Body::from("hello server"))
+        .expect("could not create request");
+    let response = service.call(request);
+
+    let body = hyper::body::to_bytes(response.await.unwrap().into_body())
+        .await
+        .unwrap();
+    assert_eq!(body, "hello client");
+    th.await.unwrap();
     Ok(())
 }
 
