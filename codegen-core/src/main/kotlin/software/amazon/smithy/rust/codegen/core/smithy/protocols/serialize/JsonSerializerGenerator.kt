@@ -59,8 +59,10 @@ sealed class JsonSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
 
+    /** Mutate the input object prior to finalization. */
     data class InputStruct(val structureShape: StructureShape, val jsonObject: String) : JsonSection("InputStruct")
 
+    /** Mutate the output object prior to finalization. This is applied in addition to `JsonSection.ServerError`. */
     data class OutputStruct(val structureShape: StructureShape, val jsonObject: String) : JsonSection("OutputStruct")
 }
 
@@ -171,10 +173,10 @@ class JsonSerializerGenerator(
 
     /**
      * Reusable structure serializer implementation that can be used to generate serializing code for
-     * operation, error and structure shapes.
+     * operation outputs or errors.
      * This function is only used by the server, the client uses directly [serializeStructure].
      */
-    private fun serverStructureSerializer(
+    private fun outputSerializer(
         fnName: String,
         structureShape: StructureShape,
         includedMembers: List<MemberShape>,
@@ -291,7 +293,7 @@ class JsonSerializerGenerator(
 
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
-        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers)
+        return outputSerializer(fnName, outputShape, httpDocumentMembers)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
@@ -300,7 +302,7 @@ class JsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return serverStructureSerializer(fnName, errorShape, includedMembers)
+        return outputSerializer(fnName, errorShape, includedMembers)
     }
 
     private fun RustWriter.serializeStructure(
