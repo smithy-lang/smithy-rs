@@ -348,9 +348,8 @@ class ConfigureEndpointResolver(
                     /// use $moduleUseName::endpoints::Params;
                     ///
                     /// let config = $moduleUseName::Config::builder()
-                    ///     .endpoint_resolver(
-                    ///         |_: &'_ Params| Ok(Endpoint::immutable("http://localhost:8080".parse().expect("valid URI")))
-                    ///     ).build();
+                    ///     .endpoint_resolver(Endpoint::immutable("http://localhost:8080".parse().expect("valid URI")))
+                    ///     .build();
                     /// ```
                     pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{EndpointResolver}<#{Params}> + 'static) -> Self {
                         self.endpoint_resolver = Some(std::sync::Arc::new(endpoint_resolver));

@@ -7,25 +7,23 @@
 pub mod partition;
 pub mod v2;
 
-use std::collections::HashMap;
 #[doc(hidden)]
 pub use partition::Partition;
 #[doc(hidden)]
 pub use partition::PartitionResolver;
 
-use aws_smithy_http::endpoint::Error as EndpointError;
-use aws_smithy_http::endpoint::{EndpointPrefix, ResolveEndpoint};
-use aws_smithy_http::middleware::MapRequest;
-use aws_smithy_http::operation::Request;
-use aws_smithy_types::endpoint::Endpoint as SmithyEndpoint;
-use aws_smithy_types::Document;
-use aws_types::region::{Region, SigningRegion};
-use aws_types::SigningService;
-use std::error::Error;
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
-use aws_smithy_http::property_bag::PropertyBag;
+// use aws_smithy_http::endpoint::Error as EndpointError;
+// use aws_smithy_http::endpoint::{EndpointPrefix, ResolveEndpoint};
+// use aws_smithy_http::middleware::MapRequest;
+// use aws_smithy_http::operation::Request;
+// use aws_smithy_types::endpoint::Endpoint as SmithyEndpoint;
+// use aws_smithy_types::Document;
+// use aws_types::region::{Region, SigningRegion};
+// use aws_types::SigningService;
+// use std::collections::HashMap;
+// use std::error::Error;
+// use std::fmt::{self, Debug, Display, Formatter};
+// use aws_smithy_http::property_bag::PropertyBag;
 
 pub use aws_types::endpoint::{
     AwsEndpoint, BoxError, CredentialScope, ResolveAwsEndpoint, ResolveAwsEndpointV2,

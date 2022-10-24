@@ -420,10 +420,9 @@ sealed class Attribute {
         val symbols: List<RuntimeType> = listOf(),
         val container: Boolean = false,
     ) : Attribute() {
-        // TODO make this add newline
         override fun render(writer: RustWriter) {
             val bang = if (container) "!" else ""
-            writer.raw("#$bang[$annotation]")
+            writer.rust("##$bang[$annotation]")
             symbols.forEach {
                 writer.addDependency(it.dependency)
             }

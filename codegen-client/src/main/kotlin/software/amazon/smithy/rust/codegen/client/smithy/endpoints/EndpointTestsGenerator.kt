@@ -51,8 +51,6 @@ class EndpointTestsGenerator(
     }
 
     private fun assertion(testCase: EndpointTestCase) = writable {
-        // TODO(Zelda) I translated this from https://github.com/awslabs/smithy-rs/blob/e872308e0e510bb7a6e5dd7331546f0a010d81a9/codegen-endpoints/src/main/kotlin/software/amazon/smithy/rust/codegen/endpoints/EndpointTestGenerator.kt#L42
-        //             My version feels a bit verbose, am I using this correctly?
         val expectationEndpoint = testCase.expect.endpoint.orNull()
         val expectationError = testCase.expect.error.orNull()
         if (expectationEndpoint != null) {

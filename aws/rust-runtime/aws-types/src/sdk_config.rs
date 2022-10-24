@@ -86,8 +86,19 @@ impl Builder {
         self
     }
 
-    // TODO(Zelda) Add docs
-    /// Override the endpoint URI, foregoing endpoint resolution
+    /// Override endpoint resolution by providing a static URL. The provided URI will be used for all clients
+    /// created from this config, bypassing endpoint resolution. Useful for testing and for resolving
+    /// localstack services. To override the default endpoint resolver function, use the `endpoint_resolver`
+    /// methods of service configs.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_types::SdkConfig;
+    /// use http::Uri;
+    ///
+    /// let endpoint = Uri::from_static("https://some-endpoint.some-region.amazonaws.com");
+    /// let config = SdkConfig::builder().endpoint_uri(endpoint).build();
+    /// ```
     pub fn endpoint_uri(
         mut self,
         endpoint_uri: Uri,
@@ -96,8 +107,25 @@ impl Builder {
         self
     }
 
-    // TODO(Zelda) Add docs
-    /// Override the endpoint URI, foregoing endpoint resolution
+    /// Override endpoint resolution by providing a static URL. The provided URI will be used for all clients
+    /// created from this config, bypassing endpoint resolution. Useful for testing and for resolving
+    /// localstack services. To override the default endpoint resolver function, use the `endpoint_resolver`
+    /// methods of service configs.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    /// use http::Uri;
+    ///
+    /// fn override_endpoint_resolution(builder: &mut Builder) {
+    ///     let endpoint = Uri::from_static("https://some-endpoint.some-region.amazonaws.com");
+    ///     builder.set_endpoint_uri(Some(endpoint));
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// override_endpoint_resolution(&mut builder);
+    /// let config = builder.build();
+    /// ```
     pub fn set_endpoint_uri(
         &mut self,
         endpoint_uri: Option<Uri>,

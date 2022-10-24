@@ -185,6 +185,13 @@ impl Endpoint {
     }
 }
 
+// Static `Endpoint`s can be passed in place of a function that dynamically resolves `Endpoint`s.
+impl <T> ResolveEndpoint<T> for Endpoint {
+    fn resolve_endpoint(&self, _: &T) -> Result {
+        Ok(self.clone())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use http::Uri;

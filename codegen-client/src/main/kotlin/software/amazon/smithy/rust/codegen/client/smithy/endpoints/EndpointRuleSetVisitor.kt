@@ -115,13 +115,14 @@ internal class EndpointRuleSetVisitor(
     override fun visitIsSet(fn: Expression): Writable = writable {
         when (fn) {
             is GetAttr -> {
-                // TODO is this safe? I think we won't need to assign in these cases but I need to check
+                // We don't assign here because these IsSet checks result in the checked value getting ignored
                 rustInlineTemplate(
                     "#{expr:W}.is_some()",
                     "expr" to fn.accept(this@EndpointRuleSetVisitor),
                 )
             }
             else -> {
+                // We assign here because these IsSet checks almost always result in the checked value getting used
                 rustInlineTemplate(
                     "let Some(#{expr:W}) = #{expr:W}",
                     "expr" to fn.accept(this@EndpointRuleSetVisitor),
@@ -179,8 +180,7 @@ internal class EndpointRuleSetVisitor(
         }
 
         return when (val id = fn.id) {
-            // TODO move these AWS-specific fns into AWS codegen somehow
-            // TODO actually implement this fn on the Rust side
+            // TODO(Zelda) move these AWS-specific fns into AWS codegen somehow
             "aws.isVirtualHostableS3Bucket" -> {
                 writable {
                     rustTuple("#T", endpointLib.member("s3::is_virtual_hostable_s3_bucket")) {
@@ -207,7 +207,7 @@ internal class EndpointRuleSetVisitor(
                 }
             }
 
-            // TODO did I impl this correctly?
+            // TODO(Zelda) did I impl this correctly?
             "isValidHostLabel" -> {
                 writable {
                     rustTuple("#T", endpointLib.member("host::is_valid_host_label")) {
@@ -224,7 +224,7 @@ internal class EndpointRuleSetVisitor(
                 }
             }
 
-            // TODO did I impl this correctly?
+            // TODO(Zelda) did I impl this correctly?
             "substring" -> {
                 writable {
                     rustTuple("#T", endpointLib.member("substring::substring")) {
@@ -233,7 +233,7 @@ internal class EndpointRuleSetVisitor(
                 }
             }
 
-            // TODO did I impl this correctly?
+            // TODO(Zelda) did I impl this correctly?
             "uriEncode" -> {
                 writable {
                     rustTuple("#T", endpointLib.member("uri_encode::uri_encode")) {
@@ -256,7 +256,7 @@ internal class EndpointRuleSetVisitor(
     }
 
     override fun visitStaticElement(p0: String): Writable = writable {
-        // TODO How safe is this approach?
+        // TODO(Zelda) How safe is this approach?
         // The start and end of templates ends up with extra quotes that we don't want.
         // This is because we use a string-builder API instead of the format! macro.
         // Hence, we must remove them. If input was the closing quote, we do nothing.

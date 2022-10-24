@@ -6,7 +6,7 @@
 use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter};
 
-use aws_smithy_http::endpoint::{EndpointPrefix, Endpoint};
+use aws_smithy_http::endpoint::EndpointPrefix;
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
 use aws_types::region::SigningRegion;
@@ -42,9 +42,9 @@ impl MapRequest for AwsEndpointStage {
         request.augment(|mut http_req, props| {
             // TODO(Zelda) is removing this prop bad? Nothing else should need to access this
             let endpoint = props
-                .remove::<Result<Endpoint, BoxError>>()
+                .remove::<aws_smithy_http::endpoint::Result>()
                 .map_or(Err(NoResolvedEndpoint), |res| {
-                    res.map_err(EndpointResolutionError)
+                    res.map_err(|e| EndpointResolutionError(Box::new(e)))
                 })?;
 
             let signing_service = props.get::<SigningService>().ok_or(NoSigningService)?;

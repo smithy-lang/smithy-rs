@@ -7,9 +7,11 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoints.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -53,6 +55,14 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                         builder.set_sleep_impl(input.sleep_impl());
                         builder.set_credentials_provider(input.credentials_provider().cloned());
                         builder.set_app_name(input.app_name().cloned());
+                        builder.set_endpoint_resolver(
+                            input
+                                .endpoint_uri()
+                                .map(|endpoint| -> std::sync::Arc<dyn #{ResolveEndpoint}<#{Params}>> {
+                                    std::sync::Arc::new(
+                                        #{Endpoint}::immutable(endpoint)
+                                    )
+                                }));
                         builder
                     }
                 }
@@ -64,6 +74,9 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                 }
                 """,
                 *codegenScope,
+                "ResolveEndpoint" to codegenContext.runtimeConfig.smithyHttp().member("endpoint::ResolveEndpoint"),
+                "Params" to EndpointsModule.member("Params"),
+                "Endpoint" to codegenContext.runtimeConfig.smithyHttp().member("endpoint::Endpoint"),
             )
         }
     }
