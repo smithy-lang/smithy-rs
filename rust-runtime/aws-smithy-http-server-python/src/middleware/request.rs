@@ -10,11 +10,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use aws_smithy_http_server::body::Body;
-use http::header::HeaderName;
-use http::request::Parts;
-use http::{HeaderValue, Request};
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::*;
+use http::{header::HeaderName, request::Parts, HeaderValue, Request};
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use tokio::sync::Mutex;
 
 use super::PyMiddlewareError;
@@ -25,7 +22,7 @@ use super::PyMiddlewareError;
 #[derive(Debug)]
 pub struct PyRequest {
     parts: Option<Parts>,
-    body: Option<Arc<Mutex<Option<Body>>>>,
+    body: Arc<Mutex<Option<Body>>>,
 }
 
 impl PyRequest {
@@ -34,13 +31,13 @@ impl PyRequest {
         let (parts, body) = request.into_parts();
         Self {
             parts: Some(parts),
-            body: Some(Arc::new(Mutex::new(Some(body)))),
+            body: Arc::new(Mutex::new(Some(body))),
         }
     }
 
     pub fn take_inner(&mut self) -> Option<Request<Body>> {
         let parts = self.parts.take()?;
-        let body = self.body.take()?;
+        let body = std::mem::replace(&mut self.body, Arc::new(Mutex::new(None)));
         let body = Arc::try_unwrap(body).ok()?;
         let body = body.into_inner().take()?;
         Some(Request::from_parts(parts, body))
@@ -119,12 +116,8 @@ impl PyRequest {
     /// Return the HTTP body of this request.
     /// Note that this is a costly operation because the whole request body is cloned.
     #[getter]
-    fn body<'p>(&mut self, py: Python<'p>) -> PyResult<&'p PyAny> {
-        let body = self
-            .body
-            .as_mut()
-            .map(|b| b.clone())
-            .ok_or(PyMiddlewareError::RequestGone)?;
+    fn body<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let body = self.body.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let body = {
                 let mut body_guard = body.lock().await;
@@ -143,13 +136,7 @@ impl PyRequest {
 
     /// Set the HTTP body of this request.
     #[setter]
-    fn set_body(&mut self, buf: &[u8]) -> PyResult<()> {
-        match self.body.as_mut() {
-            Some(body) => {
-                *body = Arc::new(Mutex::new(Some(Body::from(buf.to_owned()))));
-                Ok(())
-            }
-            None => Err(PyMiddlewareError::RequestGone.into()),
-        }
+    fn set_body(&mut self, buf: &[u8]) {
+        self.body = Arc::new(Mutex::new(Some(Body::from(buf.to_owned()))));
     }
 }

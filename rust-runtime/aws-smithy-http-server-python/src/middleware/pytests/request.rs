@@ -26,12 +26,16 @@ async fn accessing_request_properties() -> PyResult<()> {
             py,
             req,
             r#"
-            assert req.method == "POST"
-            assert req.uri == "https://www.rust-lang.org/"
-            assert req.headers["accept-encoding"] == "*"
-            assert req.headers["x-custom"] == "42"
-            assert req.version == "HTTP/2.0"
-        "#
+assert req.method == "POST"
+assert req.uri == "https://www.rust-lang.org/"
+assert req.headers["accept-encoding"] == "*"
+assert req.headers["x-custom"] == "42"
+assert req.version == "HTTP/2.0"
+
+assert req.headers.get("x-foo") == None
+req.set_header("x-foo", "bar")
+assert req.headers["x-foo"] == "bar"
+"#
         );
         Ok(())
     })
