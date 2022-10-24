@@ -273,7 +273,7 @@ class HttpBoundProtocolPayloadGenerator(
                             )
                             is StructureShape -> rust("#T()", serializerGenerator.unsetStructure(targetShape))
                             is UnionShape -> throw CodegenException("Currently unsupported. Tracking issue: https://github.com/awslabs/smithy-rs/issues/1896")
-                            else -> throw CodegenException("List and Map are unsupported payloads")
+                            else -> throw CodegenException("`httpPayload` on member shapes targeting shapes of type ${targetShape.type} is unsupported")
                         }
                     }
                 }
