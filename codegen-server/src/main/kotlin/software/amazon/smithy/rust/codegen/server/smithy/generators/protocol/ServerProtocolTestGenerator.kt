@@ -289,7 +289,6 @@ class ServerProtocolTestGenerator(
                     is TestCase.MalformedRequestTest -> this.renderHttpMalformedRequestTestCase(
                         it.testCase,
                         operationShape,
-                        operationSymbol,
                     )
                 }
             }
@@ -473,7 +472,6 @@ class ServerProtocolTestGenerator(
     private fun RustWriter.renderHttpMalformedRequestTestCase(
         testCase: HttpMalformedRequestTestCase,
         operationShape: OperationShape,
-        operationSymbol: Symbol,
     ) {
         with(testCase.request) {
             // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
@@ -609,6 +607,15 @@ class ServerProtocolTestGenerator(
         httpRequestTestCase: HttpRequestTestCase,
         rustWriter: RustWriter,
     ) {
+        makeRequest2(operationShape, operationSymbol, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
+    }
+
+    private fun makeRequest2(
+        operationShape: OperationShape,
+        operationSymbol: Symbol,
+        rustWriter: RustWriter,
+        body: Writable,
+    ) {
         val (inputT, _) = operationInputOutputTypes[operationShape]!!
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
         rustWriter.rustTemplate(
@@ -629,11 +636,10 @@ class ServerProtocolTestGenerator(
                 .expect("unable to make an HTTP request");
             assert!(receiver.recv().await.is_some())
             """,
-            "Body" to checkRequestHandler(operationShape, httpRequestTestCase),
+            "Body" to body,
             *codegenScope,
         )
     }
-
     private fun checkRequestParams(inputShape: StructureShape, rustWriter: RustWriter) {
         if (inputShape.hasStreamingMember(model)) {
             // A streaming shape does not implement `PartialEq`, so we have to iterate over the input shape's members
