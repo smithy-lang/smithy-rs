@@ -573,9 +573,11 @@ class ServerProtocolTestGenerator(
     }
 
     private fun checkOperationExtension(operationShape: OperationShape, operationSymbol: Symbol, rustWriter: RustWriter) {
-        rustWriter.rust("""
+        rustWriter.rust(
+            """
             super::$PROTOCOL_TEST_HELPER_MODULE_NAME::check_operation_extension_was_set(http_response, "${operationShape.id.namespace}.${operationSymbol.name}");
-        """)
+            """,
+        )
     }
 
     private fun makeRequest(
