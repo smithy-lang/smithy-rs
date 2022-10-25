@@ -286,6 +286,7 @@ class ServerProtocolTestGenerator(
 
                     is TestCase.MalformedRequestTest -> this.renderHttpMalformedRequestTestCase(
                         it.testCase,
+                        operationShape,
                         operationSymbol,
                     )
                 }
@@ -469,6 +470,7 @@ class ServerProtocolTestGenerator(
      */
     private fun RustWriter.renderHttpMalformedRequestTestCase(
         testCase: HttpMalformedRequestTestCase,
+        operationShape: OperationShape,
         operationSymbol: Symbol,
     ) {
         with(testCase.request) {
@@ -476,16 +478,21 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
         }
 
-        val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-        rustTemplate(
+        val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
+
+        rust(
             """
-            let mut http_request = #{SmithyHttpServer}::request::RequestParts::new(http_request);
-            let rejection = super::$operationName::from_request(&mut http_request).await.expect_err("request was accepted but we expected it to be rejected");
-            let http_response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(rejection);
+            let http_response = super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
+                http_request,
+                "${operationShape.id.namespace}.${operationSymbol.name}",
+                &|builder| {
+                    builder.${operationShape.toName()}((|input| Box::pin(async move {
+                        $outputT::builder().build()
+                    })) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)
+                }).await;
             """,
-            "Protocol" to protocolGenerator.protocol.markerStruct(),
-            *codegenScope,
         )
+
         checkResponse(this, testCase.response)
     }
 
