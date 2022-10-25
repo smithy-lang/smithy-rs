@@ -481,7 +481,7 @@ class ServerProtocolTestGenerator(
         }
 
         val (_, outputT) = operationInputOutputTypes[operationShape]!!
-        makeRequest(operationShape, operationSymbol, this, writable("$outputT::builder().build()"))
+        makeRequest(operationShape, this, writable("$outputT::builder().build()"))
 
         checkResponse(this, testCase.response)
     }
@@ -568,7 +568,7 @@ class ServerProtocolTestGenerator(
         httpRequestTestCase: HttpRequestTestCase,
         rustWriter: RustWriter,
     ) {
-        makeRequest(operationShape, operationSymbol, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
+        makeRequest(operationShape, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
         checkOperationExtension(operationShape, operationSymbol, rustWriter)
     }
 
@@ -582,7 +582,7 @@ class ServerProtocolTestGenerator(
 
     private fun makeRequest(
         operationShape: OperationShape,
-        operationSymbol: Symbol, rustWriter: RustWriter,
+        rustWriter: RustWriter,
         operationBody: Writable,
     ) {
         val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
