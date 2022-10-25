@@ -246,7 +246,7 @@ class HttpBoundProtocolPayloadGenerator(
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
             val outputT = if (member.isStreaming(model)) symbolProvider.toSymbol(member) else RuntimeType.ByteSlab.toSymbol()
-            it.rustBlockTemplate(
+            rustBlockTemplate(
                 "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
                 "outputT" to outputT,
@@ -272,6 +272,8 @@ class HttpBoundProtocolPayloadGenerator(
                                 """,
                             )
                             is StructureShape -> rust("#T()", serializerGenerator.unsetStructure(targetShape))
+                            is UnionShape -> throw CodegenException("Currently unsupported. Tracking issue: https://github.com/awslabs/smithy-rs/issues/1896")
+                            else -> throw CodegenException("`httpPayload` on member shapes targeting shapes of type ${targetShape.type} is unsupported")
                         }
                     }
                 }

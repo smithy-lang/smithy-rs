@@ -98,8 +98,8 @@ internal class XmlBindingTraitParserGeneratorTest {
         ) { _, inner -> inner("decoder") }
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
-        project.lib { writer ->
-            writer.unitTest(
+        project.lib {
+            unitTest(
                 name = "valid_input",
                 test = """
                     let xml = br#"<Top>
@@ -114,7 +114,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                         <prefix:local>hey</prefix:local>
                     </Top>
                     "#;
-                    let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
                     let mut map = std::collections::HashMap::new();
                     map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                     assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
@@ -122,7 +122,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "ignore_extras",
                 test = """
                     let xml = br#"<Top>
@@ -142,14 +142,14 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
                     let mut map = std::collections::HashMap::new();
                     map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                     assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "nopanics_on_invalid",
                 test = """
                     let xml = br#"<Top>
@@ -169,10 +169,10 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
+                    ${format(operationParser)}(xml, output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
                 """,
             )
-            writer.unitTest(
+            unitTest(
                 name = "unknown_union_variant",
                 test = """
                     let xml = br#"<Top>
@@ -186,20 +186,20 @@ internal class XmlBindingTraitParserGeneratorTest {
                         </choice>
                     </Top>
                     "#;
-                    let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
                     assert!(output.choice.unwrap().is_unknown());
                 """,
             )
         }
         project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
-            UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
+            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.public("output")) {
-            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<OperationShape>("test#Op").outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
         project.compileAndTest()
     }

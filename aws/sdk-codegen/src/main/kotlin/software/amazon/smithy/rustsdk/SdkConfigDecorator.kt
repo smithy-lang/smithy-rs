@@ -42,7 +42,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         )
         rustCrate.withModule(RustModule.Config) {
             // !!NOTE!! As more items are added to aws_types::SdkConfig, use them here to configure the config builder
-            it.rustTemplate(
+            rustTemplate(
                 """
                 impl From<&#{SdkConfig}> for Builder {
                     fn from(input: &#{SdkConfig}) -> Self {

@@ -163,11 +163,10 @@ class RequestBindingGeneratorTest {
     @Test
     fun `generates valid request bindings`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.public("input")) { writer ->
-            // Currently rendering the operation renders the protocols—I want to separate that at some point.
-            renderOperation(writer)
+        project.withModule(RustModule.public("input")) { // Currently rendering the operation renders the protocols—I want to separate that at some point.
+            renderOperation(this)
 
-            writer.unitTest(
+            unitTest(
                 name = "generate_uris",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -186,7 +185,7 @@ class RequestBindingGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "serialize_non_zero_values",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -202,7 +201,7 @@ class RequestBindingGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "build_http_requests",
                 test = """
                     use std::collections::HashMap;
@@ -235,7 +234,7 @@ class RequestBindingGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "invalid_header_name_produces_error",
                 test = """
                     use std::collections::HashMap;
@@ -250,7 +249,7 @@ class RequestBindingGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "invalid_prefix_header_value_produces_an_error",
                 test = """
                     use std::collections::HashMap;
@@ -265,7 +264,7 @@ class RequestBindingGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "invalid_header_value_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -280,7 +279,7 @@ class RequestBindingGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "missing_uri_label_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -290,11 +289,11 @@ class RequestBindingGeneratorTest {
                         .key(ts.clone())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    assert!(matches!(err, ${format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "missing_timestamp_uri_label_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -304,11 +303,11 @@ class RequestBindingGeneratorTest {
                         // .key(ts.clone())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    assert!(matches!(err, ${format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "empty_uri_label_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -317,7 +316,7 @@ class RequestBindingGeneratorTest {
                         .key(ts.clone())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    assert!(matches!(err, ${format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
                 """,
             )
         }

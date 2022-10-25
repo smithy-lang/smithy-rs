@@ -93,8 +93,8 @@ class ResponseBindingGeneratorTest {
     fun deserializeHeadersIntoOutputShape() {
         val testProject = TestWorkspace.testProject(symbolProvider)
         testProject.withModule(RustModule.public("output")) {
-            it.renderOperation()
-            it.unitTest(
+            renderOperation()
+            unitTest(
                 "http_header_deser",
                 """
                 use crate::http_serde;
