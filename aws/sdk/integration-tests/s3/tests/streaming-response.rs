@@ -3,30 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_sdk_s3::{Credentials, Endpoint, Region};
+use bytes::BytesMut;
 use std::net::SocketAddr;
 use std::time::Duration;
-use aws_sdk_s3::{
-    Credentials, Region,
-    Endpoint
-};
-use bytes::BytesMut;
 use tracing::debug;
-
-// static INIT_LOGGER: std::sync::Once = std::sync::Once::new();
-//
-// fn init_logger() {
-//     INIT_LOGGER.call_once(|| {
-//         tracing_subscriber::fmt::init();
-//     });
-// }
 
 // test will hang forever with the default (single-threaded) test executor
 #[tokio::test(flavor = "multi_thread")]
-#[should_panic(expected = "error reading a body from connection: end of file before message length reached")]
+#[should_panic(
+    expected = "error reading a body from connection: end of file before message length reached"
+)]
 async fn test_streaming_response_fails_when_eof_comes_before_content_length_reached() {
-    // init_logger();
-
-    let addr = SocketAddr::from(([0,0,0,0], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     // We spawn a faulty server that will close the connection after
     // writing half of the response body.
     let _server = tokio::spawn(start_faulty_server(addr));
@@ -42,9 +31,9 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
     let conf = aws_sdk_s3::Config::builder()
         .credentials_provider(creds)
         .region(Region::new("us-east-1"))
-        .endpoint_resolver(
-            Endpoint::immutable("http://localhost:3000".parse().expect("valid URI"))
-        )
+        .endpoint_resolver(Endpoint::immutable(
+            "http://localhost:3000".parse().expect("valid URI"),
+        ))
         .build();
 
     let client = aws_sdk_s3::client::Client::from_conf(conf);
@@ -85,38 +74,33 @@ x-amz-id-2: kPl+IVVZAwsN8ePUyQJZ40WD9dzaqtr4eNESArqE68GSKtVvuvCTDe+SxhTT+JTUqXB1
 accept-ranges: bytes
 
 Hello"#;
-        let mut nothing_more_to_read = false;
         let mut time_to_respond = false;
 
         loop {
             match socket.try_read_buf(&mut buf) {
                 Ok(0) => {
-                    debug!("stream read has been closed, breaking from loop");
-                    nothing_more_to_read = true;
+                    unreachable!(
+                        "The connection will be closed before this branch is ever reached"
+                    );
                 }
                 Ok(n) => {
-                    debug!("read {n} bytes from the socket reader");
+                    debug!("read {n} bytes from the socket");
                     if let Ok(s) = std::str::from_utf8(&buf) {
                         debug!("buf currently looks like:\n{s:?}");
                     }
 
+                    // Check for CRLF to see if we've received the entire HTTP request.
                     if buf.ends_with(b"\r\n\r\n") {
                         time_to_respond = true;
                     }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    debug!("would block, looping again after small 1ms nap");
+                    debug!("reading would block, sleeping for 1ms and then trying again");
                     sleep(Duration::from_millis(1)).await;
                 }
                 Err(e) => {
                     panic!("{e}")
                 }
-            }
-
-            if nothing_more_to_read {
-                let s = std::str::from_utf8(&buf).unwrap();
-                debug!("nothing_more_to_read, server received {s}");
-                break;
             }
 
             if socket.writable().await.is_ok() {
@@ -133,11 +117,16 @@ Hello"#;
     }
 
     loop {
-        let (socket, addr) = listener.accept().await.expect("listener can accept new connections");
+        let (socket, addr) = listener
+            .accept()
+            .await
+            .expect("listener can accept new connections");
         debug!("server received new connection from {addr:?}");
         let start = std::time::Instant::now();
         process_socket(socket).await;
-        debug!("connection to {addr:?} closed after {:.02?}", start.elapsed());
+        debug!(
+            "connection to {addr:?} closed after {:.02?}",
+            start.elapsed()
+        );
     }
 }
-
