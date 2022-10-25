@@ -200,10 +200,8 @@ class ServerProtocolTestGenerator(
                         #{RegistryBuilderMethods:W}
                 }
 
-                /// The operation full name is a concatenation of `<operation namespace>.<operation name>`.
                 pub(crate) async fn build_router_and_make_request(
                     http_request: #{Http}::request::Request<#{SmithyHttpServer}::body::Body>,
-                    _operation_full_name: &str,
                     f: &dyn Fn(RegistryBuilder) -> RegistryBuilder,
                 ) -> #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody> {
                     let mut router: #{Router} = f(create_operation_registry_builder())
@@ -214,12 +212,16 @@ class ServerProtocolTestGenerator(
                         .call(http_request)
                         .await
                         .expect("unable to make an HTTP request");
-                    // let operation_extension = http_response.extensions()
-                    //     .get::<#{SmithyHttpServer}::extension::OperationExtension>()
-                    //     .expect("extension `OperationExtension` not found");
-                    // #{AssertEq}(operation_extension.absolute(), operation_full_name);
 
                     http_response
+                }
+
+                /// The operation full name is a concatenation of `<operation namespace>.<operation name>`.
+                pub(crate) fn check_operation_extension_was_set(http_response: #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody>, operation_full_name: &str) {
+                    let operation_extension = http_response.extensions()
+                        .get::<#{SmithyHttpServer}::extension::OperationExtension>()
+                        .expect("extension `OperationExtension` not found");
+                    #{AssertEq}(operation_extension.absolute(), operation_full_name);
                 }
                 """,
                 "RegistryBuilderTypeParams" to renderRegistryBuilderTypeParams(),
@@ -567,6 +569,13 @@ class ServerProtocolTestGenerator(
         rustWriter: RustWriter,
     ) {
         makeRequest(operationShape, operationSymbol, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
+        checkOperationExtension(operationShape, operationSymbol, rustWriter)
+    }
+
+    private fun checkOperationExtension(operationShape: OperationShape, operationSymbol: Symbol, rustWriter: RustWriter) {
+        rustWriter.rust("""
+            super::$PROTOCOL_TEST_HELPER_MODULE_NAME::check_operation_extension_was_set(http_response, "${operationShape.id.namespace}.${operationSymbol.name}");
+        """)
     }
 
     private fun makeRequest(
@@ -580,7 +589,6 @@ class ServerProtocolTestGenerator(
             """
             let http_response = super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
                 http_request,
-                "${operationShape.id.namespace}.${operationSymbol.name}",
                 &|builder| {
                     builder.${operationShape.toName()}((|input| Box::pin(async move {
             """,
