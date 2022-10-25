@@ -22,3 +22,9 @@ message = "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This arc
 references = ["smithy-rs#1847"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "crisidev"
+
+[[smithy-rs]]
+message = "Replace bool with enum for a function parameter of `label::fmt_string`."
+references = ["smithy-rs#1875"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
