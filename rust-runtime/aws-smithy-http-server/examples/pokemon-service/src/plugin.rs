@@ -12,7 +12,8 @@ use aws_smithy_http_server::{
 use tower::{layer::util::Stack, Layer, Service};
 
 use std::task::{Context, Poll};
-/// A [`Service`](tower::Service) that adds a print log.
+
+/// A [`Service`] that prints a given string.
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
@@ -37,7 +38,7 @@ where
     }
 }
 
-/// A [`Layer`](tower::Layer) which constructs the [`PrintService`].
+/// A [`Layer`] which constructs the [`PrintService`].
 #[derive(Debug)]
 pub struct PrintLayer {
     name: &'static str,
@@ -69,7 +70,9 @@ where
     }
 }
 
-/// An extension to service builders to add the `print()` function.
+/// An extension trait of [`Pluggable`].
+///
+/// This provides a [`print`](PrintExt::print) method to all service builders.
 pub trait PrintExt: Pluggable<PrintPlugin> {
     /// Causes all operations to print the operation name when called.
     ///
