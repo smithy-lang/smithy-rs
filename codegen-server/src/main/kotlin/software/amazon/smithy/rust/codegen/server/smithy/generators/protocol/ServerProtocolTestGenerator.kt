@@ -844,7 +844,7 @@ class ServerProtocolTestGenerator(
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
         rustWriter.rust("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
-        rustWriter.rust(");")
+        rustWriter.write(");")
     }
 
     private fun strSlice(writer: RustWriter, args: List<String>) {
