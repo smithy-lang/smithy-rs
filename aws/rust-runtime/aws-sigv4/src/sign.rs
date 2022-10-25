@@ -6,19 +6,10 @@
 //! Functions to create signing keys and calculate signatures.
 
 use crate::date_time::format_date;
-#[cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))]
 use hmac::{digest::FixedOutput, Hmac, Mac};
-#[cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))]
 use sha2::{Digest, Sha256};
-
-#[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
-use ring::{
-    digest,
-    hmac::{self, Key},
-};
 use std::time::SystemTime;
 
-#[cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))]
 /// HashedPayload = Lowercase(HexEncode(Hash(requestPayload)))
 #[allow(dead_code)] // Unused when compiling without certain features
 pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
@@ -27,15 +18,6 @@ pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
     hex::encode(hasher.finalize_fixed())
 }
 
-#[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
-/// HashedPayload = Lowercase(HexEncode(Hash(requestPayload)))
-#[allow(dead_code)] // Unused when compiling without certain features
-pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
-    // hex::encode returns a lowercase string
-    hex::encode(digest::digest(&digest::SHA256, bytes.as_ref()))
-}
-
-#[cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))]
 /// Calculates a Sigv4 signature
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(signing_key.as_ref())
@@ -44,15 +26,6 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
     hex::encode(mac.finalize_fixed())
 }
 
-#[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
-/// Calculates a Sigv4 signature
-pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
-    let s_key = Key::new(hmac::HMAC_SHA256, signing_key.as_ref());
-    let tag = hmac::sign(&s_key, string_to_sign);
-    hex::encode(tag)
-}
-
-#[cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))]
 /// Generates a signing key for Sigv4
 pub fn generate_signing_key(
     secret: &str,
@@ -86,37 +59,6 @@ pub fn generate_signing_key(
     let mut mac = Hmac::<Sha256>::new_from_slice(&tag).expect("HMAC can take key of any size");
     mac.update("aws4_request".as_bytes());
     mac.finalize_fixed()
-}
-
-#[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
-/// Generates a signing key for Sigv4
-pub fn generate_signing_key(
-    secret: &str,
-    time: SystemTime,
-    region: &str,
-    service: &str,
-) -> impl AsRef<[u8]> {
-    // kSecret = your secret access key
-    // kDate = HMAC("AWS4" + kSecret, Date)
-    // kRegion = HMAC(kDate, Region)
-    // kService = HMAC(kRegion, Service)
-    // kSigning = HMAC(kService, "aws4_request")
-
-    let secret = format!("AWS4{}", secret);
-    let secret = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
-    let tag = hmac::sign(&secret, format_date(time).as_bytes());
-
-    // sign region
-    let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
-    let tag = hmac::sign(&key, region.as_bytes());
-
-    // sign service
-    let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
-    let tag = hmac::sign(&key, service.as_bytes());
-
-    // sign request
-    let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
-    hmac::sign(&key, "aws4_request".as_bytes())
 }
 
 #[cfg(test)]

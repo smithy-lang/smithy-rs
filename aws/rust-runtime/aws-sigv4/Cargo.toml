@@ -25,12 +25,6 @@ percent-encoding = { version = "2.1", optional = true }
 regex = "1.5"
 time = "0.3.5"
 tracing = "0.1"
-
-[target.'cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))'.dependencies]
-ring = "0.16"
-
-# ring does not compile on powerpc (https://github.com/briansmith/ring/issues/389) so we use hmac and sha2.
-[target.'cfg(any(target_arch = "powerpc", target_arch = "powerpc64"))'.dependencies]
 hmac = "0.12"
 sha2 = "0.10"
 
