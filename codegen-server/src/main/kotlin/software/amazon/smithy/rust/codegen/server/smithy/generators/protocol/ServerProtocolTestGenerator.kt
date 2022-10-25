@@ -203,7 +203,7 @@ class ServerProtocolTestGenerator(
                 /// The operation full name is a concatenation of `<operation namespace>.<operation name>`.
                 pub(crate) async fn build_router_and_make_request(
                     http_request: #{Http}::request::Request<#{SmithyHttpServer}::body::Body>,
-                    operation_full_name: &str,
+                    _operation_full_name: &str,
                     f: &dyn Fn(RegistryBuilder) -> RegistryBuilder,
                 ) -> #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody> {
                     let mut router: #{Router} = f(create_operation_registry_builder())
@@ -478,20 +478,8 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
         }
 
-        val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
-
-        rust(
-            """
-            let http_response = super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
-                http_request,
-                "${operationShape.id.namespace}.${operationSymbol.name}",
-                &|builder| {
-                    builder.${operationShape.toName()}((|input| Box::pin(async move {
-                        $outputT::builder().build()
-                    })) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)
-                }).await;
-            """,
-        )
+        val (_, outputT) = operationInputOutputTypes[operationShape]!!
+        makeRequest(operationShape, operationSymbol, this, writable("$outputT::builder().build()"))
 
         checkResponse(this, testCase.response)
     }
@@ -578,11 +566,17 @@ class ServerProtocolTestGenerator(
         httpRequestTestCase: HttpRequestTestCase,
         rustWriter: RustWriter,
     ) {
+        makeRequest(operationShape, operationSymbol, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
+    }
+
+    private fun makeRequest(operationShape: OperationShape,
+                            operationSymbol: Symbol, rustWriter: RustWriter,
+        operationBody: Writable) {
         val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
 
         rustWriter.withBlock(
             """
-            super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
+            let http_response = super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
                 http_request,
                 "${operationShape.id.namespace}.${operationSymbol.name}",
                 &|builder| {
@@ -591,9 +585,10 @@ class ServerProtocolTestGenerator(
 
             "})) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)}).await;",
 
-        ) {
-            checkRequestHandler(operationShape, httpRequestTestCase)()
+            ) {
+            operationBody()
         }
+
     }
 
     /** Checks the request using the new service builder. */
