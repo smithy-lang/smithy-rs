@@ -1,4 +1,33 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 24th, 2022
+==================
+**Breaking Changes:**
+- ⚠ (all, [smithy-rs#1825](https://github.com/awslabs/smithy-rs/issues/1825)) Bump MSRV to be 1.62.0.
+- ⚠ (server, [smithy-rs#1825](https://github.com/awslabs/smithy-rs/issues/1825)) Bump pyo3 and pyo3-asyncio from 0.16.x to 0.17.0 for aws-smithy-http-server-python.
+- ⚠ (client, [smithy-rs#1811](https://github.com/awslabs/smithy-rs/issues/1811)) Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.
+- ⚠ (server, [smithy-rs#1803](https://github.com/awslabs/smithy-rs/issues/1803)) Mark `operation` and `operation_handler` modules as private in the generated server crate.
+    Both modules did not contain any public types, therefore there should be no actual breakage when updating.
+- ⚠ (client, [smithy-rs#1740](https://github.com/awslabs/smithy-rs/issues/1740), [smithy-rs#256](https://github.com/awslabs/smithy-rs/issues/256)) A large list of breaking changes were made to accomodate default timeouts in the AWS SDK.
+    See [the smithy-rs upgrade guide](https://github.com/awslabs/smithy-rs/issues/1760) for a full list
+    of breaking changes and how to resolve them.
+- ⚠ (server, [smithy-rs#1829](https://github.com/awslabs/smithy-rs/issues/1829)) Remove `Protocol` enum, removing an obstruction to extending smithy to third-party protocols.
+- ⚠ (server, [smithy-rs#1829](https://github.com/awslabs/smithy-rs/issues/1829)) Convert the `protocol` argument on `PyMiddlewares::new` constructor to a type parameter.
+
+**New this release:**
+- (server, [smithy-rs#1811](https://github.com/awslabs/smithy-rs/issues/1811)) Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.
+- 🐛 (all, [smithy-rs#1802](https://github.com/awslabs/smithy-rs/issues/1802)) Sensitive fields in errors now respect @sensitive trait and are properly redacted.
+- (server, [smithy-rs#1727](https://github.com/awslabs/smithy-rs/issues/1727), @GeneralSwiss) Pokémon Service example code now runs clippy during build.
+- (server, [smithy-rs#1734](https://github.com/awslabs/smithy-rs/issues/1734)) Implement support for pure Python request middleware. Improve idiomatic logging support over tracing.
+- 🐛 (client, [aws-sdk-rust#620](https://github.com/awslabs/aws-sdk-rust/issues/620), [smithy-rs#1748](https://github.com/awslabs/smithy-rs/issues/1748)) Paginators now stop on encountering a duplicate token by default rather than panic. This behavior can be customized by toggling the `stop_on_duplicate_token` property on the paginator before calling `send`.
+- 🐛 (all, [smithy-rs#1817](https://github.com/awslabs/smithy-rs/issues/1817), @ethyi) Update aws-types zeroize to flexible version to prevent downstream version conflicts.
+- (all, [smithy-rs#1852](https://github.com/awslabs/smithy-rs/issues/1852), @ogudavid) Enable local maven repo dependency override.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @GeneralSwiss ([smithy-rs#1727](https://github.com/awslabs/smithy-rs/issues/1727))
+- @ethyi ([smithy-rs#1817](https://github.com/awslabs/smithy-rs/issues/1817))
+- @ogudavid ([smithy-rs#1852](https://github.com/awslabs/smithy-rs/issues/1852))
+
 September 20th, 2022
 ====================
 **Breaking Changes:**
