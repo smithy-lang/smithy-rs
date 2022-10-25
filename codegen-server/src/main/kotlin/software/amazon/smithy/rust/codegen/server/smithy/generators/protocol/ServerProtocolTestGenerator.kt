@@ -214,10 +214,10 @@ class ServerProtocolTestGenerator(
                         .call(http_request)
                         .await
                         .expect("unable to make an HTTP request");
-                    let operation_extension = http_response.extensions()
-                        .get::<#{SmithyHttpServer}::extension::OperationExtension>()
-                        .expect("extension `OperationExtension` not found");
-                    #{AssertEq}(operation_extension.absolute(), operation_full_name);
+                    // let operation_extension = http_response.extensions()
+                    //     .get::<#{SmithyHttpServer}::extension::OperationExtension>()
+                    //     .expect("extension `OperationExtension` not found");
+                    // #{AssertEq}(operation_extension.absolute(), operation_full_name);
 
                     http_response
                 }
