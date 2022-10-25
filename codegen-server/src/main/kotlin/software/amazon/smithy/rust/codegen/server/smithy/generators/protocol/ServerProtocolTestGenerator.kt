@@ -205,7 +205,7 @@ class ServerProtocolTestGenerator(
                     http_request: #{Http}::request::Request<#{SmithyHttpServer}::body::Body>,
                     operation_full_name: &str,
                     f: &dyn Fn(RegistryBuilder) -> RegistryBuilder,
-                ) {
+                ) -> #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody> {
                     let mut router: #{Router} = f(create_operation_registry_builder())
                         .build()
                         .expect("unable to build operation registry")
@@ -218,6 +218,8 @@ class ServerProtocolTestGenerator(
                         .get::<#{SmithyHttpServer}::extension::OperationExtension>()
                         .expect("extension `OperationExtension` not found");
                     #{AssertEq}(operation_extension.absolute(), operation_full_name);
+
+                    http_response
                 }
                 """,
                 "RegistryBuilderTypeParams" to renderRegistryBuilderTypeParams(),
