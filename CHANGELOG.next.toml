@@ -198,3 +198,9 @@ message = "Add test to exercise excluded headers in aws-sigv4."
 references = ["smithy-rs#1890"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Add test ensuring that a response will error if the response body returns an EOF before the entire body has been read."
+references = ["smithy-rs#1801"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
