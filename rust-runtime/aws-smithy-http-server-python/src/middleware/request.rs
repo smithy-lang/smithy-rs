@@ -35,6 +35,9 @@ impl PyRequest {
         }
     }
 
+    // Consumes self by taking the inner Request.
+    // This method would have been `into_inner(self) -> Request<Body>`
+    // but we can't do that because we are crossing Python boundary.
     pub fn take_inner(&mut self) -> Option<Request<Body>> {
         let parts = self.parts.take()?;
         let body = std::mem::replace(&mut self.body, Arc::new(Mutex::new(None)));

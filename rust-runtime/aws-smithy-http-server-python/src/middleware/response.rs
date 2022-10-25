@@ -34,6 +34,9 @@ impl PyResponse {
         }
     }
 
+    // Consumes self by taking the inner Response.
+    // This method would have been `into_inner(self) -> Response<BoxBody>`
+    // but we can't do that because we are crossing Python boundary.
     pub fn take_inner(&mut self) -> Option<Response<BoxBody>> {
         let parts = self.parts.take()?;
         let body = std::mem::replace(&mut self.body, Arc::new(Mutex::new(None)));

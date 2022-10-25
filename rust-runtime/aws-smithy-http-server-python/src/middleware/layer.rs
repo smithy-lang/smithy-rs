@@ -25,8 +25,7 @@ use crate::PyMiddlewareException;
 
 /// Tower [Layer] implementation of Python middleware handling.
 ///
-/// Middleware stored in the `handlers` attribute will be executed, in order,
-/// inside an async Tower middleware.
+/// Middleware stored in the `handler` attribute will be executed inside an async Tower middleware.
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareLayer<P> {
     handler: PyMiddlewareHandler,
@@ -60,7 +59,7 @@ where
     }
 }
 
-// Tower [Service] wrapping the Python middleware [Layer].
+/// Tower [Service] wrapping the Python middleware [Layer].
 #[derive(Clone, Debug)]
 pub struct PyMiddlewareService<S> {
     inner: S,

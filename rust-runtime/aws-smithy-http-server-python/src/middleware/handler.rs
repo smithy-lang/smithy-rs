@@ -15,8 +15,10 @@ use crate::util::func_metadata;
 
 use super::{PyMiddlewareError, PyRequest, PyResponse};
 
+// PyNextInner represents the inner service Tower layer applied to.
 type PyNextInner = BoxService<Request<Body>, Response<BoxBody>, BoxError>;
 
+// PyNext wraps inner Tower service and makes it calleble from Python.
 #[pyo3::pyclass]
 struct PyNext(Option<PyNextInner>);
 
@@ -25,6 +27,9 @@ impl PyNext {
         Self(Some(inner))
     }
 
+    // Consumes self by taking the inner Tower service.
+    // This method would have been `into_inner(self) -> PyNextInner`
+    // but we can't do that because we are crossing Python boundary.
     fn take_inner(&mut self) -> Option<PyNextInner> {
         self.0.take()
     }
@@ -32,6 +37,14 @@ impl PyNext {
 
 #[pyo3::pymethods]
 impl PyNext {
+    // Calls the inner Tower service with the `Request` that is passed from Python.
+    // It returns a coroutine to be awaited on the Python to complete the call.
+    // Note that it takes wrapped objects from both `PyRequest` and `PyNext`,
+    // so after calling `next`, consumer can't access to the `Request` or
+    // can't call the `next` again, this basically emulates consuming `self` and `Request`,
+    // but since we are crossing Python boundary we can't express it in natural Rust terms.
+    //
+    // Naming the method `__call__` allows `next` to be called like `next(...)`.
     fn __call__<'p>(&'p mut self, py: Python<'p>, py_req: Py<PyRequest>) -> PyResult<&'p PyAny> {
         let req = py_req
             .borrow_mut(py)
@@ -71,6 +84,8 @@ impl PyMiddlewareHandler {
         })
     }
 
+    // Calls pure-Python middleware handler with given `Request` and the next Tower service
+    // and returns the `Response` that returned from the pure-Python handler.
     pub async fn call(
         self,
         req: Request<Body>,
@@ -87,9 +102,9 @@ impl PyMiddlewareHandler {
                     let py_handler: &PyFunction = handler.extract(py)?;
                     let output = py_handler.call1((py_req, py_next))?;
                     pyo3_asyncio::tokio::into_future(output)
-                })
+                })?
+                .await
             })
-            .await?
             .await?
         } else {
             Python::with_gil(|py| {
