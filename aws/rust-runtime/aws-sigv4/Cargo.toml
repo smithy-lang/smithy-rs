@@ -31,11 +31,9 @@ sha2 = "0.10"
 [dev-dependencies]
 criterion = "0.4"
 bytes = "1"
-hmac = "0.12"
 httparse = "1.5"
 pretty_assertions = "1.0"
 proptest = "1"
-sha2 = "0.10"
 time = { version = "0.3.4", features = ["parsing"] }
 
 [target.'cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))'.dev-dependencies]
