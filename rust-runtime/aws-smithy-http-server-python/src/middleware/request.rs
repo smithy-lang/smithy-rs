@@ -129,7 +129,7 @@ impl PyRequest {
                 body_guard.replace(Body::from(body));
                 buf
             };
-            // TODO: can we use `PyBytes` here?
+            // TODO(Perf): can we use `PyBytes` here?
             Ok(body.to_vec())
         })
     }

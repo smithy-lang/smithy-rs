@@ -141,7 +141,7 @@ impl PyResponse {
                 body_guard.replace(to_boxed(body));
                 buf
             };
-            // TODO: can we use `PyBytes` here?
+            // TODO(Perf): can we use `PyBytes` here?
             Ok(body.to_vec())
         })
     }

@@ -53,7 +53,7 @@ async fn accessing_and_changing_request_body() -> PyResult<()> {
             py,
             r#"
 async def handler(req):
-    # TODO: why we need to wrap with `bytes`?
+    # TODO(Ergonomics): why we need to wrap with `bytes`?
     assert bytes(await req.body) == b"hello world"
 
     req.body = b"hello world from middleware"
