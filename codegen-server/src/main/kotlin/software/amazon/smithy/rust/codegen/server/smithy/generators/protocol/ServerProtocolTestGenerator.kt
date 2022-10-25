@@ -289,6 +289,7 @@ class ServerProtocolTestGenerator(
                     is TestCase.MalformedRequestTest -> this.renderHttpMalformedRequestTestCase(
                         it.testCase,
                         operationShape,
+                        operationSymbol,
                     )
                 }
             }
@@ -392,7 +393,8 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
-            checkRequest(operationShape, operationSymbol, httpRequestTestCase, this)
+            makeRequest(operationShape, this, checkRequestHandler(operationShape, httpRequestTestCase))
+            checkOperationExtension(operationShape, operationSymbol, this)
         }
 
         // Test against new service builder.
@@ -400,7 +402,7 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
-            checkRequest2(operationShape, operationSymbol, httpRequestTestCase, this)
+            makeRequest2(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -472,14 +474,23 @@ class ServerProtocolTestGenerator(
     private fun RustWriter.renderHttpMalformedRequestTestCase(
         testCase: HttpMalformedRequestTestCase,
         operationShape: OperationShape,
+        operationSymbol: Symbol,
     ) {
+        val (_, outputT) = operationInputOutputTypes[operationShape]!!
+
+        // Use the `OperationRegistryBuilder`
         with(testCase.request) {
             // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
             renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
         }
-
-        val (_, outputT) = operationInputOutputTypes[operationShape]!!
         makeRequest(operationShape, this, writable("$outputT::builder().build()"))
+
+        // Use new service builder
+        with(testCase.request) {
+            // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
+            renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+        }
+        makeRequest2(operationShape, operationSymbol, this, writable("$outputT::builder().build()"))
 
         checkResponse(this, testCase.response)
     }
@@ -559,17 +570,6 @@ class ServerProtocolTestGenerator(
             }
         }
 
-    /** Checks the request using the `OperationRegistryBuilder`. */
-    private fun checkRequest(
-        operationShape: OperationShape,
-        operationSymbol: Symbol,
-        httpRequestTestCase: HttpRequestTestCase,
-        rustWriter: RustWriter,
-    ) {
-        makeRequest(operationShape, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
-        checkOperationExtension(operationShape, operationSymbol, rustWriter)
-    }
-
     private fun checkOperationExtension(operationShape: OperationShape, operationSymbol: Symbol, rustWriter: RustWriter) {
         rustWriter.rust(
             """
@@ -578,6 +578,7 @@ class ServerProtocolTestGenerator(
         )
     }
 
+    /** Checks the request using the `OperationRegistryBuilder`. */
     private fun makeRequest(
         operationShape: OperationShape,
         rustWriter: RustWriter,
@@ -601,15 +602,6 @@ class ServerProtocolTestGenerator(
     }
 
     /** Checks the request using the new service builder. */
-    private fun checkRequest2(
-        operationShape: OperationShape,
-        operationSymbol: Symbol,
-        httpRequestTestCase: HttpRequestTestCase,
-        rustWriter: RustWriter,
-    ) {
-        makeRequest2(operationShape, operationSymbol, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
-    }
-
     private fun makeRequest2(
         operationShape: OperationShape,
         operationSymbol: Symbol,
@@ -634,7 +626,7 @@ class ServerProtocolTestGenerator(
             let http_response = #{Tower}::ServiceExt::oneshot(service, http_request)
                 .await
                 .expect("unable to make an HTTP request");
-            assert!(receiver.recv().await.is_some())
+            assert!(receiver.recv().await.is_some());
             """,
             "Body" to body,
             *codegenScope,
