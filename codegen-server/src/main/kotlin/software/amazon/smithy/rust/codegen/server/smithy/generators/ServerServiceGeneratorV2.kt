@@ -279,7 +279,7 @@ class ServerServiceGeneratorV2(
         rustTemplate(
             """
             ##[derive(Clone)]
-            pub struct $serviceName<S> {
+            pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
 
@@ -320,6 +320,21 @@ class ServerServiceGeneratorV2(
                     $serviceName {
                         router: self.router.map(|s| s.layer(layer))
                     }
+                }
+
+                /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
+                ///
+                /// This has the effect of erasing all types accumulated via [`layer`].
+                pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
+                where
+                    S: #{Tower}::Service<
+                        #{Http}::Request<B>,
+                        Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
+                        Error = std::convert::Infallible>,
+                    S: Clone + Send + 'static,
+                    S::Future: Send + 'static,
+                {
+                    self.layer(&#{Tower}::layer::layer_fn(#{SmithyHttpServer}::routing::Route::new))
                 }
             }
 
