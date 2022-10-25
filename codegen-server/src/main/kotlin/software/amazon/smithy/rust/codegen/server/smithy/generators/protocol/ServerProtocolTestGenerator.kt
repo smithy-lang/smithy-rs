@@ -569,9 +569,11 @@ class ServerProtocolTestGenerator(
         makeRequest(operationShape, operationSymbol, rustWriter, checkRequestHandler(operationShape, httpRequestTestCase))
     }
 
-    private fun makeRequest(operationShape: OperationShape,
-                            operationSymbol: Symbol, rustWriter: RustWriter,
-        operationBody: Writable) {
+    private fun makeRequest(
+        operationShape: OperationShape,
+        operationSymbol: Symbol, rustWriter: RustWriter,
+        operationBody: Writable,
+    ) {
         val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
 
         rustWriter.withBlock(
@@ -585,10 +587,9 @@ class ServerProtocolTestGenerator(
 
             "})) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)}).await;",
 
-            ) {
+        ) {
             operationBody()
         }
-
     }
 
     /** Checks the request using the new service builder. */
