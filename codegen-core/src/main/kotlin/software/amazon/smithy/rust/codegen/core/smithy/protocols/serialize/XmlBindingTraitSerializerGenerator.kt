@@ -291,7 +291,14 @@ class XmlBindingTraitSerializerGenerator(
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
         when (model.expectShape(member.target)) {
             is StringShape -> {
-                rust("$input.as_str()")
+                // The `input` expression always evaluates to a reference type at this point, but if it does so because
+                // it's preceded by the `&` operator, calling `as_str()` on it will upset Clippy.
+                val dereferenced = if (input.startsWith("&")) {
+                    autoDeref(input)
+                } else {
+                    input
+                }
+                rust("$dereferenced.as_str()")
             }
             is BooleanShape, is NumberShape -> {
                 rust(
