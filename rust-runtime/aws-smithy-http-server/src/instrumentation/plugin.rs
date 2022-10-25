@@ -6,7 +6,7 @@
 use tower::layer::util::Stack;
 
 use crate::{
-    operation::{Operation, OperationShape},
+    operation::OperationShape,
     plugin::{Pluggable, Plugin},
 };
 
@@ -16,19 +16,19 @@ use super::{layer::InstrumentLayer, sensitivity::Sensitivity};
 #[derive(Debug)]
 pub struct InstrumentPlugin;
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for InstrumentPlugin
+impl<P, Op, ModelLayer, HttpLayer> Plugin<P, Op, ModelLayer, HttpLayer> for InstrumentPlugin
 where
     Op: OperationShape,
     Op: Sensitivity,
 {
-    type Service = S;
-    type Layer = Stack<L, InstrumentLayer<Op::RequestFmt, Op::ResponseFmt>>;
+    type ModelLayer = ModelLayer;
+    type HttpLayer = Stack<HttpLayer, InstrumentLayer<Op::RequestFmt, Op::ResponseFmt>>;
 
-    fn map(&self, operation: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+    fn map(&self, model_layer: ModelLayer, http_layer: HttpLayer) -> (Self::ModelLayer, Self::HttpLayer) {
         let layer = InstrumentLayer::new(Op::NAME)
             .request_fmt(Op::request_fmt())
             .response_fmt(Op::response_fmt());
-        operation.layer(layer)
+        (model_layer, Stack::new(http_layer, layer))
     }
 }
 

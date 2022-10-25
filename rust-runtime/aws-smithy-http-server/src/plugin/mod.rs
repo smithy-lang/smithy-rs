@@ -7,8 +7,6 @@ mod filter;
 mod identity;
 mod stack;
 
-use crate::operation::Operation;
-
 pub use filter::*;
 pub use identity::*;
 pub use stack::*;
@@ -46,12 +44,12 @@ pub trait Pluggable<NewPlugin> {
 ///
 /// Every service builder enjoys [`Pluggable`] and therefore can be provided with a [`Plugin`] using
 /// [`Pluggable::apply`].
-pub trait Plugin<Protocol, Op, S, L> {
-    type Service;
-    type Layer;
+pub trait Plugin<Protocol, Op, ModelLayer, HttpLayer> {
+    type ModelLayer;
+    type HttpLayer;
 
     /// Maps an [`Operation`] to another.
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
+    fn map(&self, model_layer: ModelLayer, http_layer: HttpLayer) -> (Self::ModelLayer, Self::HttpLayer);
 }
 
 /// An extension trait for [`Plugin`].

@@ -189,23 +189,35 @@ pub use operation_service::*;
 pub use shape::*;
 pub use upgrade::*;
 
-/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`](tower::Layer) `L`.
+/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and two [`Layer`](tower::Layer)s `ModelLayer` and `HttpLayer`.
 ///
-/// The `L` is held and applied lazily during [`Upgradable::upgrade`].
-pub struct Operation<S, L = Identity> {
+/// The `ModelLayer` is applied to the `S` and the `HttpLayer` is held and applied lazily during [`Upgradable::upgrade`].
+pub struct Operation<S, ModelLayer = Identity, HttpLayer = Identity> {
     /// The inner [`Service`](tower::Service) representing the logic of the operation.
     pub inner: S,
+    /// The [`Layer`](tower::Layer) applied to the [`Service`](tower::Service) `S`.
+    pub model_layer: ModelLayer,
     /// The [`Layer`](tower::Layer) applied to the HTTP [`Service`](tower::Service) after `S` has been wrapped in
     /// [`Upgrade`].
-    pub layer: L,
+    pub http_layer: HttpLayer,
 }
 
-impl<S, L> Operation<S, L> {
-    /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
-    pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
+impl<S, ModelLayer, HttpLayer> Operation<S, ModelLayer, HttpLayer> {
+    /// Applies a [`Layer`] to the operation _before_ it has been upgraded via [`Operation::upgrade`].
+    pub fn model_layer<NewL>(self, layer: NewL) -> Operation<S, Stack<ModelLayer, NewL>, HttpLayer> {
         Operation {
             inner: self.inner,
-            layer: Stack::new(self.layer, layer),
+            model_layer: Stack::new(self.model_layer, layer),
+            http_layer: self.http_layer,
+        }
+    }
+
+    /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
+    pub fn http_layer<NewL>(self, layer: NewL) -> Operation<S, ModelLayer, Stack<HttpLayer, NewL>> {
+        Operation {
+            inner: self.inner,
+            model_layer: self.model_layer,
+            http_layer: Stack::new(self.http_layer, layer),
         }
     }
 }
@@ -219,7 +231,8 @@ impl<Op, S, PollError> Operation<Normalize<Op, S, PollError>> {
     {
         Self {
             inner: inner.canonicalize(),
-            layer: Identity::new(),
+            http_layer: Identity::new(),
+            model_layer: Identity::new(),
         }
     }
 }
@@ -233,7 +246,8 @@ impl<Op, H> Operation<IntoService<Op, H>> {
     {
         Self {
             inner: handler.into_service(),
-            layer: Identity::new(),
+            http_layer: Identity::new(),
+            model_layer: Identity::new(),
         }
     }
 }

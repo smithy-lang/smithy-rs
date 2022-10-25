@@ -228,7 +228,8 @@ pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     fn upgrade(self, plugin: &Plugin) -> Self::Service;
 }
 
-impl<P, Op, Exts, B, Pl, S, L, PollError> Upgradable<P, Op, Exts, B, Pl> for Operation<S, L>
+impl<P, Op, Exts, B, Pl, S, ModelLayer, HttpLayer, PollError> Upgradable<P, Op, Exts, B, Pl>
+    for Operation<S, ModelLayer, HttpLayer>
 where
     // `Op` is used to specify the operation shape
     Op: OperationShape,
@@ -243,29 +244,37 @@ where
     // Must be able to convert extensions
     Exts: FromParts<P>,
 
-    // The signature of the inner service is correct
+    // The model layer applies to `S`
+    Pl::ModelLayer: Layer<S>,
+
+    // The signature of the model service is correct
     S: Service<(Op::Input, Exts), Response = Op::Output, Error = OperationError<Op::Error, PollError>> + Clone,
 
     // The plugin takes this operation as input
-    Pl: Plugin<P, Op, S, L>,
+    Pl: Plugin<P, Op, ModelLayer, HttpLayer>,
 
     // The modified Layer applies correctly to `Upgrade<P, Op, Exts, B, S>`
-    Pl::Layer: Layer<Upgrade<P, Op, Exts, B, Pl::Service>>,
+    Pl::HttpLayer: Layer<Upgrade<P, Op, Exts, B, <Pl::ModelLayer as Layer<S>>::Service>>,
 
     // The signature of the output is correct
-    <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service:
+    <Pl::HttpLayer as Layer<Upgrade<P, Op, Exts, B, <Pl::ModelLayer as Layer<S>>::Service>>>::Service:
         Service<http::Request<B>, Response = http::Response<BoxBody>>,
 {
-    type Service = <Pl::Layer as Layer<Upgrade<P, Op, Exts, B, Pl::Service>>>::Service;
+    type Service = <Pl::HttpLayer as Layer<Upgrade<P, Op, Exts, B, <Pl::ModelLayer as Layer<S>>::Service>>>::Service;
 
-    /// Takes the [`Operation<S, L>`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
+    /// Takes the [`Operation`], applies [`Plugin`], then applies [`UpgradeLayer`] to
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
     fn upgrade(self, plugin: &Pl) -> Self::Service {
-        let mapped = plugin.map(self);
-        let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
-        layer.layer(mapped.inner)
+        let Operation {
+            inner,
+            model_layer,
+            http_layer,
+        } = self;
+        let (model_layer, http_layer) = plugin.map(model_layer, http_layer);
+        let layer = Stack::new(model_layer, Stack::new(UpgradeLayer::new(), http_layer));
+        layer.layer(inner)
     }
 }
 
