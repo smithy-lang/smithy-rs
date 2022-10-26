@@ -77,28 +77,28 @@ class ConstrainedStringGeneratorTest {
             unitTest(
                 name = "parse_success",
                 test = """
-                    let string = String::from("${testCase.validString}");
+                    let string = "${testCase.validString}".to_owned();
                     let _constrained = ConstrainedString::parse(string).unwrap();
                 """,
             )
             unitTest(
                 name = "try_from_success",
                 test = """
-                    let string = String::from("${testCase.validString}");
+                    let string = "${testCase.validString}".to_owned();
                     let _constrained: ConstrainedString = string.try_into().unwrap();
                 """,
             )
             unitTest(
                 name = "parse_fail",
                 test = """
-                    let string = String::from("${testCase.invalidString}");
+                    let string = "${testCase.invalidString}".to_owned();
                     let _constrained = ConstrainedString::parse(string).unwrap_err();
                 """,
             )
             unitTest(
                 name = "try_from_fail",
                 test = """
-                    let string = String::from("${testCase.invalidString}");
+                    let string = "${testCase.invalidString}".to_owned();
                     let constrained_res: Result<ConstrainedString, _> = string.try_into();
                     constrained_res.unwrap_err();
                 """,
@@ -106,7 +106,7 @@ class ConstrainedStringGeneratorTest {
             unitTest(
                 name = "inner",
                 test = """
-                    let string = String::from("${testCase.validString}");
+                    let string = "${testCase.validString}".to_owned();
                     let constrained = ConstrainedString::parse(string).unwrap();
 
                     assert_eq!(constrained.inner(), "${testCase.validString}");
@@ -115,7 +115,7 @@ class ConstrainedStringGeneratorTest {
             unitTest(
                 name = "into_inner",
                 test = """
-                    let string = String::from("${testCase.validString}");
+                    let string = "${testCase.validString}".to_owned();
                     let constrained = ConstrainedString::parse(string.clone()).unwrap();
 
                     assert_eq!(constrained.into_inner(), string);
@@ -144,5 +144,50 @@ class ConstrainedStringGeneratorTest {
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) std::string::String);"
+    }
+
+    @Test
+    fun `Display implementation`() {
+        val model = """
+            namespace test
+            
+            @length(min: 1, max: 69)
+            string ConstrainedString
+            
+            @sensitive
+            @length(min: 1, max: 78)
+            string SensitiveConstrainedString
+            """.asSmithyModel()
+        val constrainedStringShape = model.lookup<StringShape>("test#ConstrainedString")
+        val sensitiveConstrainedStringShape = model.lookup<StringShape>("test#SensitiveConstrainedString")
+
+        val codegenContext = serverTestCodegenContext(model)
+
+        val project = TestWorkspace.testProject(codegenContext.symbolProvider)
+
+        project.withModule(ModelsModule) {
+            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
+            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape).render()
+
+            unitTest(
+                name = "non_sensitive_string_display_implementation",
+                test = """
+                    let string = "a non-sensitive string".to_owned();
+                    let constrained = ConstrainedString::parse(string).unwrap();
+                    assert_eq!(format!("{}", constrained), "a non-sensitive string")
+                """,
+            )
+
+            unitTest(
+                name = "sensitive_string_display_implementation",
+                test = """
+                    let string = "That is how heavy a secret can become. It can make blood flow easier than ink.".to_owned();
+                    let constrained = SensitiveConstrainedString::parse(string).unwrap();
+                    assert_eq!(format!("{}", constrained), "*** Sensitive Data Redacted ***")
+                """,
+            )
+        }
+
+        project.compileAndTest()
     }
 }
