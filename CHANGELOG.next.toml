@@ -28,3 +28,9 @@ message = "Replace bool with enum for a function parameter of `label::fmt_string
 references = ["smithy-rs#1875"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_http_server::routing::Router` is exported from the crate root again. This reverts unintentional breakage that was introduced in `aws-smithy-http-server` v0.51.0 only."
+references = ["smithy-rs#1910"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+author = "david-perez"
