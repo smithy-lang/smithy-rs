@@ -71,7 +71,7 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
                 rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
             }
         }
-        else -> writable {}
+        else -> emptySection
     }
 }
 
