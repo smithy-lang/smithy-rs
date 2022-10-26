@@ -196,7 +196,7 @@ impl<'a> CanonicalRequest<'a> {
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
-                normalize_header_value(value),
+                normalize_header_value(value)?,
             );
         }
 
@@ -373,11 +373,11 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
     &bytes[starting_index..ending_index]
 }
 
-/// Works just like [trim_all] but acts on HeaderValues instead of bytes
-fn normalize_header_value(header_value: &HeaderValue) -> HeaderValue {
+/// Works just like [trim_all] but acts on HeaderValues instead of bytes.
+/// Will ensure that the underlying bytes are valid UTF-8.
+fn normalize_header_value(header_value: &HeaderValue) -> Result<HeaderValue, Error> {
     let trimmed_value = trim_all(header_value.as_bytes());
-    // This can't fail because we started with a valid HeaderValue and then only trimmed spaces
-    HeaderValue::from_bytes(&trimmed_value).unwrap()
+    HeaderValue::from_str(std::str::from_utf8(&trimmed_value)?).map_err(Error::from)
 }
 
 #[derive(Debug, PartialEq, Default)]
@@ -507,10 +507,10 @@ mod tests {
     };
     use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
-    use http::HeaderValue;
     use http::Uri;
+    use http::{header::HeaderName, HeaderValue};
     use pretty_assertions::assert_eq;
-    use proptest::proptest;
+    use proptest::{prelude::*, proptest};
     use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
@@ -597,7 +597,7 @@ mod tests {
             region: "us-east-1",
             service: "iam",
         };
-        assert_eq!(format!("{}\n", scope.to_string()), expected);
+        assert_eq!(format!("{}\n", scope), expected);
     }
 
     #[test]
@@ -707,6 +707,47 @@ mod tests {
         );
     }
 
+    proptest! {
+       #[test]
+       fn presigning_header_exclusion_with_explicit_exclusion_list_specified(
+           excluded_headers in prop::collection::vec("[a-z]{1,20}", 1..10),
+       ) {
+            let mut request_builder = http::Request::builder()
+                .uri("https://some-endpoint.some-region.amazonaws.com")
+                .header("content-type", "application/xml")
+                .header("content-length", "0");
+            for key in &excluded_headers {
+                request_builder = request_builder.header(key, "value");
+            }
+            let request = request_builder.body("").unwrap();
+
+            let request = SignableRequest::from(&request);
+
+            let settings = SigningSettings {
+                signature_location: SignatureLocation::QueryParams,
+                expires_in: Some(Duration::from_secs(30)),
+                excluded_headers: Some(
+                    excluded_headers
+                        .into_iter()
+                        .map(|header_string| {
+                            HeaderName::from_static(Box::leak(header_string.into_boxed_str()))
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            };
+
+            let signing_params = signing_params(settings);
+            let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
+
+            let values = canonical.values.into_query_params().unwrap();
+            assert_eq!(
+                "content-length;content-type;host",
+                values.signed_headers.as_str()
+            );
+        }
+    }
+
     #[test]
     fn test_trim_all_handles_spaces_correctly() {
         // Can't compare a byte array to a Cow so we convert both to slices before comparing
@@ -738,9 +779,9 @@ mod tests {
         }
 
         #[test]
-        fn test_normalize_header_value_doesnt_panic(v in (".*")) {
+        fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
             if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
-                let _ = normalize_header_value(&header_value);
+                assert!(normalize_header_value(&header_value).is_ok());
             }
         }
 
@@ -748,5 +789,11 @@ mod tests {
         fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
             assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
+    }
+
+    #[test]
+    fn test_normalize_header_value_returns_expected_error_on_invalid_utf8() {
+        let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
+        assert!(normalize_header_value(&header_value).is_err());
     }
 }

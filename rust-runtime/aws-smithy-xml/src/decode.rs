@@ -463,7 +463,7 @@ mod test {
         let xml = r#"<Response/>"#;
         let mut doc = Document::new(xml);
         let mut scoped = doc.root_element().expect("valid doc");
-        assert_eq!(scoped.start_el.closed, true);
+        assert!(scoped.start_el.closed);
         assert!(scoped.next_tag().is_none())
     }
 
@@ -531,8 +531,8 @@ mod test {
             root.start_el().attributes,
             vec![Attr {
                 name: Name {
-                    prefix: "xsi".into(),
-                    local: "type".into()
+                    prefix: "xsi",
+                    local: "type"
                 },
                 value: "CanonicalUser".into()
             }]
@@ -540,7 +540,7 @@ mod test {
     }
 
     #[test]
-    fn escape_data() {
+    fn unescape_data() {
         let xml = r#"<Response key="&quot;hey&quot;>">&gt;</Response>"#;
         let mut doc = Document::new(xml);
         let mut root = doc.root_element().unwrap();

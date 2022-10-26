@@ -6,29 +6,29 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 class ServerOperationGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val operation: OperationShape,
 ) {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         )
-    private val symbolProvider = coreCodegenContext.symbolProvider
-    private val model = coreCodegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val model = codegenContext.model
 
     private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
     private val operationId = operation.id
@@ -61,7 +61,7 @@ class ServerOperationGenerator(
                 type Error = #{Error:W};
             }
 
-            impl #{SmithyHttpServer}::logging::sensitivity::Sensitivity for $operationName {
+            impl #{SmithyHttpServer}::instrumentation::sensitivity::Sensitivity for $operationName {
                 type RequestFmt = #{RequestType:W};
                 type ResponseFmt = #{ResponseType:W};
 

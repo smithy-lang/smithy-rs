@@ -10,14 +10,17 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute.Companion.NonExhaustive
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.NonExhaustive
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import java.util.logging.Level
 import java.util.logging.Logger
 

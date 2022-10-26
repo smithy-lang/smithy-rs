@@ -10,18 +10,17 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWordSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.client.smithy.EventStreamSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolVisitor
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonStreamingShapeMetadataProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -44,7 +43,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
+        val codegenDecorator: CombinedCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(
                 context,
                 CombinedCodegenDecorator(DECORATORS + ServerRequiredCustomizations()),

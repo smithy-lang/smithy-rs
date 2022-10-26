@@ -8,18 +8,18 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize.EventStreamMarshallerGenerator
-import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.testRustSettings
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
-import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.EventStreamTestModels
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.EventStreamTestTools
 
 class EventStreamMarshallerGeneratorTest {
     @ParameterizedTest
@@ -27,7 +27,7 @@ class EventStreamMarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase)
 
-        val codegenContext = CoreCodegenContext(
+        val codegenContext = CodegenContext(
             test.model,
             test.symbolProvider,
             test.serviceShape,
@@ -46,10 +46,10 @@ class EventStreamMarshallerGeneratorTest {
             testCase.requestContentType,
         )
 
-        test.project.lib { writer ->
+        test.project.lib {
             val protocolTestHelpers = CargoDependency.SmithyProtocolTestHelpers(TestRuntimeConfig)
                 .copy(scope = DependencyScope.Compile)
-            writer.rustTemplate(
+            rustTemplate(
                 """
                 use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
                 use std::collections::HashMap;
@@ -76,13 +76,13 @@ class EventStreamMarshallerGeneratorTest {
                 "MediaType" to protocolTestHelpers.rustName("MediaType"),
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_blob",
                 """
                 let event = TestStream::MessageWithBlob(
                     MessageWithBlob::builder().data(Blob::new(&b"hello, world!"[..])).build()
                 );
-                let result = ${writer.format(generator.render())}().marshall(event);
+                let result = ${format(generator.render())}().marshall(event);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 let message = result.unwrap();
                 let headers = headers_to_map(message.headers());
@@ -93,13 +93,13 @@ class EventStreamMarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_string",
                 """
                 let event = TestStream::MessageWithString(
                     MessageWithString::builder().data("hello, world!").build()
                 );
-                let result = ${writer.format(generator.render())}().marshall(event);
+                let result = ${format(generator.render())}().marshall(event);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 let message = result.unwrap();
                 let headers = headers_to_map(message.headers());
@@ -110,7 +110,7 @@ class EventStreamMarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_struct",
                 """
                 let event = TestStream::MessageWithStruct(
@@ -121,7 +121,7 @@ class EventStreamMarshallerGeneratorTest {
                             .build()
                     ).build()
                 );
-                let result = ${writer.format(generator.render())}().marshall(event);
+                let result = ${format(generator.render())}().marshall(event);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 let message = result.unwrap();
                 let headers = headers_to_map(message.headers());
@@ -137,13 +137,13 @@ class EventStreamMarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_union",
                 """
                 let event = TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(
                     TestUnion::Foo("hello".into())
                 ).build());
-                let result = ${writer.format(generator.render())}().marshall(event);
+                let result = ${format(generator.render())}().marshall(event);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 let message = result.unwrap();
                 let headers = headers_to_map(message.headers());
@@ -159,7 +159,7 @@ class EventStreamMarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_headers",
                 """
                 let event = TestStream::MessageWithHeaders(MessageWithHeaders::builder()
@@ -173,7 +173,7 @@ class EventStreamMarshallerGeneratorTest {
                     .timestamp(DateTime::from_secs(5))
                     .build()
                 );
-                let result = ${writer.format(generator.render())}().marshall(event);
+                let result = ${format(generator.render())}().marshall(event);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 let actual_message = result.unwrap();
                 let expected_message = Message::new(&b""[..])
@@ -191,7 +191,7 @@ class EventStreamMarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_header_and_payload",
                 """
                 let event = TestStream::MessageWithHeaderAndPayload(MessageWithHeaderAndPayload::builder()
@@ -199,7 +199,7 @@ class EventStreamMarshallerGeneratorTest {
                     .payload(Blob::new(&b"payload"[..]))
                     .build()
                 );
-                let result = ${writer.format(generator.render())}().marshall(event);
+                let result = ${format(generator.render())}().marshall(event);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 let actual_message = result.unwrap();
                 let expected_message = Message::new(&b"payload"[..])
@@ -211,7 +211,7 @@ class EventStreamMarshallerGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 "message_with_no_header_payload_traits",
                 """
                 let event = TestStream::MessageWithNoHeaderPayloadTraits(MessageWithNoHeaderPayloadTraits::builder()
@@ -219,7 +219,7 @@ class EventStreamMarshallerGeneratorTest {
                     .some_string("hello")
                     .build()
                 );
-                let result = ${writer.format(generator.render())}().marshall(event);
+                let result = ${format(generator.render())}().marshall(event);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 let message = result.unwrap();
                 let headers = headers_to_map(message.headers());

@@ -13,7 +13,7 @@ Setup
 
 1. `./gradlew` will setup gradle for you. JDK 17 is required.
 2. Running tests requires a working Rust installation. See [Rust docs](https://www.rust-lang.org/learn/get-started) for
-installation instructions on your platform. Minimum supported Rust version is the latest released Rust version, although older versions may work.
+installation instructions on your platform. The MSRV (**M**inimum **S**upported **R**ust **V**ersion) for the crates in this project is `stable-2`, i.e. the current `stable` Rust version and the prior two versions. Older versions may work.
 
 Development
 -----------

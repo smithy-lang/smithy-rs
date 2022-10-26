@@ -6,27 +6,27 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustReservedWords
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.client.rustlang.join
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.join
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    coreCodegenContext: CoreCodegenContext,
+    codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
 ) {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "Bytes" to CargoDependency.Bytes.asType(),
@@ -36,16 +36,16 @@ class ServerServiceGeneratorV2(
                 ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
             "Tower" to CargoDependency.Tower.asType(),
         )
-    private val model = coreCodegenContext.model
-    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
 
-    private val service = coreCodegenContext.serviceShape
+    private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
-    private val index = TopDownIndex.of(coreCodegenContext.model)
-    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+    private val index = TopDownIndex.of(codegenContext.model)
+    private val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
 
     /** The sequence of builder generics: `Op1`, ..., `OpN`. */
     private val builderOps = (1..operations.size).map { "Op$it" }
@@ -113,7 +113,7 @@ class ServerServiceGeneratorV2(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
-                /// This should be a closure satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
+                /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
                 /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
                 pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{HandlerSetterGenerics:W}>
                 where
@@ -275,7 +275,7 @@ class ServerServiceGeneratorV2(
         rustTemplate(
             """
             ##[derive(Clone)]
-            pub struct $serviceName<S> {
+            pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
 
@@ -308,7 +308,7 @@ class ServerServiceGeneratorV2(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
-                /// Applies a layer uniformly to all routes.
+                /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                 pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
                 where
                     L: #{Tower}::Layer<S>
@@ -316,6 +316,21 @@ class ServerServiceGeneratorV2(
                     $serviceName {
                         router: self.router.map(|s| s.layer(layer))
                     }
+                }
+
+                /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
+                ///
+                /// This has the effect of erasing all types accumulated via [`layer`].
+                pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
+                where
+                    S: #{Tower}::Service<
+                        #{Http}::Request<B>,
+                        Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
+                        Error = std::convert::Infallible>,
+                    S: Clone + Send + 'static,
+                    S::Future: Send + 'static,
+                {
+                    self.layer(&#{Tower}::layer::layer_fn(#{SmithyHttpServer}::routing::Route::new))
                 }
             }
 

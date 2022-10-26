@@ -10,12 +10,13 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 import java.util.ServiceLoader
 import java.util.logging.Logger
@@ -27,7 +28,7 @@ import java.util.logging.Logger
  * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
-interface RustCodegenDecorator<C : CoreCodegenContext> {
+interface RustCodegenDecorator<T, C : CodegenContext> {
     /**
      * The name of this [RustCodegenDecorator], used for logging and debug information
      */
@@ -64,12 +65,11 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
 
     fun extras(codegenContext: C, rustCrate: RustCrate) {}
 
-    fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap<C>): ProtocolMap<C> =
-        currentProtocols
+    fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap<T, C>): ProtocolMap<T, C> = currentProtocols
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
 
-    fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean
+    fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean
 }
 
 /**
@@ -77,21 +77,21 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) :
-    RustCodegenDecorator<C> {
+open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<RustCodegenDecorator<T, C>>) :
+    RustCodegenDecorator<T, C> {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
     override val order: Byte
         get() = 0
 
-    fun withDecorator(decorator: RustCodegenDecorator<C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
+    fun withDecorator(decorator: RustCodegenDecorator<T, C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
 
     override fun configCustomizations(
         codegenContext: C,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
+        return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<T, C>, customizations ->
             decorator.configCustomizations(codegenContext, customizations)
         }
     }
@@ -101,7 +101,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
+        return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<T, C>, customizations ->
             decorator.operationCustomizations(codegenContext, operation, customizations)
         }
     }
@@ -118,7 +118,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         }
     }
 
-    override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap<C>): ProtocolMap<C> {
+    override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap<T, C>): ProtocolMap<T, C> {
         return orderedDecorators.foldRight(currentProtocols) { decorator, protocolMap ->
             decorator.protocols(serviceId, protocolMap)
         }
@@ -140,22 +140,22 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         // `CombinedCodegenDecorator` can work with all types of codegen context.
-        CoreCodegenContext::class.java.isAssignableFrom(clazz)
+        CodegenContext::class.java.isAssignableFrom(clazz)
 
     companion object {
-        inline fun <reified T : CoreCodegenContext> fromClasspath(
+        inline fun <T, reified C : CodegenContext> fromClasspath(
             context: PluginContext,
-            vararg extras: RustCodegenDecorator<T>,
+            vararg extras: RustCodegenDecorator<T, C>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader"),
-        ): CombinedCodegenDecorator<T> {
+        ): CombinedCodegenDecorator<T, C> {
             val decorators = ServiceLoader.load(
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader),
             )
 
-            val filteredDecorators = filterDecorators<T>(decorators, logger).toList()
+            val filteredDecorators = filterDecorators<T, C>(decorators, logger).toList()
             return CombinedCodegenDecorator(filteredDecorators + extras)
         }
 
@@ -165,10 +165,10 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
          * non-public-API declarations.
          * See https://kotlinlang.org/docs/inline-functions.html#restrictions-for-public-api-inline-functions.
          */
-        inline fun <reified T : CoreCodegenContext> filterDecorators(
-            decorators: Iterable<RustCodegenDecorator<*>>,
+        inline fun <T, reified C : CodegenContext> filterDecorators(
+            decorators: Iterable<RustCodegenDecorator<*, *>>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader"),
-        ): Sequence<RustCodegenDecorator<T>> =
+        ): Sequence<RustCodegenDecorator<T, C>> =
             decorators.asSequence()
                 .onEach {
                     logger.info("Discovered Codegen Decorator: ${it.javaClass.name}")
@@ -183,7 +183,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
                 // in Kotlin (and presumably all JVM-based languages) _at runtime_. Not even when using reified type
                 // parameters of inline functions. See https://kotlinlang.org/docs/generics.html#type-erasure for details.
                 .filter {
-                    val clazz = T::class.java
+                    val clazz = C::class.java
                     it.supportsCodegenContext(clazz)
                 }
                 .onEach {
@@ -193,7 +193,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
                     // Cast is safe because of the filter above.
                     // Not that it really has an effect at runtime, since its unchecked.
                     @Suppress("UNCHECKED_CAST")
-                    it as RustCodegenDecorator<T>
+                    it as RustCodegenDecorator<T, C>
                 }
     }
 }

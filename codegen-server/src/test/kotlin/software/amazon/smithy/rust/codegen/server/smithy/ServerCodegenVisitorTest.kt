@@ -8,11 +8,11 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import kotlin.io.path.createDirectory
 import kotlin.io.path.writeText
 
@@ -48,7 +48,7 @@ class ServerCodegenVisitorTest {
         val (ctx, testDir) = generatePluginContext(model)
         testDir.resolve("src").createDirectory()
         testDir.resolve("src/main.rs").writeText("fn main() {}")
-        val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
+        val codegenDecorator: CombinedCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, ServerRequiredCustomizations())
         val visitor = ServerCodegenVisitor(ctx, codegenDecorator)
         val baselineModel = visitor.baselineTransformInternalTest(model)

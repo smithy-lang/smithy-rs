@@ -13,8 +13,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodeg
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import kotlin.io.path.createDirectory
 import kotlin.io.path.writeText
 

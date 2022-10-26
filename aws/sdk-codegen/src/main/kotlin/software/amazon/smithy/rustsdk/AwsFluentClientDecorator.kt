@@ -8,32 +8,33 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.TitleTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.client.rustlang.Feature
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
@@ -77,14 +78,18 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override val bounds = writable { }
 
     /** Bounds for generated `send()` functions */
-    override fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable = writable { }
+    override fun sendBounds(
+        operation: Symbol,
+        operationOutput: Symbol,
+        operationError: RuntimeType,
+        retryClassifier: RuntimeType,
+    ): Writable =
+        writable { }
 
-    override fun toGenericsGenerator(): GenericsGenerator {
-        return GenericsGenerator()
-    }
+    override fun toRustGenerics() = RustGenerics()
 }
 
-class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
+class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "FluentClient"
 
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
@@ -103,11 +108,11 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
             ),
             retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) { writer ->
-            renderCustomizableOperationSendMethod(runtimeConfig, generics, writer)
+        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) {
+            renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
-        rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
-            AwsFluentClientExtensions(types).render(writer)
+        rustCrate.withModule(FluentClientGenerator.clientModule) {
+            AwsFluentClientExtensions(types).render(this)
         }
         val awsSmithyClient = "aws-smithy-client"
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsSmithyClient/rustls")))
@@ -124,12 +129,13 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
                     Attribute.DocInline.render(this)
                     rust("pub use client::Client;")
                 }
+
                 else -> emptySection
             }
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
@@ -203,17 +209,17 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
-    private val serviceName = coreCodegenContext.serviceShape.expectTrait<TitleTrait>().value
-    private val serviceShape = coreCodegenContext.serviceShape
-    private val crateName = coreCodegenContext.moduleUseName()
+private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : FluentClientCustomization() {
+    private val serviceName = codegenContext.serviceShape.expectTrait<TitleTrait>().value
+    private val serviceShape = codegenContext.serviceShape
+    private val crateName = codegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to coreCodegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
 
     // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
     // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
     private fun suppressUsageDocs(): Boolean =
-        SdkSettings.from(coreCodegenContext.settings).awsConfigVersion == null ||
+        SdkSettings.from(codegenContext.settings).awsConfigVersion == null ||
             setOf(
                 ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
                 ShapeId.from("com.amazonaws.sso#SWBPortalService"),
@@ -262,6 +268,7 @@ private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenCon
                     )
                 }
             }
+
             else -> emptySection
         }
     }
@@ -274,8 +281,8 @@ private fun renderCustomizableOperationSendMethod(
 ) {
     val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
 
-    val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toGenericsGenerator()
+    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+    val handleGenerics = generics.toRustGenerics()
     val combinedGenerics = operationGenerics + handleGenerics
 
     val codegenScope = arrayOf(

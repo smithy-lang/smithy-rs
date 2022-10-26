@@ -5,8 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
  * Object used *exclusively* in the runtime of the Python server, for separation concerns.

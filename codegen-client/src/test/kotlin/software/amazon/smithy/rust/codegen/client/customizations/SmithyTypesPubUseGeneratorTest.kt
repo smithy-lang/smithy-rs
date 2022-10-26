@@ -7,10 +7,10 @@ package software.amazon.smithy.rust.codegen.client.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.pubUseTypes
-import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class SmithyTypesPubUseGeneratorTest {
     private fun emptyModel() = modelWithMember()

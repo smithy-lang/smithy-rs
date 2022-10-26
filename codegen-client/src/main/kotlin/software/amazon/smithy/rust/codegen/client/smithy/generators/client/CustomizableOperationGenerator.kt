@@ -5,17 +5,18 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.asType
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericTypeArg
-import software.amazon.smithy.rust.codegen.client.smithy.generators.GenericsGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
+import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
  * Generates the code required to add the `.customize()` function to the
@@ -34,13 +35,13 @@ class CustomizableOperationGenerator(
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.Operation) { writer ->
-            writer.docs("Operation customization and supporting types")
-            writer.rust("pub mod customize;")
+        crate.withModule(RustModule.operation(Visibility.PUBLIC)) {
+            docs("Operation customization and supporting types")
+            rust("pub mod customize;")
         }
 
-        crate.withNonRootModule(CUSTOMIZE_MODULE) { writer ->
-            writer.rustTemplate(
+        crate.withNonRootModule(CUSTOMIZE_MODULE) {
+            rustTemplate(
                 """
                 pub use #{Operation};
                 pub use #{ClassifyRetry};
@@ -50,17 +51,17 @@ class CustomizableOperationGenerator(
                 "ClassifyRetry" to smithyHttp.member("retry::ClassifyRetry"),
                 "RetryKind" to smithyTypes.member("retry::RetryKind"),
             )
-            renderCustomizableOperationModule(writer)
+            renderCustomizableOperationModule(this)
 
             if (includeFluentClient) {
-                renderCustomizableOperationSend(writer)
+                renderCustomizableOperationSend(this)
             }
         }
     }
 
     private fun renderCustomizableOperationModule(writer: RustWriter) {
-        val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-        val handleGenerics = generics.toGenericsGenerator()
+        val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+        val handleGenerics = generics.toRustGenerics()
         val combinedGenerics = operationGenerics + handleGenerics
 
         val codegenScope = arrayOf(
@@ -109,7 +110,7 @@ class CustomizableOperationGenerator(
                 }
 
                 /// Convenience for `map_request` where infallible direct mutation of request is acceptable
-                pub fn mutate_request<E>(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
+                pub fn mutate_request(self, f: impl FnOnce(&mut #{HttpRequest}<SdkBody>)) -> Self {
                     self.map_request(|mut req| {
                         f(&mut req);
                         Result::<_, Infallible>::Ok(req)
@@ -145,8 +146,8 @@ class CustomizableOperationGenerator(
         val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
         val smithyClient = CargoDependency.SmithyClient(runtimeConfig).asType()
 
-        val operationGenerics = GenericsGenerator(GenericTypeArg("O"), GenericTypeArg("Retry"))
-        val handleGenerics = generics.toGenericsGenerator()
+        val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
+        val handleGenerics = generics.toRustGenerics()
         val combinedGenerics = operationGenerics + handleGenerics
 
         val codegenScope = arrayOf(

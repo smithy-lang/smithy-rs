@@ -9,25 +9,28 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.TokioTest
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.client.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import kotlin.io.path.ExperimentalPathApi
@@ -65,15 +68,15 @@ internal class EndpointTraitBindingsTest {
         )
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.default("test", visibility = Visibility.PRIVATE)) {
-            it.rust(
+            rust(
                 """
                 struct GetStatusInput {
                     foo: Option<String>
                 }
                 """,
             )
-            it.implBlock(model.lookup("test#GetStatusInput"), sym) {
-                it.rustBlock(
+            implBlock(model.lookup("test#GetStatusInput"), sym) {
+                rustBlock(
                     "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
                     TestRuntimeConfig.smithyHttp(),
                     TestRuntimeConfig.operationBuildError(),
@@ -81,7 +84,7 @@ internal class EndpointTraitBindingsTest {
                     endpointBindingGenerator.render(this, "self")
                 }
             }
-            it.unitTest(
+            unitTest(
                 "valid_prefix",
                 """
                 let inp = GetStatusInput { foo: Some("test_value".to_string()) };
@@ -89,7 +92,7 @@ internal class EndpointTraitBindingsTest {
                 assert_eq!(prefix.as_str(), "test_valuea.data.");
                 """,
             )
-            it.unitTest(
+            unitTest(
                 "invalid_prefix",
                 """
                 // not a valid URI component
@@ -98,7 +101,7 @@ internal class EndpointTraitBindingsTest {
                 """,
             )
 
-            it.unitTest(
+            unitTest(
                 "unset_prefix",
                 """
                 // unset is invalid
@@ -107,7 +110,7 @@ internal class EndpointTraitBindingsTest {
                 """,
             )
 
-            it.unitTest(
+            unitTest(
                 "empty_prefix",
                 """
                 // empty is invalid
@@ -144,14 +147,14 @@ internal class EndpointTraitBindingsTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val codegenDecorator = object : RustCodegenDecorator<ClientCodegenContext> {
+        val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
             override val name: String = "add tests"
             override val order: Byte = 0
 
             override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 rustCrate.withFile("tests/validate_errors.rs") {
-                    TokioTest.render(it)
-                    it.rust(
+                    TokioTest.render(this)
+                    rust(
                         """
                         async fn test_endpoint_prefix() {
                             let conf = $moduleName::Config::builder().build();
@@ -173,10 +176,10 @@ internal class EndpointTraitBindingsTest {
                 }
             }
 
-            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+            override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
-        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)
         val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
         visitor.execute()

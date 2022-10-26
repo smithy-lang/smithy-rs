@@ -9,7 +9,7 @@ on:
   workflow_call:
 
 env:
-  rust_version: 1.61.0
+  rust_version: 1.62.0
   rust_toolchain_components: clippy,rustfmt
 
 jobs:
@@ -62,6 +62,7 @@ jobs:
         - action: check-aws-sdk-adhoc-tests
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
+        - action: check-core-codegen-unit-tests
         - action: check-rust-runtimes
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
@@ -142,6 +143,113 @@ jobs:
           popd &>/dev/null
         done
 
+  # We make sure that Smithy-rs can be compiled on platforms that are not natively supported by GitHub actions.
+  # We run as many tests we can on those platforms because they require a more complicated setup involving architecture
+  # emulation.
+  test-exotic-platform-support:
+    name: Exotic platform support
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        # We always exclude aws-smithy-http-server-python since the Python framework is experimental.
+        # We only build the `native-tls` feature here because `rustls` depends on `ring` which in turn
+        # does not support powerpc as a target platform (see https://github.com/briansmith/ring/issues/389)
+        - target: i686-unknown-linux-gnu
+          build_smithy_rs_features: --all-features
+          build_aws_exclude: ''
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_features: --all-features
+          test_aws_exclude: ''
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+        - target: powerpc-unknown-linux-gnu
+          build_smithy_rs_features: --features native-tls
+          build_aws_exclude: --exclude aws-inlineable
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_features: --features native-tls
+          test_aws_exclude: --exclude aws-inlineable
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+        - target: powerpc64-unknown-linux-gnu
+          build_smithy_rs_features: --features native-tls
+          build_aws_exclude: --exclude aws-inlineable
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+          test_smithy_rs_features: --features native-tls
+          test_aws_exclude: --exclude aws-inlineable
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python
+    env:
+      CROSS_CONFIG: Cross.toml
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
+        target-dir: ./target
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        profile: minimal
+        override: true
+        target: ${{ matrix.target }}
+    - name: Sets OpenSSL env vars on i686
+      run: |
+        echo "OPENSSL_LIB_DIR=/usr/lib/i386-linux-gnu" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=/usr/include/i386-linux-gnu" >> $GITHUB_ENV
+      if: matrix.target == 'i686-unknown-linux-gnu'
+    - name: Sets OpenSSL env vars on ppc and ppc64
+      run: |
+        echo "OPENSSL_DIR=/openssl" >> $GITHUB_ENV
+      if: matrix.target != 'i686-unknown-linux-gnu'
+    - name: Configure cross
+      shell: bash
+      # configure and cross compile openssl locally on ppc and ppc64 to be able to run aws-smithy-client tests.
+      # since cross dropped support for openssl, we use the build script from version 0.16.
+      run: |
+        cat > Cross.toml << EOF
+        [target.i686-unknown-linux-gnu]
+        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
+        [target.i686-unknown-linux-gnu.env]
+        passthrough = [
+            "OPENSSL_LIB_DIR",
+            "OPENSSL_INCLUDE_DIR",
+        ]
+        [target.powerpc-unknown-linux-gnu]
+        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
+        [target.powerpc-unknown-linux-gnu.env]
+        passthrough = ["OPENSSL_DIR"]
+        [target.powerpc64-unknown-linux-gnu]
+        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
+        [target.powerpc64-unknown-linux-gnu.env]
+        passthrough = ["OPENSSL_DIR"]
+        EOF
+    - name: Build Smithy-rs rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
+    - name: Build AWS rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: -vv --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
+    - name: Test Smithy-rs rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: test
+        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
+    - name: Test AWS rust-runtime crates
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: test
+        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
+
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
@@ -165,6 +273,7 @@ jobs:
     - test-codegen
     - test-sdk
     - test-rust-windows
+    - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest

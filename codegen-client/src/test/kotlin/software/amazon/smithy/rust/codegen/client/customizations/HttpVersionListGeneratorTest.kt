@@ -6,23 +6,24 @@
 package software.amazon.smithy.rust.codegen.client.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.AddRustTestsDecorator
-import software.amazon.smithy.rust.codegen.client.testutil.TokioTest
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 // If any of these tests fail, and you want to understand why, run them with logging:
@@ -58,7 +59,7 @@ internal class HttpVersionListGeneratorTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
                 .withDecorator(
                     AddRustTestsDecorator("validate_defaults") {
@@ -114,7 +115,7 @@ internal class HttpVersionListGeneratorTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
                 .withDecorator(
                     AddRustTestsDecorator("validate_http") {
@@ -184,9 +185,9 @@ internal class HttpVersionListGeneratorTest {
         val (ctx, testDir) = generatePluginContext(model, addModuleToEventStreamAllowList = true)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
 
-        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
-                .withDecorator(object : AddRustTestsDecorator<ClientCodegenContext>("validate_eventstream_http", {
+                .withDecorator(object : AddRustTestsDecorator<ClientProtocolGenerator, ClientCodegenContext>("validate_eventstream_http", {
                     TokioTest.render(this)
                     rust(
                         """

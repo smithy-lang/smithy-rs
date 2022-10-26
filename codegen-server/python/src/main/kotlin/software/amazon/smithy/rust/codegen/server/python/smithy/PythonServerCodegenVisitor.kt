@@ -14,20 +14,21 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.client.smithy.DefaultPublicModules
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.DefaultServerPublicModules
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 
 /**
@@ -39,7 +40,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtoco
  */
 class PythonServerCodegenVisitor(
     context: PluginContext,
-    codegenDecorator: RustCodegenDecorator<ServerCodegenContext>,
+    codegenDecorator: RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext>,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
@@ -47,7 +48,6 @@ class PythonServerCodegenVisitor(
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = false,
-                handleRustBoxing = true,
                 nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
             )
         val baseModel = baselineTransform(context.model)
@@ -68,7 +68,7 @@ class PythonServerCodegenVisitor(
         codegenContext = ServerCodegenContext(model, symbolProvider, service, protocol, settings)
 
         // Override `rustCrate` which carries the symbolProvider.
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultServerPublicModules, settings.codegenConfig)
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -85,14 +85,14 @@ class PythonServerCodegenVisitor(
      */
     override fun structureShape(shape: StructureShape) {
         logger.info("[python-server-codegen] Generating a structure $shape")
-        rustCrate.useShapeWriter(shape) { writer ->
+        rustCrate.useShapeWriter(shape) {
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
+            PythonServerStructureGenerator(model, symbolProvider, this, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-            builderGenerator.render(writer)
-            writer.implBlock(shape, symbolProvider) {
+            builderGenerator.render(this)
+            implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
             }
         }
@@ -106,8 +106,8 @@ class PythonServerCodegenVisitor(
     override fun stringShape(shape: StringShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                PythonServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
+            rustCrate.useShapeWriter(shape) {
+                PythonServerEnumGenerator(model, symbolProvider, this, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
     }

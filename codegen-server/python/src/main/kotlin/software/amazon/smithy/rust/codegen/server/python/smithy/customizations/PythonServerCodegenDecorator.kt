@@ -6,22 +6,23 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
 import software.amazon.smithy.model.neighbor.Walker
-import software.amazon.smithy.rust.codegen.client.rustlang.Writable
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.rust
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
 /**
  * Configure the [lib] section of `Cargo.toml`.
@@ -30,7 +31,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInter
  * name = "$CRATE_NAME"
  * crate-type = ["cdylib"]
  */
-class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
+class CdylibManifestDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
     override val name: String = "CdylibDecorator"
     override val order: Byte = 0
 
@@ -45,7 +46,7 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
             ),
         )
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
@@ -70,7 +71,7 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
 /**
  * Render the Python shared library module export.
  */
-class PythonExportModuleDecorator : RustCodegenDecorator<ServerCodegenContext> {
+class PythonExportModuleDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
     override val name: String = "PythonExportModuleDecorator"
     override val order: Byte = 0
 
@@ -80,14 +81,14 @@ class PythonExportModuleDecorator : RustCodegenDecorator<ServerCodegenContext> {
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
  * Decorator applying the customization from [PubUsePythonTypes] class.
  */
-class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
+class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
     override val name: String = "PubUsePythonTypesDecorator"
     override val order: Byte = 0
 
@@ -98,7 +99,7 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 

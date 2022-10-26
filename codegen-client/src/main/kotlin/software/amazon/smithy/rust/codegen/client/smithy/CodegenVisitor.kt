@@ -18,21 +18,26 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ProtocolLoader
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStreamNormalizer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -43,8 +48,10 @@ import java.util.logging.Logger
 /**
  * Base Entrypoint for Code generation
  */
-class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator<ClientCodegenContext>) :
-    ShapeVisitor.Default<Unit>() {
+class CodegenVisitor(
+    context: PluginContext,
+    private val codegenDecorator: RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>,
+) : ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
     private val settings = ClientRustSettings.from(context.model, context.settings)
@@ -54,31 +61,39 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val fileManifest = context.fileManifest
     private val model: Model
     private val codegenContext: ClientCodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext>
-    private val protocolGenerator: ProtocolGenerator
+    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ClientProtocolGenerator, ClientCodegenContext>
+    private val protocolGenerator: ClientProtocolGenerator
 
     init {
         val symbolVisitorConfig =
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 renameExceptions = settings.codegenConfig.renameExceptions,
-                handleRustBoxing = true,
                 nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
-        val (protocol, generator) = ProtocolLoader(
-            codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols),
+        val (protocol, generator) = ClientProtocolLoader(
+            codegenDecorator.protocols(service.id, ClientProtocolLoader.DefaultProtocols),
         ).protocolFor(context.model, service)
         protocolGeneratorFactory = generator
         model = codegenDecorator.transformModel(service, baseModel)
         symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
+
+        val clientPublicModules = setOf(
+            RustModule.Error,
+            RustModule.Model,
+            RustModule.Input,
+            RustModule.Output,
+            RustModule.Config,
+            RustModule.operation(Visibility.PUBLIC),
+        ).associateBy { it.name }
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
-            DefaultPublicModules,
+            clientPublicModules,
             codegenContext.settings.codegenConfig,
         )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
@@ -175,12 +190,12 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     override fun structureShape(shape: StructureShape) {
         logger.fine("generating a structure...")
-        rustCrate.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).render()
+        rustCrate.useShapeWriter(shape) {
+            StructureGenerator(model, symbolProvider, this, shape).render()
             if (!shape.hasTrait<SyntheticInputTrait>()) {
                 val builderGenerator = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
-                builderGenerator.render(writer)
-                writer.implBlock(shape, symbolProvider) {
+                builderGenerator.render(this)
+                this.implBlock(shape, symbolProvider) {
                     builderGenerator.renderConvenienceMethod(this)
                 }
             }
@@ -194,8 +209,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     override fun stringShape(shape: StringShape) {
         shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) { writer ->
-                EnumGenerator(model, symbolProvider, writer, shape, enum).render()
+            rustCrate.useShapeWriter(shape) {
+                EnumGenerator(model, symbolProvider, this, shape, enum).render()
             }
         }
     }
@@ -209,7 +224,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
      */
     override fun unionShape(shape: UnionShape) {
         rustCrate.useShapeWriter(shape) {
-            UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = true).render()
+            UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
         }
     }
 }

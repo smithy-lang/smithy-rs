@@ -10,14 +10,14 @@ import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.rustlang.docs
-import software.amazon.smithy.rust.codegen.client.rustlang.raw
-import software.amazon.smithy.rust.codegen.client.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.NamedSectionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
@@ -111,9 +111,9 @@ typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
 class ServiceConfigGenerator(private val customizations: List<ConfigCustomization> = listOf()) {
 
     companion object {
-        fun withBaseBehavior(coreCodegenContext: CoreCodegenContext, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
+        fun withBaseBehavior(codegenContext: CodegenContext, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
-            if (coreCodegenContext.serviceShape.needsIdempotencyToken(coreCodegenContext.model)) {
+            if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
                 baseFeatures.add(IdempotencyTokenProviderCustomization())
             }
             return ServiceConfigGenerator(baseFeatures + extraCustomizations)
@@ -133,7 +133,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
 
         // Custom implementation for Debug so we don't need to enforce Debug down the chain
         writer.rustBlock("impl std::fmt::Debug for Config") {
-            rustTemplate(
+            writer.rustTemplate(
                 """
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     let mut config = f.debug_struct("Config");
@@ -144,7 +144,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
         }
 
         writer.rustBlock("impl Config") {
-            rustTemplate(
+            writer.rustTemplate(
                 """
                 /// Constructs a config builder.
                 pub fn builder() -> Builder { Builder::default() }
@@ -163,8 +163,8 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             }
         }
         writer.rustBlock("impl Builder") {
-            docs("Constructs a config builder.")
-            rustTemplate("pub fn new() -> Self { Self::default() }")
+            writer.docs("Constructs a config builder.")
+            writer.rustTemplate("pub fn new() -> Self { Self::default() }")
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }

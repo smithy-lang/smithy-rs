@@ -5,15 +5,16 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.client.rustlang.Feature
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.client.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
 /**
  * A set of customizations that are included in all protocols.
@@ -22,7 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.LibRsCustomi
  *
  * See [RequiredCustomizations] from the `rust-codegen` subproject for the client version of this decorator.
  */
-class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> {
+class ServerRequiredCustomizations : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
     override val name: String = "ServerRequired"
     override val order: Byte = -1
 
@@ -37,6 +38,6 @@ class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> 
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }

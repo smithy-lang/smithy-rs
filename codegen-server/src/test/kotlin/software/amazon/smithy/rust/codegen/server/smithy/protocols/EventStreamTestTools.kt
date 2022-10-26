@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.provider.Arguments
@@ -16,32 +16,32 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.client.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.client.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.client.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.CombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ServerCombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.client.smithy.generators.renderUnknownVariant
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.AwsQueryProtocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Ec2QueryProtocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestJson
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.EventStreamNormalizer
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.client.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.client.testutil.TestWriterDelegator
-import software.amazon.smithy.rust.codegen.client.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.client.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsQueryProtocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Ec2QueryProtocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -136,7 +136,7 @@ object EventStreamTestModels {
         val validSomeError: String,
         val validUnmodeledError: String,
         val target: CodegenTarget = CodegenTarget.CLIENT,
-        val protocolBuilder: (CoreCodegenContext) -> Protocol,
+        val protocolBuilder: (CodegenContext) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
     }
@@ -357,24 +357,24 @@ object EventStreamTestTools {
                 .map { it.asStructureShape().get() }
                 .toList()
             when (testCase.target) {
-                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(it)
-                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(it)
+                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
+                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
             }
             for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
-                StructureGenerator(model, symbolProvider, it, shape as StructureShape).render(testCase.target)
+                StructureGenerator(model, symbolProvider, this, shape as StructureShape).render(testCase.target)
                 val builderGen = BuilderGenerator(model, symbolProvider, shape)
-                builderGen.render(it)
-                it.implBlock(shape, symbolProvider) {
+                builderGen.render(this)
+                implBlock(shape, symbolProvider) {
                     builderGen.renderConvenienceMethod(this)
                 }
             }
         }
         project.withModule(RustModule.public("model")) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-            recursivelyGenerateModels(model, symbolProvider, inputOutput, it, testCase.target)
+            recursivelyGenerateModels(model, symbolProvider, inputOutput, this, testCase.target)
         }
         project.withModule(RustModule.public("output")) {
-            operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+            operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
         return TestEventStreamProject(model, serviceShape, operationShape, unionShape, symbolProvider, project)
     }

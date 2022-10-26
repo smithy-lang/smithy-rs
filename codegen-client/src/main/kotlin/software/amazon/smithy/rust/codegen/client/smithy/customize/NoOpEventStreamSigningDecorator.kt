@@ -5,25 +5,25 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customize
 
-import software.amazon.smithy.rust.codegen.client.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.client.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.client.rustlang.writable
-import software.amazon.smithy.rust.codegen.client.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.client.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 
 /**
  * The NoOpEventStreamSigningDecorator:
  * - adds a `new_event_stream_signer()` method to `config` to create an Event Stream NoOp signer
  */
-open class NoOpEventStreamSigningDecorator<C : CoreCodegenContext> : RustCodegenDecorator<C> {
+open class NoOpEventStreamSigningDecorator<T, C : CodegenContext> : RustCodegenDecorator<T, C> {
     override val name: String = "NoOpEventStreamSigning"
     override val order: Byte = Byte.MIN_VALUE
 
-    private fun applies(codegenContext: CoreCodegenContext, baseCustomizations: List<ConfigCustomization>): Boolean =
+    private fun applies(codegenContext: CodegenContext, baseCustomizations: List<ConfigCustomization>): Boolean =
         codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model) &&
             // and if there is no other `EventStreamSigningConfig`, apply this one
             !baseCustomizations.any { it is EventStreamSigningConfig }
@@ -41,7 +41,7 @@ open class NoOpEventStreamSigningDecorator<C : CoreCodegenContext> : RustCodegen
         )
     }
 
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>) = true
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>) = true
 }
 
 class NoOpEventStreamSigningConfig(
