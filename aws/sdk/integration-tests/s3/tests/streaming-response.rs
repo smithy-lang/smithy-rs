@@ -5,6 +5,7 @@
 
 use aws_sdk_s3::{Credentials, Endpoint, Region};
 use bytes::BytesMut;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tracing::debug;
@@ -15,10 +16,10 @@ use tracing::debug;
     expected = "error reading a body from connection: end of file before message length reached"
 )]
 async fn test_streaming_response_fails_when_eof_comes_before_content_length_reached() {
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     // We spawn a faulty server that will close the connection after
     // writing half of the response body.
-    let _server = tokio::spawn(start_faulty_server(addr));
+    let (server, server_addr) = start_faulty_server().await;
+    let _ = tokio::spawn(server);
 
     let creds = Credentials::new(
         "ANOTREAL",
@@ -32,7 +33,7 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
         .credentials_provider(creds)
         .region(Region::new("us-east-1"))
         .endpoint_resolver(Endpoint::immutable(
-            "http://localhost:3000".parse().expect("valid URI"),
+            format!("http://{server_addr}").parse().expect("valid URI"),
         ))
         .build();
 
@@ -53,11 +54,14 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
     }
 }
 
-async fn start_faulty_server(addr: SocketAddr) {
+async fn start_faulty_server() -> (impl Future<Output = ()>, SocketAddr) {
     use tokio::net::{TcpListener, TcpStream};
     use tokio::time::sleep;
 
-    let listener = TcpListener::bind(addr).await.expect("socket is free");
+    let listener = TcpListener::bind("0.0.0.0:0")
+        .await
+        .expect("socket is free");
+    let bind_addr = listener.local_addr().unwrap();
 
     async fn process_socket(socket: TcpStream) {
         let mut buf = BytesMut::new();
@@ -116,17 +120,21 @@ Hello"#;
         }
     }
 
-    loop {
-        let (socket, addr) = listener
-            .accept()
-            .await
-            .expect("listener can accept new connections");
-        debug!("server received new connection from {addr:?}");
-        let start = std::time::Instant::now();
-        process_socket(socket).await;
-        debug!(
-            "connection to {addr:?} closed after {:.02?}",
-            start.elapsed()
-        );
-    }
+    let fut = async move {
+        loop {
+            let (socket, addr) = listener
+                .accept()
+                .await
+                .expect("listener can accept new connections");
+            debug!("server received new connection from {addr:?}");
+            let start = std::time::Instant::now();
+            process_socket(socket).await;
+            debug!(
+                "connection to {addr:?} closed after {:.02?}",
+                start.elapsed()
+            );
+        }
+    };
+
+    (fut, bind_addr)
 }
