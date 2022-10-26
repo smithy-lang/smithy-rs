@@ -7389,7 +7389,9 @@ all errors in the public API for the Rust runtime crates and generated client cr
 information, it must use a separate context struct that is referenced via tuple in the enum. For example:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>pub enum Error {
+</span>// Good: new error types can be added in the future
+#[non_exhaustive]
+pub enum Error {
     // Good: This is exhaustive and uses a tuple, but its sole member is an extensible struct with private fields
     VariantA(VariantA),
 
