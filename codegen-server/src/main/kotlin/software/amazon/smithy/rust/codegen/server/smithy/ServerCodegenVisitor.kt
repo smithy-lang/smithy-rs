@@ -189,15 +189,20 @@ open class ServerCodegenVisitor(
             "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}",
         )
 
-        // TODO We need another validation here that checks that if an operation uses constrained input, it needs to have `ValidationException` attached in `errors`.
-
-        val validationResult = validateUnsupportedConstraintsAreNotUsed(model, service, codegenContext.settings.codegenConfig)
-        for (logMessage in validationResult.messages) {
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1756): These are getting duplicated.
-            logger.log(logMessage.level, logMessage.message)
-        }
-        if (validationResult.shouldAbort) {
-            throw CodegenException("Unsupported constraints used")
+        for (validationResult in listOf(
+            validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+                model,
+                service,
+            ),
+            validateUnsupportedConstraints(model, service, codegenContext.settings.codegenConfig),
+        )) {
+            for (logMessage in validationResult.messages) {
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1756): These are getting duplicated.
+                logger.log(logMessage.level, logMessage.message)
+            }
+            if (validationResult.shouldAbort) {
+                throw CodegenException("Unsupported constraints feature used; see error messages above for resolution")
+            }
         }
 
         val serviceShapes = Walker(model).walkShapes(service)

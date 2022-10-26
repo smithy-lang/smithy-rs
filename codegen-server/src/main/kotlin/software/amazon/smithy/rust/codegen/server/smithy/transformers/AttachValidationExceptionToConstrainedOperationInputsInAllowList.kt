@@ -27,17 +27,26 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
  *
  * [1]: https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809424783
  *
- * TODO(https://github.com/awslabs/smithy-rs/issues/1401): This transformer will go away once we implement
+ * TODO(https://github.com/awslabs/smithy-rs/issues/1401): This transformer will go away once we add support for
  *  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
  */
 object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
     private val sherviceShapeIdAllowList =
         setOf(
+            // These we currently generate server SDKs for.
             ShapeId.from("aws.protocoltests.restjson#RestJson"),
             ShapeId.from("aws.protocoltests.json10#JsonRpc10"),
             ShapeId.from("aws.protocoltests.json#JsonProtocol"),
             ShapeId.from("com.amazonaws.s3#AmazonS3"),
             ShapeId.from("com.amazonaws.ebs#Ebs"),
+
+            // These are only loaded in the classpath and need this model transformer, but we don't generate server
+            // SDKs for them. Here they are for reference.
+            // ShapeId.from("aws.protocoltests.restxml#RestXml"),
+            // ShapeId.from("com.amazonaws.glacier#Glacier"),
+            // ShapeId.from("aws.protocoltests.ec2#AwsEc2"),
+            // ShapeId.from("aws.protocoltests.query#AwsQuery"),
+            // ShapeId.from("com.amazonaws.machinelearning#AmazonML_20141212"),
         )
 
     fun transform(model: Model): Model {

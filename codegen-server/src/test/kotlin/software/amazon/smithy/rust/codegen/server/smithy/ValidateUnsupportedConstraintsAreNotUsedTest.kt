@@ -8,7 +8,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -18,7 +17,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     private val baseModel =
         """
         namespace test
-
+        
         service TestService {
             version: "123",
             operations: [TestOperation]
@@ -32,28 +31,25 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
     private fun validateModel(model: Model, serverCodegenConfig: ServerCodegenConfig = ServerCodegenConfig()): ValidationResult {
         val service = model.lookup<ServiceShape>("test#TestService")
-        return validateUnsupportedConstraintsAreNotUsed(model, service, serverCodegenConfig)
+        return validateUnsupportedConstraints(model, service, serverCodegenConfig)
     }
 
     @Test
-    fun `foo`() {
+    fun `it should detect when an operation with constrained input but that does not have ValidationException attached in errors`() {
         val model =
             """
             $baseModel
             
             structure TestInputOutput {
-                string: String
+                @required
+                requiredString: String
             }
-            
-            @length(min: 1, max: 100)
-            string LengthString
             """.asSmithyModel()
-
         val service = model.lookup<ServiceShape>("test#TestService")
-        val s = Walker(model).walkShapes(service).toSet()
-        for (member in s) {
-            println(member)
-        }
+        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model, service)
+
+        validationResult.messages shouldHaveSize 1
+        validationResult.messages[0].message shouldContain "Operation test#TestOperation takes in input that is constrained"
     }
 
     @Test
@@ -223,7 +219,10 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
     @Test
     fun `it should not abort when ignoreUnsupportedConstraints is true and unsupported constraints are used`() {
-        val validationResult = validateModel(constraintTraitOnStreamingBlobShapeModel, ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true))
+        val validationResult = validateModel(
+            constraintTraitOnStreamingBlobShapeModel,
+            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+        )
 
         validationResult.messages shouldHaveAtLeastSize 1
         validationResult.shouldAbort shouldBe false
@@ -239,7 +238,10 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
     @Test
     fun `it should set log level to warn when ignoreUnsupportedConstraints is true and unsupported constraints are used`() {
-        val validationResult = validateModel(constraintTraitOnStreamingBlobShapeModel, ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true))
+        val validationResult = validateModel(
+            constraintTraitOnStreamingBlobShapeModel,
+            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+        )
 
         validationResult.messages shouldHaveAtLeastSize 1
         validationResult.messages.shouldForAll { it.level shouldBe Level.WARNING }

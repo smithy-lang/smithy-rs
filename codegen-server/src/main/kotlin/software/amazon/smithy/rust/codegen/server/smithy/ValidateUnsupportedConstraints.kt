@@ -4,9 +4,13 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
@@ -19,10 +23,11 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.logging.Level
 
-private sealed class MessageKind {
+private sealed class UnsupportedConstraintMessageKind {
     private val constraintTraitsUberIssue = "https://github.com/awslabs/smithy-rs/issues/1401"
 
     fun intoLogMessage(ignoreUnsupportedConstraints: Boolean): LogMessage {
@@ -87,12 +92,13 @@ private sealed class MessageKind {
         }
     }
 }
-private data class UnsupportedConstraintOnMemberShape(val shape: MemberShape, val constraintTrait: Trait) : MessageKind()
-private data class UnsupportedConstraintOnShapeReachableViaAnEventStream(val shape: Shape, val constraintTrait: Trait) : MessageKind()
-private data class UnsupportedLengthTraitOnStreamingBlobShape(val shape: BlobShape, val lengthTrait: LengthTrait, val streamingTrait: StreamingTrait) : MessageKind()
-private data class UnsupportedLengthTraitOnCollectionOrOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) : MessageKind()
-private data class UnsupportedPatternTraitOnStringShape(val shape: Shape, val patternTrait: PatternTrait) : MessageKind()
-private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) : MessageKind()
+private data class OperationWithConstrainedInputWithoutValidationException(val shape: OperationShape)
+private data class UnsupportedConstraintOnMemberShape(val shape: MemberShape, val constraintTrait: Trait) : UnsupportedConstraintMessageKind()
+private data class UnsupportedConstraintOnShapeReachableViaAnEventStream(val shape: Shape, val constraintTrait: Trait) : UnsupportedConstraintMessageKind()
+private data class UnsupportedLengthTraitOnStreamingBlobShape(val shape: BlobShape, val lengthTrait: LengthTrait, val streamingTrait: StreamingTrait) : UnsupportedConstraintMessageKind()
+private data class UnsupportedLengthTraitOnCollectionOrOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) : UnsupportedConstraintMessageKind()
+private data class UnsupportedPatternTraitOnStringShape(val shape: Shape, val patternTrait: PatternTrait) : UnsupportedConstraintMessageKind()
+private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) : UnsupportedConstraintMessageKind()
 
 data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>)
@@ -107,7 +113,50 @@ private val allConstraintTraits = setOf(
 )
 private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
 
-fun validateUnsupportedConstraintsAreNotUsed(model: Model, service: ServiceShape, codegenConfig: ServerCodegenConfig): ValidationResult {
+fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model: Model, service: ServiceShape): ValidationResult {
+    // Traverse the model and error out if an operation uses constrained input, but it does not have
+    // `ValidationException` attached in `errors`. https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809424783
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): This check will go away once we add support for
+    //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
+    val walker = Walker(model)
+    val operationsWithConstrainedInputWithoutValidationExceptionSet = walker.walkShapes(service)
+        .filterIsInstance<OperationShape>()
+        .asSequence()
+        .filter { operationShape ->
+            // Walk the shapes reachable via this operation input.
+            walker.walkShapes(operationShape.inputShape(model))
+                .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+        }
+        .filter { !it.errors.contains(ShapeId.from("smithy.framework#ValidationException")) }
+        .map { OperationWithConstrainedInputWithoutValidationException(it) }
+        .toSet()
+
+    val messages =
+        operationsWithConstrainedInputWithoutValidationExceptionSet.map {
+            LogMessage(
+                Level.SEVERE,
+                """
+                Operation ${it.shape.id} takes in input that is constrained
+                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation 
+                exception. You must model this behavior in the operation shape in your model file.
+                """.trimIndent().replace("\n", "") +
+                    """
+                ```smithy
+                use smithy.framework#ValidationException
+                
+                operation ${it.shape.id.name} {
+                    ...
+                    errors: [..., ValidationException] // <-- Add this.
+                }
+                ```
+                    """.trimIndent(),
+            )
+        }
+
+    return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
+}
+
+fun validateUnsupportedConstraints(model: Model, service: ServiceShape, codegenConfig: ServerCodegenConfig): ValidationResult {
     // Traverse the model and error out if:
     val walker = Walker(model)
 
@@ -154,7 +203,7 @@ fun validateUnsupportedConstraintsAreNotUsed(model: Model, service: ServiceShape
         .map { UnsupportedLengthTraitOnCollectionOrOnBlobShape(it, it.expectTrait()) }
         .toSet()
 
-    // 4. Pattern trait on string shapes is used. It has not been implemented yet.
+    // 5. Pattern trait on string shapes is used. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedPatternTraitOnStringShapeSet = walker
         .walkShapes(service)
@@ -164,7 +213,7 @@ fun validateUnsupportedConstraintsAreNotUsed(model: Model, service: ServiceShape
         .map { (shape, patternTrait) -> UnsupportedPatternTraitOnStringShape(shape, patternTrait as PatternTrait) }
         .toSet()
 
-    // 5. Range trait on any shape is used. It has not been implemented yet.
+    // 6. Range trait on any shape is used. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)

@@ -33,6 +33,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
 }
 
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
@@ -47,7 +48,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
         ),
         CodegenTest("com.amazonaws.constraints#ConstraintsService", "constraints", imports = listOf("$commonModels/constraints.smithy")),
-        CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json", imports = listOf("$commonModels/smithy.framework.validation.smithy")),
+        CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
         CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras", imports = listOf("$commonModels/rest-json-extras.smithy")),
         CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation",
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
