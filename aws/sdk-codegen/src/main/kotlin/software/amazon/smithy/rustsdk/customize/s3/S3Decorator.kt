@@ -96,7 +96,7 @@ class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
+        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
         "s3_errors" to AwsRuntimeType.S3Errors,
     )
@@ -104,7 +104,7 @@ class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
         return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.private("xml_deser")) {
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(

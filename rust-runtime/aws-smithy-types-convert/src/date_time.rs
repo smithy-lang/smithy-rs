@@ -125,12 +125,14 @@ impl DateTimeExt for DateTime {
         match chrono::NaiveDateTime::from_timestamp_opt(self.secs(), self.subsec_nanos()) {
             None => {
                 let err: Box<dyn StdError + Send + Sync + 'static> = format!(
-                    "Out-of-range seconds {} or invalid nanoseconds {}",
+                    "out-of-range seconds {} or invalid nanoseconds {}",
                     self.secs(),
                     self.subsec_nanos()
                 )
                 .into();
-                Err(Error::OutOfRange(err))
+                Err(Error {
+                    kind: ErrorKind::OutOfRange(err),
+                })
             }
             Some(dt) => Ok(chrono::DateTime::<chrono::Utc>::from_utc(dt, chrono::Utc)),
         }
