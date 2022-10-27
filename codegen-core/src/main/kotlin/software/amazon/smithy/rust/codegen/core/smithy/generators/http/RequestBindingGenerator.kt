@@ -261,7 +261,12 @@ class RequestBindingGenerator(
         when {
             target.isStringShape -> {
                 val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_string"))
-                rust("let $outputVar = $func($input, ${label.isGreedyLabel});")
+                val encodingStrategy = if (label.isGreedyLabel) {
+                    RuntimeType.LabelFormat(runtimeConfig, "EncodingStrategy::Greedy")
+                } else {
+                    RuntimeType.LabelFormat(runtimeConfig, "EncodingStrategy::Default")
+                }
+                rust("let $outputVar = $func($input, #T);", encodingStrategy)
             }
             target.isTimestampShape -> {
                 val timestampFormat =
