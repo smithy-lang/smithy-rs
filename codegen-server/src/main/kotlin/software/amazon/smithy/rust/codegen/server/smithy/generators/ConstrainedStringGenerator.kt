@@ -85,15 +85,9 @@ class ConstrainedStringGenerator(
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
-        // TODO `parse` is usually `&str -> Result<T, E>`: https://github.com/awslabs/smithy-rs/pull/1342#discussion_r983283531
         writer.rustTemplate(
             """
             impl $name {
-                /// ${rustDocsParseMethod(name, inner)}
-                pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
-                    Self::try_from(value)
-                }
-                
                 /// Extracts a string slice containing the entire underlying `String`.
                 pub fn as_str(&self) -> &str {
                     &self.0
@@ -129,6 +123,7 @@ class ConstrainedStringGenerator(
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
                 
+                /// ${rustDocsTryFromMethod(name, inner)}
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
                     let length = value.chars().count();
                     if $condition {

@@ -88,24 +88,10 @@ class ConstrainedMapGeneratorTest {
             }
 
             unitTest(
-                name = "parse_success",
-                test = """
-                    let map = build_valid_map();
-                    let _constrained = ConstrainedMap::parse(map).unwrap();
-                """,
-            )
-            unitTest(
                 name = "try_from_success",
                 test = """
                     let map = build_valid_map();
                     let _constrained: ConstrainedMap = map.try_into().unwrap();
-                """,
-            )
-            unitTest(
-                name = "parse_fail",
-                test = """
-                    let map = build_invalid_map();
-                    let _constrained = ConstrainedMap::parse(map).unwrap_err();
                 """,
             )
             unitTest(
@@ -120,7 +106,7 @@ class ConstrainedMapGeneratorTest {
                 name = "inner",
                 test = """
                     let map = build_valid_map();
-                    let constrained = ConstrainedMap::parse(map.clone()).unwrap();
+                    let constrained = ConstrainedMap::try_from(map.clone()).unwrap();
 
                     assert_eq!(constrained.inner(), &map);
                 """,
@@ -129,7 +115,7 @@ class ConstrainedMapGeneratorTest {
                 name = "into_inner",
                 test = """
                     let map = build_valid_map();
-                    let constrained = ConstrainedMap::parse(map.clone()).unwrap();
+                    let constrained = ConstrainedMap::try_from(map.clone()).unwrap();
 
                     assert_eq!(constrained.into_inner(), map);
                 """,

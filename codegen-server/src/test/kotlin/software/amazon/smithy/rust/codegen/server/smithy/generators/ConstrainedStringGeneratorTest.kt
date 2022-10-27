@@ -75,24 +75,10 @@ class ConstrainedStringGeneratorTest {
             ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
 
             unitTest(
-                name = "parse_success",
-                test = """
-                    let string = "${testCase.validString}".to_owned();
-                    let _constrained = ConstrainedString::parse(string).unwrap();
-                """,
-            )
-            unitTest(
                 name = "try_from_success",
                 test = """
                     let string = "${testCase.validString}".to_owned();
                     let _constrained: ConstrainedString = string.try_into().unwrap();
-                """,
-            )
-            unitTest(
-                name = "parse_fail",
-                test = """
-                    let string = "${testCase.invalidString}".to_owned();
-                    let _constrained = ConstrainedString::parse(string).unwrap_err();
                 """,
             )
             unitTest(
@@ -107,7 +93,7 @@ class ConstrainedStringGeneratorTest {
                 name = "inner",
                 test = """
                     let string = "${testCase.validString}".to_owned();
-                    let constrained = ConstrainedString::parse(string).unwrap();
+                    let constrained = ConstrainedString::try_from(string).unwrap();
 
                     assert_eq!(constrained.inner(), "${testCase.validString}");
                 """,
@@ -116,7 +102,7 @@ class ConstrainedStringGeneratorTest {
                 name = "into_inner",
                 test = """
                     let string = "${testCase.validString}".to_owned();
-                    let constrained = ConstrainedString::parse(string.clone()).unwrap();
+                    let constrained = ConstrainedString::try_from(string.clone()).unwrap();
 
                     assert_eq!(constrained.into_inner(), string);
                 """,
@@ -173,7 +159,7 @@ class ConstrainedStringGeneratorTest {
                 name = "non_sensitive_string_display_implementation",
                 test = """
                     let string = "a non-sensitive string".to_owned();
-                    let constrained = ConstrainedString::parse(string).unwrap();
+                    let constrained = ConstrainedString::try_from(string).unwrap();
                     assert_eq!(format!("{}", constrained), "a non-sensitive string")
                 """,
             )
@@ -182,7 +168,7 @@ class ConstrainedStringGeneratorTest {
                 name = "sensitive_string_display_implementation",
                 test = """
                     let string = "That is how heavy a secret can become. It can make blood flow easier than ink.".to_owned();
-                    let constrained = SensitiveConstrainedString::parse(string).unwrap();
+                    let constrained = SensitiveConstrainedString::try_from(string).unwrap();
                     assert_eq!(format!("{}", constrained), "*** Sensitive Data Redacted ***")
                 """,
             )

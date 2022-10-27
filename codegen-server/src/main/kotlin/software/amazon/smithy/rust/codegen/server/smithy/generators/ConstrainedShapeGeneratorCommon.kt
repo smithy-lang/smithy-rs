@@ -14,7 +14,7 @@ fun rustDocsNote(typeName: String) =
         "[constraint traits]. Use [`parse`] or [`$typeName::TryFrom`] to construct values of this type." +
         "[constraint traits]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html"
 
-fun rustDocsParseMethod(typeName: String, inner: String) =
+fun rustDocsTryFromMethod(typeName: String, inner: String) =
     "Constructs a `$typeName` from an [`$inner`], failing when the provided value does not satisfy the modeled constraints."
 
 fun rustDocsInnerMethod(inner: String) =

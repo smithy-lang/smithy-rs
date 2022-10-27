@@ -84,8 +84,6 @@ class ConstrainedMapGenerator(
             "ConstraintViolation" to constraintViolation,
         )
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1744): If we end up implementing `Display`, it should honor `sensitive`.
-
         writer.documentShape(shape, model, note = rustDocsNote(name))
         constrainedTypeMetadata.render(writer)
         writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
@@ -95,11 +93,6 @@ class ConstrainedMapGenerator(
         writer.rustTemplate(
             """
             impl $name {
-                /// ${rustDocsParseMethod(name, inner)}
-                pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
-                    Self::try_from(value)
-                }
-                
                 /// ${rustDocsInnerMethod(inner)}
                 pub fn inner(&self) -> &$inner {
                     &self.0
@@ -114,6 +107,7 @@ class ConstrainedMapGenerator(
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
                 
+                /// ${rustDocsTryFromMethod(name, inner)}
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
                     let length = value.len();
                     if $condition {

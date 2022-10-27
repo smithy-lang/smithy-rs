@@ -45,48 +45,56 @@ operation ConstrainedShapesOperation {
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/constrained-recursive-shapes-operation", method: "POST")
 operation ConstrainedRecursiveShapesOperation {
     input: ConstrainedRecursiveShapesOperationInputOutput,
     output: ConstrainedRecursiveShapesOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/query-params-targeting-length-map", method: "POST")
 operation QueryParamsTargetingLengthMapOperation {
     input: QueryParamsTargetingLengthMapOperationInputOutput,
     output: QueryParamsTargetingLengthMapOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/query-params-targeting-map-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfLengthStringOperation {
     input: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/query-params-targeting-map-of-enum-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfEnumStringOperation {
     input: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
     output: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/query-params-targeting-map-of-list-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfListOfLengthStringOperation {
     input: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/query-params-targeting-map-of-set-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/query-params-targeting-map-of-list-of-enum-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfListOfEnumStringOperation {
     input: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
     output: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "POST")
@@ -100,6 +108,7 @@ operation HttpPrefixHeadersTargetingLengthMapOperation {
 operation HttpPrefixHeadersTargetingMapOfEnumStringOperation {
     input: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
     output: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/non-streaming-blob-operation", method: "POST")
