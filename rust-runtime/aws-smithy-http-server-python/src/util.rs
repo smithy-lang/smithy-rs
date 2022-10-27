@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+pub mod collection;
+
 use pyo3::prelude::*;
 
 // Captures some information about a Python function.
