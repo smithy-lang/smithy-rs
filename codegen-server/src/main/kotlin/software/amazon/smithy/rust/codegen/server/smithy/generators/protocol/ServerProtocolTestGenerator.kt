@@ -897,7 +897,10 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
 
-            // Deprioritized, sets don't exist in Smithy 2.0. They have the exact same semantics as list shapes with `@uniqueItems`, so we could implement them as such once we've added support for constraint traits.
+            // Deprioritized, sets don't exist in Smithy 2.0.
+            // They have the exact same semantics as list shapes with `@uniqueItems`,
+            // so we could implement them as such once we've added support for constraint traits.
+            //
             // See https://github.com/awslabs/smithy/issues/1266#issuecomment-1169543051.
             // See https://awslabs.github.io/smithy/2.0/guides/migrating-idl-1-to-2.html#convert-set-shapes-to-list-shapes.
             FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
