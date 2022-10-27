@@ -404,7 +404,7 @@ class ServerProtocolTestGenerator(
         }
         if (protocolSupport.requestBodyDeserialization) {
             makeRequest2(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
-            checkHandlerWasEntered(operationShape, operationSymbol, this)
+            checkHandlerWasEntered2(this)
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -572,14 +572,6 @@ class ServerProtocolTestGenerator(
             }
         }
 
-    private fun checkHandlerWasEntered(operationShape: OperationShape, operationSymbol: Symbol, rustWriter: RustWriter) {
-        rustWriter.rust(
-            """
-            assert!(receiver.recv().await.is_some());
-            """,
-        )
-    }
-
     /** Checks the request using the `OperationRegistryBuilder`. */
     private fun makeRequest(
         operationShape: OperationShape,
@@ -590,21 +582,30 @@ class ServerProtocolTestGenerator(
 
         rustWriter.withBlockTemplate(
             """
-            let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let http_response = super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
                 http_request,
                 &|builder| {
-                    let sender = sender.clone();
-                    builder.${operationShape.toName()}((|input| {
-                        Box::pin(async move {
-                            sender.send(()).await.expect("Receiver dropped early");
+                    builder.${operationShape.toName()}((|input| Box::pin(async move {
             """,
 
-            "})}) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)}).await;",
+            "})) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)}).await;",
             *codegenScope,
         ) {
             operationBody()
         }
+    }
+
+    private fun checkHandlerWasEntered(
+        operationShape: OperationShape,
+        operationSymbol: Symbol,
+        rustWriter: RustWriter,
+    ) {
+        val operationFullName = "${operationShape.id.namespace}.${operationSymbol.name}"
+        rustWriter.rust(
+            """
+            super::$PROTOCOL_TEST_HELPER_MODULE_NAME::check_operation_extension_was_set(http_response, "$operationFullName");
+            """,
+        )
     }
 
     /** Checks the request using the new service builder. */
@@ -618,6 +619,7 @@ class ServerProtocolTestGenerator(
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
         rustWriter.rustTemplate(
             """
+            ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let service = crate::service::$serviceName::unchecked_builder()
                 .$operationName(move |input: $inputT| {
@@ -637,6 +639,15 @@ class ServerProtocolTestGenerator(
             *codegenScope,
         )
     }
+
+    private fun checkHandlerWasEntered2(rustWriter: RustWriter) {
+        rustWriter.rust(
+            """
+            assert!(receiver.recv().await.is_some());
+            """,
+        )
+    }
+
     private fun checkRequestParams(inputShape: StructureShape, rustWriter: RustWriter) {
         if (inputShape.hasStreamingMember(model)) {
             // A streaming shape does not implement `PartialEq`, so we have to iterate over the input shape's members
