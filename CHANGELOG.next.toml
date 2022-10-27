@@ -46,3 +46,9 @@ message = "`aws_smithy_http_server::routing::Router` is exported from the crate 
 references = ["smithy-rs#1910"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = "Fix bug that can cause panics in paginators"
+references = ["smithy-rs#1903", "smithy-rs#1902"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "rcoh"
