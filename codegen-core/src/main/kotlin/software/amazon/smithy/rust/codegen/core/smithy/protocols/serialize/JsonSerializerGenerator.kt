@@ -191,7 +191,7 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
-                customizations.forEach { it.section(makeSection(structureShape, "object")) }
+                customizations.forEach { it.section(makeSection(structureShape, "object"))(this) }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
