@@ -403,6 +403,7 @@ class ServerProtocolTestGenerator(
         }
         if (protocolSupport.requestBodyDeserialization) {
             makeRequest2(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
+            checkOperationExtension(operationShape, operationSymbol, this)
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
