@@ -152,7 +152,7 @@ class ServerServiceGeneratorV2(
     private val buildConstraints = operations.zip(builderOps).zip(extensionTypes).map { (first, exts) ->
         val (operation, type) = first
         // TODO(https://github.com/awslabs/smithy-rs/issues/1713#issue-1365169734): The `Error = Infallible` is an
-        // excess requirement to stay at parity with existing builder.
+        //  excess requirement to stay at parity with existing builder.
         writable {
             rustTemplate(
                 """
@@ -162,11 +162,7 @@ class ServerServiceGeneratorV2(
                     $exts,
                     B,
                     Pl,
-                >,
-                $type::Service: Clone + Send + 'static,
-                <$type::Service as #{Tower}::Service<#{Http}::Request<B>>>::Future: Send + 'static,
-
-                $type::Service: #{Tower}::Service<#{Http}::Request<B>, Error = std::convert::Infallible>
+                >
                 """,
                 "Marker" to protocol.markerStruct(),
                 *codegenScope,
@@ -279,7 +275,7 @@ class ServerServiceGeneratorV2(
         rustTemplate(
             """
             ##[derive(Clone)]
-            pub struct $serviceName<S> {
+            pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
             }
 
@@ -320,6 +316,21 @@ class ServerServiceGeneratorV2(
                     $serviceName {
                         router: self.router.map(|s| s.layer(layer))
                     }
+                }
+
+                /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
+                ///
+                /// This has the effect of erasing all types accumulated via [`layer`].
+                pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
+                where
+                    S: #{Tower}::Service<
+                        #{Http}::Request<B>,
+                        Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
+                        Error = std::convert::Infallible>,
+                    S: Clone + Send + 'static,
+                    S::Future: Send + 'static,
+                {
+                    self.layer(&#{Tower}::layer::layer_fn(#{SmithyHttpServer}::routing::Route::new))
                 }
             }
 
