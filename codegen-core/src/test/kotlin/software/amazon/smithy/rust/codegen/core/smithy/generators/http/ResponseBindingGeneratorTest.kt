@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -68,8 +67,8 @@ class ResponseBindingGeneratorTest {
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
-    private val symbolProvider = testSymbolProvider(model)
-    private val testCodegenContext: CodegenContext = testCodegenContext(model)
+    private val codegenContext: CodegenContext = testCodegenContext(model)
+    private val symbolProvider = codegenContext.symbolProvider
 
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
@@ -79,8 +78,8 @@ class ResponseBindingGeneratorTest {
                 .filter { it.location == HttpLocation.HEADER }
             bindings.forEach { binding ->
                 val runtimeType = ResponseBindingGenerator(
-                    RestJson(testCodegenContext),
-                    testCodegenContext,
+                    RestJson(codegenContext),
+                    codegenContext,
                     operationShape,
                 ).generateDeserializeHeaderFn(binding)
                 // little hack to force these functions to be generated
