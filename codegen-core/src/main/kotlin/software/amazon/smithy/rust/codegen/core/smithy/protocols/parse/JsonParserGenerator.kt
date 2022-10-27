@@ -84,9 +84,6 @@ class JsonParserGenerator(
      *
      * The function returns a pair where the second component is the return symbol that should be parsed, and the first
      * component is whether such symbol is unconstrained or not.
-     *
-     * TODO Try to store whether a symbol is unconstrained or not as a property on the `Symbol` itself, and so then
-     *  this function should just need to return a `Symbol` as opposed to a pair.
      */
     private val returnSymbolToParse: (Shape) -> Pair<Boolean, Symbol> = { shape -> false to codegenContext.symbolProvider.toSymbol(shape) },
     private val customizations: List<JsonParserCustomization> = listOf(),

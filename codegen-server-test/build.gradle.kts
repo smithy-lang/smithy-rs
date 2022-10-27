@@ -38,8 +38,7 @@ dependencies {
 
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
-        // TODO Commented out because we should decide how to fix https://github.com/awslabs/smithy-rs/issues/1826
-//        CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
+        CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
         CodegenTest("naming_obs_structs#NamingObstacleCourseStructs", "naming_test_structs", imports = listOf("$commonModels/naming-obstacle-course-structs.smithy")),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
         CodegenTest(
