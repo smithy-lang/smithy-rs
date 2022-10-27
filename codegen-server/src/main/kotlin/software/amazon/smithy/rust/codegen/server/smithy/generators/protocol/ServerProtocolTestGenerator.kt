@@ -612,13 +612,10 @@ class ServerProtocolTestGenerator(
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
         rustWriter.rustTemplate(
             """
-            let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let service = crate::service::$serviceName::unchecked_builder()
                 .$operationName(move |input: $inputT| {
-                    let sender = sender.clone();
                     async move {
                         let result = { #{Body:W} };
-                        sender.send(()).await.expect("receiver dropped early");
                         result
                     }
                 })
@@ -626,7 +623,6 @@ class ServerProtocolTestGenerator(
             let http_response = #{Tower}::ServiceExt::oneshot(service, http_request)
                 .await
                 .expect("unable to make an HTTP request");
-            assert!(receiver.recv().await.is_some());
             """,
             "Body" to body,
             *codegenScope,
