@@ -485,14 +485,14 @@ class ServerProtocolTestGenerator(
             // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
             renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
         }
-        makeRequest(operationShape, this, writable("$outputT::builder().build()"))
+        makeRequest(operationShape, this, writable("todo!() as $outputT"))
 
         // Use new service builder
         with(testCase.request) {
             // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
             renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
         }
-        makeRequest2(operationShape, operationSymbol, this, writable("$outputT::builder().build()"))
+        makeRequest2(operationShape, operationSymbol, this, writable("todo!() as $outputT"))
 
         checkResponse(this, testCase.response)
     }
