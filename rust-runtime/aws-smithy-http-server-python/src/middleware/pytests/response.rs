@@ -67,7 +67,7 @@ assert res.version == "HTTP/3.0"
 assert res.headers["x-secret"] == "42"
 
 assert res.headers.get("x-foo") == None
-res.set_header("x-foo", "bar")
+res.headers["x-foo"] = "bar"
 assert res.headers["x-foo"] == "bar"
 "#
         );

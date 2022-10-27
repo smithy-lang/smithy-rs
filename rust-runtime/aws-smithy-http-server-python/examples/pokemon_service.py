@@ -164,7 +164,7 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
 # middleware.
 @app.middleware
 async def add_x_amzn_answer_header(request: Request, next: Next) -> Response:
-    request.set_header("x-amzn-answer", "42")
+    request.headers["x-amzn-answer"] = "42"
     logging.debug("Setting `x-amzn-answer` header to 42")
     return await next(request)
 

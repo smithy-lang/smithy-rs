@@ -5,16 +5,15 @@
 
 //! Python-compatible middleware [http::Request] implementation.
 
-use std::collections::HashMap;
-use std::str::FromStr;
+use std::mem;
 use std::sync::Arc;
 
 use aws_smithy_http_server::body::Body;
-use http::{header::HeaderName, request::Parts, HeaderValue, Request};
+use http::{request::Parts, Request};
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use tokio::sync::Mutex;
 
-use super::PyMiddlewareError;
+use super::{PyHeaderMap, PyMiddlewareError};
 
 /// Python-compatible [Request] object.
 #[pyclass(name = "Request")]
@@ -22,15 +21,18 @@ use super::PyMiddlewareError;
 #[derive(Debug)]
 pub struct PyRequest {
     parts: Option<Parts>,
+    headers: PyHeaderMap,
     body: Arc<Mutex<Option<Body>>>,
 }
 
 impl PyRequest {
     /// Create a new Python-compatible [Request] structure from the Rust side.
     pub fn new(request: Request<Body>) -> Self {
-        let (parts, body) = request.into_parts();
+        let (mut parts, body) = request.into_parts();
+        let headers = mem::take(&mut parts.headers);
         Self {
             parts: Some(parts),
+            headers: PyHeaderMap::new(headers),
             body: Arc::new(Mutex::new(Some(body))),
         }
     }
@@ -39,10 +41,14 @@ impl PyRequest {
     // This method would have been `into_inner(self) -> Request<Body>`
     // but we can't do that because we are crossing Python boundary.
     pub fn take_inner(&mut self) -> Option<Request<Body>> {
-        let parts = self.parts.take()?;
-        let body = std::mem::replace(&mut self.body, Arc::new(Mutex::new(None)));
-        let body = Arc::try_unwrap(body).ok()?;
-        let body = body.into_inner().take()?;
+        let headers = self.headers.take_inner()?;
+        let mut parts = self.parts.take()?;
+        parts.headers = headers;
+        let body = {
+            let body = mem::take(&mut self.body);
+            let body = Arc::try_unwrap(body).ok()?;
+            body.into_inner().take()?
+        };
         Some(Request::from_parts(parts, body))
     }
 }
@@ -77,43 +83,9 @@ impl PyRequest {
     }
 
     /// Return the HTTP headers of this request.
-    /// TODO(can we use `Py::clone_ref()` to prevent cloning the hashmap?)
     #[getter]
-    fn headers(&self) -> PyResult<HashMap<String, String>> {
-        self.parts
-            .as_ref()
-            .map(|parts| {
-                parts
-                    .headers
-                    .iter()
-                    .map(|(k, v)| -> (String, String) {
-                        let name: String = k.to_string();
-                        let value: String = String::from_utf8_lossy(v.as_bytes()).to_string();
-                        (name, value)
-                    })
-                    .collect()
-            })
-            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
-    }
-
-    /// Insert a new key/value into this request's headers.
-    /// TODO(investigate if using a PyDict can make the experience more idiomatic)
-    /// I'd like to be able to do request.headers.get("my-header") and
-    /// request.headers["my-header"] = 42 instead of implementing set_header() and get_header()
-    /// under pymethods. The same applies to response.
-    #[pyo3(text_signature = "($self, key, value)")]
-    fn set_header(&mut self, key: &str, value: &str) -> PyResult<()> {
-        match self.parts.as_mut() {
-            Some(parts) => {
-                let key = HeaderName::from_str(key)
-                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-                let value = HeaderValue::from_str(value)
-                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-                parts.headers.insert(key, value);
-                Ok(())
-            }
-            None => Err(PyMiddlewareError::RequestGone.into()),
-        }
+    fn headers(&self) -> PyHeaderMap {
+        self.headers.clone()
     }
 
     /// Return the HTTP body of this request.

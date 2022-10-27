@@ -74,12 +74,14 @@
 
 mod error;
 mod handler;
+mod header_map;
 mod layer;
 mod request;
 mod response;
 
 pub use self::error::PyMiddlewareError;
 pub use self::handler::PyMiddlewareHandler;
+pub use self::header_map::PyHeaderMap;
 pub use self::layer::PyMiddlewareLayer;
 pub use self::request::PyRequest;
 pub use self::response::PyResponse;

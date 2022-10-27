@@ -33,7 +33,7 @@ assert req.headers["x-custom"] == "42"
 assert req.version == "HTTP/2.0"
 
 assert req.headers.get("x-foo") == None
-req.set_header("x-foo", "bar")
+req.headers["x-foo"] = "bar"
 assert req.headers["x-foo"] == "bar"
 "#
         );

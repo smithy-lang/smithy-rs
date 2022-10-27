@@ -256,7 +256,7 @@ async def middleware(request, next):
     body = bytes(await request.body).decode()
     body_reversed = body[::-1]
     request.body = body_reversed.encode()
-    request.set_header("X-From-Middleware", "yes")
+    request.headers["X-From-Middleware"] = "yes"
     return await next(request)
 "#,
             "",
@@ -312,7 +312,7 @@ async def middleware(request, next):
     body = bytes(await response.body).decode()
     body_reversed = body[::-1]
     response.body = body_reversed.encode()
-    response.set_header("X-From-Middleware", "yes")
+    response.headers["X-From-Middleware"] = "yes"
     return response
 "#,
             "",

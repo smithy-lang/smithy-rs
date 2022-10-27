@@ -8,6 +8,7 @@
 use std::{
     convert::Infallible,
     marker::PhantomData,
+    mem,
     task::{Context, Poll},
 };
 
@@ -107,7 +108,7 @@ where
         let inner = {
             // https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
             let clone = self.inner.clone();
-            std::mem::replace(&mut self.inner, clone)
+            mem::replace(&mut self.inner, clone)
         };
         let handler = self.handler.clone();
         let handler_name = handler.name.clone();
