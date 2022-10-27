@@ -230,6 +230,7 @@ structure MapWithEnumKeyInputOutput {
 operation MapWithEnumKeyOp {
     input: MapWithEnumKeyInputOutput,
     output: MapWithEnumKeyInputOutput,
+    errors: [ValidationException],
 }
 
 
@@ -269,6 +270,7 @@ structure EscapedStringValuesInputOutput {
 operation EscapedStringValues {
     input: EscapedStringValuesInputOutput,
     output: EscapedStringValuesInputOutput,
+    errors: [ValidationException],
 }
 
 list NonSparseList {

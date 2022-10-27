@@ -141,11 +141,12 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model:
             LogMessage(
                 Level.SEVERE,
                 """
-                Operation ${it.shape.id} takes in input that is constrained
+                Operation ${it.shape.id} takes in input that is constrained 
                 (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation 
                 exception. You must model this behavior in the operation shape in your model file.
                 """.trimIndent().replace("\n", "") +
                     """
+                        
                 ```smithy
                 use smithy.framework#ValidationException
                 

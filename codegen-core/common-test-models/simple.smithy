@@ -75,7 +75,7 @@ resource Service {
 operation RegisterService {
     input: RegisterServiceInputRequest,
     output: RegisterServiceOutputResponse,
-    errors: [ResourceAlreadyExists]
+    errors: [ResourceAlreadyExists, ValidationException]
 }
 
 @documentation("Service register input structure")

@@ -238,6 +238,7 @@ operation AcceptHeaderStarService {}
 operation RequiredHeaderCollectionOperation {
     input: RequiredHeaderCollectionOperationInputOutput,
     output: RequiredHeaderCollectionOperationInputOutput,
+    errors: [ValidationException]
 }
 
 structure RequiredHeaderCollectionOperationInputOutput {
