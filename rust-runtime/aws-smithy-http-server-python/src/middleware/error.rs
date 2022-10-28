@@ -9,14 +9,11 @@ use thiserror::Error;
 /// Possible middleware errors that might arise.
 #[derive(Error, Debug)]
 pub enum PyMiddlewareError {
-    /// Returned when `next` is called multiple times.
-    #[error("next already called")]
+    #[error("`next` is called multiple times")]
     NextAlreadyCalled,
-    /// Returned when request is accessed after `next` is called.
-    #[error("request is gone")]
+    #[error("request is accessed after `next` is called")]
     RequestGone,
-    /// Returned when response is called after it is returned.
-    #[error("response is gone")]
+    #[error("response is called after it is returned")]
     ResponseGone,
 }
 

@@ -403,7 +403,10 @@ async def middleware(request, next):
     let response = response.await.unwrap();
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
-    assert_eq!(body, r#"{"message":"RuntimeError: request is gone"}"#);
+    assert_eq!(
+        body,
+        r#"{"message":"RuntimeError: request is accessed after `next` is called"}"#
+    );
     th.await.unwrap();
     Ok(())
 }
