@@ -213,12 +213,12 @@ class PythonApplicationGenerator(
 
                     {
                         use #{tower}::Layer;
-                        tracing::debug!("adding middlewares to rust python router");
+                        #{tracing}::trace!("adding middlewares to rust python router");
                         let mut middlewares = self.middlewares.clone();
                         // Reverse the middlewares, so they run with same order as they defined
                         middlewares.reverse();
                         for handler in middlewares {
-                            tracing::debug!("adding python middleware '{}'", &handler.name);
+                            #{tracing}::trace!(name = &handler.name, "adding python middleware");
                             let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
                             let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
                             service = #{tower}::util::BoxCloneService::new(layer.layer(service));
@@ -258,10 +258,10 @@ class PythonApplicationGenerator(
                 ##[pyo3(text_signature = "(${'$'}self, func)")]
                 pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                     let handler = #{SmithyPython}::PyMiddlewareHandler::new(py, func)?;
-                    tracing::info!(
-                        "registering middleware function `{}`, coroutine: {}",
-                        handler.name,
-                        handler.is_coroutine,
+                    #{tracing}::trace!(
+                        name = &handler.name,
+                        is_coroutine = handler.is_coroutine,
+                        "registering middleware function",
                     );
                     self.middlewares.push(handler);
                     Ok(())

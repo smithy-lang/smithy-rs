@@ -84,16 +84,16 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                     .getattr(py, "pid")
                     .map(|pid| pid.extract(py).unwrap_or(-1))
                     .unwrap_or(-1);
-                tracing::debug!("Terminating worker {idx}, PID: {pid}");
+                tracing::debug!(idx, pid, "terminating worker");
                 match worker.call_method0(py, "terminate") {
                     Ok(_) => {}
                     Err(e) => {
-                        tracing::error!("Error terminating worker {idx}, PID: {pid}: {e}");
+                        tracing::error!(err = %e, idx, pid, "error terminating worker");
                         worker
                             .call_method0(py, "kill")
                             .map_err(|e| {
                                 tracing::error!(
-                                    "Unable to kill kill worker {idx}, PID: {pid}: {e}"
+                                    err = %e, idx, pid, "unable to kill kill worker"
                                 );
                             })
                             .unwrap();
@@ -115,11 +115,11 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                     .getattr(py, "pid")
                     .map(|pid| pid.extract(py).unwrap_or(-1))
                     .unwrap_or(-1);
-                tracing::debug!("Killing worker {idx}, PID: {pid}");
+                tracing::debug!(idx, pid, "killing worker");
                 worker
                     .call_method0(py, "kill")
                     .map_err(|e| {
-                        tracing::error!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
+                        tracing::error!(err = %e, idx, pid, "unable to kill kill worker");
                     })
                     .unwrap();
             });
@@ -143,19 +143,19 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
             match sig {
                 SIGINT => {
                     tracing::info!(
-                        "Termination signal {sig:?} received, all workers will be immediately terminated"
+                        sig = %sig, "termination signal received, all workers will be immediately terminated"
                     );
 
                     self.immediate_termination(self.workers());
                 }
                 SIGTERM | SIGQUIT => {
                     tracing::info!(
-                        "Termination signal {sig:?} received, all workers will be gracefully terminated"
+                        sig = %sig, "termination signal received, all workers will be gracefully terminated"
                     );
                     self.graceful_termination(self.workers());
                 }
                 _ => {
-                    tracing::debug!("Signal {sig:?} is ignored by this application");
+                    tracing::debug!(sig = %sig, "signal is ignored by this application");
                 }
             }
         }
@@ -229,7 +229,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         self.register_python_signals(py, event_loop.to_object(py))?;
 
         // Spawn a new background [std::thread] to run the application.
-        tracing::debug!("Start the Tokio runtime in a background task");
+        tracing::trace!("start the tokio runtime in a background task");
         thread::spawn(move || {
             // The thread needs a new [tokio] runtime.
             let rt = runtime::Builder::new_multi_thread()
@@ -246,15 +246,15 @@ event_loop.add_signal_handler(signal.SIGINT,
                 .expect("Unable to create hyper server from shared socket")
                 .serve(IntoMakeService::new(service));
 
-                tracing::debug!("Started hyper server from shared socket");
+                tracing::trace!("started hyper server from shared socket");
                 // Run forever-ish...
                 if let Err(err) = server.await {
-                    tracing::error!("server error: {}", err);
+                    tracing::error!(err = %err, "server error");
                 }
             });
         });
         // Block on the event loop forever.
-        tracing::debug!("Run and block on the Python event loop until a signal is received");
+        tracing::trace!("run and block on the python event loop until a signal is received");
         event_loop.call_method0("run_forever")?;
         Ok(())
     }
@@ -273,9 +273,10 @@ event_loop.add_signal_handler(signal.SIGINT,
             args: func_metadata.num_args,
         };
         tracing::info!(
-            "Registering handler function `{name}`, coroutine: {}, arguments: {}",
-            handler.is_coroutine,
-            handler.args,
+            name,
+            is_coroutine = handler.is_coroutine,
+            args = handler.args,
+            "registering handler function",
         );
         // Insert the handler in the handlers map.
         self.handlers().insert(name.to_string(), handler);
@@ -295,10 +296,10 @@ event_loop.add_signal_handler(signal.SIGINT,
         match py.import("uvloop") {
             Ok(uvloop) => {
                 uvloop.call_method0("install")?;
-                tracing::debug!("Setting up uvloop for current process");
+                tracing::trace!("setting up uvloop for current process");
             }
             Err(_) => {
-                tracing::warn!("Uvloop not found, using Python standard event loop, which could have worse performance than uvloop");
+                tracing::warn!("uvloop not found, using python standard event loop, which could have worse performance than uvloop");
             }
         }
         let event_loop = asyncio.call_method0("new_event_loop")?;
@@ -409,7 +410,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         }
         // Unlock the workers mutex.
         drop(active_workers);
-        tracing::info!("Rust Python server started successfully");
+        tracing::trace!("rust python server started successfully");
         self.block_on_rust_signals();
         Ok(())
     }

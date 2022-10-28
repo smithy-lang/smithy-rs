@@ -120,7 +120,7 @@ where
             handler
                 .call(req, next, locals)
                 .or_else(move |err| async move {
-                    tracing::error!(err = %err, "middleware '{handler_name}' failed");
+                    tracing::error!(err = %err, handler_name, "middleware failed");
                     let response = (into_response)(err.into());
                     Ok(response)
                 }),

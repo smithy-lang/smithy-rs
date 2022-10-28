@@ -91,7 +91,7 @@ class PythonServerOperationHandlerGenerator(
         writable {
             rustTemplate(
                 """
-                #{tracing}::debug!("Executing Python handler function `$name()`");
+                #{tracing}::trace!(name = "$name", "executing python handler function");
                 #{pyo3}::Python::with_gil(|py| {
                     let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
                     let output = if handler.args == 1 {
@@ -110,7 +110,7 @@ class PythonServerOperationHandlerGenerator(
         writable {
             rustTemplate(
                 """
-                #{tracing}::debug!("Executing Python handler coroutine `$name()`");
+                #{tracing}::trace!(name = "$name", "executing python handler coroutine");
                 let result = #{pyo3}::Python::with_gil(|py| {
                     let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
                     let coroutine = if handler.args == 1 {
