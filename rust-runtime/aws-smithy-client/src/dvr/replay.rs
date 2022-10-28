@@ -4,6 +4,8 @@
  */
 
 use crate::dvr::{Action, ConnectionId, Direction, Event};
+use crate::erase::DynConnector;
+use crate::http_connector::HttpConnector;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use bytes::{Bytes, BytesMut};
@@ -16,8 +18,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tokio::task::JoinHandle;
-use crate::erase::DynConnector;
-use crate::http_connector::HttpConnector;
 
 /// Wrapper type to enable optionally waiting for a future to complete
 #[derive(Debug)]
@@ -220,7 +220,7 @@ impl tower::Service<http::Request<SdkBody>> for ReplayingConnection {
 
     #[allow(clippy::type_complexity)]
     type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output=Result<Self::Response, Self::Error>> + Send + 'static>,
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>,
     >;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

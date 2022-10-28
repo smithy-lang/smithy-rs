@@ -24,7 +24,6 @@ use tokio::sync::oneshot;
 #[derive(Debug, Clone)]
 pub struct CaptureRequestHandler(Arc<Mutex<Inner>>);
 
-
 #[derive(Debug)]
 struct Inner {
     response: Option<http::Response<SdkBody>>,

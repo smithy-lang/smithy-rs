@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::erase::boxclone::BoxFuture;
+use crate::erase::DynConnector;
+use crate::http_connector::HttpConnector;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use tower::BoxError;
-use crate::erase::DynConnector;
-use crate::http_connector::HttpConnector;
 
 /// A service that will never return whatever it is you want
 ///
