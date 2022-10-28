@@ -127,8 +127,9 @@ open class MakeOperationGenerator(
             writeCustomizations(customizations, OperationSection.MutateRequest(customizations, "request", "_config"))
             rustTemplate(
                 """
-                let op = #{operation}::Operation::new(request, #{OperationType}::new())
-                    .with_metadata(#{operation}::Metadata::new(${operationName.dq()}, ${sdkId.dq()}));
+                let metadata = #{operation}::Metadata::new(${operationName.dq()}, ${sdkId.dq()});
+                request.properties_mut().insert(metadata.clone());
+                let op = #{operation}::Operation::new(request, #{OperationType}::new()).with_metadata(metadata);
                 """,
                 *codegenScope,
                 "OperationType" to symbolProvider.toSymbol(shape),
