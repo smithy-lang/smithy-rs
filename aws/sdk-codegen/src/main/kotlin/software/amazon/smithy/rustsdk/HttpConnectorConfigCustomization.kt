@@ -27,19 +27,19 @@ class HttpConnectorDecorator : RustCodegenDecorator<ClientProtocolGenerator, Cli
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + HttpConnectorConfigCustomization(codegenContext)
     }
 }
 
 class HttpConnectorConfigCustomization(
-    codegenContext: CodegenContext
+    codegenContext: CodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "HttpConnector" to SmithyClient(runtimeConfig).asType().member("http_connector::HttpConnector")
+        "HttpConnector" to SmithyClient(runtimeConfig).asType().member("http_connector::HttpConnector"),
     )
 
     override fun section(section: ServiceConfig): Writable {
@@ -55,7 +55,7 @@ class HttpConnectorConfigCustomization(
                             self.http_connector.as_ref()
                         }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             is ServiceConfig.BuilderStruct -> writable {
