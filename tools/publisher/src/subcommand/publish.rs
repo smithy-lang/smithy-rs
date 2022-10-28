@@ -66,15 +66,15 @@ pub async fn subcommand_publish(
             if !is_published(&package.handle).await? {
                 publish(&package.handle, &package.crate_path).await?;
 
+                // Keep things slow to avoid getting throttled by crates.io
+                tokio::time::sleep(Duration::from_secs(2)).await;
+
                 // Sometimes it takes a little bit of time for the new package version
                 // to become available after publish. If we proceed too quickly, then
                 // the next package publish can fail if it depends on this package.
                 wait_for_eventual_consistency(&package).await?;
                 info!("Successfully published `{}`", package.handle);
                 any_published = true;
-
-                // Keep things slow to avoid getting throttled by crates.io
-                tokio::time::sleep(Duration::from_secs(1)).await;
             } else {
                 info!("`{}` was already published", package.handle);
             }

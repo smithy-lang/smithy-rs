@@ -101,9 +101,10 @@ class JsonSerializerGeneratorTest {
     @Test
     fun `generates valid serializers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val symbolProvider = testSymbolProvider(model)
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
         val parserSerializer = JsonSerializerGenerator(
-            testCodegenContext(model),
+            codegenContext,
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
             ::restJsonFieldName,
         )

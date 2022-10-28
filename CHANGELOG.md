@@ -12,6 +12,7 @@ October 24th, 2022
     of breaking changes and how to resolve them.
 - ⚠ (server, [smithy-rs#1829](https://github.com/awslabs/smithy-rs/issues/1829)) Remove `Protocol` enum, removing an obstruction to extending smithy to third-party protocols.
 - ⚠ (server, [smithy-rs#1829](https://github.com/awslabs/smithy-rs/issues/1829)) Convert the `protocol` argument on `PyMiddlewares::new` constructor to a type parameter.
+- ⚠ (server, [smithy-rs#1753](https://github.com/awslabs/smithy-rs/issues/1753)) `aws_smithy_http_server::routing::Router` is no longer exported from the crate root. This was unintentional breakage that will be reverted in the next release.
 
 **New this release:**
 - (server, [smithy-rs#1811](https://github.com/awslabs/smithy-rs/issues/1811)) Replace all usages of `AtomicU64` with `AtomicUsize` to support 32bit targets.

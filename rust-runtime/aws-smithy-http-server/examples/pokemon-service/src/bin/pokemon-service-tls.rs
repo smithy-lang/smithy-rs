@@ -28,7 +28,7 @@ use std::io::BufReader;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use aws_smithy_http_server::{routing::Router, AddExtensionLayer};
+use aws_smithy_http_server::{AddExtensionLayer, Router};
 use clap::Parser;
 use futures_util::stream::StreamExt;
 use pokemon_service::{
