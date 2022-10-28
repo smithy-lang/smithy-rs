@@ -83,34 +83,34 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
             .body(SdkBody::from("request body"))
             .unwrap(),
     )
-        .augment(|req, conf| {
-            conf.insert(
-                EndpointShim::from_resolver(aws_endpoint::partition::endpoint::Metadata {
-                    uri_template: "test-service.{region}.amazonaws.com",
-                    protocol: Protocol::Https,
-                    credential_scope: Default::default(),
-                    signature_versions: SignatureVersion::V4,
-                })
-                    .resolve_endpoint(&Params::new(Some(Region::new("test-region")))),
-            );
-            aws_http::auth::set_provider(
-                conf,
-                SharedCredentialsProvider::new(Credentials::new(
-                    "access_key",
-                    "secret_key",
-                    None,
-                    None,
-                    "test",
-                )),
-            );
-            conf.insert(Region::new("test-region"));
-            conf.insert(OperationSigningConfig::default_config());
-            conf.insert(SigningService::from_static("test-service-signing"));
-            conf.insert(UNIX_EPOCH + Duration::from_secs(1613414417));
-            conf.insert(AwsUserAgent::for_tests());
-            Result::<_, Infallible>::Ok(req)
-        })
-        .unwrap();
+    .augment(|req, conf| {
+        conf.insert(
+            EndpointShim::from_resolver(aws_endpoint::partition::endpoint::Metadata {
+                uri_template: "test-service.{region}.amazonaws.com",
+                protocol: Protocol::Https,
+                credential_scope: Default::default(),
+                signature_versions: SignatureVersion::V4,
+            })
+            .resolve_endpoint(&Params::new(Some(Region::new("test-region")))),
+        );
+        aws_http::auth::set_provider(
+            conf,
+            SharedCredentialsProvider::new(Credentials::new(
+                "access_key",
+                "secret_key",
+                None,
+                None,
+                "test",
+            )),
+        );
+        conf.insert(Region::new("test-region"));
+        conf.insert(OperationSigningConfig::default_config());
+        conf.insert(SigningService::from_static("test-service-signing"));
+        conf.insert(UNIX_EPOCH + Duration::from_secs(1613414417));
+        conf.insert(AwsUserAgent::for_tests());
+        Result::<_, Infallible>::Ok(req)
+    })
+    .unwrap();
     Operation::new(req, TestOperationParser)
         .with_retry_classifier(AwsResponseRetryClassifier::new())
         .with_metadata(operation::Metadata::new("test-op", "test-service"))
@@ -166,14 +166,19 @@ async fn test_operation_metadata_is_available_to_middlewares() {
             .body("response body")
             .unwrap(),
     )]);
-    let client = aws_smithy_client::Client::builder().middleware_fn(|req| {
-        let metadata = req.properties().get::<operation::Metadata>().cloned().unwrap();
+    let client = aws_smithy_client::Client::builder()
+        .middleware_fn(|req| {
+            let metadata = req
+                .properties()
+                .get::<operation::Metadata>()
+                .cloned()
+                .unwrap();
 
-        assert_eq!("test-op", metadata.name());
-        assert_eq!("test-service", metadata.service());
+            assert_eq!("test-op", metadata.name());
+            assert_eq!("test-service", metadata.service());
 
-        req
-    })
+            req
+        })
         .connector(DynConnector::new(conn))
         .build();
 
