@@ -56,6 +56,8 @@ tasks.register<JavaExec>("ktlint") {
     classpath = configurations.getByName("ktlint")
     main = "com.pinterest.ktlint.Main"
     args = listOf("--verbose", "--relative", "--") + lintPaths
+    // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
 
 tasks.register<JavaExec>("ktlintFormat") {
@@ -64,6 +66,8 @@ tasks.register<JavaExec>("ktlintFormat") {
     classpath = configurations.getByName("ktlint")
     main = "com.pinterest.ktlint.Main"
     args = listOf("--verbose", "--relative", "--format", "--") + lintPaths
+    // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
 
 @Suppress("UnstableApiUsage")

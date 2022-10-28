@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -89,16 +88,17 @@ class AwsQuerySerializerGeneratorTest {
     @ParameterizedTest
     @CsvSource("true", "false")
     fun `generates valid serializers`(generateUnknownVariant: Boolean) {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val symbolProvider = testSymbolProvider(model)
-        val target = when (generateUnknownVariant) {
+        val codegenTarget = when (generateUnknownVariant) {
             true -> CodegenTarget.CLIENT
             false -> CodegenTarget.SERVER
         }
-        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = target))
+        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val codegenContext = testCodegenContext(model, codegenTarget = codegenTarget)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = codegenTarget))
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
-        val project = TestWorkspace.testProject(testSymbolProvider(model))
+        val project = TestWorkspace.testProject(symbolProvider)
         project.lib {
             unitTest(
                 "query_serializer",
