@@ -180,7 +180,7 @@ private class AwsFluentClientExtensions(types: Types) {
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
                     let conf: crate::Config = sdk_config.into();
-                    let connector = conf.http_connector().map(|c| {
+                    let connector = conf.http_connector().and_then(|c| {
                         let timeout_config = conf
                             .timeout_config()
                             .cloned()
@@ -189,7 +189,7 @@ private class AwsFluentClientExtensions(types: Types) {
                             &timeout_config,
                         );
                         c.connector(&connector_settings, conf.sleep_impl())
-                    }).flatten();
+                    });
 
                     match connector {
                         // Use provided connector
