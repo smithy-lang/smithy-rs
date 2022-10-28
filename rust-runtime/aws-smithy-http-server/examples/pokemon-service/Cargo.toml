@@ -37,7 +37,7 @@ rustls-pemfile = "1.0.1"
 futures-util = "0.3"
 
 # This dependency is only required for the `pokemon-service-lambda` program.
-lambda_http = "0.7.0"
+lambda_http = "0.7.1"
 
 # Local paths
 aws-smithy-http-server = { path = "../../" }
