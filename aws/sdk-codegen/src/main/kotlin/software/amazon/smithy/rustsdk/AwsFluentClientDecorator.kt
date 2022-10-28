@@ -179,7 +179,24 @@ private class AwsFluentClientExtensions(types: Types) {
                 /// Creates a new client from a shared config.
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
-                    Self::from_conf(sdk_config.into())
+                    let conf: crate::Config = sdk_config.into();
+                    let connector = conf.http_connector().map(|c| {
+                        let timeout_config = conf
+                            .timeout_config()
+                            .cloned()
+                            .unwrap_or_else(#{TimeoutConfig}::disabled);
+                        let connector_settings = #{ConnectorSettings}::from_timeout_config(
+                            &timeout_config,
+                        );
+                        c.connector(&connector_settings, conf.sleep_impl())
+                    }).flatten();
+
+                    match connector {
+                        // Use provided connector
+                        Some(conn) => Self::from_conf_conn(conf, conn),
+                        // Use default connector based on enabled features
+                        None => Self::from_conf(conf),
+                    }
                 }
 
                 /// Creates a new client from the service [`Config`](crate::Config).
