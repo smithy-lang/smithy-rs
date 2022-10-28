@@ -52,3 +52,40 @@ message = "Fix bug that can cause panics in paginators"
 references = ["smithy-rs#1903", "smithy-rs#1902"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+The HTTP connector used when making requests is now configurable. This is especially useful when testing:
+
+```rust
+    let conn = TestConnection::new(vec![
+        // tuples of requests and responses
+    ]);
+    let conf = SdkConfig::builder()
+        .http_connector(conn.clone().into())
+        .build();
+    let client = Client::new(&conf);
+
+    // When sent, this operation will go through the TestConnection instead of
+    // the default HTTP connector. That way, the request structure can be checked
+    // and we can send custom responses to trigger specific behavior.
+    let op = client
+        .get_object()
+        .bucket("some-test-bucket")
+        .key("test.txt")
+        .send()
+        .await
+        .unwrap();
+```
+
+The code above is just a snippet. See the full version of this test [here](./aws/sdk/integration-tests/s3/tests/connector-configuration.rs).
+"""
+references = [""]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Add `to_vec` method to `aws_smithy_http::byte_stream::AggregatedBytes`."
+references = [""]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
