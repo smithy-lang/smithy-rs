@@ -80,12 +80,12 @@ The HTTP connector used when making requests is now configurable. This is especi
 
 The code above is just a snippet. See the full version of this test [here](./aws/sdk/integration-tests/s3/tests/connector-configuration.rs).
 """
-references = [""]
+references = ["smithy-rs#1225"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
 
 [[aws-sdk-rust]]
 message = "Add `to_vec` method to `aws_smithy_http::byte_stream::AggregatedBytes`."
-references = [""]
+references = ["smithy-rs#1918"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "Velfi"
