@@ -7,30 +7,34 @@
 // TODO(docs)
 #![allow(missing_docs)]
 
-use http::header::{HeaderName, CONTENT_TYPE};
-use http::Request;
-
-use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
-
+use crate::erase::DynConnector;
+use crate::http_connector::HttpConnector;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
+use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
+use http::header::{HeaderName, CONTENT_TYPE};
+use http::Request;
 use std::future::Ready;
-
 use std::ops::Deref;
-
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-
 use tokio::sync::oneshot;
 
 /// Test Connection to capture a single request
 #[derive(Debug, Clone)]
 pub struct CaptureRequestHandler(Arc<Mutex<Inner>>);
 
+
 #[derive(Debug)]
 struct Inner {
     response: Option<http::Response<SdkBody>>,
     sender: Option<oneshot::Sender<http::Request<SdkBody>>>,
+}
+
+impl From<CaptureRequestHandler> for HttpConnector {
+    fn from(capture_request_handler: CaptureRequestHandler) -> Self {
+        HttpConnector::Prebuilt(Some(DynConnector::new(capture_request_handler)))
+    }
 }
 
 /// Receiver for [`CaptureRequestHandler`](CaptureRequestHandler)
@@ -251,6 +255,16 @@ where
             .middleware(tower::layer::util::Identity::new())
             .connector(tc)
             .build()
+    }
+}
+
+impl<B> From<TestConnection<B>> for HttpConnector
+where
+    B: Send + 'static,
+    SdkBody: From<B>,
+{
+    fn from(test_connection: TestConnection<B>) -> Self {
+        HttpConnector::Prebuilt(Some(DynConnector::new(test_connection)))
     }
 }
 

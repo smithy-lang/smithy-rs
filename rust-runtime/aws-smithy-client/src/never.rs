@@ -19,6 +19,8 @@ use crate::erase::boxclone::BoxFuture;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use tower::BoxError;
+use crate::erase::DynConnector;
+use crate::http_connector::HttpConnector;
 
 /// A service that will never return whatever it is you want
 ///
@@ -63,6 +65,12 @@ impl<Req, Resp, Err> NeverService<Req, Resp, Err> {
 /// A Connector that can be use with [`Client`](crate::Client) that never returns a response.
 pub type NeverConnector =
     NeverService<http::Request<SdkBody>, http::Response<SdkBody>, ConnectorError>;
+
+impl From<NeverConnector> for HttpConnector {
+    fn from(never_connector: NeverConnector) -> Self {
+        HttpConnector::Prebuilt(Some(DynConnector::new(never_connector)))
+    }
+}
 
 /// A service where the underlying TCP connection never connects.
 pub type NeverConnected = NeverService<Uri, stream::EmptyStream, BoxError>;

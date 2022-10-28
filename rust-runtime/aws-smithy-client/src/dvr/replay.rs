@@ -16,6 +16,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tokio::task::JoinHandle;
+use crate::erase::DynConnector;
+use crate::http_connector::HttpConnector;
 
 /// Wrapper type to enable optionally waiting for a future to complete
 #[derive(Debug)]
@@ -156,6 +158,12 @@ impl ReplayingConnection {
     }
 }
 
+impl From<ReplayingConnection> for HttpConnector {
+    fn from(replaying_connection: ReplayingConnection) -> Self {
+        HttpConnector::Prebuilt(Some(DynConnector::new(replaying_connection)))
+    }
+}
+
 async fn replay_body(events: VecDeque<Event>, mut sender: hyper::body::Sender) {
     for event in events {
         match event.action {
@@ -212,7 +220,7 @@ impl tower::Service<http::Request<SdkBody>> for ReplayingConnection {
 
     #[allow(clippy::type_complexity)]
     type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>,
+        Box<dyn std::future::Future<Output=Result<Self::Response, Self::Error>> + Send + 'static>,
     >;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -227,7 +235,7 @@ impl tower::Service<http::Request<SdkBody>> for ReplayingConnection {
                 return Box::pin(std::future::ready(Err(ConnectorError::other(
                     format!("no data for event {}. req: {:?}", event_id.0, req).into(),
                     None,
-                ))))
+                ))));
             }
         };
 
