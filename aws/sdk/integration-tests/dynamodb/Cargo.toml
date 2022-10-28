@@ -17,8 +17,7 @@ aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1.0.0"
-# TODO(https://github.com/awslabs/smithy-rs/issues/1044) v3.6 has an unmaintained dependency, upgrade this when possible
-criterion = { version = "0.3.6" }
+criterion = { version = "0.4.0" }
 futures-util = "0.3.16"
 http = "0.2.0"
 serde_json = "1.0.0"
