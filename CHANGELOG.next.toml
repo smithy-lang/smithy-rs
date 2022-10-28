@@ -55,7 +55,7 @@ author = "rcoh"
 
 [[smithy-rs]]
 message = """
-Operation metadata is now added to the property bag during `make_operation` allowing middlewares to behave
+Operation metadata is now added to the property bag before sending requests allowing middlewares to behave
 differently depending on the operation being sent.
 """
 references = ["smithy-rs#1919"]

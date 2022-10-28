@@ -71,7 +71,8 @@ open class MakeOperationGenerator(
     ) {
         val operationName = symbolProvider.toSymbol(shape).name
         val baseReturnType = buildOperationType(implBlockWriter, shape, customizations)
-        val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+        val returnType =
+            "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
         val outputSymbol = symbolProvider.toSymbol(shape)
 
         val takesOwnership = bodyGenerator.payloadMetadata(shape).takesOwnership
@@ -82,8 +83,10 @@ open class MakeOperationGenerator(
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         Attribute.AllowUnusedMut.render(implBlockWriter) // For codegen simplicity
-        Attribute.Custom("allow(clippy::let_and_return)").render(implBlockWriter) // For codegen simplicity, allow `let x = ...; x`
-        Attribute.Custom("allow(clippy::needless_borrow)").render(implBlockWriter) // Allows builders that don’t consume the input borrow
+        Attribute.Custom("allow(clippy::let_and_return)")
+            .render(implBlockWriter) // For codegen simplicity, allow `let x = ...; x`
+        Attribute.Custom("allow(clippy::needless_borrow)")
+            .render(implBlockWriter) // Allows builders that don’t consume the input borrow
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope,
@@ -127,9 +130,8 @@ open class MakeOperationGenerator(
             writeCustomizations(customizations, OperationSection.MutateRequest(customizations, "request", "_config"))
             rustTemplate(
                 """
-                let metadata = #{operation}::Metadata::new(${operationName.dq()}, ${sdkId.dq()});
-                request.properties_mut().insert(metadata.clone());
-                let op = #{operation}::Operation::new(request, #{OperationType}::new()).with_metadata(metadata);
+                let op = #{operation}::Operation::new(request, #{OperationType}::new())
+                    .with_metadata(#{operation}::Metadata::new(${operationName.dq()}, ${sdkId.dq()}));
                 """,
                 *codegenScope,
                 "OperationType" to symbolProvider.toSymbol(shape),
