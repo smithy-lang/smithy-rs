@@ -3,18 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::{
-    Credentials, Region,
-    Client,
-};
+use aws_http::user_agent::AwsUserAgent;
+use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
-use http::Uri;
-use aws_types::SdkConfig;
 use aws_types::credentials::SharedCredentialsProvider;
-use std::time::{Duration, UNIX_EPOCH};
-use aws_http::user_agent::AwsUserAgent;
+use aws_types::SdkConfig;
+use http::Uri;
 use std::convert::Infallible;
+use std::time::{Duration, UNIX_EPOCH};
 
 static INIT_LOGGER: std::sync::Once = std::sync::Once::new();
 
@@ -75,13 +72,18 @@ async fn test_http_connector_is_settable_in_config() {
         .await
         .unwrap();
 
-    let res = op.map_operation(|mut op| {
-        op.properties_mut()
-            .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
-        op.properties_mut().insert(AwsUserAgent::for_tests());
+    let res = op
+        .map_operation(|mut op| {
+            op.properties_mut()
+                .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
+            op.properties_mut().insert(AwsUserAgent::for_tests());
 
-        Result::<_, Infallible>::Ok(op)
-    }).unwrap().send().await.unwrap();
+            Result::<_, Infallible>::Ok(op)
+        })
+        .unwrap()
+        .send()
+        .await
+        .unwrap();
 
     conn.assert_requests_match(&[http::header::HeaderName::from_static("x-amz-checksum-mode")]);
     let body = String::from_utf8(res.body.collect().await.unwrap().to_vec()).unwrap();
