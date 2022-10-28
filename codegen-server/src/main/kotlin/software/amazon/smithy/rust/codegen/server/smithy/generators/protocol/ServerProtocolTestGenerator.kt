@@ -480,21 +480,25 @@ class ServerProtocolTestGenerator(
     ) {
         val (_, outputT) = operationInputOutputTypes[operationShape]!!
 
-        // Use the `OperationRegistryBuilder`
-        with(testCase.request) {
-            // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-            renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+        rust("// Use the `OperationRegistryBuilder`")
+        rustBlock("") {
+            with(testCase.request) {
+                // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
+                renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+            }
+            makeRequest(operationShape, this, writable("todo!() as $outputT"))
+            checkResponse(this, testCase.response)
         }
-        makeRequest(operationShape, this, writable("todo!() as $outputT"))
 
-        // Use new service builder
-        with(testCase.request) {
-            // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-            renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+        rust("// Use new service builder")
+        rustBlock("") {
+            with(testCase.request) {
+                // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
+                renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+            }
+            makeRequest2(operationShape, operationSymbol, this, writable("todo!() as $outputT"))
+            checkResponse(this, testCase.response)
         }
-        makeRequest2(operationShape, operationSymbol, this, writable("todo!() as $outputT"))
-
-        checkResponse(this, testCase.response)
     }
 
     private fun RustWriter.renderHttpRequest(
