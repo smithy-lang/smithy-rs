@@ -18,11 +18,12 @@ use aws_smithy_http_server::{
 };
 use futures::{future::BoxFuture, TryFutureExt};
 use http::{Request, Response};
+use pyo3::Python;
 use pyo3_asyncio::TaskLocals;
 use tower::{util::BoxService, Layer, Service, ServiceExt};
 
 use super::PyMiddlewareHandler;
-use crate::PyMiddlewareException;
+use crate::{util::error::rich_py_err, PyMiddlewareException};
 
 /// Tower [Layer] implementation of Python middleware handling.
 ///
@@ -120,7 +121,7 @@ where
             handler
                 .call(req, next, locals)
                 .or_else(move |err| async move {
-                    tracing::error!(err = %err, handler_name, "middleware failed");
+                    tracing::error!(error = ?rich_py_err(Python::with_gil(|py| err.clone_ref(py))), handler_name, "middleware failed");
                     let response = (into_response)(err.into());
                     Ok(response)
                 }),

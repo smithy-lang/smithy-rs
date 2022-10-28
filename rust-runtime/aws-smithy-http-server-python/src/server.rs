@@ -17,7 +17,10 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::{util::BoxCloneService, ServiceBuilder};
 
-use crate::{util::func_metadata, PySocket};
+use crate::{
+    util::{error::rich_py_err, func_metadata},
+    PySocket,
+};
 
 /// A Python handler function representation.
 ///
@@ -88,12 +91,12 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                 match worker.call_method0(py, "terminate") {
                     Ok(_) => {}
                     Err(e) => {
-                        tracing::error!(err = %e, idx, pid, "error terminating worker");
+                        tracing::error!(error = ?rich_py_err(e), idx, pid, "error terminating worker");
                         worker
                             .call_method0(py, "kill")
                             .map_err(|e| {
                                 tracing::error!(
-                                    err = %e, idx, pid, "unable to kill kill worker"
+                                    error = ?rich_py_err(e), idx, pid, "unable to kill kill worker"
                                 );
                             })
                             .unwrap();
@@ -119,7 +122,7 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
                 worker
                     .call_method0(py, "kill")
                     .map_err(|e| {
-                        tracing::error!(err = %e, idx, pid, "unable to kill kill worker");
+                        tracing::error!(error = ?rich_py_err(e), idx, pid, "unable to kill kill worker");
                     })
                     .unwrap();
             });
@@ -249,7 +252,7 @@ event_loop.add_signal_handler(signal.SIGINT,
                 tracing::trace!("started hyper server from shared socket");
                 // Run forever-ish...
                 if let Err(err) = server.await {
-                    tracing::error!(err = %err, "server error");
+                    tracing::error!(error = ?err, "server error");
                 }
             });
         });

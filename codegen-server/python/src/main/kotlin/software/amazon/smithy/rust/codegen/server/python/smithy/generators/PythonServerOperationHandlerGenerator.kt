@@ -132,15 +132,9 @@ class PythonServerOperationHandlerGenerator(
                 """
                 // Catch and record a Python traceback.
                 result.map_err(|e| {
-                    let traceback = #{pyo3}::Python::with_gil(|py| {
-                        match e.traceback(py) {
-                            Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
-                            None => "Unknown traceback\n".to_string()
-                        }
-                    });
-                    let error = e.into();
-                    #{tracing}::error!("{}{}", traceback, error);
-                    error
+                    let rich_py_err = #{SmithyPython}::rich_py_err(#{pyo3}::Python::with_gil(|py| { e.clone_ref(py) }));
+                    #{tracing}::error!(error = ?rich_py_err, "handler error");
+                    e.into()
                 })
                 """,
                 *codegenScope,

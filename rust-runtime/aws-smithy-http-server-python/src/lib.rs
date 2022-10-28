@@ -17,7 +17,7 @@ pub mod middleware;
 mod server;
 mod socket;
 pub mod types;
-pub(crate) mod util;
+mod util;
 
 #[doc(inline)]
 pub use error::{PyError, PyMiddlewareException};
@@ -29,6 +29,8 @@ pub use middleware::{PyMiddlewareHandler, PyMiddlewareLayer, PyRequest, PyRespon
 pub use server::{PyApp, PyHandler};
 #[doc(inline)]
 pub use socket::PySocket;
+#[doc(inline)]
+pub use util::error::rich_py_err;
 
 #[cfg(test)]
 mod tests {

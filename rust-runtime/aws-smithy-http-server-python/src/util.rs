@@ -4,6 +4,7 @@
  */
 
 pub mod collection;
+pub mod error;
 
 use pyo3::prelude::*;
 
