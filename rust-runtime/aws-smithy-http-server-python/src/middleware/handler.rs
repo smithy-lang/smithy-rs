@@ -18,7 +18,7 @@ use super::{PyMiddlewareError, PyRequest, PyResponse};
 // PyNextInner represents the inner service Tower layer applied to.
 type PyNextInner = BoxService<Request<Body>, Response<BoxBody>, BoxError>;
 
-// PyNext wraps inner Tower service and makes it calleble from Python.
+// PyNext wraps inner Tower service and makes it callable from Python.
 #[pyo3::pyclass]
 struct PyNext(Option<PyNextInner>);
 
@@ -38,11 +38,11 @@ impl PyNext {
 #[pyo3::pymethods]
 impl PyNext {
     // Calls the inner Tower service with the `Request` that is passed from Python.
-    // It returns a coroutine to be awaited on the Python to complete the call.
+    // It returns a coroutine to be awaited on the Python side to complete the call.
     // Note that it takes wrapped objects from both `PyRequest` and `PyNext`,
     // so after calling `next`, consumer can't access to the `Request` or
     // can't call the `next` again, this basically emulates consuming `self` and `Request`,
-    // but since we are crossing Python boundary we can't express it in natural Rust terms.
+    // but since we are crossing the Python boundary we can't express it in natural Rust terms.
     //
     // Naming the method `__call__` allows `next` to be called like `next(...)`.
     fn __call__<'p>(&'p mut self, py: Python<'p>, py_req: Py<PyRequest>) -> PyResult<&'p PyAny> {
