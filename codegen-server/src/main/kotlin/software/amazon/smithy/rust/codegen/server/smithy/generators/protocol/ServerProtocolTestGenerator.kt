@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -200,12 +201,10 @@ class ServerProtocolTestGenerator(
                         #{RegistryBuilderMethods:W}
                 }
 
-                /// The operation full name is a concatenation of `<operation namespace>.<operation name>`.
                 pub(crate) async fn build_router_and_make_request(
                     http_request: #{Http}::request::Request<#{SmithyHttpServer}::body::Body>,
-                    operation_full_name: &str,
                     f: &dyn Fn(RegistryBuilder) -> RegistryBuilder,
-                ) {
+                ) -> #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody> {
                     let mut router: #{Router} = f(create_operation_registry_builder())
                         .build()
                         .expect("unable to build operation registry")
@@ -214,6 +213,12 @@ class ServerProtocolTestGenerator(
                         .call(http_request)
                         .await
                         .expect("unable to make an HTTP request");
+
+                    http_response
+                }
+
+                /// The operation full name is a concatenation of `<operation namespace>.<operation name>`.
+                pub(crate) fn check_operation_extension_was_set(http_response: #{Http}::response::Response<#{SmithyHttpServer}::body::BoxBody>, operation_full_name: &str) {
                     let operation_extension = http_response.extensions()
                         .get::<#{SmithyHttpServer}::extension::OperationExtension>()
                         .expect("extension `OperationExtension` not found");
@@ -284,6 +289,7 @@ class ServerProtocolTestGenerator(
 
                     is TestCase.MalformedRequestTest -> this.renderHttpMalformedRequestTestCase(
                         it.testCase,
+                        operationShape,
                         operationSymbol,
                     )
                 }
@@ -388,7 +394,8 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
-            checkRequest(operationShape, operationSymbol, httpRequestTestCase, this)
+            makeRequest(operationShape, this, checkRequestHandler(operationShape, httpRequestTestCase))
+            checkHandlerWasEntered(operationShape, operationSymbol, this)
         }
 
         // Test against new service builder.
@@ -396,7 +403,8 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
-            checkRequest2(operationShape, operationSymbol, httpRequestTestCase, this)
+            makeRequest2(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
+            checkHandlerWasEntered2(this)
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -467,24 +475,30 @@ class ServerProtocolTestGenerator(
      */
     private fun RustWriter.renderHttpMalformedRequestTestCase(
         testCase: HttpMalformedRequestTestCase,
+        operationShape: OperationShape,
         operationSymbol: Symbol,
     ) {
-        with(testCase.request) {
-            // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-            renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+        val (_, outputT) = operationInputOutputTypes[operationShape]!!
+
+        rust("// Use the `OperationRegistryBuilder`")
+        rustBlock("") {
+            with(testCase.request) {
+                // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
+                renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+            }
+            makeRequest(operationShape, this, writable("todo!() as $outputT"))
+            checkResponse(this, testCase.response)
         }
 
-        val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-        rustTemplate(
-            """
-            let mut http_request = #{SmithyHttpServer}::request::RequestParts::new(http_request);
-            let rejection = super::$operationName::from_request(&mut http_request).await.expect_err("request was accepted but we expected it to be rejected");
-            let http_response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(rejection);
-            """,
-            "Protocol" to protocolGenerator.protocol.markerStruct(),
-            *codegenScope,
-        )
-        checkResponse(this, testCase.response)
+        rust("// Use new service builder")
+        rustBlock("") {
+            with(testCase.request) {
+                // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
+                renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+            }
+            makeRequest2(operationShape, operationSymbol, this, writable("todo!() as $outputT"))
+            checkResponse(this, testCase.response)
+        }
     }
 
     private fun RustWriter.renderHttpRequest(
@@ -563,41 +577,53 @@ class ServerProtocolTestGenerator(
         }
 
     /** Checks the request using the `OperationRegistryBuilder`. */
-    private fun checkRequest(
+    private fun makeRequest(
         operationShape: OperationShape,
-        operationSymbol: Symbol,
-        httpRequestTestCase: HttpRequestTestCase,
         rustWriter: RustWriter,
+        operationBody: Writable,
     ) {
         val (inputT, outputT) = operationInputOutputTypes[operationShape]!!
 
-        rustWriter.withBlock(
+        rustWriter.withBlockTemplate(
             """
-            super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
+            let http_response = super::$PROTOCOL_TEST_HELPER_MODULE_NAME::build_router_and_make_request(
                 http_request,
-                "${operationShape.id.namespace}.${operationSymbol.name}",
                 &|builder| {
                     builder.${operationShape.toName()}((|input| Box::pin(async move {
             """,
 
             "})) as super::$PROTOCOL_TEST_HELPER_MODULE_NAME::Fun<$inputT, $outputT>)}).await;",
-
+            *codegenScope,
         ) {
-            checkRequestHandler(operationShape, httpRequestTestCase)()
+            operationBody()
         }
     }
 
-    /** Checks the request using the new service builder. */
-    private fun checkRequest2(
+    private fun checkHandlerWasEntered(
         operationShape: OperationShape,
         operationSymbol: Symbol,
-        httpRequestTestCase: HttpRequestTestCase,
         rustWriter: RustWriter,
+    ) {
+        val operationFullName = "${operationShape.id.namespace}.${operationSymbol.name}"
+        rustWriter.rust(
+            """
+            super::$PROTOCOL_TEST_HELPER_MODULE_NAME::check_operation_extension_was_set(http_response, "$operationFullName");
+            """,
+        )
+    }
+
+    /** Checks the request using the new service builder. */
+    private fun makeRequest2(
+        operationShape: OperationShape,
+        operationSymbol: Symbol,
+        rustWriter: RustWriter,
+        body: Writable,
     ) {
         val (inputT, _) = operationInputOutputTypes[operationShape]!!
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
         rustWriter.rustTemplate(
             """
+            ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let service = crate::service::$serviceName::unchecked_builder()
                 .$operationName(move |input: $inputT| {
@@ -612,10 +638,17 @@ class ServerProtocolTestGenerator(
             let http_response = #{Tower}::ServiceExt::oneshot(service, http_request)
                 .await
                 .expect("unable to make an HTTP request");
-            assert!(receiver.recv().await.is_some())
             """,
-            "Body" to checkRequestHandler(operationShape, httpRequestTestCase),
+            "Body" to body,
             *codegenScope,
+        )
+    }
+
+    private fun checkHandlerWasEntered2(rustWriter: RustWriter) {
+        rustWriter.rust(
+            """
+            assert!(receiver.recv().await.is_some());
+            """,
         )
     }
 
@@ -842,7 +875,7 @@ class ServerProtocolTestGenerator(
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
         rustWriter.rust("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
-        rustWriter.rust(");")
+        rustWriter.write(");")
     }
 
     private fun strSlice(writer: RustWriter, args: List<String>) {
@@ -872,31 +905,50 @@ class ServerProtocolTestGenerator(
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>(
-            // Headers.
+            // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
+            FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedMapNullKey", TestType.MalformedRequest),
+
+            // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
 
-            FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", TestType.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
+
+            // See https://github.com/awslabs/smithy/issues/1098 for context.
             FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
 
+            // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
+            FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
+            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
+
+            // Work in progress PR, see https://github.com/awslabs/smithy-rs/pull/1294.
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
             FailingTest(
                 RestJson,
                 "RestJsonHeaderMalformedStringInvalidBase64MediaType_case1",
                 TestType.MalformedRequest,
             ),
-            FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
+
+            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
+
+            // Deprioritized, sets don't exist in Smithy 2.0.
+            // They have the exact same semantics as list shapes with `@uniqueItems`,
+            // so we could implement them as such once we've added support for constraint traits.
+            //
+            // See https://github.com/awslabs/smithy/issues/1266#issuecomment-1169543051.
+            // See https://awslabs.github.io/smithy/2.0/guides/migrating-idl-1-to-2.html#convert-set-shapes-to-list-shapes.
+            FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedSetDuplicateBlobs", TestType.MalformedRequest),
 
+            FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
+
+            // Tests involving constraint traits, which are not yet implemented.
+            // See https://github.com/awslabs/smithy-rs/pull/1342.
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
