@@ -905,6 +905,10 @@ class ServerProtocolTestGenerator(
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>(
+            // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
+            FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedMapNullKey", TestType.MalformedRequest),
+
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
 
