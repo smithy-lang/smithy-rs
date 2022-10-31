@@ -145,7 +145,7 @@ app.context(Context())
 # Next is either the next middleware in the stack or the handler.
 Next = Callable[[Request], Awaitable[Response]]
 
-# This middleware checks the `Conten-Type` from the request header,
+# This middleware checks the `Content-Type` from the request header,
 # logs some information depending on that and then calls `next`.
 @app.middleware
 async def check_content_type_header(request: Request, next: Next) -> Response:
