@@ -1,3 +1,6 @@
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  SPDX-License-Identifier: Apache-2.0
+
 # NOTE: This is manually created to surpass some mypy errors and it is incomplete,
 #       in future we will autogenerate correct stubs.
 
