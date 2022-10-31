@@ -19,6 +19,7 @@ use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
+use aws_smithy_client::erase::DynConnector;
 
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
@@ -112,6 +113,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
     .unwrap();
     Operation::new(req, TestOperationParser)
         .with_retry_classifier(AwsResponseRetryClassifier::new())
+        .with_metadata(operation::Metadata::new("test-op", "test-service"))
 }
 
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -147,4 +149,40 @@ async fn e2e_test() {
     assert_eq!(resp, "Hello!");
 
     conn.assert_requests_match(&[]);
+}
+
+#[tokio::test]
+async fn test_operation_metadata_is_available_to_middlewares() {
+    let conn = TestConnection::new(vec![(
+        http::Request::builder()
+            .header(USER_AGENT, "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
+            .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
+            .header(AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=access_key/20210215/test-region/test-service-signing/aws4_request, SignedHeaders=host;x-amz-date;x-amz-user-agent, Signature=da249491d7fe3da22c2e09cbf910f37aa5b079a3cedceff8403d0b18a7bfab75")
+            .header("x-amz-date", "20210215T184017Z")
+            .uri(Uri::from_static("https://test-service.test-region.amazonaws.com/"))
+            .body(SdkBody::from("request body")).unwrap(),
+        http::Response::builder()
+            .status(200)
+            .body("response body")
+            .unwrap(),
+    )]);
+    let client = aws_smithy_client::Client::builder()
+        .middleware_fn(|req| {
+            let metadata = req
+                .properties()
+                .get::<operation::Metadata>()
+                .cloned()
+                .unwrap();
+
+            assert_eq!("test-op", metadata.name());
+            assert_eq!("test-service", metadata.service());
+
+            req
+        })
+        .connector(DynConnector::new(conn))
+        .build();
+
+    let resp = client.call(test_operation()).await;
+    let resp = resp.expect("successful operation");
+    assert_eq!(resp, "Hello!");
 }
