@@ -14,15 +14,11 @@ use aws_smithy_http_server_python::{
     PyMiddlewareException, PyResponse,
 };
 use http::{Request, Response, StatusCode};
-use lambda_http::Service;
 use pretty_assertions::assert_eq;
-use pyo3::{
-    prelude::*,
-    types::{IntoPyDict, PyDict},
-};
+use pyo3::{prelude::*, types::PyDict};
 use pyo3_asyncio::TaskLocals;
 use tokio_test::assert_ready_ok;
-use tower::{layer::util::Stack, util::BoxCloneService, Layer, ServiceExt};
+use tower::{layer::util::Stack, util::BoxCloneService, Layer, Service, ServiceExt};
 use tower_test::mock;
 
 #[pyo3_asyncio::tokio::test]
@@ -291,14 +287,19 @@ fn task_locals() -> TaskLocals {
 
 fn py_handler(code: &str) -> PyMiddlewareHandler {
     Python::with_gil(|py| {
-        let globals = [
-            (
-                "MiddlewareException",
-                py.get_type::<PyMiddlewareException>(),
-            ),
-            ("Response", py.get_type::<PyResponse>()),
-        ]
-        .into_py_dict(py);
+        // `py.run` under the hood uses `eval` (`PyEval_EvalCode` in C API)
+        // and by default if you pass a `global` object without `__builtins__` key
+        // it inserts `__builtins__` with reference to the `builtins` module
+        // which provides prelude for Python so you can access `print()`, `bytes()`, `len()` etc.
+        // but this is not working for Python 3.7.10 which is the version we are using in our CI
+        // so our tests are failing in CI because there is no `print()`, `bytes()` etc.
+        // in order to fix that we are manually extending `__main__` module to preserve `__builtins__`.
+        let globals = PyModule::import(py, "__main__")?.dict();
+        globals.set_item(
+            "MiddlewareException",
+            py.get_type::<PyMiddlewareException>(),
+        )?;
+        globals.set_item("Response", py.get_type::<PyResponse>())?;
         let locals = PyDict::new(py);
         py.run(code, Some(globals), Some(locals))?;
         let handler = locals
