@@ -54,6 +54,21 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
 author = "rcoh"
 
 [[smithy-rs]]
+message = """
+Operation metadata is now added to the property bag before sending requests allowing middlewares to behave
+differently depending on the operation being sent.
+"""
+references = ["smithy-rs#1919"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Upgrade Smithy to v1.26"
+references = ["smithy-rs#1929"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[smithy-rs]]
 message = "Fix cargo audit issue on chrono."
 references = ["smithy-rs#1907"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
