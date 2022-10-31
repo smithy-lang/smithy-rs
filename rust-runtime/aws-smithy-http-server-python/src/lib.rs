@@ -30,7 +30,7 @@ pub use server::{PyApp, PyHandler};
 #[doc(inline)]
 pub use socket::PySocket;
 #[doc(inline)]
-pub use util::error::rich_py_err;
+pub use util::error::{rich_py_err, RichPyErr};
 
 #[cfg(test)]
 mod tests {
