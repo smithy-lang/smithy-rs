@@ -61,3 +61,9 @@ differently depending on the operation being sent.
 references = ["smithy-rs#1919"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Upgrade Smithy to v1.26"
+references = ["smithy-rs#1929"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all"}
+author = "Velfi"
