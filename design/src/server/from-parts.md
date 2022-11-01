@@ -19,7 +19,7 @@ pub trait FromParts<Protocol>: Sized {
 
 Here [`Parts`](https://docs.rs/http/latest/http/request/struct.Parts.html) is the struct containing all items in a [`http::Request`](https://docs.rs/http/latest/http/request/struct.Request.html) except for the HTTP body.
 
-A prolific example of a `FromParts` implementation the `Extension<T>`:
+A prolific example of a `FromParts` implementation is `Extension<T>`:
 
 ```rust
 /// Generic extension type stored in and extracted from [request extensions].
@@ -66,9 +66,19 @@ async fn handler(input: ModelInput, extension: Extension<SomeStruct>) -> ModelOu
 }
 ```
 
-where `ModelInput` and `ModelOutput` are specified by the Smithy Operation and `SomeStruct` is a struct which has been inserted, by middleware, into the [`http::Request::extensions`](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions). Up to 32 structures implementing `FromParts` can be provided to the handler with the constraint that they _must_ be provided _after_ the `ModelInput`.
+where `ModelInput` and `ModelOutput` are specified by the Smithy Operation and `SomeStruct` is a struct which has been inserted, by middleware, into the [`http::Request::extensions`](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions).
 
-The `FromParts` trait is publicly exported so customers have the ability to define and use their own `FromParts` implementations:
+Up to 32 structures implementing `FromParts` can be provided to the handler with the constraint that they _must_ be provided _after_ the `ModelInput`:
+
+```rust
+async fn handler(input: ModelInput, ext1: Extension<SomeStruct1>, ext2: Extension<SomeStruct2>, other: Other /* : FromParts */, /* ... */) -> ModelOutput {
+    /* ... */
+}
+```
+
+Note that the `parts.extensions.remove::<T>()` in `Extensions::from_parts` will cause multiple `Extension<SomeStruct>` arguments in the handler to fail. The first extraction failure to occur is serialized via the `IntoResponse` trait (notice `type Error: IntoResponse<Protocol>`) and returned.
+
+The `FromParts` trait is public so customers have the ability specify their own implementations:
 
 ```rust
 struct CustomerDefined {
@@ -85,7 +95,7 @@ impl<P> FromParts<P> for CustomerDefined {
     }
 }
 
-async fn handler(input: ModelInput, arg: CustomerDefined, ext: Extension<SomeStruct>) -> ModelOutput {
+async fn handler(input: ModelInput, arg: CustomerDefined) -> ModelOutput {
     /* ... */
 }
 ```
