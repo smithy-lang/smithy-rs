@@ -35,7 +35,7 @@ import java.util.Optional
 /** Models the ways status codes can be bound and sensitive. */
 class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: RuntimeConfig) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
     )
 
     /** Returns the type of the `MakeFmt`. */
@@ -65,7 +65,7 @@ data class GreedyLabel(
 
 /** Models the ways labels can be bound and sensitive. */
 class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedyLabel: GreedyLabel?, runtimeConfig: RuntimeConfig) {
-    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType())
+    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType())
 
     /** Returns the closure used during construction. */
     fun closure(): Writable = writable {
@@ -117,7 +117,7 @@ sealed class HeaderSensitivity(
     runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
     )
 
@@ -219,7 +219,7 @@ sealed class QuerySensitivity(
     val allKeysSensitive: Boolean,
     runtimeConfig: RuntimeConfig,
 ) {
-    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType())
+    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType())
 
     /** The case where the `httpQueryParams` value is not sensitive. */
     class NotSensitiveMapValue(
@@ -307,7 +307,7 @@ class ServerHttpSensitivityGenerator(
     private val runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
     )
 

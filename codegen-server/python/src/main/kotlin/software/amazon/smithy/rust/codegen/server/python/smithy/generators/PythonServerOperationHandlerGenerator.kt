@@ -42,7 +42,7 @@ class PythonServerOperationHandlerGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+            "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),

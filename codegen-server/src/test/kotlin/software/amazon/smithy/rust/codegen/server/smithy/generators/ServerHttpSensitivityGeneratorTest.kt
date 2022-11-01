@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymb
 
 class ServerHttpSensitivityGeneratorTest {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(TestRuntimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(TestRuntimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
     )
 

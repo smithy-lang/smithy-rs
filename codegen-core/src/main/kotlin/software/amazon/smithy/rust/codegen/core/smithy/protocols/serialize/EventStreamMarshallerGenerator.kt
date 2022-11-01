@@ -21,7 +21,6 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -30,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyEventStream
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -53,14 +53,13 @@ open class EventStreamMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
 ) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
+        "MarshallMessage" to runtimeConfig.smithyEventStream().member("frame::MarshallMessage"),
+        "Message" to runtimeConfig.smithyEventStream().member("frame::Message"),
+        "Header" to runtimeConfig.smithyEventStream().member("frame::Header"),
+        "HeaderValue" to runtimeConfig.smithyEventStream().member("frame::HeaderValue"),
+        "Error" to runtimeConfig.smithyEventStream().member("error::Error"),
     )
 
     open fun render(): RuntimeType {

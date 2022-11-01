@@ -21,15 +21,16 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyJson
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -156,15 +157,14 @@ class JsonSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val target = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
-    private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val codegenScope = arrayOf(
-        "String" to RuntimeType.String,
-        "Error" to runtimeConfig.serializationError(),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
-        "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
         "ByteSlab" to RuntimeType.ByteSlab,
+        "Error" to runtimeConfig.serializationError(),
+        "JsonObjectWriter" to runtimeConfig.smithyJson().member("serialize::JsonObjectWriter"),
+        "JsonValueWriter" to runtimeConfig.smithyJson().member("serialize::JsonValueWriter"),
+        "Number" to runtimeConfig.smithyTypes().member("Number"),
+        "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
+        "String" to RuntimeType.String,
     )
     private val serializerUtil = SerializerUtil(model)
     private val operationSerModule = RustModule.private("operation_ser")
@@ -368,9 +368,9 @@ class JsonSerializerGenerator(
                     is RustType.Integer -> "NegInt"
                     else -> throw IllegalStateException("unreachable")
                 }
-                rust(
-                    "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number"),
+                rustTemplate(
+                    "$writer.number(##[allow(clippy::useless_conversion)]#{Number}::$numberType((${value.asValue()}).into()));",
+                    *codegenScope,
                 )
             }
             is BlobShape -> rust(

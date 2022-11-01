@@ -60,7 +60,7 @@ class ServerOperationRegistryGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "Phantom" to ServerRuntimeType.Phantom,
@@ -400,6 +400,6 @@ ${operationImplementationStubs(operations)}
         this,
         symbolProvider.toSymbol(this).name,
         serviceName,
-        ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec"),
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).asType().member("routing::request_spec"),
     )
 }

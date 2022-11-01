@@ -26,7 +26,7 @@ object ServerCargoDependency {
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.8.4"), scope = DependencyScope.Dev)
 
-    fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
+    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
 }
 
 /**
@@ -44,7 +44,7 @@ object ServerInlineDependency {
     fun serverOperationHandler(runtimeConfig: RuntimeConfig): InlineDependency =
         InlineDependency.forRustFile(
             "server_operation_handler_trait",
-            ServerCargoDependency.SmithyHttpServer(runtimeConfig),
+            ServerCargoDependency.smithyHttpServer(runtimeConfig),
             CargoDependency.Http,
             ServerCargoDependency.PinProjectLite,
             ServerCargoDependency.Tower,

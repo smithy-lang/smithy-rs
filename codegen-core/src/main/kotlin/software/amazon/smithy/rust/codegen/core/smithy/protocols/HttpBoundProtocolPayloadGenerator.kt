@@ -21,6 +21,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyEventStream
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -55,16 +57,13 @@ class HttpBoundProtocolPayloadGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val target = codegenContext.target
     private val httpBindingResolver = protocol.httpBindingResolver
-
     private val operationSerModule = RustModule.private("operation_ser")
-
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
         "BuildError" to runtimeConfig.operationBuildError(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "SmithyHttp" to runtimeConfig.smithyHttp(),
+        "NoOpSigner" to runtimeConfig.smithyEventStream().member("frame::NoOpSigner"),
     )
 
     override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {
@@ -176,7 +175,7 @@ class HttpBoundProtocolPayloadGenerator(
         val contentType = when (target) {
             CodegenTarget.CLIENT -> httpBindingResolver.requestContentType(operationShape)
             CodegenTarget.SERVER -> httpBindingResolver.responseContentType(operationShape)
-        }
+        } ?: throw CodegenException("event streams must set a content type")
         val errorMarshallerConstructorFn = EventStreamErrorMarshallerGenerator(
             model,
             target,
@@ -184,7 +183,7 @@ class HttpBoundProtocolPayloadGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            contentType ?: throw CodegenException("event streams must set a content type"),
+            contentType,
         ).render()
         val marshallerConstructorFn = EventStreamMarshallerGenerator(
             model,
@@ -193,7 +192,7 @@ class HttpBoundProtocolPayloadGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            contentType ?: throw CodegenException("event streams must set a content type"),
+            contentType,
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the

@@ -22,6 +22,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyAsync
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyClient
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -110,10 +113,9 @@ class PaginatorGenerator private constructor(
         "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
 
         // SDK Types
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType()
-            .copy(name = "result::SdkError"),
-        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
-        "fn_stream" to CargoDependency.SmithyAsync(runtimeConfig).asType().member("future::fn_stream"),
+        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
+        "client" to runtimeConfig.smithyClient(),
+        "fn_stream" to runtimeConfig.smithyAsync().member("future::fn_stream"),
 
         // External Types
         "Stream" to CargoDependency.TokioStream.asType().member("Stream"),

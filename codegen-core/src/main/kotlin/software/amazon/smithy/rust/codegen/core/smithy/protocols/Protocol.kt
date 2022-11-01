@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.Structure
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
 /**
- * Describes a protocol to the [HttpBoundProtocolGenerator].
+ * Describes a protocol to the [software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolGenerator].
  *
  * Each protocol (e.g. RestXml, RestJson, etc.) will provide its own implementation of the [Protocol] interface.
  */

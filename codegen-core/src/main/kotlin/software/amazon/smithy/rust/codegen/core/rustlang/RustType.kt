@@ -23,13 +23,11 @@ fun autoDeref(input: String) = if (input.startsWith("&")) {
  * A hierarchy of types handled by Smithy codegen
  */
 sealed class RustType {
-
-    // TODO(kotlin): when Kotlin supports, sealed interfaces, seal Container
     /**
      * A Rust type that contains [member], another RustType. Used to generically operate over
      * shapes that contain other shapes, e.g. [stripOuter] and [contains].
      */
-    interface Container {
+    sealed interface Container {
         val member: RustType
         val namespace: kotlin.String?
         val name: kotlin.String

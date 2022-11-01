@@ -25,7 +25,7 @@ class ServerOperationGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to
-                ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         )
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model

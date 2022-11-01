@@ -84,7 +84,7 @@ class ServerAwsJsonProtocol(
 ) : AwsJson(codegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
     )
     private val symbolProvider = codegenContext.symbolProvider
     private val service = codegenContext.serviceShape
@@ -107,7 +107,7 @@ class ServerAwsJsonProtocol(
         }
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
+    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::proto::aws_json::router")
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
         val allOperationShapes = allOperations(codegenContext)
@@ -158,7 +158,7 @@ class ServerAwsJsonProtocol(
     }
 }
 
-private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::rest::router")
+private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::proto::rest::router")
 
 private fun restRouterConstruction(
     protocol: ServerProtocol,
@@ -178,7 +178,7 @@ private fun restRouterConstruction(
                 operationShape,
                 operationName,
                 serviceName,
-                ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType().member("routing::request_spec"),
+                ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).asType().member("routing::request_spec"),
             )
             rustTemplate(
                 """
@@ -189,7 +189,7 @@ private fun restRouterConstruction(
                 """,
                 "Key" to key,
                 "OperationValue" to operationValue,
-                "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
+                "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).asType(),
             )
         }
     }

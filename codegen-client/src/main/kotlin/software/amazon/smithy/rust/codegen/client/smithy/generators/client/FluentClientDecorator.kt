@@ -82,7 +82,7 @@ abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSec
 
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
+    private val clientDep = CargoDependency.smithyClient(codegenContext.runtimeConfig)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {

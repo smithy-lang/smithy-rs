@@ -31,16 +31,16 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.StreamingTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyJson
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -119,10 +119,12 @@ open class Instantiator(
                 is StringNode -> {
                     val numberSymbol = symbolProvider.toSymbol(shape)
                     // support Smithy custom values, such as Infinity
-                    writer.rust(
-                        """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
-                        numberSymbol,
-                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
+                    writer.rustTemplate(
+                        """
+                        <#{Number} as #{Parse}>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")
+                        """,
+                        "Number" to numberSymbol,
+                        "Parse" to runtimeConfig.smithyTypes().member("primitive::Parse"),
                     )
                 }
 
@@ -131,15 +133,14 @@ open class Instantiator(
 
             is BooleanShape -> writer.rust(data.asBooleanNode().get().toString())
             is DocumentShape -> writer.rustBlock("") {
-                val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
                 rustTemplate(
                     """
                     let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
                     let mut tokens = #{json_token_iter}(json_bytes).peekable();
                     #{expect_document}(&mut tokens).expect("well formed json")
                     """,
-                    "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-                    "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
+                    "expect_document" to runtimeConfig.smithyJson().member("deserialize::token::expect_document"),
+                    "json_token_iter" to runtimeConfig.smithyJson().member("deserialize::json_token_iter"),
                 )
             }
 

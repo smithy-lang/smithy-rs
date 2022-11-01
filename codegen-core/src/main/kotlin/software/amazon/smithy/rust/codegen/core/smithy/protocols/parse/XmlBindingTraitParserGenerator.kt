@@ -25,17 +25,17 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -85,7 +85,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     /**
-     * Codegeneration Context
+     * Code generation Context
      *
      * [tag]: The symbol name of the current tag
      * [accum]: Flattened lists and maps need to be written into an accumulator. When a flattened list / map
@@ -96,21 +96,16 @@ class XmlBindingTraitParserGenerator(
     data class Ctx(val tag: String, val accum: String?)
 
     private val symbolProvider = codegenContext.symbolProvider
-    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).asType()
-    private val xmlError = smithyXml.member("decode::XmlError")
-
-    private val scopedDecoder = smithyXml.member("decode::ScopedDecoder")
     private val runtimeConfig = codegenContext.runtimeConfig
-
-    // The symbols we want all the time
+    private val xmlError = runtimeConfig.smithyXml().member("decode::XmlError")
     private val codegenScope = arrayOf(
         "Blob" to RuntimeType.Blob(runtimeConfig),
-        "Document" to smithyXml.member("decode::Document"),
+        "Document" to runtimeConfig.smithyXml().member("decode::Document"),
         "XmlError" to xmlError,
-        "next_start_element" to smithyXml.member("decode::next_start_element"),
-        "try_data" to smithyXml.member("decode::try_data"),
-        "ScopedDecoder" to scopedDecoder,
-        "aws_smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType(),
+        "next_start_element" to runtimeConfig.smithyXml().member("decode::next_start_element"),
+        "try_data" to runtimeConfig.smithyXml().member("decode::try_data"),
+        "ScopedDecoder" to runtimeConfig.smithyXml().member("decode::ScopedDecoder"),
+        "aws_smithy_types" to runtimeConfig.smithyTypes(),
     )
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)

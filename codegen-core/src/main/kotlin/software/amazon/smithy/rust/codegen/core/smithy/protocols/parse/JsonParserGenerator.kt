@@ -21,16 +21,15 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyJson
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -64,25 +63,25 @@ class JsonParserGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val target = codegenContext.target
-    private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+    private val smithyJsonDeser = runtimeConfig.smithyJson().member("deserialize")
     private val jsonDeserModule = RustModule.private("json_deser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
-        "Error" to smithyJson.member("deserialize::Error"),
-        "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
-        "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
-        "expect_bool_or_null" to smithyJson.member("deserialize::token::expect_bool_or_null"),
-        "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-        "expect_number_or_null" to smithyJson.member("deserialize::token::expect_number_or_null"),
-        "expect_start_array" to smithyJson.member("deserialize::token::expect_start_array"),
-        "expect_start_object" to smithyJson.member("deserialize::token::expect_start_object"),
-        "expect_string_or_null" to smithyJson.member("deserialize::token::expect_string_or_null"),
-        "expect_timestamp_or_null" to smithyJson.member("deserialize::token::expect_timestamp_or_null"),
-        "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
+        "Error" to smithyJsonDeser.member("Error"),
+        "ErrorReason" to smithyJsonDeser.member("ErrorReason"),
+        "expect_blob_or_null" to smithyJsonDeser.member("token::expect_blob_or_null"),
+        "expect_bool_or_null" to smithyJsonDeser.member("token::expect_bool_or_null"),
+        "expect_document" to smithyJsonDeser.member("token::expect_document"),
+        "expect_number_or_null" to smithyJsonDeser.member("token::expect_number_or_null"),
+        "expect_start_array" to smithyJsonDeser.member("token::expect_start_array"),
+        "expect_start_object" to smithyJsonDeser.member("token::expect_start_object"),
+        "expect_string_or_null" to smithyJsonDeser.member("token::expect_string_or_null"),
+        "expect_timestamp_or_null" to smithyJsonDeser.member("token::expect_timestamp_or_null"),
+        "json_token_iter" to smithyJsonDeser.member("json_token_iter"),
         "Peekable" to RuntimeType.std.member("iter::Peekable"),
-        "skip_value" to smithyJson.member("deserialize::token::skip_value"),
-        "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
-        "Token" to smithyJson.member("deserialize::Token"),
+        "skip_value" to smithyJsonDeser.member("token::skip_value"),
+        "skip_to_end" to smithyJsonDeser.member("token::skip_to_end"),
+        "Token" to smithyJsonDeser.member("Token"),
         "or_empty" to orEmptyJson(),
     )
 

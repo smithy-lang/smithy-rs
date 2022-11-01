@@ -23,17 +23,18 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -62,13 +63,12 @@ class XmlBindingTraitSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
-    private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
     private val target = codegenContext.target
     private val codegenScope =
         arrayOf(
-            "XmlWriter" to smithyXml.member("encode::XmlWriter"),
-            "ElementWriter" to smithyXml.member("encode::ElWriter"),
-            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "XmlWriter" to runtimeConfig.smithyXml().member("encode::XmlWriter"),
+            "ElementWriter" to runtimeConfig.smithyXml().member("encode::ElWriter"),
+            "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
             "Error" to runtimeConfig.serializationError(),
         )
     private val operationSerModule = RustModule.private("operation_ser")
@@ -296,7 +296,7 @@ class XmlBindingTraitSerializerGenerator(
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
-                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder"),
+                    runtimeConfig.smithyTypes().member("primitive::Encoder"),
                 )
             }
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))

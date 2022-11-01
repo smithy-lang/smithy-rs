@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -50,20 +51,23 @@ object AwsRuntimeType {
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "middleware", visibility = Visibility.PUBLIC,
-            CargoDependency.SmithyHttp(this),
-            CargoDependency.SmithyHttpTower(this),
-            CargoDependency.SmithyClient(this),
+            CargoDependency.smithyHttp(this),
+            CargoDependency.smithyHttpTower(this),
+            CargoDependency.smithyClient(this),
             CargoDependency.Tower,
-            awsHttp(),
-            awsEndpoint(),
+            awsRuntimeCrate("aws-http"),
+            awsRuntimeCrate("aws-endpoint"),
         ),
     ).member("DefaultMiddleware")
 }
 
-fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
+fun RuntimeConfig.awsRuntimeCrate(name: String, features: Set<String> = setOf()): CargoDependency =
     CargoDependency(name, awsRoot().crateLocation(null), features = features)
 
-fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
-fun RuntimeConfig.awsTypes(): CargoDependency = awsRuntimeDependency("aws-types")
-fun RuntimeConfig.awsConfig(): CargoDependency = awsRuntimeDependency("aws-config")
-fun RuntimeConfig.awsEndpoint() = awsRuntimeDependency("aws-endpoint")
+fun RuntimeConfig.awsConfig() = awsRuntimeCrate("aws-config").asType()
+fun RuntimeConfig.awsEndpoint() = awsRuntimeCrate("aws-endpoint").asType()
+fun RuntimeConfig.awsHttp() = awsRuntimeCrate("aws-http").asType()
+fun RuntimeConfig.awsSigAuth() = awsRuntimeCrate("aws-sig-auth").asType()
+fun RuntimeConfig.awsSigAuthEventStream() = awsRuntimeCrate("aws-sig-auth", setOf("sign-eventstream")).asType()
+fun RuntimeConfig.awsSigv4() = awsRuntimeCrate("aws-sigv4").asType()
+fun RuntimeConfig.awsTypes() = awsRuntimeCrate("aws-types").asType()

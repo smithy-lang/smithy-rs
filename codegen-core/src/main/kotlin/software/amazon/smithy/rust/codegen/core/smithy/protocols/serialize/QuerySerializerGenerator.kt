@@ -21,15 +21,16 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyQuery
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -93,15 +94,13 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private val target = codegenContext.target
     private val serviceShape = codegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
-    private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
     private val serdeUtil = SerializerUtil(model)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "QueryWriter" to smithyQuery.member("QueryWriter"),
-        "QueryValueWriter" to smithyQuery.member("QueryValueWriter"),
+        "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
+        "QueryWriter" to runtimeConfig.smithyQuery().member("QueryWriter"),
+        "QueryValueWriter" to runtimeConfig.smithyQuery().member("QueryValueWriter"),
     )
     private val operationSerModule = RustModule.private("operation_ser")
     private val querySerModule = RustModule.private("query_ser")
@@ -219,7 +218,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number"),
+                    runtimeConfig.smithyTypes().member("Number"),
                 )
             }
             is BlobShape -> rust(

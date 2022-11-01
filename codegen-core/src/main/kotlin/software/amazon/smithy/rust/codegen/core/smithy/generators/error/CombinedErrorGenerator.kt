@@ -249,7 +249,8 @@ class CombinedErrorGenerator(
                     self.meta.code()
                 }
                 """,
-                "generic_error" to genericError, "std_error" to RuntimeType.StdError,
+                "generic_error" to genericError,
+                "std_error" to RuntimeType.StdError,
             )
             errors.forEach { error ->
                 val errorVariantSymbol = symbolProvider.toSymbol(error)

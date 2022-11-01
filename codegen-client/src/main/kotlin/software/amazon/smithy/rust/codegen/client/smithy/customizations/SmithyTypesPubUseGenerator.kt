@@ -7,11 +7,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -59,7 +58,7 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
         listOf(
             PubUseType(RuntimeType.Blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.DateTime(runtimeConfig), ::hasDateTimes),
-        ) + CargoDependency.SmithyHttp(runtimeConfig).asType().let { http ->
+        ) + runtimeConfig.smithyHttp().let { http ->
             listOf(
                 PubUseType(http.member("result::SdkError")) { true },
                 PubUseType(http.member("byte_stream::ByteStream"), ::hasStreamingOperations),

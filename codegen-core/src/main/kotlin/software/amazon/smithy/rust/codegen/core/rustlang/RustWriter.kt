@@ -33,7 +33,7 @@ import java.util.function.BiFunction
 /**
  * # RustWriter (and Friends)
  *
- * RustWriter contains a set of features to make generating Rust code much more ergonomic ontop of the Smithy CodeWriter
+ * RustWriter contains a set of features to make generating Rust code much more ergonomic on top of the Smithy CodeWriter
  * interface.
  *
  * ## Recommended Patterns
@@ -47,7 +47,7 @@ import java.util.function.BiFunction
  * writer.rustTemplate("""
  *  // regular types can be rendered directly
  *  let request = #{http}::Request::builder().uri("http://example.com");
- *  // writeables can be rendered with `:W`
+ *  // writables can be rendered with `:W`
  *  let request_headers = #{request_headers:W};
  * """, *codegenScope, "request_headers" to requestHeaders())
  * ```
@@ -141,7 +141,7 @@ fun <T : AbstractCodeWriter<T>> T.rust(
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
-    val output = template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
+    val output = template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
         val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
         if (!scope.toMap().keys.contains(keyName)) {
@@ -158,7 +158,7 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
 }
 
 /**
- * Sibling method to [rustBlock] that enables `#{variablename}` style templating
+ * Sibling method to [rustBlock] that enables `#{variable_name}` style templating
  */
 fun <T : AbstractCodeWriter<T>> T.rustBlockTemplate(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
@@ -333,7 +333,7 @@ private fun Element.changeInto(tagName: String) {
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
-fun RustWriter.raw(text: String) = writeInline(escape(text))
+fun RustWriter.raw(text: String): RustWriter = writeInline(escape(text))
 
 /**
  * Rustdoc doesn't support `r#` for raw identifiers.
@@ -504,10 +504,10 @@ class RustWriter private constructor(
 
     override fun toString(): String {
         val contents = super.toString()
-        val preheader = if (preamble.isNotEmpty()) {
-            val prewriter = RustWriter(filename, namespace, printWarning = false)
-            preamble.forEach { it(prewriter) }
-            prewriter.toString()
+        val preHeader = if (preamble.isNotEmpty()) {
+            val preWriter = RustWriter(filename, namespace, printWarning = false)
+            preamble.forEach { it(preWriter) }
+            preWriter.toString()
         } else null
 
         // Hack to support TOML: the [commentCharacter] is overridden to support writing TOML.
@@ -517,7 +517,7 @@ class RustWriter private constructor(
         val useDecls = importContainer.toString().ifEmpty {
             null
         }
-        return listOfNotNull(preheader, header, useDecls, contents).joinToString(separator = "\n", postfix = "\n")
+        return listOfNotNull(preHeader, header, useDecls, contents).joinToString(separator = "\n", postfix = "\n")
     }
 
     fun format(r: Any) = formatter.apply(r, "")

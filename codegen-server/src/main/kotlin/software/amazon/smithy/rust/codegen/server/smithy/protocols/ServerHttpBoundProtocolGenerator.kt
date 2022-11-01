@@ -37,6 +37,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyJson
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -131,7 +135,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.asType(),
         "HttpBody" to CargoDependency.HttpBody.asType(),
-        "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
+        "header_util" to runtimeConfig.smithyHttp().member("header"),
         "Hyper" to CargoDependency.Hyper.asType(),
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
         "Mime" to ServerCargoDependency.Mime.asType(),
@@ -139,8 +143,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "OnceCell" to ServerCargoDependency.OnceCell.asType(),
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttp" to runtimeConfig.smithyHttp(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
@@ -965,7 +969,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     "let mut query_params: #{HashMap}<String, " +
                         "${queryParamsBinding.queryParamsBindingTargetMapValueType().asRustType().render()}> = #{HashMap}::new();",
-                    "HashMap" to software.amazon.smithy.rust.codegen.core.rustlang.RustType.HashMap.RuntimeType,
+                    "HashMap" to RustType.HashMap.RuntimeType,
                 )
             }
             val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
@@ -1033,7 +1037,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                     """
                                     let v = <_ as #T>::parse_smithy_primitive(&v)?;
                                     """.trimIndent(),
-                                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
+                                    runtimeConfig.smithyTypes().member("primitive::Parse"),
                                 )
                             }
                         }
@@ -1215,10 +1219,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
         when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                return CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
+                return runtimeConfig.smithyJson().member("deserialize").member("Error")
             }
             RestXmlTrait.ID -> {
-                return CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlError")
+                return runtimeConfig.smithyXml().member("decode").member("XmlError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

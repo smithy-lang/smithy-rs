@@ -54,12 +54,12 @@ open class StructureGenerator(
 ) {
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
-    protected val accessorMembers: List<MemberShape> = when (errorTrait) {
+    private val accessorMembers: List<MemberShape> = when (errorTrait) {
         null -> members
         // Let the ErrorGenerator render the error message accessor if this is an error struct
         else -> members.filter { "message" != symbolProvider.toMemberName(it) }
     }
-    protected val name = symbolProvider.toSymbol(shape).name
+    protected val name: String = symbolProvider.toSymbol(shape).name
 
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()

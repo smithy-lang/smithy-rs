@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -59,7 +60,7 @@ class ProtocolTestGenerator(
     private val writer: RustWriter,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
-
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val inputShape = operationShape.inputShape(codegenContext.model)
     private val outputShape = operationShape.outputShape(codegenContext.model)
     private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
@@ -68,7 +69,7 @@ class ProtocolTestGenerator(
     private val instantiator = clientInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
-        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
+        "SmithyHttp" to runtimeConfig.smithyHttp(),
         "Http" to CargoDependency.Http.asType(),
         "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
     )
@@ -138,12 +139,12 @@ class ProtocolTestGenerator(
         testModuleWriter: RustWriter,
         block: Writable,
     ) {
-        testModuleWriter.setNewlinePrefix("/// ")
+        testModuleWriter.newlinePrefix = "/// "
         testCase.documentation.map {
             testModuleWriter.writeWithNoFormatting(it)
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
-        testModuleWriter.setNewlinePrefix("")
+        testModuleWriter.newlinePrefix = ""
         TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
@@ -283,7 +284,7 @@ class ProtocolTestGenerator(
             """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
-            "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
+            "parse_http_response" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).asType()
                 .member("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {

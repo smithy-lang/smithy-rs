@@ -28,18 +28,17 @@ class RestRequestSpecGenerator(
 ) {
     fun generate(operationShape: OperationShape): Writable {
         val httpTrait = httpBindingResolver.httpTrait(operationShape)
-        val extraCodegenScope =
-            arrayOf(
-                "RequestSpec",
-                "UriSpec",
-                "PathAndQuerySpec",
-                "PathSpec",
-                "QuerySpec",
-                "PathSegment",
-                "QuerySegment",
-            ).map {
-                it to requestSpecModule.member(it)
-            }.toTypedArray()
+        val codegenScope = arrayOf(
+            "RequestSpec",
+            "UriSpec",
+            "PathAndQuerySpec",
+            "PathSpec",
+            "QuerySpec",
+            "PathSegment",
+            "QuerySegment",
+        ).map {
+            it to requestSpecModule.member(it)
+        }.toTypedArray()
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
         val pathSegmentsVec = writable {
@@ -52,7 +51,7 @@ class RestRequestSpecGenerator(
                     }
                     rustTemplate(
                         "#{PathSegment}::$variant,",
-                        *extraCodegenScope,
+                        *codegenScope,
                     )
                 }
             }
@@ -66,7 +65,7 @@ class RestRequestSpecGenerator(
                     } else {
                         """KeyValue(String::from("${queryLiteral.key}"), String::from("${queryLiteral.value}"))"""
                     }
-                    rustTemplate("#{QuerySegment}::$variant,", *extraCodegenScope)
+                    rustTemplate("#{QuerySegment}::$variant,", *codegenScope)
                 }
             }
         }
@@ -84,7 +83,7 @@ class RestRequestSpecGenerator(
                     ),
                 )
                 """,
-                *extraCodegenScope,
+                *codegenScope,
                 "PathSegmentsVec" to pathSegmentsVec,
                 "QuerySegmentsVec" to querySegmentsVec,
                 "Method" to CargoDependency.Http.asType().member("Method"),

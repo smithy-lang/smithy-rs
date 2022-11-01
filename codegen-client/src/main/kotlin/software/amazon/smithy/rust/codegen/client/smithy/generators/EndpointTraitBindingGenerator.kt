@@ -8,12 +8,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
@@ -24,8 +23,6 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 fun EndpointTrait.prefixFormatString(): String {
     return this.hostPrefix.rustFormatString("", "")
 }
-
-fun RuntimeConfig.smithyHttp() = CargoDependency.SmithyHttp(this).asType()
 
 class EndpointTraitBindings(
     model: Model,
@@ -60,7 +57,7 @@ class EndpointTraitBindings(
         } else {
             val operationBuildError = OperationBuildError(runtimeConfig)
             writer.rustBlock("") {
-                // build a list of args: `labelname = "field"`
+                // build a list of args: `field_name = "field"`
                 // these eventually end up in the format! macro invocation:
                 // ```format!("some.{endpoint}", endpoint = endpoint);```
                 val args = endpointTrait.hostPrefix.labels.map { label ->

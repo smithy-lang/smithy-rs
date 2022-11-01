@@ -33,7 +33,7 @@ class ServerServiceGeneratorV2(
             "Http" to CargoDependency.Http.asType(),
             "HttpBody" to CargoDependency.HttpBody.asType(),
             "SmithyHttpServer" to
-                ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
             "Tower" to CargoDependency.Tower.asType(),
         )
     private val model = codegenContext.model

@@ -88,7 +88,7 @@ data class RuntimeConfig(
             val path = node.getStringMember("relativePath").orNull()?.value
             val runtimeCrateLocation = RuntimeCrateLocation(path = path, versions = crateVersionMap)
             return RuntimeConfig(
-                node.getStringMemberOrDefault("cratePrefix", "aws-smithy"),
+                node.getStringMemberOrDefault("cratePrefix", "aws"),
                 runtimeCrateLocation = runtimeCrateLocation,
             )
         }
@@ -96,7 +96,7 @@ data class RuntimeConfig(
 
     val crateSrcPrefix: String = cratePrefix.replace("-", "_")
 
-    fun runtimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency {
+    fun smithyRuntimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency {
         val crateName = "$cratePrefix-$runtimeCrateName"
         return CargoDependency(
             crateName,
@@ -177,14 +177,14 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
     companion object {
         fun errorKind(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ErrorKind",
-            dependency = CargoDependency.SmithyTypes(runtimeConfig),
-            namespace = "${runtimeConfig.crateSrcPrefix}_types::retry",
+            dependency = CargoDependency.smithyTypes(runtimeConfig),
+            namespace = "${runtimeConfig.crateSrcPrefix}_smithy_types::retry",
         )
 
         fun provideErrorKind(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ProvideErrorKind",
-            dependency = CargoDependency.SmithyTypes(runtimeConfig),
-            namespace = "${runtimeConfig.crateSrcPrefix}_types::retry",
+            dependency = CargoDependency.smithyTypes(runtimeConfig),
+            namespace = "${runtimeConfig.crateSrcPrefix}_smithy_types::retry",
         )
 
         val std = RuntimeType(null, dependency = null, namespace = "std")
@@ -203,38 +203,38 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val String = RuntimeType("String", dependency = null, namespace = "std::string")
 
         fun DateTime(runtimeConfig: RuntimeConfig) =
-            RuntimeType("DateTime", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+            RuntimeType("DateTime", CargoDependency.smithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_types")
 
         fun GenericError(runtimeConfig: RuntimeConfig) =
-            RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+            RuntimeType("Error", CargoDependency.smithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_types")
 
         fun Blob(runtimeConfig: RuntimeConfig) =
-            RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+            RuntimeType("Blob", CargoDependency.smithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_types")
 
         fun ByteStream(runtimeConfig: RuntimeConfig) =
-            RuntimeType("ByteStream", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::byte_stream")
+            RuntimeType("ByteStream", CargoDependency.smithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http::byte_stream")
 
         fun Document(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("Document", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+            RuntimeType("Document", CargoDependency.smithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_types")
 
         fun LabelFormat(runtimeConfig: RuntimeConfig, func: String) =
-            RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::label")
+            RuntimeType(func, CargoDependency.smithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http::label")
 
         fun QueryFormat(runtimeConfig: RuntimeConfig, func: String) =
-            RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::query")
+            RuntimeType(func, CargoDependency.smithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http::query")
 
         fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
                 "encode",
-                CargoDependency.SmithyTypes(runtimeConfig),
-                "${runtimeConfig.crateSrcPrefix}_types::base64",
+                CargoDependency.smithyTypes(runtimeConfig),
+                "${runtimeConfig.crateSrcPrefix}_smithy_types::base64",
             )
 
         fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
                 "decode",
-                CargoDependency.SmithyTypes(runtimeConfig),
-                "${runtimeConfig.crateSrcPrefix}_types::base64",
+                CargoDependency.smithyTypes(runtimeConfig),
+                "${runtimeConfig.crateSrcPrefix}_smithy_types::base64",
             )
 
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
@@ -246,14 +246,14 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             }
             return RuntimeType(
                 timestampFormat,
-                CargoDependency.SmithyTypes(runtimeConfig),
-                "${runtimeConfig.crateSrcPrefix}_types::date_time::Format",
+                CargoDependency.smithyTypes(runtimeConfig),
+                "${runtimeConfig.crateSrcPrefix}_smithy_types::date_time::Format",
             )
         }
 
         fun ProtocolTestHelper(runtimeConfig: RuntimeConfig, func: String): RuntimeType =
             RuntimeType(
-                func, CargoDependency.SmithyProtocolTestHelpers(runtimeConfig), "aws_smithy_protocol_test",
+                func, CargoDependency.smithyProtocolTestHelpers(runtimeConfig), "aws_smithy_protocol_test",
             )
 
         val http = CargoDependency.Http.asType()
@@ -266,7 +266,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
                 "Receiver",
-                dependency = CargoDependency.SmithyHttp(runtimeConfig),
+                dependency = CargoDependency.smithyHttp(runtimeConfig),
                 "aws_smithy_http::event_stream",
             )
 
@@ -278,22 +278,22 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         fun operation(runtimeConfig: RuntimeConfig) = RuntimeType(
             "Operation",
-            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            dependency = CargoDependency.smithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::operation",
         )
 
         fun operationModule(runtimeConfig: RuntimeConfig) = RuntimeType(
             null,
-            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            dependency = CargoDependency.smithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::operation",
         )
 
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType("SdkBody", dependency = CargoDependency.SmithyHttp(runtimeConfig), "aws_smithy_http::body")
+            RuntimeType("SdkBody", dependency = CargoDependency.smithyHttp(runtimeConfig), "aws_smithy_http::body")
 
         fun parseStrictResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseStrictResponse",
-            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            dependency = CargoDependency.smithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response",
         )
 
@@ -310,7 +310,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         fun parseResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseHttpResponse",
-            dependency = CargoDependency.SmithyHttp(runtimeConfig),
+            dependency = CargoDependency.smithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response",
         )
 

@@ -17,7 +17,7 @@ import software.amazon.smithy.model.traits.Trait
  * This trait is synthetic, applied during code generation, and never used in actual models.
  */
 class RustBoxTrait : Trait {
-    val ID = ShapeId.from("software.amazon.smithy.rust.codegen.smithy.rust.synthetic#box")
+    val ID: ShapeId = ShapeId.from("software.amazon.smithy.rust.codegen.smithy.rust.synthetic#box")
     override fun toNode(): Node = Node.objectNode()
 
     override fun toShapeId(): ShapeId = ID

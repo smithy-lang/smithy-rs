@@ -79,7 +79,7 @@ interface RustCodegenDecorator<T, C : CodegenContext> {
  */
 open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<RustCodegenDecorator<T, C>>) :
     RustCodegenDecorator<T, C> {
-    private val orderedDecorators = decorators.sortedBy { it.order }
+    protected val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
     override val order: Byte
