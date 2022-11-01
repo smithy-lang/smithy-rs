@@ -71,7 +71,7 @@ value class CrateVersionMap(
  * Prefix & crate location for the runtime crates.
  */
 data class RuntimeConfig(
-    val cratePrefix: String = "aws-smithy",
+    val cratePrefix: String = "aws",
     val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.Path("../"),
 ) {
     companion object {
