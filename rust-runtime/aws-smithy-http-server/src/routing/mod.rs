@@ -284,6 +284,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod rest_tests {
     use super::*;
     use crate::{
@@ -510,6 +511,7 @@ mod rest_tests {
     }
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod awsjson_tests {
     use super::rest_tests::{get_body_as_string, req};
