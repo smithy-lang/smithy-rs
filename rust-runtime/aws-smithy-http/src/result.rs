@@ -177,6 +177,39 @@ impl<E, R> SdkError<E, R> {
         Self::ServiceError(ServiceError { source, raw })
     }
 
+    /// Returns the underlying service error `E` if there is one
+    ///
+    /// If a service error is not available (for example, the error is a network timeout),
+    /// then the full `SdkError` is returned. This makes it easy to match on the service's
+    /// error response while simultaneously bubbling up transient failures. For example,
+    /// handling the `NoSuchKey` error for S3's `GetObject` operation may look as follows:
+    ///
+    /// ```no_run
+    /// # use aws_smithy_http::result::SdkError;
+    /// # #[derive(Debug)] enum GetObjectErrorKind { NoSuchKey(()), Other(()) }
+    /// # #[derive(Debug)] struct GetObjectError { kind: GetObjectErrorKind }
+    /// # impl std::fmt::Display for GetObjectError {
+    /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { unimplemented!() }
+    /// # }
+    /// # impl std::error::Error for GetObjectError {}
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let sdk_err = SdkError::service_error(GetObjectError { kind: GetObjectErrorKind::NoSuchKey(()) }, ());
+    /// match sdk_err.into_service_error()? {
+    ///     GetObjectError { kind: GetObjectErrorKind::NoSuchKey(_) } => {
+    ///         // handle NoSuchKey
+    ///     }
+    ///     err @ _ => return Err(err.into()),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn into_service_error(self) -> Result<E, Self> {
+        match self {
+            Self::ServiceError(context) => Ok(context.source),
+            _ => Err(self),
+        }
+    }
+
     /// Converts this error into its error source.
     ///
     /// If there is no error source, then `Err(Self)` is returned.
