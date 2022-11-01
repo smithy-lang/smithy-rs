@@ -73,3 +73,9 @@ message = "Fix cargo audit issue on chrono."
 references = ["smithy-rs#1907"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix cargo audit issue on criterion."
+references = ["smithy-rs#1923"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
