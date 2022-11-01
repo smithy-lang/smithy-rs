@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomi
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.rustSettings
+import software.amazon.smithy.rustsdk.decorators.RegionProviderConfig
 
 internal class RegionProviderConfigTest {
     @Test

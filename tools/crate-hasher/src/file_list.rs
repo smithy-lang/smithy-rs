@@ -64,7 +64,7 @@ impl FileList {
                         .to_str()
                         .expect("not using unusual file names in crate source")
                         .into(),
-                    sha256: sha256::digest_file(&path).context("hash file")?,
+                    sha256: sha256::try_digest(path).context("hash file")?,
                 });
             }
         }

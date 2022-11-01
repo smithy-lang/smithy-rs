@@ -21,7 +21,7 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
 
     /** Path to the `sdk-default-configuration.json` config file */
     val defaultsConfigPath: Path? get() =
-        awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value.let { Paths.get(it) }
+        awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value?.let { Paths.get(it) }
 
     /** Path to the `sdk-endpoints.json` configuration */
     val endpointsConfigPath: Path? get() =

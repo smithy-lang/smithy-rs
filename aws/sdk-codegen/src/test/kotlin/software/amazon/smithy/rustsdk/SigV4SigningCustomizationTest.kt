@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.stubConfigProject
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rustsdk.decorators.SigV4SigningConfig
 
 internal class SigV4SigningCustomizationTest {
     @Test

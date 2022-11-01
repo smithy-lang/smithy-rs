@@ -26,13 +26,15 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rustsdk.decorators.EndpointConfigCustomization
+import software.amazon.smithy.rustsdk.decorators.PubUseEndpoint
 
 internal class EndpointConfigCustomizationTest {
-    private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().asType().member("Params")
+    private val runtimeConfig = AwsTestRuntimeConfig
     private val codegenScope = arrayOf(
         "http" to CargoDependency.Http.asType(),
-        "PlaceholderParams" to placeholderEndpointParams,
-        "aws_types" to awsTypes(AwsTestRuntimeConfig).asType(),
+        "PlaceholderParams" to runtimeConfig.awsEndpoint().member("Params"),
+        "Region" to runtimeConfig.awsTypes().member("region::Region"),
     )
 
     private val model = """
@@ -135,16 +137,18 @@ internal class EndpointConfigCustomizationTest {
                 codegenContext: ClientCodegenContext,
                 baseCustomizations: List<ConfigCustomization>,
             ): List<ConfigCustomization> =
-                baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
-                    codegenContext,
-                    endpointConfig,
-                ) + stubConfigCustomization("b")
+                baseCustomizations +
+                    stubConfigCustomization("a") +
+                    EndpointConfigCustomization(codegenContext, endpointConfig) +
+                    stubConfigCustomization("b")
 
             override fun libRsCustomizations(
                 codegenContext: ClientCodegenContext,
                 baseCustomizations: List<LibRsCustomization>,
             ): List<LibRsCustomization> =
-                baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
+                baseCustomizations +
+                    PubUseEndpoint(AwsTestRuntimeConfig) +
+                    AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
 
             override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 if (test != null) {
@@ -180,7 +184,8 @@ internal class EndpointConfigCustomizationTest {
                         """
                         let conf = crate::config::Config::builder().build();
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("fips-ca-central-1")))).expect("default resolver produces a valid endpoint");
+                            .resolve_endpoint(&#{PlaceholderParams}::new(Some(#{Region}::new("fips-ca-central-1"))))
+                            .expect("default resolver produces a valid endpoint");
                         assert_eq!(endpoint.url(), "https://access-analyzer-fips.ca-central-1.amazonaws.com/");
                         """,
                         *codegenScope,
@@ -199,11 +204,13 @@ internal class EndpointConfigCustomizationTest {
                         """
                         let conf = crate::config::Config::builder().build();
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("us-east-1")))).expect("default resolver produces a valid endpoint");
+                            .resolve_endpoint(&#{PlaceholderParams}::new(Some(#{Region}::new("us-east-1"))))
+                            .expect("default resolver produces a valid endpoint");
                         assert_eq!(endpoint.url(), "https://iam.amazonaws.com/");
 
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("iam-fips")))).expect("default resolver produces a valid endpoint");
+                            .resolve_endpoint(&#{PlaceholderParams}::new(Some(#{Region}::new("iam-fips"))))
+                            .expect("default resolver produces a valid endpoint");
                         assert_eq!(endpoint.url(), "https://iam-fips.amazonaws.com/");
                         """,
                         *codegenScope,

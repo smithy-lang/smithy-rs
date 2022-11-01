@@ -5,7 +5,7 @@
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rustsdk.AwsSdkReadmeGenerator
+import software.amazon.smithy.rustsdk.decorators.AwsSdkReadmeGenerator
 
 class AwsReadmeDecoratorTest {
     @Test
