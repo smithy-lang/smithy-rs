@@ -17,6 +17,11 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rustsdk.decorators.AwsPresigningDecorator
+import software.amazon.smithy.rustsdk.decorators.MoveDocumentMembersToQueryParamsTransform
+import software.amazon.smithy.rustsdk.decorators.OverrideHttpMethodTransform
+import software.amazon.smithy.rustsdk.decorators.PayloadSigningType
+import software.amazon.smithy.rustsdk.decorators.PresignableOperation
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 
 class AwsPresigningDecoratorTest {
