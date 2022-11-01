@@ -63,7 +63,7 @@ pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::
 /// [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 #[derive(Debug)]
 #[deprecated(
-    since = "0.52",
+    since = "0.52.0",
     note = "OperationRegistry is part of the deprecated service builder API. This type no longer appears in the public API."
 )]
 pub struct Router<B = Body> {
