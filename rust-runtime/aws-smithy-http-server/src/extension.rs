@@ -185,7 +185,7 @@ impl<Protocol> IntoResponse<Protocol> for MissingExtension {
 
 impl<Protocol, T> FromParts<Protocol> for Extension<T>
 where
-    T: Clone + Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     type Rejection = MissingExtension;
 
