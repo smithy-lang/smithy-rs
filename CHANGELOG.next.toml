@@ -68,6 +68,12 @@ references = ["smithy-rs#1929"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all"}
 author = "Velfi"
 
+[[smithy-rs]]
+message = "Fix cargo audit issue on chrono."
+references = ["smithy-rs#1907"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
 [[aws-sdk-rust]]
 message = "Fix cargo audit issue on criterion."
 references = ["smithy-rs#1923"]
