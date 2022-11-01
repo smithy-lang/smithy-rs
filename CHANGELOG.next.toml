@@ -67,3 +67,9 @@ message = "Upgrade Smithy to v1.26"
 references = ["smithy-rs#1929"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all"}
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Fix cargo audit issue on criterion."
+references = ["smithy-rs#1923"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
