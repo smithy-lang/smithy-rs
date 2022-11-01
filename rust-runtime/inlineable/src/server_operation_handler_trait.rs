@@ -24,6 +24,7 @@ pub struct OperationHandler<H, B, R, I> {
     _marker: PhantomData<(B, R, I)>,
 }
 
+#[allow(deprecated)]
 impl<H, B, R, I> Clone for OperationHandler<H, B, R, I>
 where
     H: Clone,
@@ -37,6 +38,7 @@ where
 }
 
 /// Construct an [`OperationHandler`] out of a function implementing the operation.
+#[allow(deprecated)]
 #[deprecated(
     since = "0.52.0",
     note = "OperationHandler is part of the older service builder API. This type no longer appears in the public API."
@@ -48,6 +50,7 @@ pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
     }
 }
 
+#[allow(deprecated)]
 impl<H, B, R, I> Service<Request<B>> for OperationHandler<H, B, R, I>
 where
     H: Handler<B, R, I>,
