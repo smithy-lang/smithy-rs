@@ -2,7 +2,7 @@
 
 For every [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) an input, output, and optional error are specified. This in turn constrains the function signature of the handler provided to the service builder - the input to the handler must be the input specified by the operation etc.
 
-But what if we, the customer, want to access data in the handler which is _not_ modelled by our Smithy model? Smithy Rust provides an escape hatch in the form of the `FromParts` trait.
+But what if we, the customer, want to access data in the handler which is _not_ modelled by our Smithy model? Smithy Rust provides an escape hatch in the form of the `FromParts` trait. In [`axum`](https://docs.rs/axum/latest/axum/index.html) these are referred to as ["extractors"](https://docs.rs/axum/latest/axum/extract/index.html).
 
 <!-- TODO(IntoParts): Dually, what if we want to return data from the handler which is _not_ modelled by our Smithy model? -->
 
