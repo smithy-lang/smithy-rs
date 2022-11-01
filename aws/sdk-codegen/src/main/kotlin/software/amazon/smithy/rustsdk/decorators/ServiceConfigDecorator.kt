@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 
 class ServiceConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "ServiceConfigGenerator"
+    override val name: String = "ServiceConfig"
     override val order: Byte = 0
 
     override fun configCustomizations(

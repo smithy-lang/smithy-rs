@@ -1,15 +1,8 @@
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
-
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -17,9 +10,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rustsdk.AwsCustomization
+import software.amazon.smithy.rustsdk.AwsSection
+import software.amazon.smithy.rustsdk.awsHttp
 
-class RetryClassifierDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "RetryPolicy"
+class ResiliencyDecorator : AwsCodegenDecorator {
+    override val name: String = "Resiliency"
     override val order: Byte = 0
 
     override fun operationCustomizations(
@@ -30,12 +26,21 @@ class RetryClassifierDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
         return baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig)
     }
 
+    override fun awsCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<AwsCustomization>,
+    ): List<AwsCustomization> {
+        return baseCustomizations +
+            RetryConfigFromSdkConfig() +
+            TimeoutConfigFromSdkConfig()
+    }
+
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    override fun retryType(): RuntimeType = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier")
+    override fun retryType(): RuntimeType = runtimeConfig.awsHttp().member("retry::AwsResponseRetryClassifier")
     override fun section(section: OperationSection) = when (section) {
         is OperationSection.FinalizeOperation -> writable {
             rust(
@@ -44,5 +49,21 @@ class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : Operati
             )
         }
         else -> emptySection
+    }
+}
+
+class RetryConfigFromSdkConfig : AwsCustomization() {
+    override fun section(section: AwsSection): Writable = writable {
+        when (section) {
+            is AwsSection.FromSdkConfigForBuilder -> rust("builder.set_retry_config(input.retry_config().cloned());")
+        }
+    }
+}
+
+class TimeoutConfigFromSdkConfig : AwsCustomization() {
+    override fun section(section: AwsSection): Writable = writable {
+        when (section) {
+            is AwsSection.FromSdkConfigForBuilder -> rust("builder.set_timeout_config(input.timeout_config().cloned());")
+        }
     }
 }

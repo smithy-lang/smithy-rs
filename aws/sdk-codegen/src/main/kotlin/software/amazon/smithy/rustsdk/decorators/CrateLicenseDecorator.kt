@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
@@ -14,13 +14,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 class CrateLicenseDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "CrateLicense"
-
     override val order: Byte = 0
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.withFile("LICENSE") {
-            val license = this::class.java.getResource("/LICENSE").readText()
-            raw(license)
+            this::class.java.getResource("/LICENSE")?.readText()?.let { license ->
+                raw(license)
+            }
         }
     }
 

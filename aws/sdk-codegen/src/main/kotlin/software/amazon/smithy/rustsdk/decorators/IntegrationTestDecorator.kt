@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rustsdk.SdkSettings
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -65,10 +66,10 @@ class IntegrationTestDependencies(
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Body -> writable {
             if (hasTests) {
-                val smithyClient = CargoDependency.SmithyClient(runtimeConfig)
+                val smithyClient = CargoDependency.smithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
-                addDependency(CargoDependency.SmithyProtocolTestHelpers(runtimeConfig))
+                addDependency(CargoDependency.smithyProtocolTestHelpers(runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
@@ -110,10 +111,10 @@ class S3TestDependencies(
             addDependency(BytesUtils)
             addDependency(Smol)
             addDependency(TempFile)
-            runtimeConfig.runtimeCrate("async", scope = DependencyScope.Dev)
-            runtimeConfig.runtimeCrate("client", scope = DependencyScope.Dev)
-            runtimeConfig.runtimeCrate("http", scope = DependencyScope.Dev)
-            runtimeConfig.runtimeCrate("types", scope = DependencyScope.Dev)
+            runtimeConfig.smithyRuntimeCrate("smithy-async", scope = DependencyScope.Dev)
+            runtimeConfig.smithyRuntimeCrate("smithy-client", scope = DependencyScope.Dev)
+            runtimeConfig.smithyRuntimeCrate("smithy-http", scope = DependencyScope.Dev)
+            runtimeConfig.smithyRuntimeCrate("smithy-types", scope = DependencyScope.Dev)
         }
 }
 

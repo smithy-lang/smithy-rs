@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
@@ -12,12 +12,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Servi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rustsdk.awsTypes
 
 /**
  * Adds functionality for constructing `<service>::Config` objects from `aws_types::SdkConfig`s
@@ -37,34 +37,16 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
     }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val codegenScope = arrayOf(
-            "SdkConfig" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("sdk_config::SdkConfig"),
-        )
         rustCrate.withModule(RustModule.Config) {
-            // !!NOTE!! As more items are added to aws_types::SdkConfig, use them here to configure the config builder
             rustTemplate(
                 """
-                impl From<&#{SdkConfig}> for Builder {
-                    fn from(input: &#{SdkConfig}) -> Self {
-                        let mut builder = Builder::default();
-                        builder = builder.region(input.region().cloned());
-                        builder.set_endpoint_resolver(input.endpoint_resolver().clone());
-                        builder.set_retry_config(input.retry_config().cloned());
-                        builder.set_timeout_config(input.timeout_config().cloned());
-                        builder.set_sleep_impl(input.sleep_impl());
-                        builder.set_credentials_provider(input.credentials_provider().cloned());
-                        builder.set_app_name(input.app_name().cloned());
-                        builder
-                    }
-                }
-
                 impl From<&#{SdkConfig}> for Config {
                     fn from(sdk_config: &#{SdkConfig}) -> Self {
                         Builder::from(sdk_config).build()
                     }
                 }
                 """,
-                *codegenScope,
+                "SdkConfig" to codegenContext.runtimeConfig.awsTypes().member("sdk_config::SdkConfig"),
             )
         }
     }
@@ -73,10 +55,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val codegenScope = arrayOf(
-        "SdkConfig" to awsTypes(runtimeConfig = runtimeConfig).asType().member("sdk_config::SdkConfig"),
-    )
+class NewFromShared(private val runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             ServiceConfig.ConfigImpl -> writable {
@@ -87,7 +66,7 @@ class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
                         Builder::from(config).build()
                     }
                     """,
-                    *codegenScope,
+                    "SdkConfig" to runtimeConfig.awsTypes().member("sdk_config::SdkConfig"),
                 )
             }
             else -> emptySection

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.OperationShape
@@ -13,9 +13,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyChecksums
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -26,19 +26,21 @@ import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rustsdk.InlineAwsDependency
+import software.amazon.smithy.rustsdk.awsRuntimeCrate
 
 fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDependency(
     InlineAwsDependency.forRustFile(
         "http_body_checksum", visibility = Visibility.PUBLIC,
         CargoDependency.Http,
         CargoDependency.HttpBody,
-        CargoDependency.SmithyHttp(this),
-        CargoDependency.SmithyChecksums(this),
-        CargoDependency.SmithyTypes(this),
+        CargoDependency.smithyHttp(this),
+        CargoDependency.smithyChecksums(this),
+        CargoDependency.smithyTypes(this),
         CargoDependency.Bytes,
         CargoDependency.Tracing,
-        this.sigAuth(),
-        this.awsHttp(),
+        this.awsRuntimeCrate("aws-sig-auth"),
+        this.smithyRuntimeCrate("smithy-http"),
     ),
 )
 
@@ -105,7 +107,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             };
             """,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to CargoDependency.SmithyChecksums(runtimeConfig).asType().member("ChecksumAlgorithm"),
+            "ChecksumAlgorithm" to runtimeConfig.smithyChecksums().member("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing

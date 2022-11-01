@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rustsdk.SdkSettings
 import java.util.logging.Logger
 
 // Use a sigil that should always be unique in the text to fix line breaks and spaces
@@ -28,7 +29,7 @@ private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
  * Generates a README.md for each service crate for display on crates.io.
  */
 class AwsReadmeDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "AwsReadmeDecorator"
+    override val name: String = "AwsReadme"
     override val order: Byte = 0
 
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
@@ -218,7 +219,7 @@ internal class AwsSdkReadmeGenerator {
     private fun Element.normalizeLists() {
         (getElementsByTag("ul") + getElementsByTag("ol"))
             // Only operate on lists that are top-level (are not nested within other lists)
-            .filter { list -> list.parents().none() { it.isList() } }
+            .filter { list -> list.parents().none { it.isList() } }
             .forEach { list -> list.normalizeList() }
     }
 

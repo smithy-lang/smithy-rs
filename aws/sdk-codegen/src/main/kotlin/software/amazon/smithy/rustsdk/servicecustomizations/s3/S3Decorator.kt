@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.s3
+package software.amazon.smithy.rustsdk.servicecustomizations.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
@@ -17,13 +17,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -36,9 +35,8 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import java.util.logging.Logger
 
-/**
- * Top level decorator for S3
- */
+val S3: ShapeId = ShapeId.from("com.amazonaws.s3#AmazonS3")
+
 class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "S3"
     override val order: Byte = 0
@@ -49,7 +47,7 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
     )
 
     private fun applies(serviceId: ShapeId) =
-        serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
+        serviceId == S3
 
     override fun protocols(
         serviceId: ShapeId,
@@ -58,7 +56,7 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
         currentProtocols.letIf(applies(serviceId)) {
             it + mapOf(
                 RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
-                    S3(protocolConfig)
+                    S3RestXml(protocolConfig)
                 },
             )
         }
@@ -89,14 +87,14 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
     }
 }
 
-class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
+class S3RestXml(codegenContext: CodegenContext) : RestXml(codegenContext) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
+        "XmlError" to runtimeConfig.smithyXml().member("decode::XmlError"),
         "base_errors" to restXmlErrors,
         "s3_errors" to AwsRuntimeType.S3Errors,
     )

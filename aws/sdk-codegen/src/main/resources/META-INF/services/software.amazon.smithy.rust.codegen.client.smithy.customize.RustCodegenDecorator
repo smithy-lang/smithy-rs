@@ -3,4 +3,4 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-software.amazon.smithy.rustsdk.AwsCodegenDecorator
+software.amazon.smithy.rustsdk.decorators.AwsCombinedCodegenDecorator

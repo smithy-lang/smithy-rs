@@ -3,34 +3,34 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rustsdk.AwsCustomization
+import software.amazon.smithy.rustsdk.AwsSection
+import software.amazon.smithy.rustsdk.awsHttp
+import software.amazon.smithy.rustsdk.awsTypes
 
 /**
  * Inserts a UserAgent configuration into the operation
  */
-class UserAgentDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class UserAgentDecorator : AwsCodegenDecorator {
     override val name: String = "UserAgent"
     override val order: Byte = 10
 
@@ -48,6 +48,13 @@ class UserAgentDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         // We are generating an AWS SDK, the service needs to have the AWS service trait
         val serviceTrait = codegenContext.serviceShape.expectTrait<ServiceTrait>()
         return baseCustomizations + ApiVersionAndPubUse(codegenContext.runtimeConfig, serviceTrait)
+    }
+
+    override fun awsCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<AwsCustomization>,
+    ): List<AwsCustomization> {
+        return baseCustomizations + AppNameFromSdkConfig()
     }
 
     override fun operationCustomizations(
@@ -71,28 +78,24 @@ private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serv
     override fun section(section: LibRsSection): Writable = when (section) {
         is LibRsSection.Body -> writable {
             // PKG_VERSION comes from CrateVersionGenerator
-            rust(
-                "static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);",
-                runtimeConfig.userAgentModule(),
+            rustTemplate(
+                "static API_METADATA: #{ApiMetadata} = #{ApiMetadata}::new(${serviceId.dq()}, PKG_VERSION);",
+                "ApiMetadata" to runtimeConfig.awsHttp().member("user_agent::ApiMetadata"),
             )
 
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
-            rustTemplate("pub use #{AppName};", "AppName" to runtimeConfig.appName())
+            rust("pub use #T;", runtimeConfig.awsTypes().member("app_name::AppName"))
         }
         else -> emptySection
     }
 }
-
-private fun RuntimeConfig.userAgentModule() = awsHttp().asType().member("user_agent")
-private fun RuntimeConfig.env(): RuntimeType = RuntimeType("Env", awsTypes(), "aws_types::os_shim_internal")
-private fun RuntimeConfig.appName(): RuntimeType = RuntimeType("AppName", awsTypes(this), "aws_types::app_name")
 
 private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
             rustTemplate(
                 """
-                let mut user_agent = #{ua_module}::AwsUserAgent::new_from_environment(
+                let mut user_agent = #{AwsUserAgent}::new_from_environment(
                     #{Env}::real(),
                     crate::API_METADATA.clone(),
                 );
@@ -101,8 +104,8 @@ private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : Opera
                 }
                 ${section.request}.properties_mut().insert(user_agent);
                 """,
-                "ua_module" to runtimeConfig.userAgentModule(),
-                "Env" to runtimeConfig.env(),
+                "AwsUserAgent" to runtimeConfig.awsHttp().member("user_agent::AwsUserAgent"),
+                "Env" to runtimeConfig.awsTypes().member("os_shim_internal::Env"),
             )
         }
         else -> emptySection
@@ -110,7 +113,7 @@ private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : Opera
 }
 
 private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val codegenScope = arrayOf("AppName" to runtimeConfig.appName())
+    private val codegenScope = arrayOf("AppName" to runtimeConfig.awsTypes().member("app_name::AppName"))
 
     override fun section(section: ServiceConfig): Writable =
         when (section) {
@@ -163,4 +166,12 @@ private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomi
             }
             else -> emptySection
         }
+}
+
+class AppNameFromSdkConfig : AwsCustomization() {
+    override fun section(section: AwsSection): Writable = writable {
+        when (section) {
+            is AwsSection.FromSdkConfigForBuilder -> rust("builder.set_app_name(input.app_name().cloned());")
+        }
+    }
 }

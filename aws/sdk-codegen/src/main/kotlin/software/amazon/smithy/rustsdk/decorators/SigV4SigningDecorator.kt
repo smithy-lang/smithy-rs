@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
@@ -19,13 +19,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -34,6 +32,9 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rustsdk.awsSigAuth
+import software.amazon.smithy.rustsdk.awsSigAuthEventStream
+import software.amazon.smithy.rustsdk.awsTypes
 
 /**
  * The SigV4SigningDecorator:
@@ -87,11 +88,7 @@ class SigV4SigningConfig(
     private val sigV4Trait: SigV4Trait,
 ) : EventStreamSigningConfig(runtimeConfig) {
     private val codegenScope = arrayOf(
-        "SigV4Signer" to RuntimeType(
-            "SigV4Signer",
-            runtimeConfig.awsRuntimeDependency("aws-sig-auth", setOf("sign-eventstream")),
-            "aws_sig_auth::event_stream",
-        ),
+        "SigV4Signer" to runtimeConfig.awsSigAuthEventStream().member("event_stream::SigV4Signer"),
     )
 
     override fun configImplSection(): Writable {
@@ -144,10 +141,14 @@ class SigV4SigningFeature(
     private val operation: OperationShape,
     runtimeConfig: RuntimeConfig,
     private val service: ServiceShape,
-) :
-    OperationCustomization() {
-    private val codegenScope =
-        arrayOf("sig_auth" to runtimeConfig.sigAuth().asType(), "aws_types" to awsTypes(runtimeConfig).asType())
+) : OperationCustomization() {
+    private val codegenScope = arrayOf(
+        "OperationSigningConfig" to runtimeConfig.awsSigAuth().member("signer::OperationSigningConfig"),
+        "SignableBody" to runtimeConfig.awsSigAuth().member("signer::SignableBody"),
+        "SigningRegion" to runtimeConfig.awsTypes().member("region::SigningRegion"),
+        "SigningRequirements" to runtimeConfig.awsSigAuth().member("signer::SigningRequirements"),
+        "SigningService" to runtimeConfig.awsTypes().member("SigningService"),
+    )
 
     private val serviceIndex = ServiceIndex.of(model)
 
@@ -155,7 +156,7 @@ class SigV4SigningFeature(
         return when (section) {
             is OperationSection.MutateRequest -> writable {
                 rustTemplate(
-                    "let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();",
+                    "let mut signing_config = #{OperationSigningConfig}::default_config();",
                     *codegenScope,
                 )
                 if (needsAmzSha256(service)) {
@@ -167,13 +168,13 @@ class SigV4SigningFeature(
                 if (operation.hasTrait<UnsignedPayloadTrait>()) {
                     rust("signing_config.signing_options.content_sha256_header = true;")
                     rustTemplate(
-                        "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
+                        "${section.request}.properties_mut().insert(#{SignableBody}::UnsignedPayload);",
                         *codegenScope,
                     )
                 } else if (operation.isInputEventStream(model)) {
                     // TODO(EventStream): Is this actually correct for all Event Stream operations?
                     rustTemplate(
-                        "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::Bytes(&[]));",
+                        "${section.request}.properties_mut().insert(#{SignableBody}::Bytes(&[]));",
                         *codegenScope,
                     )
                 }
@@ -181,13 +182,13 @@ class SigV4SigningFeature(
                 val authSchemes = serviceIndex.getEffectiveAuthSchemes(service, operation)
                 if (!authSchemes.containsKey(SigV4Trait.ID)) {
                     rustTemplate(
-                        "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Disabled;",
+                        "signing_config.signing_requirements = #{SigningRequirements}::Disabled;",
                         *codegenScope,
                     )
                 } else {
                     if (operation.hasTrait<OptionalAuthTrait>()) {
                         rustTemplate(
-                            "signing_config.signing_requirements = #{sig_auth}::signer::SigningRequirements::Optional;",
+                            "signing_config.signing_requirements = #{SigningRequirements}::Optional;",
                             *codegenScope,
                         )
                     }
@@ -195,17 +196,16 @@ class SigV4SigningFeature(
                 rustTemplate(
                     """
                     ${section.request}.properties_mut().insert(signing_config);
-                    ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
+                    ${section.request}.properties_mut().insert(#{SigningService}::from_static(${section.config}.signing_service()));
                     if let Some(region) = &${section.config}.region {
-                        ${section.request}.properties_mut().insert(#{aws_types}::region::SigningRegion::from(region.clone()));
+                        ${section.request}.properties_mut().insert(#{SigningRegion}::from(region.clone()));
                     }
                     """,
                     *codegenScope,
                 )
             }
+
             else -> emptySection
         }
     }
 }
-
-fun RuntimeConfig.sigAuth() = awsRuntimeDependency("aws-sig-auth")

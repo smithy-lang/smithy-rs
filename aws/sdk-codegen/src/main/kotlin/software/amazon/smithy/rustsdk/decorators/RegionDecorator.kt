@@ -3,25 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rustsdk.AwsCustomization
+import software.amazon.smithy.rustsdk.AwsSection
+import software.amazon.smithy.rustsdk.awsTypes
 
 /* Example Generated Code */
 /*
@@ -71,7 +71,7 @@ fn test_1() {
 }
  */
 
-class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class RegionDecorator : AwsCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
@@ -97,14 +97,21 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
 
+    override fun awsCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<AwsCustomization>,
+    ): List<AwsCustomization> {
+        return baseCustomizations + RegionFromSdkConfig()
+    }
+
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val region = region(codegenContext.runtimeConfig)
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf("Region" to region.member("Region"))
+    private val codegenScope = arrayOf("Region" to runtimeConfig.awsTypes().member("region::Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
@@ -119,7 +126,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
             )
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("region: Option<#{Region}>,", *codegenScope)
-            ServiceConfig.BuilderImpl ->
+            is ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
                     /// Sets the AWS region to use when making requests.
@@ -140,11 +147,11 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                     """,
                     *codegenScope,
                 )
-
-            ServiceConfig.BuilderBuild -> rustTemplate(
+            is ServiceConfig.BuilderBuild -> rustTemplate(
                 """region: self.region,""",
                 *codegenScope,
             )
+            else -> emptySection
         }
     }
 }
@@ -172,8 +179,8 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
         return when (section) {
             is LibRsSection.Body -> writable {
                 rust(
-                    "pub use #T::Region;",
-                    region(runtimeConfig),
+                    "pub use #T;",
+                    runtimeConfig.awsTypes().member("region::Region"),
                 )
             }
             else -> emptySection
@@ -181,7 +188,10 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
     }
 }
 
-fun region(runtimeConfig: RuntimeConfig) =
-    RuntimeType("region", awsTypes(runtimeConfig), "aws_types")
-
-fun awsTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-types")
+class RegionFromSdkConfig : AwsCustomization() {
+    override fun section(section: AwsSection): Writable = writable {
+        when (section) {
+            is AwsSection.FromSdkConfigForBuilder -> rust("builder = builder.region(input.region().cloned());")
+        }
+    }
+}

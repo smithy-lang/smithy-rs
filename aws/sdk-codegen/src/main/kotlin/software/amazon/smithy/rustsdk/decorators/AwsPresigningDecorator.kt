@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk
+package software.amazon.smithy.rustsdk.decorators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -42,7 +43,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtoc
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
+import software.amazon.smithy.rustsdk.awsSigAuth
+import software.amazon.smithy.rustsdk.awsSigv4
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
 
@@ -109,7 +113,7 @@ class AwsPresigningDecorator internal constructor(
         val intermediate = ModelTransformer.create().mapShapes(modelWithSynthetics) { shape ->
             if (shape is OperationShape && presignableOperations.containsKey(shape.id)) {
                 presignableTransforms.addAll(presignableOperations.getValue(shape.id).modelTransforms)
-                shape.toBuilder().addTrait(PresignableTrait(syntheticShapeId(shape))).build()
+                shape.toBuilder().addTrait(PresignableTrait()).build()
             } else {
                 shape
             }
@@ -145,9 +149,9 @@ class AwsInputPresignedMethod(
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
-        "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").asType(),
-        "sig_auth" to runtimeConfig.sigAuth().asType(),
+        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
+        "aws_sigv4" to runtimeConfig.awsSigv4(),
+        "sig_auth" to runtimeConfig.awsSigAuth(),
         "tower" to CargoDependency.Tower.asType(),
         "Middleware" to runtimeConfig.defaultMiddleware(),
     )
@@ -253,7 +257,7 @@ class AwsPresignedFluentBuilderMethod(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
+        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
     )
 
     override fun section(section: FluentClientSection): Writable =
@@ -262,19 +266,19 @@ class AwsPresignedFluentBuilderMethod(
                 documentPresignedMethod(hasConfigArg = false)
                 rustBlockTemplate(
                     """
-                pub async fn presigned(
-                    self,
-                    presigning_config: #{PresigningConfig},
-                ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
-                """,
+                    pub async fn presigned(
+                        self,
+                        presigning_config: #{PresigningConfig},
+                    ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
+                    """,
                     *codegenScope,
                     "OpError" to section.operationErrorType,
                 ) {
                     rustTemplate(
                         """
-                    let input = self.inner.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?;
-                    input.presigned(&self.handle.conf, presigning_config).await
-                    """,
+                        let input = self.inner.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?;
+                        input.presigned(&self.handle.conf, presigning_config).await
+                        """,
                         *codegenScope,
                     )
                 }
