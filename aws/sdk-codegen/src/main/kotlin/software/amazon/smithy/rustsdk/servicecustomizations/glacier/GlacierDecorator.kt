@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.glacier
+package software.amazon.smithy.rustsdk.servicecustomizations.glacier
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
@@ -19,15 +20,16 @@ class GlacierDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCod
     override val name: String = "Glacier"
     override val order: Byte = 0
 
-    private fun applies(codegenContext: CodegenContext) = codegenContext.serviceShape.id == Glacier
+    private fun applies(serviceShape: ServiceShape) = serviceShape.id == Glacier
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        val extras = if (applies(codegenContext)) {
-            val apiVersion = codegenContext.serviceShape.version
+        val serviceShape = codegenContext.serviceShape
+        val extras = if (applies(serviceShape)) {
+            val apiVersion = serviceShape.version
             listOfNotNull(
                 ApiVersionHeader(apiVersion),
                 TreeHashHeader.forOperation(operation, codegenContext.runtimeConfig),

@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.ec2
+package software.amazon.smithy.rustsdk.servicecustomizations.ec2
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.ClientOptionalTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 
-object EC2MakePrimitivesOptional {
+object Ec2MakePrimitivesOptional {
     fun processModel(model: Model): Model {
         val updates = arrayListOf<Shape>()
         for (struct in model.structureShapes) {

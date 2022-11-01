@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.apigateway
+package software.amazon.smithy.rustsdk.servicecustomizations.apigateway
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -42,8 +42,6 @@ class ApiGatewayDecorator : RustCodegenDecorator<ClientProtocolGenerator, Client
 
 class ApiGatewayAddAcceptHeader : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
-        is OperationSection.FinalizeOperation -> emptySection
-        is OperationSection.OperationImplBlock -> emptySection
         is OperationSection.MutateRequest -> writable {
             rust(
                 """${section.request}

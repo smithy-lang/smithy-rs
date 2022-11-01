@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-package software.amazon.smithy.rustsdk.customize.sts
+package software.amazon.smithy.rustsdk.servicecustomizations.sts
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -20,13 +20,15 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.util.logging.Logger
 
+val Sts = ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615")
+
 class STSDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "STS"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
     private fun applies(serviceId: ShapeId) =
-        serviceId == ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615")
+        serviceId == Sts
 
     private fun isIdpCommunicationError(shape: Shape): Boolean =
         shape is StructureShape && shape.hasTrait<ErrorTrait>() &&

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.glacier
+package software.amazon.smithy.rustsdk.servicecustomizations.glacier
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -34,7 +34,6 @@ private val UploadMultipartPart: ShapeId = ShapeId.from("com.amazonaws.glacier#U
 private val Applies = setOf(UploadArchive, UploadMultipartPart)
 
 class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    private val glacierChecksums = RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("glacier_checksums"))
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateRequest -> writable {
@@ -47,9 +46,11 @@ class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustom
                         &mut ${section.request}
                     ).await.map_err(|e|#{BuildError}::Other(e.into()))?;
                     """,
-                    "glacier_checksums" to glacierChecksums, "BuildError" to runtimeConfig.operationBuildError(),
+                    "glacier_checksums" to RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("glacier_checksums")),
+                    "BuildError" to runtimeConfig.operationBuildError(),
                 )
             }
+
             else -> emptySection
         }
     }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.glacier
+package software.amazon.smithy.rustsdk.servicecustomizations.glacier
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape

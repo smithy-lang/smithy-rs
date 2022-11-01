@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.auth
+package software.amazon.smithy.rustsdk.servicecustomizations.auth
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
@@ -20,7 +20,7 @@ private fun String.shapeId() = ShapeId.from(this)
 
 // / STS (and possibly other services) need to have auth manually set to []
 class DisabledAuthDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "OptionalAuth"
+    override val name: String = "DisabledAuth"
     override val order: Byte = 0
 
     private val optionalAuth =
