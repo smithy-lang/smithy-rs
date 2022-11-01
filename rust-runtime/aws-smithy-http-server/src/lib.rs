@@ -20,9 +20,7 @@ pub mod plugin;
 pub mod protocols;
 #[doc(hidden)]
 pub mod rejection;
-#[doc(hidden)]
 pub mod request;
-#[doc(hidden)]
 pub mod response;
 pub mod routing;
 #[doc(hidden)]
