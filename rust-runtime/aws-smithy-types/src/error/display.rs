@@ -10,10 +10,17 @@ use std::fmt;
 
 /// Provides a `Display` impl for an `Error` that outputs the full error context
 ///
-/// This is useful for emitting errors with `tracing` in cases where the error
-/// is not returned back to the customer.
+/// This utility follows the error cause/source chain and displays every error message
+/// in the chain separated by ": ". At the end of the chain, it outputs a debug view
+/// of the entire error chain.
+///
+// Internally in the SDK, this is useful for emitting errors with `tracing` in cases
+// where the error is not returned back to the customer.
 #[derive(Debug)]
-pub struct DisplayErrorContext<E: Error>(pub E);
+pub struct DisplayErrorContext<E: Error>(
+    /// The error to display full context for
+    pub E,
+);
 
 impl<E: Error> fmt::Display for DisplayErrorContext<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
