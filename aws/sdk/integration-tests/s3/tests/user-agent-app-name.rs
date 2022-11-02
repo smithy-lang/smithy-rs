@@ -20,7 +20,7 @@ async fn user_agent_app_name() {
             "test",
         )))
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone().into())
+        .http_connector(conn.clone())
         .app_name(AppName::new("test-app-name").expect("valid app name")) // set app name in config
         .build();
     let client = Client::new(&sdk_config);

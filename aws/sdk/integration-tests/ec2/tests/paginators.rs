@@ -5,12 +5,14 @@
 
 use aws_sdk_ec2::{model::InstanceType, Client, Config, Credentials, Region};
 use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_client::http_connector::HttpConnector;
 use tokio_stream::StreamExt;
 
-fn stub_config() -> Config {
+fn stub_config(conn: impl Into<HttpConnector>) -> Config {
     Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(Credentials::new("akid", "secret", None, None, "test"))
+        .http_connector(conn)
         .build()
 }
 
@@ -36,7 +38,7 @@ async fn paginators_handle_empty_tokens() {
             .body(response)
             .unwrap(),
     )]);
-    let client = Client::from_conf_conn(stub_config(), conn.clone());
+    let client = Client::from_conf(stub_config(conn.clone()));
     let instance_type = InstanceType::from("g5.48xlarge");
     let mut paginator = client
         .describe_spot_price_history()
@@ -72,7 +74,7 @@ async fn paginators_handle_unset_tokens() {
             .body(response)
             .unwrap(),
     )]);
-    let client = Client::from_conf_conn(stub_config(), conn.clone());
+    let client = Client::from_conf(stub_config(conn.clone()));
     let instance_type = InstanceType::from("g5.48xlarge");
     let mut paginator = client
         .describe_spot_price_history()

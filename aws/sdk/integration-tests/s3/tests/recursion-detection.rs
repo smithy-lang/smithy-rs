@@ -23,7 +23,7 @@ async fn recursion_detection_applied() {
             "test",
         )))
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone().into())
+        .http_connector(conn.clone())
         .build();
     let client = Client::new(&sdk_config);
     let _ = client.list_objects_v2().bucket("test-bucket").send().await;

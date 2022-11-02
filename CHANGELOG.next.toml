@@ -62,7 +62,7 @@ The HTTP connector used when making requests is now configurable. This is especi
         // tuples of requests and responses
     ]);
     let conf = SdkConfig::builder()
-        .http_connector(conn.clone().into())
+        .http_connector(conn.clone())
         .build();
     let client = Client::new(&conf);
 

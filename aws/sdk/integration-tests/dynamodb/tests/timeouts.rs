@@ -27,6 +27,7 @@ async fn api_call_timeout_retries() {
     let conn = NeverConnector::new();
     let conf = SdkConfig::builder()
         .region(Region::new("us-east-2"))
+        .http_connector(conn.clone())
         .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
             "stub", "stub", None, None, "test",
         )))
@@ -38,9 +39,8 @@ async fn api_call_timeout_retries() {
         .retry_config(RetryConfig::standard())
         .sleep_impl(Arc::new(InstantSleep))
         .build();
-    let client = aws_sdk_dynamodb::Client::from_conf_conn(
+    let client = aws_sdk_dynamodb::Client::from_conf(
         aws_sdk_dynamodb::Config::new(&conf),
-        conn.clone(),
     );
     let resp = client
         .list_tables()
@@ -64,6 +64,7 @@ async fn no_retries_on_operation_timeout() {
     let conn = NeverConnector::new();
     let conf = SdkConfig::builder()
         .region(Region::new("us-east-2"))
+        .http_connector(conn.clone())
         .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
             "stub", "stub", None, None, "test",
         )))
@@ -75,9 +76,8 @@ async fn no_retries_on_operation_timeout() {
         .retry_config(RetryConfig::standard())
         .sleep_impl(Arc::new(InstantSleep))
         .build();
-    let client = aws_sdk_dynamodb::Client::from_conf_conn(
+    let client = aws_sdk_dynamodb::Client::from_conf(
         aws_sdk_dynamodb::Config::new(&conf),
-        conn.clone(),
     );
     let resp = client
         .list_tables()

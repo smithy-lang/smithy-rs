@@ -24,7 +24,7 @@ async fn test_success() {
         .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
             "test", "test", None, None, "test",
         )))
-        .http_connector(replayer.clone().into())
+        .http_connector(replayer.clone())
         .build();
     let client = Client::new(&sdk_config);
 

@@ -30,7 +30,7 @@ async fn test_timeout_service_ends_request_that_never_completes() {
         .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
             "test", "test", None, None, "test",
         )))
-        .http_connector(conn.clone().into())
+        .http_connector(conn.clone())
         .timeout_config(
             TimeoutConfig::builder()
                 .operation_timeout(Duration::from_secs_f32(0.5))

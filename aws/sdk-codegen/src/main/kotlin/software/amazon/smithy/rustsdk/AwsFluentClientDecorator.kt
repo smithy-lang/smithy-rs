@@ -158,45 +158,10 @@ private class AwsFluentClientExtensions(types: Types) {
         writer.rustBlockTemplate("impl Client", *codegenScope) {
             rustTemplate(
                 """
-                /// Creates a client with the given service config and connector override.
-                pub fn from_conf_conn<C, E>(conf: crate::Config, conn: C) -> Self
-                where
-                    C: #{SmithyConnector}<Error = E> + Send + 'static,
-                    E: Into<#{ConnectorError}>,
-                {
-                    let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
-                    let mut builder = #{aws_smithy_client}::Builder::new()
-                        .connector(#{DynConnector}::new(conn))
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
-                        .retry_config(retry_config.into())
-                        .operation_timeout_config(timeout_config.into());
-                    builder.set_sleep_impl(conf.sleep_impl());
-                    let client = builder.build();
-                    Self { handle: std::sync::Arc::new(Handle { client, conf }) }
-                }
-
-                /// Creates a new client from a shared config.
+                /// Creates a new client from an [SDK Config](#{aws_types}::sdk_config::SdkConfig).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
-                    let conf: crate::Config = sdk_config.into();
-                    let connector = conf.http_connector().and_then(|c| {
-                        let timeout_config = conf
-                            .timeout_config()
-                            .cloned()
-                            .unwrap_or_else(#{TimeoutConfig}::disabled);
-                        let connector_settings = #{ConnectorSettings}::from_timeout_config(
-                            &timeout_config,
-                        );
-                        c.connector(&connector_settings, conf.sleep_impl())
-                    });
-
-                    match connector {
-                        // Use provided connector
-                        Some(conn) => Self::from_conf_conn(conf, conn),
-                        // Use default connector based on enabled features
-                        None => Self::from_conf(conf),
-                    }
+                    Self::from_conf(sdk_config.into())
                 }
 
                 /// Creates a new client from the service [`Config`](crate::Config).
@@ -209,8 +174,26 @@ private class AwsFluentClientExtensions(types: Types) {
                         panic!("An async sleep implementation is required for retries or timeouts to work. \
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");
                     }
-                    let mut builder = #{aws_smithy_client}::Builder::new()
-                        .dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
+
+                    let connector = conf.http_connector().and_then(|c| {
+                        let timeout_config = conf
+                            .timeout_config()
+                            .cloned()
+                            .unwrap_or_else(#{TimeoutConfig}::disabled);
+                        let connector_settings = #{ConnectorSettings}::from_timeout_config(
+                            &timeout_config,
+                        );
+                        c.connector(&connector_settings, conf.sleep_impl())
+                    });
+
+                    let builder = #{aws_smithy_client}::Builder::new();
+                    let builder = match connector {
+                        // Use provided connector
+                        Some(c) => builder.connector(c),
+                        // Use default connector based on enabled features
+                        None => builder.dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config)),
+                    };
+                    let mut builder = builder
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
                         .retry_config(retry_config.into())
                         .operation_timeout_config(timeout_config.into());

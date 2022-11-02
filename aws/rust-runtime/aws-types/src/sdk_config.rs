@@ -360,14 +360,14 @@ impl Builder {
     }
 
     /// Sets the HTTP connector that clients will use to make HTTP requests.
-    pub fn http_connector(mut self, http_connector: HttpConnector) -> Self {
+    pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
         self.set_http_connector(Some(http_connector));
         self
     }
 
     /// Sets the HTTP connector that clients will use to make HTTP requests.
-    pub fn set_http_connector(&mut self, http_connector: Option<HttpConnector>) -> &mut Self {
-        self.http_connector = http_connector;
+    pub fn set_http_connector(&mut self, http_connector: Option<impl Into<HttpConnector>>) -> &mut Self {
+        self.http_connector = http_connector.map(|inner| inner.into());
         self
     }
 

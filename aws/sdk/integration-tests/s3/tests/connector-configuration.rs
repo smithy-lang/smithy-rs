@@ -59,7 +59,7 @@ async fn test_http_connector_is_settable_in_config() {
     let conf = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(creds))
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone().into())
+        .http_connector(conn.clone())
         .build();
     let client = Client::new(&conf);
 

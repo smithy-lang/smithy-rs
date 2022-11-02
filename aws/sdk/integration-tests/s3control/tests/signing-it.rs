@@ -33,7 +33,7 @@ async fn test_signer() {
             None,
             "test",
         )))
-        .http_connector(conn.clone().into())
+        .http_connector(conn.clone())
         .region(Region::new("us-east-1"))
         .build();
     let client = Client::new(&sdk_config);

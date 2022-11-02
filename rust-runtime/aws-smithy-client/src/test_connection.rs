@@ -82,7 +82,10 @@ impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
 /// Example:
 /// ```rust,compile_fail
 /// let (server, request) = capture_request(None);
-/// let client = aws_sdk_sts::Client::from_conf_conn(conf, server);
+/// let conf = aws_sdk_sts::Config::builder()
+///     .http_connector(server)
+///     .build();
+/// let client = aws_sdk_sts::Client::from_conf(conf);
 /// let _ = client.assume_role_with_saml().send().await;
 /// // web identity should be unsigned
 /// assert_eq!(

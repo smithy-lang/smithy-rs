@@ -52,7 +52,7 @@ async fn ignore_invalid_xml_body_root() {
             "test",
         )))
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone().into())
+        .http_connector(conn.clone())
         .build();
     let client = Client::new(&sdk_config);
 
