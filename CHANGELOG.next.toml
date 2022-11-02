@@ -79,3 +79,9 @@ message = "Fix cargo audit issue on criterion."
 references = ["smithy-rs#1923"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Removed re-export of `aws_smithy_client::retry::Config` from the `middleware` module."
+references = ["smithy-rs#1935"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
