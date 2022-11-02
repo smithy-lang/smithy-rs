@@ -117,7 +117,7 @@ class EnumGeneratorTest {
                 let instance = InstanceType::T2Micro;
                 assert_eq!(instance.as_str(), "t2.micro");
                 assert_eq!(InstanceType::from("t2.nano"), InstanceType::T2Nano);
-                assert_eq!(InstanceType::from("other"), InstanceType::Unknown("other".to_owned()));
+                assert_eq!(InstanceType::from("other"), InstanceType::Unknown(UnknownVariantValue("other".to_owned())));
                 // round trip unknown variants:
                 assert_eq!(InstanceType::from("other").as_str(), "other");
                 """,
@@ -250,7 +250,7 @@ class EnumGeneratorTest {
                 """
                 assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
                 assert_eq!(SomeEnum::from("UnknownValue"), SomeEnum::UnknownValue_);
-                assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
+                assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(UnknownVariantValue("SomethingNew".to_owned())));
                 """,
             )
         }
@@ -271,7 +271,9 @@ class EnumGeneratorTest {
             val shape: StringShape = model.lookup("test#SomeEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
-            val rendered = RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait).render() }.toString()
+            val rendered =
+                RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait).render() }
+                    .toString()
 
             rendered shouldContain
                 """
@@ -297,7 +299,9 @@ class EnumGeneratorTest {
             val shape: StringShape = model.lookup("test#SomeEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
-            val rendered = RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait).render() }.toString()
+            val rendered =
+                RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait).render() }
+                    .toString()
 
             rendered shouldContain
                 """
@@ -326,7 +330,7 @@ class EnumGeneratorTest {
         writer.compileAndTest(
             """
             assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
-            assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
+            assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(UnknownVariantValue("SomethingNew".to_owned())));
             """,
         )
     }

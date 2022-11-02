@@ -99,6 +99,9 @@ open class EnumGenerator(
         /** Name of the generated unknown enum member name for enums with named members. */
         const val UnknownVariant = "Unknown"
 
+        /** Name of the opaque struct that is inner data for the generated [UnknownVariant]. */
+        const val UnknownVariantValue = "UnknownVariantValue"
+
         /** Name of the function on the enum impl to get a vec of value names */
         const val Values = "values"
     }
@@ -107,6 +110,10 @@ open class EnumGenerator(
         if (enumTrait.hasNames()) {
             // pub enum Blah { V1, V2, .. }
             renderEnum()
+            writer.insertTrailingNewline()
+            if (target == CodegenTarget.CLIENT) {
+                renderUnknownVariantValue()
+            }
             writer.insertTrailingNewline()
             // impl From<str> for Blah { ... }
             renderFromForStr()
@@ -168,8 +175,8 @@ open class EnumGenerator(
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
             if (target == CodegenTarget.CLIENT) {
-                docs("$UnknownVariant contains new variants that have been added since this code was generated.")
-                rust("$UnknownVariant(String)")
+                docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
+                rust("$UnknownVariant($UnknownVariantValue)")
             }
         }
     }
@@ -183,7 +190,7 @@ open class EnumGenerator(
                         rust("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
                     if (target == CodegenTarget.CLIENT) {
-                        rust("$enumName::$UnknownVariant(s) => s.as_ref()")
+                        rust("$enumName::$UnknownVariant(value) => value.as_str()")
                     }
                 }
             }
@@ -198,6 +205,17 @@ open class EnumGenerator(
         }
     }
 
+    private fun renderUnknownVariantValue() {
+        meta.render(writer)
+        writer.write("struct $UnknownVariantValue(String);")
+        writer.rustBlock("impl $UnknownVariantValue") {
+            // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
+            rustBlock("fn as_str(&self) -> &str") {
+                rust("&self.0")
+            }
+        }
+    }
+
     protected open fun renderFromForStr() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
             rustBlock("fn from(s: &str) -> Self") {
@@ -205,7 +223,7 @@ open class EnumGenerator(
                     sortedMembers.forEach { member ->
                         rust("""${member.value.dq()} => $enumName::${member.derivedName()},""")
                     }
-                    rust("other => $enumName::$UnknownVariant(other.to_owned())")
+                    rust("other => $enumName::$UnknownVariant($UnknownVariantValue(other.to_owned()))")
                 }
             }
         }
