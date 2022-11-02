@@ -30,7 +30,7 @@ class ServerOperationGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
 
-    private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
+    private val operationName = symbolProvider.toSymbol(operation).name
     private val operationId = operation.id
 
     /** Returns `std::convert::Infallible` if the model provides no errors. */

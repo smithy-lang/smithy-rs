@@ -283,16 +283,10 @@ open class SymbolVisitor(
         TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
     }
 
-    override fun operationShape(shape: OperationShape): Symbol {
-        return symbolBuilder(
-            RustType.Opaque(
-                shape.contextName(serviceShape)
-                    .replaceFirstChar { it.uppercase() },
-            ),
-        )
+    override fun operationShape(shape: OperationShape) =
+        symbolBuilder(RustType.Opaque(shape.contextName(serviceShape).toPascalCase()))
             .locatedIn(Operations)
             .build()
-    }
 
     override fun resourceShape(shape: ResourceShape?): Symbol {
         TODO("Not yet implemented: resources are not supported")
