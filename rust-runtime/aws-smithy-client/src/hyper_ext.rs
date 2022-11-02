@@ -577,7 +577,7 @@ mod timeout_middleware {
                 "expected resp.is_timeout() to be true but it was false, resp == {:?}",
                 resp
             );
-            let message = format!("{}", DisplayErrorContext(&resp));
+            let message = DisplayErrorContext(&resp).to_string();
             let expected =
                 "timeout: error trying to connect: HTTP connect timeout occurred after 1s";
             assert!(

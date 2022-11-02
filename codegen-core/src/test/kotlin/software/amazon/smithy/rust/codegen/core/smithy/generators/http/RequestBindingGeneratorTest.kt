@@ -289,7 +289,7 @@ class RequestBindingGeneratorTest {
                         .key(ts.clone())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    let message = format!("{err}");
+                    let message = err.to_string();
                     let expected = "bucket_name was missing: cannot be empty or unset";
                     assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
                 """,
