@@ -115,10 +115,7 @@ macro_rules! expect_fn {
                 Some(token) => {
                     Err(token.error(Cow::Borrowed(concat!("expected ", stringify!($token)))))
                 }
-                None => Err(Error::new(
-                    ErrorKind::Custom(Cow::Borrowed(concat!("expected ", stringify!($token)))),
-                    None,
-                )),
+                None => Err(Error::custom(concat!("expected ", stringify!($token)))),
             }
         }
     };
@@ -196,12 +193,7 @@ pub fn expect_number_or_null(
 pub fn expect_blob_or_null(token: Option<Result<Token<'_>, Error>>) -> Result<Option<Blob>, Error> {
     Ok(match expect_string_or_null(token)? {
         Some(value) => Some(Blob::new(base64::decode(value.as_escaped_str()).map_err(
-            |err| {
-                Error::new(
-                    ErrorKind::Custom(Cow::Owned(format!("failed to decode base64: {}", err))),
-                    None,
-                )
-            },
+            |err| Error::custom(format!("failed to decode base64: {}", err)),
         )?)),
         None => None,
     })
@@ -219,15 +211,9 @@ pub fn expect_timestamp_or_null(
             .map(|v| v.to_f64_lossy())
             .map(|v| {
                 if v.is_nan() {
-                    Err(Error::new(
-                        ErrorKind::Custom(Cow::Owned("NaN is not a valid epoch".to_string())),
-                        None,
-                    ))
+                    Err(Error::custom("NaN is not a valid epoch"))
                 } else if v.is_infinite() {
-                    Err(Error::new(
-                        ErrorKind::Custom(Cow::Owned("Infinity is not a valid epoch".to_string())),
-                        None,
-                    ))
+                    Err(Error::custom("infinity is not a valid epoch"))
                 } else {
                     Ok(DateTime::from_secs_f64(v))
                 }
@@ -236,12 +222,7 @@ pub fn expect_timestamp_or_null(
         Format::DateTime | Format::HttpDate => expect_string_or_null(token)?
             .map(|v| DateTime::from_str(v.as_escaped_str(), timestamp_format))
             .transpose()
-            .map_err(|err| {
-                Error::new(
-                    ErrorKind::Custom(Cow::Owned(format!("failed to parse timestamp: {}", err))),
-                    None,
-                )
-            })?,
+            .map_err(|err| Error::custom(format!("failed to parse timestamp: {}", err)))?,
     })
 }
 
@@ -594,13 +575,10 @@ pub mod test {
         );
         for &invalid in &["NaN", "Infinity", "-Infinity"] {
             assert_eq!(
-                Err(Error::new(
-                    ErrorKind::Custom(Cow::Owned(format!(
-                        "{} is not a valid epoch",
-                        invalid.replace('-', "")
-                    ))),
-                    None,
-                )),
+                Err(Error::custom(format!(
+                    "{} is not a valid epoch",
+                    invalid.replace('-', "")
+                ))),
                 expect_timestamp_or_null(value_string(0, invalid), Format::EpochSeconds)
             );
         }
