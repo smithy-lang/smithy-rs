@@ -11,8 +11,7 @@ use aws_sdk_s3::model::{
 use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
 use aws_smithy_async::assert_elapsed;
 use aws_smithy_async::rt::sleep::{default_async_sleep, TokioSleep};
-use aws_smithy_client::http_connector::HttpConnector;
-use aws_smithy_client::never::NeverService;
+use aws_smithy_client::never::NeverConnector;
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::credentials::SharedCredentialsProvider;
 use std::future::Future;
@@ -24,13 +23,12 @@ use tokio::time::timeout;
 
 #[tokio::test(start_paused = true)]
 async fn test_timeout_service_ends_request_that_never_completes() {
-    let conn = Into::<HttpConnector>::into(NeverService::new());
     let sdk_config = SdkConfig::builder()
         .region(Region::from_static("us-east-2"))
         .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
             "test", "test", None, None, "test",
         )))
-        .http_connector(conn.clone())
+        .http_connector(NeverConnector::new())
         .timeout_config(
             TimeoutConfig::builder()
                 .operation_timeout(Duration::from_secs_f32(0.5))

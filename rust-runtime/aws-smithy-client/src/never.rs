@@ -5,22 +5,19 @@
 
 //! Test connectors that never return data
 
-use http::Uri;
-
-use aws_smithy_async::future::never::Never;
-
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 
-use crate::erase::boxclone::BoxFuture;
-use crate::erase::DynConnector;
-use crate::http_connector::HttpConnector;
+use http::Uri;
+use tower::BoxError;
+
+use aws_smithy_async::future::never::Never;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use tower::BoxError;
+
+use crate::erase::boxclone::BoxFuture;
 
 /// A service that will never return whatever it is you want
 ///
@@ -66,12 +63,6 @@ impl<Req, Resp, Err> NeverService<Req, Resp, Err> {
 pub type NeverConnector =
     NeverService<http::Request<SdkBody>, http::Response<SdkBody>, ConnectorError>;
 
-impl From<NeverConnector> for HttpConnector {
-    fn from(never_connector: NeverConnector) -> Self {
-        HttpConnector::Prebuilt(Some(DynConnector::new(never_connector)))
-    }
-}
-
 /// A service where the underlying TCP connection never connects.
 pub type NeverConnected = NeverService<Uri, stream::EmptyStream, BoxError>;
 
@@ -79,8 +70,8 @@ pub type NeverConnected = NeverService<Uri, stream::EmptyStream, BoxError>;
 pub(crate) mod stream {
     use std::io::Error;
     use std::pin::Pin;
-
     use std::task::{Context, Poll};
+
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
     /// A stream that will never return or accept any data

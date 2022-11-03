@@ -7,18 +7,21 @@
 // TODO(docs)
 #![allow(missing_docs)]
 
-use crate::erase::DynConnector;
-use crate::http_connector::HttpConnector;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
-use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
-use http::header::{HeaderName, CONTENT_TYPE};
-use http::Request;
 use std::future::Ready;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
+
+use http::header::{CONTENT_TYPE, HeaderName};
+use http::Request;
 use tokio::sync::oneshot;
+
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::result::ConnectorError;
+use aws_smithy_protocol_test::{assert_ok, MediaType, validate_body};
+
+#[doc(inline)]
+pub use crate::never;
 
 /// Test Connection to capture a single request
 #[derive(Debug, Clone)]
@@ -28,12 +31,6 @@ pub struct CaptureRequestHandler(Arc<Mutex<Inner>>);
 struct Inner {
     response: Option<http::Response<SdkBody>>,
     sender: Option<oneshot::Sender<http::Request<SdkBody>>>,
-}
-
-impl From<CaptureRequestHandler> for HttpConnector {
-    fn from(capture_request_handler: CaptureRequestHandler) -> Self {
-        HttpConnector::Prebuilt(Some(DynConnector::new(capture_request_handler)))
-    }
 }
 
 /// Receiver for [`CaptureRequestHandler`](CaptureRequestHandler)
@@ -47,9 +44,6 @@ impl CaptureRequestReceiver {
         self.receiver.try_recv().expect("no request was received")
     }
 }
-
-#[doc(inline)]
-pub use crate::never;
 
 impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
     type Response = http::Response<SdkBody>;
@@ -260,24 +254,16 @@ where
     }
 }
 
-impl<B> From<TestConnection<B>> for HttpConnector
-where
-    B: Send + 'static,
-    SdkBody: From<B>,
-{
-    fn from(test_connection: TestConnection<B>) -> Self {
-        HttpConnector::Prebuilt(Some(DynConnector::new(test_connection)))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::bounds::SmithyConnector;
-    use crate::test_connection::{capture_request, never::NeverService, TestConnection};
-    use crate::Client;
+    use hyper::service::Service;
+
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;
-    use hyper::service::Service;
+
+    use crate::bounds::SmithyConnector;
+    use crate::Client;
+    use crate::test_connection::{capture_request, never::NeverService, TestConnection};
 
     fn is_send_sync<T: Send + Sync>(_: T) {}
 

@@ -72,12 +72,26 @@ class HttpConnectorConfigCustomization(
                     /// ## mod tests {
                     /// ## ##[test]
                     /// ## fn example() {
-                    /// use aws_smithy_client::test_connection::TestConnection;
+                    /// use std::time::Duration;
+                    /// use aws_smithy_client::{Client, hyper_ext};
+                    /// use aws_smithy_client::erase::DynConnector;
+                    /// use aws_smithy_client::http_connector::ConnectorSettings;
                     /// use $moduleUseName::config::Config;
                     ///
-                    /// let config = $moduleUseName::Config::builder()
-                    ///     .http_connector(TestConnection::new(vec![]).into())
+                    /// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+                    ///     .with_webpki_roots()
+                    ///     .https_only()
+                    ///     .enable_http1()
+                    ///     .enable_http2()
                     ///     .build();
+                    /// let smithy_connector = hyper_ext::Adapter::builder()
+                    ///     // Optionally set things like timeouts as well
+                    ///     .connector_settings(
+                    ///         ConnectorSettings::builder()
+                    ///             .connect_timeout(Duration::from_secs(5))
+                    ///             .build()
+                    ///     )
+                    ///     .build(https_connector);
                     /// ## }
                     /// ## }
                     /// ```
@@ -94,11 +108,28 @@ class HttpConnectorConfigCustomization(
                     /// ## mod tests {
                     /// ## ##[test]
                     /// ## fn example() {
-                    /// use aws_smithy_client::test_connection::TestConnection;
+                    /// use std::time::Duration;
+                    /// use aws_smithy_client::hyper_ext;
+                    /// use aws_smithy_client::http_connector::ConnectorSettings;
+                    /// use crate::sdk_config::{SdkConfig, Builder};
                     /// use $moduleUseName::config::{Builder, Config};
                     ///
                     /// fn override_http_connector(builder: &mut Builder) {
-                    ///     builder.set_http_connector(TestConnection::new(vec![]).into());
+                    ///     let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+                    ///         .with_webpki_roots()
+                    ///         .https_only()
+                    ///         .enable_http1()
+                    ///         .enable_http2()
+                    ///         .build();
+                    ///     let smithy_connector = hyper_ext::Adapter::builder()
+                    ///         // Optionally set things like timeouts as well
+                    ///         .connector_settings(
+                    ///             ConnectorSettings::builder()
+                    ///                 .connect_timeout(Duration::from_secs(5))
+                    ///                 .build()
+                    ///         )
+                    ///         .build(https_connector);
+                    ///     builder.set_http_connector(Some(smithy_connector));
                     /// }
                     /// 
                     /// let mut builder = $moduleUseName::Config::builder();
