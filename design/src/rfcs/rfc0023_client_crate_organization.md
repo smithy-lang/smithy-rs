@@ -165,21 +165,41 @@ generically, but less sense for SDKs since the SDK clients are hardcoded to use 
 
 Thus, the Smithy client `Builder` should not be re-exported for SDKs.
 
-Error Module
+Model Module
 ------------
 
-The builder reorganization will slightly reduce the noise in the error crate. Afterwards, it
-would look as follows:
+The name `model` is meaningless outside the context of code generation, but there is precedent for AWS SDKs
+using the term (both the Java V2 and Kotlin SDKs use the term). Previously, this module held all the generated
+structs/enums that are referenced by inputs, outputs, and errors.
+
+This RFC proposes that the generated input, output, and error structs (and their associated builders)
+be moved into the `model` module as submodules, so that it looks like the following:
 
 ```text
 .
-└── error
+└── model
+    ├── error
+    |   ├── builders
+    |   |   └── <One struct per error named `${error}Builder`>
+    |   ├── <One struct per error named `${error}`>
+    |   └── <One enum per operation named `${operation}Error`>
+    ├── input
+    |   ├── builders
+    |   |   └── <One struct per input named `${operation}InputBuilder`>
+    |   └── <One struct per input named `${operation}Input`>
+    ├── output
+    |   ├── builders
+    |   |   └── <One struct per output named `${operation}OutputBuilder`>
+    |   └── <One struct per output named `${operation}Output`>
     ├── builders
-    |   └── <One struct per error named `${error}Builder`>
-    ├── <One struct per error named `${error}`>
-    ├── <One struct per operation named `${operation}Error`>
-    └── <One enum per operation named `${operation}ErrorKind`>
+    |   └── <One struct per shape named `${shape}Builder`>
+    └── <One struct per shape>
 ```
+
+This won't have any impact on customers that use the fluent client since they won't need to import
+inputs, outputs, and modeled errors (not including the root-level `Error` type). Having all the code
+generated input, output, error, and data types in one module eliminates the name collision problem
+for the `crate::error` module, which is covered next.
 
 ### Combining `Error` with `ErrorKind`
 
@@ -223,13 +243,17 @@ Combining the error types requires adding the general error metadata to each gen
 error struct so that it's accessible by the enum error type. However, this aligns with
 our tenet of making things easier for customers even if it makes it harder for ourselves.
 
-### Top-level `Error` and `SdkError`
+Error Module
+------------
 
-Previously, `SdkError` is re-exported in `crate::types`, and `Error` is in the crate root.
-These both should be in `crate::error`, but this potentially leads to name collisions since
-a service model could have errors named `Error` or `SdkError` defined.
+The `error` module is greatly reduced after moving the generated errors into `crate::model::error`.
+This top-level module is now available for re-exports and utilities.
 
-TODO: Figure out a nice path forward for this collision issue
+The following will be re-exported in `crate::error`:
+- `aws_smithy_http::result::SdkError`
+- `aws_smithy_types::error::display::DisplayErrorContext`
+
+For crates that have an `ErrorExt`, it will also be moved into `crate::error`.
 
 Presigning Module
 -----------------
@@ -275,6 +299,10 @@ structs implements the `ParseResponse` trait. There really isn't a good reason f
 exposed directly, so they can either be made private or `#[doc(hidden)]`. They should
 also be added to a `parsers` submodule to keep the namespace open for future re-exports.
 
+The `crate::paginator` should also move into `crate::operation` since they are generated
+per-operation and aren't relevant at the top-level since their entry point is the fluent
+client's `into_paginator()` method.
+
 After these changes, the `operation` module looks as follows:
 
 ```text
@@ -285,9 +313,19 @@ After these changes, the `operation` module looks as follows:
     |   ├── CustomizableOperation
     |   ├── Operation
     |   └── RetryKind
+    ├── paginator
+    |   ├── <One struct per paginated operation named `${operation}Paginator`>
+    |   └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
     └── parsers (private/doc hidden)
         └── <One struct per operation>
 ```
+
+Types Module
+------------
+
+As a rule, the `crate::types` module re-exports types from `aws-smithy-types` that are
+referenced by code generated structs/enums, and should only re-export the types
+that are actually referenced.
 
 Empty Modules
 -------------
@@ -331,37 +369,39 @@ All combined, the following is the new organization:
 |   ├── Region
 |   └── Sleep
 ├── error
-|   ├── builders
-|   |   └── <One struct per error named `${error}Builder`>
-|   ├── <One struct per error named `${error}`>
-|   ├── <One enum per operation named `${operation}Error`>
+|   ├── DisplayErrorContext
 |   ├── ErrorExt (for some services)
 |   └── SdkError
-├── input
-|   ├── builders
-|   |   └── <One struct per input named `${operation}InputBuilder`>
-|   └── <One struct per input named `${operation}Input`>
 ├── meta
 |   └── PKG_VERSION
 ├── middleware
 |   └── DefaultMiddleware
 ├── model
+|   ├── error
+|   |   ├── builders
+|   |   |   └── <One struct per error named `${error}Builder`>
+|   |   ├── <One struct per error named `${error}`>
+|   |   └── <One enum per operation named `${operation}Error`>
+|   ├── input
+|   |   ├── builders
+|   |   |   └── <One struct per input named `${operation}InputBuilder`>
+|   |   └── <One struct per input named `${operation}Input`>
+|   ├── output
+|   |   ├── builders
+|   |   |   └── <One struct per output named `${operation}OutputBuilder`>
+|   |   └── <One struct per output named `${operation}Output`>
 |   ├── builders
 |   |   └── <One struct per shape named `${shape}Builder`>
 |   └── <One struct per shape>
 ├── operation
-|   └── customize
-|       ├── ClassifyRetry
-|       ├── CustomizableOperation
-|       ├── Operation
-|       └── RetryKind
-├── output
-|   ├── builders
-|   |   └── <One struct per output named `${operation}OutputBuilder`>
-|   └── <One struct per output named `${operation}Output`>
-├── paginator
-|   ├── <One struct per paginated operation named `${operation}Paginator`>
-|   └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
+|   ├── customize
+|   |   ├── ClassifyRetry
+|   |   ├── CustomizableOperation
+|   |   ├── Operation
+|   |   └── RetryKind
+|   └── paginator
+|       ├── <One struct per paginated operation named `${operation}Paginator`>
+|       └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
 ├── presigning
 |   ├── PresigningConfigBuilder
 |   ├── PresigningConfigError
@@ -384,8 +424,11 @@ Changes Checklist
 - [ ] Move `crate::PKG_VERSION` into a new `crate::meta` module
 - [ ] Reorganize the builders
 - [ ] Only re-export `aws_smithy_client::client::Builder` for non-SDK clients (remove from SDK clients)
-- [ ] Move `crate::Error` and `crate::ErrorExt` into `crate::error`
-- [ ] Reorganize errors
+- [ ] Move `crate::input`, `crate::output`, and `crate::error` into `crate::model`
+- [ ] Combine `Error` and `ErrorKind` for operation errors
+- [ ] Move `crate::ErrorExt` into `crate::error`
+- [ ] Re-export `aws_smithy_types::error::display::DisplayErrorContext` and `aws_smithy_http::result::SdkError` in `crate::error`
+- [ ] Move `crate::paginator` into `crate::operation`
 - [ ] Flatten `crate::presigning`
 - [ ] Remove/hide operation `ParseResponse` implementations in `crate::operation`
 - [ ] Hide or remove `crate::lens` and `crate::http_body_checksum`
