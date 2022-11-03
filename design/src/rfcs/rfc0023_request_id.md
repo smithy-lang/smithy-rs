@@ -2,6 +2,8 @@ RFC: RequestID in business logic handlers
 =============
 
 > Status: RFC
+>
+> Applies to: server
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
