@@ -573,11 +573,14 @@ pub mod test {
             Ok(None),
             expect_timestamp_or_null(value_null(0), Format::HttpDate)
         );
-        for &invalid in &["NaN", "Infinity", "-Infinity"] {
+        for (invalid, display_name) in &[
+            ("NaN", "NaN"),
+            ("Infinity", "infinity"),
+            ("-Infinity", "infinity"),
+        ] {
             assert_eq!(
                 Err(Error::custom(format!(
-                    "{} is not a valid epoch",
-                    invalid.replace('-', "")
+                    "{display_name} is not a valid epoch"
                 ))),
                 expect_timestamp_or_null(value_string(0, invalid), Format::EpochSeconds)
             );
