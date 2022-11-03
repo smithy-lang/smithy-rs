@@ -29,7 +29,26 @@ fn bench_encodes(c: &mut Criterion) {
     group.finish()
 }
 
-criterion_group!(benches, bench_encodes);
+fn bench_decodes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Decode");
+
+    for length in [1, 10, 1_000, 100_000] {
+        let string = &random_string(length);
+        let encoded = &aws_smithy_types::base64::encode(string);
+
+        group.bench_with_input(
+            BenchmarkId::new("handrolled_base64", length),
+            encoded,
+            |b, i| b.iter(|| handrolled_base64::decode(i).unwrap()),
+        );
+        group.bench_with_input(BenchmarkId::new("base64_simd", length), encoded, |b, i| {
+            b.iter(|| aws_smithy_types::base64::decode(i).unwrap())
+        });
+    }
+    group.finish()
+}
+
+criterion_group!(benches, bench_encodes, bench_decodes);
 criterion_main!(benches);
 
 mod handrolled_base64 {
