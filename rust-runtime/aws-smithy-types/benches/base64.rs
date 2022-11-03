@@ -7,14 +7,17 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand;
 use rand::distributions::{Alphanumeric, DistString};
 
+/// Generates a random string of a given length
 fn random_string(len: usize) -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), len)
 }
 
+const INPUT_SIZES: [usize; 4] = [1, 10, 1_000, 100_000];
+
 fn bench_encodes(c: &mut Criterion) {
     let mut group = c.benchmark_group("Encode");
 
-    for length in [1, 10, 1_000, 100_000] {
+    for length in INPUT_SIZES {
         let input = &random_string(length);
 
         group.bench_with_input(
@@ -32,7 +35,7 @@ fn bench_encodes(c: &mut Criterion) {
 fn bench_decodes(c: &mut Criterion) {
     let mut group = c.benchmark_group("Decode");
 
-    for length in [1, 10, 1_000, 100_000] {
+    for length in INPUT_SIZES {
         let string = &random_string(length);
         let encoded = &aws_smithy_types::base64::encode(string);
 
@@ -48,7 +51,23 @@ fn bench_decodes(c: &mut Criterion) {
     group.finish()
 }
 
-criterion_group!(benches, bench_encodes, bench_decodes);
+fn bench_encoded_lengths(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Decoded length");
+
+    for length in INPUT_SIZES {
+        group.bench_with_input(
+            BenchmarkId::new("handrolled_base64", length),
+            &length,
+            |b, &i| b.iter(|| handrolled_base64::encoded_length(i as u64)),
+        );
+        group.bench_with_input(BenchmarkId::new("base64_simd", length), &length, |b, &i| {
+            b.iter(|| aws_smithy_types::base64::encoded_length(i))
+        });
+    }
+    group.finish()
+}
+
+criterion_group!(benches, bench_encodes, bench_decodes, bench_encoded_lengths);
 criterion_main!(benches);
 
 mod handrolled_base64 {
