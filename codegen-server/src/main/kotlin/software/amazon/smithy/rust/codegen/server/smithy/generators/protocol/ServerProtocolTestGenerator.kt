@@ -922,15 +922,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
-            // Work in progress PR, see https://github.com/awslabs/smithy-rs/pull/1294.
-            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),
-            FailingTest(
-                RestJson,
-                "RestJsonHeaderMalformedStringInvalidBase64MediaType_case1",
-                TestType.MalformedRequest,
-            ),
-
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
