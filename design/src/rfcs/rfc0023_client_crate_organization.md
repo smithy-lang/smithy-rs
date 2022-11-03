@@ -17,72 +17,72 @@ Previously, crates were organized as such:
 
 ```text
 .
-├-- client
-|   ├-- fluent_builders
-|   |   └-- <One fluent builder per operation>
-|   ├-- Builder
-|   └-- Client
-├-- config
-|   ├-- retry
-|   |   ├-- RetryConfig
-|   |   ├-- RetryConfigBuilder
-|   |   └-- RetryMode
-|   ├-- timeout
-|   |   ├-- TimeoutConfig
-|   |   └-- TimeoutConfigBuilder
-|   ├-- AsyncSleep
-|   ├-- Builder
-|   ├-- Config
-|   └-- Sleep
-├-- error
-|   ├-- <One module per error to contain a single struct named `Builder`>
-|   ├-- <One struct per error named `${error}`>
-|   ├-- <One struct per operation named `${operation}Error`>
-|   └-- <One enum per operation named `${operation}ErrorKind`>
-├-- http_body_checksum (empty)
-├-- input
-|   ├-- <One module per input to contain a single struct named `Builder`>
-|   └-- <One struct per input named `${operation}Input`>
-├-- lens (empty)
-├-- middleware
-|   └-- DefaultMiddleware
-├-- model
-|   ├-- <One module per shape to contain a single struct named `Builder`>
-|   └-- <One struct per shape>
-├-- operation
-|   ├-- customize
-|   |   ├-- ClassifyRetry
-|   |   ├-- CustomizableOperation
-|   |   ├-- Operation
-|   |   ├-- RetryKind
-|   └-- <One struct per operation>
-├-- output
-|   ├-- <One module per output to contain a single struct named `Builder`>
-|   └-- <One struct per output named `${operation}Input`>
-├-- paginator
-|   ├-- <One struct per paginated operation named `${operation}Paginator`>
-|   └-- <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
-├-- presigning
-|   ├-- config
-|   |   ├-- Builder
-|   |   ├-- Error
-|   |   └-- PresigningConfig
-|   └-- request
-|       └-- PresignedRequest
-├-- types
-|   ├-- AggregatedBytes
-|   ├-- Blob
-|   ├-- ByteStream
-|   ├-- DateTime
-|   └-- SdkError
-├-- AppName
-├-- Client
-├-- Config
-├-- Credentials
-├-- Endpoint
-├-- Error
-├-- ErrorExt (for some services)
-├-- PKG_VERSION
+├── client
+|   ├── fluent_builders
+|   |   └── <One fluent builder per operation>
+|   ├── Builder
+|   └── Client
+├── config
+|   ├── retry
+|   |   ├── RetryConfig
+|   |   ├── RetryConfigBuilder
+|   |   └── RetryMode
+|   ├── timeout
+|   |   ├── TimeoutConfig
+|   |   └── TimeoutConfigBuilder
+|   ├── AsyncSleep
+|   ├── Builder
+|   ├── Config
+|   └── Sleep
+├── error
+|   ├── <One module per error to contain a single struct named `Builder`>
+|   ├── <One struct per error named `${error}`>
+|   ├── <One struct per operation named `${operation}Error`>
+|   └── <One enum per operation named `${operation}ErrorKind`>
+├── http_body_checksum (empty)
+├── input
+|   ├── <One module per input to contain a single struct named `Builder`>
+|   └── <One struct per input named `${operation}Input`>
+├── lens (empty)
+├── middleware
+|   └── DefaultMiddleware
+├── model
+|   ├── <One module per shape to contain a single struct named `Builder`>
+|   └── <One struct per shape>
+├── operation
+|   ├── customize
+|   |   ├── ClassifyRetry
+|   |   ├── CustomizableOperation
+|   |   ├── Operation
+|   |   ├── RetryKind
+|   └── <One struct per operation>
+├── output
+|   ├── <One module per output to contain a single struct named `Builder`>
+|   └── <One struct per output named `${operation}Input`>
+├── paginator
+|   ├── <One struct per paginated operation named `${operation}Paginator`>
+|   └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
+├── presigning
+|   ├── config
+|   |   ├── Builder
+|   |   ├── Error
+|   |   └── PresigningConfig
+|   └── request
+|       └── PresignedRequest
+├── types
+|   ├── AggregatedBytes
+|   ├── Blob
+|   ├── ByteStream
+|   ├── DateTime
+|   └── SdkError
+├── AppName
+├── Client
+├── Config
+├── Credentials
+├── Endpoint
+├── Error
+├── ErrorExt (for some services)
+├── PKG_VERSION
 └── Region
 ```
 
@@ -97,14 +97,14 @@ or changing the region/endpoint).
 Previously, the following were exported in root:
 ```
 .
-├-- AppName
-├-- Client
-├-- Config
-├-- Credentials
-├-- Endpoint
-├-- Error
-├-- ErrorExt (for some services)
-├-- PKG_VERSION
+├── AppName
+├── Client
+├── Config
+├── Credentials
+├── Endpoint
+├── Error
+├── ErrorExt (for some services)
+├── PKG_VERSION
 └── Region
 ```
 
@@ -132,9 +132,9 @@ They all follow the same overall pattern (where `shapeType` is `Input`, `Output`
 
 ```text
 .
-└-- module
-    ├-- <One module per shape to contain a single struct named `Builder`>
-    └-- <One struct per shape named `${prefix}${shapeType}`>
+└── module
+    ├── <One module per shape to contain a single struct named `Builder`>
+    └── <One struct per shape named `${prefix}${shapeType}`>
 ```
 
 This results in large lists of modules that all have exactly one item in them, which makes browsing
@@ -146,9 +146,9 @@ currently work:
 
 ```text
 .
-├-- module
-|   └-- builders
-|       └-- <One struct per shape named `${prefix}${shapeType}Builder`>
+├── module
+|   └── builders
+|       └── <One struct per shape named `${prefix}${shapeType}Builder`>
 └──---- <One struct per shape named `${prefix}${shapeType}`>
 ```
 
@@ -173,12 +173,12 @@ would look as follows:
 
 ```text
 .
-└-- error
-    ├-- builders
-    |   └-- <One struct per error named `${error}Builder`>
-    ├-- <One struct per error named `${error}`>
-    ├-- <One struct per operation named `${operation}Error`>
-    └-- <One enum per operation named `${operation}ErrorKind`>
+└── error
+    ├── builders
+    |   └── <One struct per error named `${error}Builder`>
+    ├── <One struct per error named `${error}`>
+    ├── <One struct per operation named `${operation}Error`>
+    └── <One enum per operation named `${operation}ErrorKind`>
 ```
 
 ### Combining `Error` with `ErrorKind`
@@ -238,24 +238,24 @@ The `crate::presigning` module only has four members, so it should be flattened 
 
 ```text
 .
-└-- presigning
-    ├-- config
-    |   ├-- Builder
-    |   ├-- Error
-    |   └-- PresigningConfig
-    └-- request
-        └-- PresignedRequest
+└── presigning
+    ├── config
+    |   ├── Builder
+    |   ├── Error
+    |   └── PresigningConfig
+    └── request
+        └── PresignedRequest
 ```
 
 to:
 
 ```text
 .
-└-- presigning
-    ├-- PresigningConfigBuilder
-    ├-- PresigningConfigError
-    ├-- PresigningConfig
-    └-- PresignedRequest
+└── presigning
+    ├── PresigningConfigBuilder
+    ├── PresigningConfigError
+    ├── PresigningConfig
+    └── PresignedRequest
 ```
 
 At the same time, `Builder` and `Error` will be renamed to `PresigningConfigBuilder` and `PresigningConfigError`
@@ -279,14 +279,14 @@ After these changes, the `operation` module looks as follows:
 
 ```text
 .
-└-- operation
-    ├-- customize
-    |   ├-- ClassifyRetry
-    |   ├-- CustomizableOperation
-    |   ├-- Operation
-    |   └-- RetryKind
-    └-- parsers (private/doc hidden)
-        └-- <One struct per operation>
+└── operation
+    ├── customize
+    |   ├── ClassifyRetry
+    |   ├── CustomizableOperation
+    |   ├── Operation
+    |   └── RetryKind
+    └── parsers (private/doc hidden)
+        └── <One struct per operation>
 ```
 
 Empty Modules
@@ -309,72 +309,72 @@ All combined, the following is the new organization:
 
 ```text
 .
-├-- client
-|   ├-- fluent_builders
-|   |   └-- <One fluent builder per operation>
-|   ├-- Builder (only in non-SDK crates)
-|   └-- Client
-├-- config
-|   ├-- retry
-|   |   ├-- RetryConfig
-|   |   ├-- RetryConfigBuilder
-|   |   └-- RetryMode
-|   ├-- timeout
-|   |   ├-- TimeoutConfig
-|   |   └-- TimeoutConfigBuilder
-|   ├-- AppName
-|   ├-- AsyncSleep
-|   ├-- Builder
-|   ├-- Config
-|   ├-- Credentials
-|   ├-- Endpoint
-|   ├-- Region
-|   └-- Sleep
-├-- error
-|   ├-- builders
-|   |   └-- <One struct per error named `${error}Builder`>
-|   ├-- <One struct per error named `${error}`>
-|   ├-- <One enum per operation named `${operation}Error`>
-|   ├-- ErrorExt (for some services)
-|   └-- SdkError
-├-- input
-|   ├-- builders
-|   |   └-- <One struct per input named `${operation}InputBuilder`>
-|   └-- <One struct per input named `${operation}Input`>
-├-- meta
-|   └-- PKG_VERSION
-├-- middleware
-|   └-- DefaultMiddleware
-├-- model
-|   ├-- builders
-|   |   └-- <One struct per shape named `${shape}Builder`>
-|   └-- <One struct per shape>
-├-- operation
-|   └-- customize
-|       ├-- ClassifyRetry
-|       ├-- CustomizableOperation
-|       ├-- Operation
-|       └-- RetryKind
-├-- output
-|   ├-- builders
-|   |   └-- <One struct per output named `${operation}OutputBuilder`>
-|   └-- <One struct per output named `${operation}Output`>
-├-- paginator
-|   ├-- <One struct per paginated operation named `${operation}Paginator`>
-|   └-- <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
-├-- presigning
-|   ├-- PresigningConfigBuilder
-|   ├-- PresigningConfigError
-|   ├-- PresigningConfig
-|   └-- PresignedRequest
-├-- types
-|   ├-- AggregatedBytes
-|   ├-- Blob
-|   ├-- ByteStream
-|   └-- DateTime
-├-- Client
-├-- Config
-└-- Error
+├── client
+|   ├── fluent_builders
+|   |   └── <One fluent builder per operation>
+|   ├── Builder (only in non-SDK crates)
+|   └── Client
+├── config
+|   ├── retry
+|   |   ├── RetryConfig
+|   |   ├── RetryConfigBuilder
+|   |   └── RetryMode
+|   ├── timeout
+|   |   ├── TimeoutConfig
+|   |   └── TimeoutConfigBuilder
+|   ├── AppName
+|   ├── AsyncSleep
+|   ├── Builder
+|   ├── Config
+|   ├── Credentials
+|   ├── Endpoint
+|   ├── Region
+|   └── Sleep
+├── error
+|   ├── builders
+|   |   └── <One struct per error named `${error}Builder`>
+|   ├── <One struct per error named `${error}`>
+|   ├── <One enum per operation named `${operation}Error`>
+|   ├── ErrorExt (for some services)
+|   └── SdkError
+├── input
+|   ├── builders
+|   |   └── <One struct per input named `${operation}InputBuilder`>
+|   └── <One struct per input named `${operation}Input`>
+├── meta
+|   └── PKG_VERSION
+├── middleware
+|   └── DefaultMiddleware
+├── model
+|   ├── builders
+|   |   └── <One struct per shape named `${shape}Builder`>
+|   └── <One struct per shape>
+├── operation
+|   └── customize
+|       ├── ClassifyRetry
+|       ├── CustomizableOperation
+|       ├── Operation
+|       └── RetryKind
+├── output
+|   ├── builders
+|   |   └── <One struct per output named `${operation}OutputBuilder`>
+|   └── <One struct per output named `${operation}Output`>
+├── paginator
+|   ├── <One struct per paginated operation named `${operation}Paginator`>
+|   └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
+├── presigning
+|   ├── PresigningConfigBuilder
+|   ├── PresigningConfigError
+|   ├── PresigningConfig
+|   └── PresignedRequest
+├── types
+|   ├── AggregatedBytes
+|   ├── Blob
+|   ├── ByteStream
+|   └── DateTime
+├── Client
+├── Config
+└── Error
 ```
 
 Changes Checklist
