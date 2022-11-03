@@ -25,6 +25,6 @@ pub fn encode(input: impl AsRef<[u8]>) -> String {
 
 /// Given the length of some data in bytes, return how many bytes it would take to base64 encode
 /// that data.
-pub fn encoded_length(length: u64) -> u64 {
-    Base64::STANDARD.encoded_length(length as usize) as u64
+pub fn encoded_length(length: usize) -> usize {
+    Base64::STANDARD.encoded_length(length)
 }
