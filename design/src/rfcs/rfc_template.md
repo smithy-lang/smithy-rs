@@ -4,6 +4,8 @@ RFC: Your RFC
 
 <!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
 > Status: RFC
+>
+> Applies to: client, server
 
 <!-- A great RFC will include a list of changes at the bottom so that the implementor can be sure they haven't missed anything -->
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
