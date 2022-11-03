@@ -7,22 +7,6 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand;
 use rand::distributions::{Alphanumeric, DistString};
 
-fn base64(c: &mut Criterion) {
-    c.bench_function("handrolled_base64::encode", |b| {
-        b.iter(|| {
-            let _encoded = handrolled_base64::encode(b"something");
-        })
-    });
-}
-
-fn base64_simd(c: &mut Criterion) {
-    c.bench_function("base_simd::encode", |b| {
-        b.iter(|| {
-            let _encoded = aws_smithy_types::base64::encode(b"something");
-        })
-    });
-}
-
 fn random_string(len: usize) -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), len)
 }
@@ -32,12 +16,13 @@ fn bench_encodes(c: &mut Criterion) {
 
     for length in [1, 10, 1_000, 100_000] {
         let input = &random_string(length);
+
         group.bench_with_input(
-            BenchmarkId::new("handrolled_base64", input),
+            BenchmarkId::new("handrolled_base64", length),
             input,
             |b, i| b.iter(|| handrolled_base64::encode(i)),
         );
-        group.bench_with_input(BenchmarkId::new("base64_simd", input), input, |b, i| {
+        group.bench_with_input(BenchmarkId::new("base64_simd", length), input, |b, i| {
             b.iter(|| aws_smithy_types::base64::encode(i))
         });
     }
