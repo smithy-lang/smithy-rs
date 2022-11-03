@@ -343,7 +343,7 @@ private or `#[doc(hidden)]` if necessary.
 New Organization
 ----------------
 
-All combined, the following is the new organization:
+All combined, the following is the new publicly visible organization:
 
 ```text
 .
