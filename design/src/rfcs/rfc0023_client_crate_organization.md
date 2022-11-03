@@ -108,9 +108,21 @@ Previously, the following were exported in root:
 └── Region
 ```
 
-The `AppName` is infrequently set, and should be moved into `crate::config`.
-The `Error` and `ErrorExt` types should be moved into `crate::error` since
-they don't meet the above definition.
+The `AppName` is infrequently set, and should be moved into `crate::config`. The `aws-config` crate
+drastically reduces the usefulness of `Credentials`, `Endpoint`, and `Region`, so these can move
+into `crate::config`. `ErrorExt` should be moved into `crate::error`, but `Error` should stay in
+the crate root so that customers that alias the SDK crate can easily reference it in their `Result`s:
+
+```rust
+use aws_sdk_s3 as s3;
+
+fn some_function(/* ... */) -> Result<(), s3::Error> {
+    /* ... */
+}
+```
+
+The `PKG_VERSION` should move into a new `meta` module, which can also include other values in the future
+such as the SHA-256 hash of the model used to produce the crate, or the version of smithy-rs that generated it.
 
 Builder Organization
 --------------------
@@ -314,19 +326,23 @@ All combined, the following is the new organization:
 |   ├-- AsyncSleep
 |   ├-- Builder
 |   ├-- Config
+|   ├-- Credentials
+|   ├-- Endpoint
+|   ├-- Region
 |   └-- Sleep
 ├-- error
 |   ├-- builders
 |   |   └-- <One struct per error named `${error}Builder`>
 |   ├-- <One struct per error named `${error}`>
 |   ├-- <One enum per operation named `${operation}Error`>
-|   ├-- Error
 |   ├-- ErrorExt (for some services)
 |   └-- SdkError
 ├-- input
 |   ├-- builders
 |   |   └-- <One struct per input named `${operation}InputBuilder`>
 |   └-- <One struct per input named `${operation}Input`>
+├-- meta
+|   └-- PKG_VERSION
 ├-- middleware
 |   └-- DefaultMiddleware
 ├-- model
@@ -358,16 +374,14 @@ All combined, the following is the new organization:
 |   └-- DateTime
 ├-- Client
 ├-- Config
-├-- Credentials
-├-- Endpoint
-├-- PKG_VERSION
-└── Region
+└-- Error
 ```
 
 Changes Checklist
 -----------------
 
-- [ ] Move `crate::AppName` into `crate::config`
+- [ ] Move `crate::AppName`, `crate::Endpoint`, `crate::Credentials`, and `crate::Region` into `crate::config`
+- [ ] Move `crate::PKG_VERSION` into a new `crate::meta` module
 - [ ] Reorganize the builders
 - [ ] Only re-export `aws_smithy_client::client::Builder` for non-SDK clients (remove from SDK clients)
 - [ ] Move `crate::Error` and `crate::ErrorExt` into `crate::error`
