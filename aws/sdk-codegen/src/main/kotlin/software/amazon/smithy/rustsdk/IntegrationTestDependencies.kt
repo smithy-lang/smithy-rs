@@ -119,7 +119,7 @@ class S3TestDependencies(
 
 private val AsyncStd = CargoDependency("async-std", CratesIo("1.12.0"), scope = DependencyScope.Dev)
 private val AsyncStream = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
-private val Criterion = CargoDependency("criterion", CratesIo("0.3.6"), scope = DependencyScope.Dev)
+private val Criterion = CargoDependency("criterion", CratesIo("0.4.0"), scope = DependencyScope.Dev)
 private val FuturesCore = CargoDependency("futures-core", CratesIo("0.3.0"), DependencyScope.Dev)
 private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3.0"), scope = DependencyScope.Dev)
 private val Hound = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
