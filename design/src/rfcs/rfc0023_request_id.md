@@ -66,7 +66,7 @@ There should be a `Service` for Lambda users that extracts the value and injects
 
 A `Service` that inserts a RequestId in the extensions:
 ```rust
-impl<R, S> Service<http::Request<R>> for Wrapper<S>
+impl<R, S> Service<http::Request<R>> for RequestIdProvider<S>
 where
     S: Service<http::Request<R>>,
 {
