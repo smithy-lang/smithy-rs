@@ -9,6 +9,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -333,5 +334,51 @@ class EnumGeneratorTest {
             assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(UnknownVariantValue("SomethingNew".to_owned())));
             """,
         )
+    }
+
+    @Test
+    fun `matching on enum should be forward-compatible`() {
+        fun expectMatchExpressionCompiles(model: Model, shapeId: String, enumToMatchOn: String) {
+            val shape: StringShape = model.lookup(shapeId)
+            val trait = shape.expectTrait<EnumTrait>()
+            val provider = testSymbolProvider(model)
+            val writer = RustWriter.forModule("model")
+            EnumGenerator(model, provider, writer, shape, trait).render()
+
+            val matchExpressionUnderTest = """
+                match $enumToMatchOn {
+                    SomeEnum::Variant1 => assert!(false, "expected `Variant3` but got `Variant1`"),
+                    SomeEnum::Variant2 => assert!(false, "expected `Variant3` but got `Variant2`"),
+                    other @ _ if other.as_str() == "Variant3" => assert!(true),
+                    _ => assert!(false, "expected `Variant3` but got `_`"),
+                }
+            """
+            writer.compileAndTest(matchExpressionUnderTest)
+        }
+
+        val modelV1 = """
+            namespace test
+
+            @enum([
+                { name: "Variant1", value: "Variant1" },
+                { name: "Variant2", value: "Variant2" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
+        val variant3AsUnknown = """SomeEnum::Unknown(UnknownVariantValue("Variant3".to_owned()))"""
+        expectMatchExpressionCompiles(modelV1, "test#SomeEnum", variant3AsUnknown)
+
+        val modelV2 = """
+            namespace test
+
+            @enum([
+                { name: "Variant1", value: "Variant1" },
+                { name: "Variant2", value: "Variant2" },
+                { name: "Variant3", value: "Variant3" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
+        val variant3AsVariant3 = "SomeEnum::Variant3"
+        expectMatchExpressionCompiles(modelV2, "test#SomeEnum", variant3AsVariant3)
     }
 }
