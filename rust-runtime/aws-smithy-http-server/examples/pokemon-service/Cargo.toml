@@ -37,7 +37,7 @@ rustls-pemfile = "1.0.1"
 futures-util = "0.3"
 
 # This dependency is only required for the `pokemon-service-lambda` program.
-lambda_http = "0.6.0"
+lambda_http = "0.7.1"
 
 # Local paths
 aws-smithy-http-server = { path = "../../" }
@@ -47,7 +47,7 @@ pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
 assert_cmd = "2.0"
 home = "0.5"
 serial_test = "0.7.0"
-wrk-api-bench = "0.0.7"
+wrk-api-bench = "0.0.8"
 
 # This dependency is only required for testing the `pokemon-service-tls` program.
 hyper-rustls = { version = "0.23.0", features = ["http2"] }
