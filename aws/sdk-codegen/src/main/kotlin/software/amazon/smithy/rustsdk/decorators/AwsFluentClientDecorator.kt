@@ -17,11 +17,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -38,8 +40,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 import software.amazon.smithy.rustsdk.SdkSettings
-import software.amazon.smithy.rustsdk.awsConfig
 import software.amazon.smithy.rustsdk.awsHttp
+import software.amazon.smithy.rustsdk.awsRuntimeCrate
 import software.amazon.smithy.rustsdk.awsTypes
 
 private class Types(runtimeConfig: RuntimeConfig) {
@@ -259,7 +261,7 @@ private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : 
                         /// let client = $crateName::Client::from_conf(config);
                         /// ## }
                         """,
-                        "aws_config" to runtimeConfig.awsConfig(),
+                        "aws_config" to runtimeConfig.awsRuntimeCrate("aws-config").copy(scope = DependencyScope.Dev).asType(),
                     )
                 }
             }

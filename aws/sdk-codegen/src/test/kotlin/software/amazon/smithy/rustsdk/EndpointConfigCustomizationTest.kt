@@ -184,7 +184,7 @@ internal class EndpointConfigCustomizationTest {
                         """
                         let conf = crate::config::Config::builder().build();
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&#{PlaceholderParams}::new(Some(#{Region}::new("fips-ca-central-1"))))
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{Region}::new("fips-ca-central-1"))))
                             .expect("default resolver produces a valid endpoint");
                         assert_eq!(endpoint.url(), "https://access-analyzer-fips.ca-central-1.amazonaws.com/");
                         """,
@@ -204,12 +204,12 @@ internal class EndpointConfigCustomizationTest {
                         """
                         let conf = crate::config::Config::builder().build();
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&#{PlaceholderParams}::new(Some(#{Region}::new("us-east-1"))))
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{Region}::new("us-east-1"))))
                             .expect("default resolver produces a valid endpoint");
                         assert_eq!(endpoint.url(), "https://iam.amazonaws.com/");
 
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&#{PlaceholderParams}::new(Some(#{Region}::new("iam-fips"))))
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{Region}::new("iam-fips"))))
                             .expect("default resolver produces a valid endpoint");
                         assert_eq!(endpoint.url(), "https://iam-fips.amazonaws.com/");
                         """,
