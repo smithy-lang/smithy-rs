@@ -1,14 +1,10 @@
-<!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
 RFC: RequestID in business logic handlers
 =============
 
-<!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
 > Status: RFC
 
-<!-- A great RFC will include a list of changes at the bottom so that the implementor can be sure they haven't missed anything -->
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
-<!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
 Terminology
 -----------
 
@@ -67,6 +63,37 @@ The proposed format is to use UUID, version 4.
 
 AWS Lambda sends a RequestID in the request context; there is no need to modify it.
 There should be a `Service` for Lambda users that extracts the value and injects it as for non-Lambda other requests.
+
+A `Service` that inserts a RequestId in the extensions:
+```rust
+impl<R, S> Service<http::Request<R>> for Wrapper<S>
+where
+    S: Service<http::Request<R>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
+        req.extensions_mut().insert(RequestId::new());
+        self.inner.call(req)
+    }
+}
+```
+
+A `Service` that inserts a RequestId in the extensions:
+```rust
+fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
+    let req_id = RequestId::new();
+    let span = span!(request_id = %req_id);
+    request.extensions_mut().insert(req_id);
+    self.inner.call(request).instrument(span)
+}
+```
 
 Changes checklist
 -----------------
