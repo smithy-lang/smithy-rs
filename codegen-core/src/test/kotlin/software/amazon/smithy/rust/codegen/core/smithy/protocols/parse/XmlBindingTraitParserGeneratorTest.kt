@@ -91,9 +91,10 @@ internal class XmlBindingTraitParserGeneratorTest {
     @Test
     fun `generates valid parsers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val symbolProvider = testSymbolProvider(model)
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = XmlBindingTraitParserGenerator(
-            testCodegenContext(model),
+            codegenContext,
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
         ) { _, inner -> inner("decoder") }
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
