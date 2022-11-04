@@ -71,7 +71,7 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonSeria
                 rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
             }
         }
-        is JsonSerializerSection.BeforeIteratingOverMap -> emptySection
+        else -> emptySection
     }
 }
 

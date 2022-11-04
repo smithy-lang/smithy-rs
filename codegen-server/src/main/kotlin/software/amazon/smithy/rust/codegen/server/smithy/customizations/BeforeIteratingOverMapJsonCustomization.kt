@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstr
  */
 class BeforeIteratingOverMapJsonCustomization(private val codegenContext: ServerCodegenContext) : JsonSerializerCustomization() {
     override fun section(section: JsonSerializerSection): Writable = when (section) {
-        is JsonSerializerSection.ServerError -> emptySection
         is JsonSerializerSection.BeforeIteratingOverMap -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(
                     section.shape,
@@ -34,5 +33,6 @@ class BeforeIteratingOverMapJsonCustomization(private val codegenContext: Server
                 rust("""let ${section.valueExpression.name} = &${section.valueExpression.name}.0;""")
             }
         }
+        else -> emptySection
     }
 }

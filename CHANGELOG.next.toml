@@ -52,3 +52,43 @@ message = "Fix bug that can cause panics in paginators"
 references = ["smithy-rs#1903", "smithy-rs#1902"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
 author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Operation metadata is now added to the property bag before sending requests allowing middlewares to behave
+differently depending on the operation being sent.
+"""
+references = ["smithy-rs#1919"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Upgrade Smithy to v1.26"
+references = ["smithy-rs#1929"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Fix cargo audit issue on chrono."
+references = ["smithy-rs#1907"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix cargo audit issue on criterion."
+references = ["smithy-rs#1923"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Ability to add an inline policy or a list of policy ARNs to the `AssumeRoleProvider` builder."
+references = ["aws-sdk-rust#641", "smithy-rs#1892"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "albe-rosado"
+
+[[aws-sdk-rust]]
+message = "Removed re-export of `aws_smithy_client::retry::Config` from the `middleware` module."
+references = ["smithy-rs#1935"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
