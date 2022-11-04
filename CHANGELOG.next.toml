@@ -174,3 +174,16 @@ after: `val smithyHttp = smithyRuntimeCrate("smithy-http").asType()`
 references = ["smithy-rs#1933"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Ability to add an inline policy or a list of policy ARNs to the `AssumeRoleProvider` builder."
+references = ["aws-sdk-rust#641", "smithy-rs#1892"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "albe-rosado"
+
+[[aws-sdk-rust]]
+message = "Removed re-export of `aws_smithy_client::retry::Config` from the `middleware` module."
+references = ["smithy-rs#1935"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
