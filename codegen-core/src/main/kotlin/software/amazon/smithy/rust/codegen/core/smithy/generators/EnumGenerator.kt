@@ -269,7 +269,7 @@ private fun RustWriter.renderForwardCompatibilityNote(
     docs("")
     docs("Here is an example of how you can make a match expression forward-compatible:")
     docs("")
-    docs("```rust,no_run")
+    docs("```text")
     rust("/// ## let ${enumName.lowercase()} = unimplemented!();")
     rust("/// match ${enumName.lowercase()} {")
     sortedMembers.mapNotNull { it.name() }.forEach { member ->
