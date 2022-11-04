@@ -38,6 +38,8 @@ pub mod routers;
 pub(crate) use self::error::Error;
 pub use self::extension::Extension;
 #[doc(inline)]
+pub use self::routing::Router;
+#[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]

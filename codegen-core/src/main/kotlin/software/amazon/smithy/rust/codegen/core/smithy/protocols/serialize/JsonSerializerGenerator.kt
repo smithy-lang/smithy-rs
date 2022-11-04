@@ -58,6 +58,12 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 sealed class JsonSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
+
+    /** Mutate the input object prior to finalization. */
+    data class InputStruct(val structureShape: StructureShape, val jsonObject: String) : JsonSection("InputStruct")
+
+    /** Mutate the output object prior to finalization. */
+    data class OutputStruct(val structureShape: StructureShape, val jsonObject: String) : JsonSection("OutputStruct")
 }
 
 /**
@@ -167,13 +173,14 @@ class JsonSerializerGenerator(
 
     /**
      * Reusable structure serializer implementation that can be used to generate serializing code for
-     * operation, error and structure shapes.
+     * operation outputs or errors.
      * This function is only used by the server, the client uses directly [serializeStructure].
      */
-    private fun serverStructureSerializer(
+    private fun serverSerializer(
         fnName: String,
         structureShape: StructureShape,
         includedMembers: List<MemberShape>,
+        makeSection: (StructureShape, String) -> JsonSection,
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             rustBlockTemplate(
@@ -184,7 +191,7 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
-                customizations.forEach { it.section(JsonSection.ServerError(structureShape, "object"))(this) }
+                customizations.forEach { it.section(makeSection(structureShape, "object"))(this) }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
@@ -244,6 +251,7 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "input", inputShape), httpDocumentMembers)
+                customizations.forEach { it.section(JsonSection.InputStruct(inputShape, "object"))(this) }
                 rust("object.finish();")
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
@@ -285,7 +293,7 @@ class JsonSerializerGenerator(
 
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
-        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers)
+        return serverSerializer(fnName, outputShape, httpDocumentMembers, JsonSection::OutputStruct)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
@@ -294,7 +302,7 @@ class JsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return serverStructureSerializer(fnName, errorShape, includedMembers)
+        return serverSerializer(fnName, errorShape, includedMembers, JsonSection::ServerError)
     }
 
     private fun RustWriter.serializeStructure(

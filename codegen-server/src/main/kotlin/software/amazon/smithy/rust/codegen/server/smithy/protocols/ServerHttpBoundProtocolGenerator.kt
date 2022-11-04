@@ -750,7 +750,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
-        val err = if (StructureGenerator.fallibleBuilder(inputShape, symbolProvider)) {
+        val err = if (StructureGenerator.hasFallibleBuilder(inputShape, symbolProvider)) {
             "?"
         } else ""
         rustTemplate("input.build()$err", *codegenScope)
