@@ -63,7 +63,6 @@ Binary size should become bigger, however, it should be managible.
  
 
 ## Testing
-Every data format is different, and we saw that serialization of enum did not work on some cases.  
 Ideally, we want every data format to work with the sdk, however,
 - there are large number of data format out there and not every one of them are implemented for serde
 - even when serde implementations are available, some of them require programmers to pass additional pieces of data (e.g. [apache-avro](https://docs.rs/apache-avro/latest/apache_avro/) requires programmers to provide schema definition) which requires considerable investment in time to test out
