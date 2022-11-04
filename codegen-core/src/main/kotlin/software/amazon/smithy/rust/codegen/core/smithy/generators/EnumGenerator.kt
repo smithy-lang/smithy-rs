@@ -160,6 +160,10 @@ open class EnumGenerator(
     }
 
     private fun renderEnum() {
+        if (target == CodegenTarget.CLIENT) {
+            writer.renderForwardCompatibilityNote(enumName, sortedMembers, UnknownVariant, UnknownVariantValue)
+        }
+
         val renamedWarning =
             sortedMembers.mapNotNull { it.name() }.filter { it.renamedFrom != null }.joinToString("\n") {
                 val previousName = it.renamedFrom!!
@@ -170,10 +174,6 @@ open class EnumGenerator(
             renamedWarning.ifBlank { null },
         )
         writer.deprecatedShape(shape)
-
-        if (target == CodegenTarget.CLIENT) {
-            writer.renderForwardCompatibilityNote(enumName, sortedMembers, UnknownVariant, UnknownVariantValue)
-        }
 
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
@@ -210,6 +210,9 @@ open class EnumGenerator(
     }
 
     private fun renderUnknownVariantValue() {
+        // No doc or note comes with this inner opaque struct.
+        // We do want to mark it as #[allow(missing_docs)] to suppress the missing docs lint.
+        writer.docWithNote(null, null)
         meta.render(writer)
         writer.write("struct $UnknownVariantValue(String);")
         writer.rustBlock("impl $UnknownVariantValue") {
