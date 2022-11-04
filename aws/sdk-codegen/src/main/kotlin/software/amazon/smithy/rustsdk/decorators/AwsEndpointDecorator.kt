@@ -43,7 +43,6 @@ import software.amazon.smithy.rustsdk.awsTypes
 import kotlin.io.path.readText
 
 class AwsEndpointDecorator : AwsCodegenDecorator {
-    override val name: String = "AwsEndpoint"
     override val order: Byte = 0
 
     private var endpointsCache: ObjectNode? = null

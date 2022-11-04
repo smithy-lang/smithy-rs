@@ -26,7 +26,6 @@ import software.amazon.smithy.rustsdk.awsTypes
  * - `pub fn new(&aws_types::SdkConfig) -> <service>::Config`: Direct construction without customization
  */
 class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "SdkConfig"
     override val order: Byte = 0
 
     override fun configCustomizations(

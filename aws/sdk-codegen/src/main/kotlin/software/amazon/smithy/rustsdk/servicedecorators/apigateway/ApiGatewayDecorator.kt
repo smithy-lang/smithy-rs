@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.servicecustomizations.apigateway
+package software.amazon.smithy.rustsdk.servicedecorators.apigateway
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class ApiGatewayDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "ApiGateway"
     override val order: Byte = 0
 
     private fun applies(codegenContext: CodegenContext) =

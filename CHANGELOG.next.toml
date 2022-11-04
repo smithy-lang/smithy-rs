@@ -79,3 +79,98 @@ message = "Fix cargo audit issue on criterion."
 references = ["smithy-rs#1923"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+`awsRuntimeDependency` has been renamed to `awsRuntimeCrate` in order to match `smithyRuntimeCrate`. Additionally,
+declaration of the runtime crates has been centralized in `software.amazon.smithy.rustsdk.AwsRuntimeDependency` for AWS
+ types and `software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency` for smithy types.
+
+The `RuntimeConfig` runtime crate functions now return `RuntimeTypes` instead of `CargoDependencies`. This better
+matches their usage in codegen. If you want to access the cargo dependency, use the `awsRuntimeCrate`/`smithyRuntimeCrate`
+functions directly.
+
+before: `rust("#T", CargoDependency.SmithyClient(runtimeConfig).asType())`
+after: `rust("#T", runtimeConfig.smithyClient())`
+"""
+references = ["smithy-rs#1933"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Service-specific decorators in SDK codegen have been moved into `software.amazon.smithy.rustsdk.servicedecorators`.
+All other decorators have been moved to `software.amazon.smithy.rustsdk.decorators`.
+"""
+references = ["smithy-rs#1933"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+`RustCodegenDecorator`'s name field has been removed. If you need to log the name of a decorator,
+use Kotlin's builtin `class` field:
+
+```kotlin
+val someDecorator = SomeDecorator()
+print(someDecorator::class)
+// prints "class SomeDecorator"
+```
+"""
+references = ["smithy-rs#1933"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+The class `AwsCodegenDecorator.kt` has been renamed to `AwsCombinedCodegenDecorator.kt`. A new class, now named
+`AwsCodegenDecorator` is an AWS-specific subclass of `RustCodegenDecorator`. `AwsCodegenDecorator` supports the
+customization of the `FromSdkConfigForBuilder` section.
+
+For example, adding this customization to codegen as part of a decorator:
+
+```kotlin
+class SleepImplFromSdkConfig : AwsCustomization() {
+    override fun section(section: AwsSection): Writable = writable {
+        when (section) {
+            is AwsSection.FromSdkConfigForBuilder -> rust("builder.set_sleep_impl(input.sleep_impl());")
+        }
+    }
+}
+```
+
+would result in this Rust code being generated:
+
+```rust
+// In aws-sdk-<service>/src/config.rs
+impl From<&SdkConfig> for Builder {
+    fn from(input: &#{SdkConfig}) -> Self {
+        let mut builder = Builder::default();
+        builder.set_sleep_impl(input.sleep_impl());
+        builder
+    }
+}
+```
+"""
+references = ["smithy-rs#1933"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+`CombinedCodegenDecorator`'s `orderedDecorators` field is now protected instead of private so that the new `AwsCodegenDecorator` subclass can use it.
+"""
+references = ["smithy-rs#1933"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+`runtimeCrate` has been renamed to `smithyRuntimeCrate` and now requires users to pass the "smithy-" prefix as part of the crate name:
+
+before: `val smithyHttp = runtimeCrate("http").asType()`
+after: `val smithyHttp = smithyRuntimeCrate("smithy-http").asType()`
+"""
+references = ["smithy-rs#1933"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"

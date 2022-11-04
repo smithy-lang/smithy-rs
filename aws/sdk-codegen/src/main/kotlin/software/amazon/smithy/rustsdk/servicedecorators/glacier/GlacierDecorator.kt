@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.servicecustomizations.glacier
+package software.amazon.smithy.rustsdk.servicedecorators.glacier
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 val Glacier: ShapeId = ShapeId.from("com.amazonaws.glacier#Glacier")
 
 class GlacierDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "Glacier"
     override val order: Byte = 0
 
     private fun applies(serviceShape: ServiceShape) = serviceShape.id == Glacier

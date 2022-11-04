@@ -223,7 +223,6 @@ class ProtocolTestGeneratorTest {
     ): Path {
         val (pluginContext, testDir) = generatePluginContext(model)
         val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-            override val name: String = "mock"
             override val order: Byte = 0
             override fun protocols(
                 serviceId: ShapeId,

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.servicecustomizations.ec2
+package software.amazon.smithy.rustsdk.servicedecorators.ec2
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape

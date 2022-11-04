@@ -30,11 +30,6 @@ import java.util.logging.Logger
  */
 interface RustCodegenDecorator<T, C : CodegenContext> {
     /**
-     * The name of this [RustCodegenDecorator], used for logging and debug information
-     */
-    val name: String
-
-    /**
      * Enable a deterministic ordering to be applied, with the lowest numbered integrations being applied first
      */
     val order: Byte
@@ -58,7 +53,7 @@ interface RustCodegenDecorator<T, C : CodegenContext> {
 
     /**
      * Returns a map of Cargo.toml properties to change. For example, if a `homepage` needs to be
-     * added to the Cargo.toml `[package]` section, a `mapOf("package" to mapOf("homepage", "https://example.com"))`
+     * added to the Cargo.toml ```[package]``` section, a `mapOf("package" to mapOf("homepage", "https://example.com"))`
      * could be returned. Properties here overwrite the default properties.
      */
     fun crateManifestCustomizations(codegenContext: C): ManifestCustomizations = emptyMap()
@@ -80,10 +75,7 @@ interface RustCodegenDecorator<T, C : CodegenContext> {
 open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<RustCodegenDecorator<T, C>>) :
     RustCodegenDecorator<T, C> {
     protected val orderedDecorators = decorators.sortedBy { it.order }
-    override val name: String
-        get() = "MetaDecorator"
-    override val order: Byte
-        get() = 0
+    override val order: Byte = 0
 
     fun withDecorator(decorator: RustCodegenDecorator<T, C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
 

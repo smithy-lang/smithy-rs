@@ -30,7 +30,6 @@ private fun HttpChecksumTrait.requestValidationModeMember(
 }
 
 class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "HttpResponseChecksum"
     override val order: Byte = 0
 
     override fun operationCustomizations(

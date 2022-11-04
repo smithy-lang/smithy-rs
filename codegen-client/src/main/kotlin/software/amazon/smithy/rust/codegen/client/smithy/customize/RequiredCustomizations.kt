@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
  * This exists as a convenient place to gather these modifications, these are not true customizations.
  */
 class RequiredCustomizations : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "Required"
     override val order: Byte = -1
 
     override fun operationCustomizations(

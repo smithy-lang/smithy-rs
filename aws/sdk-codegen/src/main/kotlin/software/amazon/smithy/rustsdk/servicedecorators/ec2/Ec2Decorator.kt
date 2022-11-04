@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.servicecustomizations.ec2
+package software.amazon.smithy.rustsdk.servicedecorators.ec2
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 private val Ec2 = ShapeId.from("com.amazonaws.ec2#AmazonEC2")
 
 class Ec2Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "Ec2"
     override val order: Byte = 0
 
     private fun applies(serviceShape: ServiceShape) = serviceShape.id == Ec2

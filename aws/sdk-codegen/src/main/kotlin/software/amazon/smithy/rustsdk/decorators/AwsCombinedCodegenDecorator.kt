@@ -20,13 +20,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
 import software.amazon.smithy.rustsdk.AwsCustomization
 import software.amazon.smithy.rustsdk.AwsSection
 import software.amazon.smithy.rustsdk.awsTypes
-import software.amazon.smithy.rustsdk.servicecustomizations.apigateway.ApiGatewayDecorator
-import software.amazon.smithy.rustsdk.servicecustomizations.auth.DisabledAuthDecorator
-import software.amazon.smithy.rustsdk.servicecustomizations.ec2.Ec2Decorator
-import software.amazon.smithy.rustsdk.servicecustomizations.glacier.GlacierDecorator
-import software.amazon.smithy.rustsdk.servicecustomizations.route53.Route53Decorator
-import software.amazon.smithy.rustsdk.servicecustomizations.s3.S3Decorator
-import software.amazon.smithy.rustsdk.servicecustomizations.sts.STSDecorator
+import software.amazon.smithy.rustsdk.servicedecorators.apigateway.ApiGatewayDecorator
+import software.amazon.smithy.rustsdk.servicedecorators.auth.DisabledAuthDecorator
+import software.amazon.smithy.rustsdk.servicedecorators.ec2.Ec2Decorator
+import software.amazon.smithy.rustsdk.servicedecorators.glacier.GlacierDecorator
+import software.amazon.smithy.rustsdk.servicedecorators.route53.Route53Decorator
+import software.amazon.smithy.rustsdk.servicedecorators.s3.S3Decorator
+import software.amazon.smithy.rustsdk.servicedecorators.sts.STSDecorator
 
 val DECORATORS = listOf(
     // General AWS Decorators
@@ -44,7 +44,6 @@ val DECORATORS = listOf(
     SdkConfigDecorator(),
     ServiceConfigDecorator(),
     SigV4SigningDecorator(),
-    SleepImplDecorator(),
     UserAgentDecorator(),
 
     // Service specific decorators
@@ -71,7 +70,6 @@ interface AwsCodegenDecorator : RustCodegenDecorator<ClientProtocolGenerator, Cl
 
 class AwsCombinedCodegenDecorator :
     CombinedCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>(DECORATORS) {
-    override val name: String = "AwsCombinedCodegen"
     override val order: Byte = -1
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {

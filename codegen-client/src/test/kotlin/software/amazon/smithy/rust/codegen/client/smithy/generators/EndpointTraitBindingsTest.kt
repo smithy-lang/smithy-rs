@@ -149,7 +149,6 @@ internal class EndpointTraitBindingsTest {
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
         val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-            override val name: String = "add tests"
             override val order: Byte = 0
 
             override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {

@@ -20,7 +20,6 @@ import software.amazon.smithy.rustsdk.AwsSection
 import software.amazon.smithy.rustsdk.awsHttp
 
 class ResiliencyDecorator : AwsCodegenDecorator {
-    override val name: String = "Resiliency"
     override val order: Byte = 0
 
     override fun operationCustomizations(
@@ -36,6 +35,7 @@ class ResiliencyDecorator : AwsCodegenDecorator {
         baseCustomizations: List<AwsCustomization>,
     ): List<AwsCustomization> {
         return baseCustomizations +
+            SleepImplFromSdkConfig() +
             RetryConfigFromSdkConfig() +
             TimeoutConfigFromSdkConfig()
     }
@@ -54,6 +54,14 @@ class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : Operati
             )
         }
         else -> emptySection
+    }
+}
+
+class SleepImplFromSdkConfig : AwsCustomization() {
+    override fun section(section: AwsSection): Writable = writable {
+        when (section) {
+            is AwsSection.FromSdkConfigForBuilder -> rust("builder.set_sleep_impl(input.sleep_impl());")
+        }
     }
 }
 

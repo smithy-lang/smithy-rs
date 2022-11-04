@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * See [RequiredCustomizations] from the `rust-codegen` subproject for the client version of this decorator.
  */
 class ServerRequiredCustomizations : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
-    override val name: String = "ServerRequired"
     override val order: Byte = -1
 
     override fun libRsCustomizations(

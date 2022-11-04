@@ -94,8 +94,6 @@ class AwsPresigningDecorator internal constructor(
     companion object {
         const val ORDER: Byte = 0
     }
-
-    override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
     override fun operationCustomizations(

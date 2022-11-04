@@ -45,7 +45,6 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
 )
 
 class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
 
     override fun operationCustomizations(

@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-package software.amazon.smithy.rustsdk.servicecustomizations.route53
+package software.amazon.smithy.rustsdk.servicedecorators.route53
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
@@ -31,7 +31,6 @@ import java.util.logging.Logger
 val Route53: ShapeId = ShapeId.from("com.amazonaws.route53#AWSDnsV20130401")
 
 class Route53Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "Route53"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
     private val resourceShapes = setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))

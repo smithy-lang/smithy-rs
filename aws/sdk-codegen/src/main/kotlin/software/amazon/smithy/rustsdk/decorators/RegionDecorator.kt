@@ -72,7 +72,6 @@ fn test_1() {
  */
 
 class RegionDecorator : AwsCodegenDecorator {
-    override val name: String = "Region"
     override val order: Byte = 0
 
     override fun configCustomizations(

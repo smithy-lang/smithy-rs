@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 
 class ServiceConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "ServiceConfig"
     override val order: Byte = 0
 
     override fun configCustomizations(

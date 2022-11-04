@@ -24,7 +24,6 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "IntegrationTest"
     override val order: Byte = 0
 
     override fun libRsCustomizations(

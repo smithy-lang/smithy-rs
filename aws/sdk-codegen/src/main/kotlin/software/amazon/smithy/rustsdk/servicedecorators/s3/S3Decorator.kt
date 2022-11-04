@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.servicecustomizations.s3
+package software.amazon.smithy.rustsdk.servicedecorators.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
@@ -38,7 +38,6 @@ import java.util.logging.Logger
 val S3: ShapeId = ShapeId.from("com.amazonaws.s3#AmazonS3")
 
 class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "S3"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
     private val invalidXmlRootAllowList = setOf(

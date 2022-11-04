@@ -13,7 +13,6 @@ open class AddRustTestsDecorator<T, C : CodegenContext>(
     private val testsFileName: String,
     private val testWritable: Writable,
 ) : RustCodegenDecorator<T, C> {
-    override val name: String = "add tests"
     override val order: Byte = 0
 
     override fun extras(codegenContext: C, rustCrate: RustCrate) {

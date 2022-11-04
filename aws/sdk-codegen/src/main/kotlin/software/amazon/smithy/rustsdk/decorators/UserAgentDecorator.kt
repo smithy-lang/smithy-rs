@@ -31,7 +31,6 @@ import software.amazon.smithy.rustsdk.awsTypes
  * Inserts a UserAgent configuration into the operation
  */
 class UserAgentDecorator : AwsCodegenDecorator {
-    override val name: String = "UserAgent"
     override val order: Byte = 10
 
     override fun configCustomizations(

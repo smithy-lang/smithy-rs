@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
  * - adds a `new_event_stream_signer()` method to `config` to create an Event Stream NoOp signer
  */
 open class NoOpEventStreamSigningDecorator<T, C : CodegenContext> : RustCodegenDecorator<T, C> {
-    override val name: String = "NoOpEventStreamSigning"
     override val order: Byte = Byte.MIN_VALUE
 
     private fun applies(codegenContext: CodegenContext, baseCustomizations: List<ConfigCustomization>): Boolean =

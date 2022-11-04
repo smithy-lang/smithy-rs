@@ -89,8 +89,6 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
 }
 
 class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "AwsFluentClient"
-
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
     override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 

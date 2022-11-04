@@ -26,7 +26,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
 class FluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "FluentClient"
     override val order: Byte = 0
 
     private fun applies(codegenContext: ClientCodegenContext): Boolean =

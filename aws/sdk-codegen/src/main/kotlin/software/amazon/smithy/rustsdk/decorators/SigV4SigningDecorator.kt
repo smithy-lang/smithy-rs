@@ -45,7 +45,6 @@ import software.amazon.smithy.rustsdk.awsTypes
  *   different behavior.
  */
 class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
     private fun applies(codegenContext: CodegenContext): Boolean = codegenContext.serviceShape.hasTrait<SigV4Trait>()

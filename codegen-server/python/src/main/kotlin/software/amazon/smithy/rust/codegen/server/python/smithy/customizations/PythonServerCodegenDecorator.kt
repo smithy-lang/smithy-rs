@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * crate-type = ["cdylib"]
  */
 class CdylibManifestDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
-    override val name: String = "CdylibDecorator"
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(
@@ -72,7 +71,6 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
  * Render the Python shared library module export.
  */
 class PythonExportModuleDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
-    override val name: String = "PythonExportModuleDecorator"
     override val order: Byte = 0
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
@@ -89,7 +87,6 @@ class PythonExportModuleDecorator : RustCodegenDecorator<ServerProtocolGenerator
  * Decorator applying the customization from [PubUsePythonTypes] class.
  */
 class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
-    override val name: String = "PubUsePythonTypesDecorator"
     override val order: Byte = 0
 
     override fun libRsCustomizations(

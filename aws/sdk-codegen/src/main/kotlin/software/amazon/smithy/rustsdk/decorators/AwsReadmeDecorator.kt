@@ -29,7 +29,6 @@ private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
  * Generates a README.md for each service crate for display on crates.io.
  */
 class AwsReadmeDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "AwsReadme"
     override val order: Byte = 0
 
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =

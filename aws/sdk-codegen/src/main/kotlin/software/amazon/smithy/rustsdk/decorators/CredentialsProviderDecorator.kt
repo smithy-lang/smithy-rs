@@ -27,7 +27,6 @@ import software.amazon.smithy.rustsdk.awsHttp
 import software.amazon.smithy.rustsdk.awsTypes
 
 class CredentialsProviderDecorator : AwsCodegenDecorator {
-    override val name: String = "CredentialsProvider"
     override val order: Byte = 0
 
     override fun configCustomizations(

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.servicecustomizations.ec2
+package software.amazon.smithy.rustsdk.servicedecorators.ec2
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test

@@ -131,7 +131,6 @@ internal class EndpointConfigCustomizationTest {
     private fun validateEndpointCustomizationForService(service: String, test: ((RustCrate) -> Unit)? = null) {
         val (context, testDir) = generatePluginContext(model, service = service, runtimeConfig = AwsTestRuntimeConfig)
         val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-            override val name: String = "tests and config"
             override val order: Byte = 0
             override fun configCustomizations(
                 codegenContext: ClientCodegenContext,

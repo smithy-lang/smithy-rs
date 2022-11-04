@@ -52,7 +52,6 @@ fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
  */
 class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadataSettings) :
     RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "docsrs-metadata"
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations {

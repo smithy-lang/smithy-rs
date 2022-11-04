@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
  * Customizations that apply only to generated clients.
  */
 class ClientCustomizations : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "ClientCustomizations"
     override val order: Byte = 0
 
     override fun libRsCustomizations(
