@@ -60,7 +60,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  *   of `App` called `register_service()` that can be used to decorate the Python implementation
  *   of this operation.
  *
- * This class also renders the implementation of the `aws_smity_http_server_python::PyServer` trait,
+ * This class also renders the implementation of the `aws_smithy_http_server_python::PyServer` trait,
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
@@ -182,8 +182,8 @@ class PythonApplicationGenerator(
                 """
                 fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
                     #{tower}::util::BoxCloneService<
-                        #{http}::Request<#{SmithyServer}::body::Body>, 
-                        #{http}::Response<#{SmithyServer}::body::BoxBody>, 
+                        #{http}::Request<#{SmithyServer}::body::Body>,
+                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
                         std::convert::Infallible
                     >
                 >
@@ -192,7 +192,7 @@ class PythonApplicationGenerator(
             ) {
                 rustTemplate(
                     """
-                    let builder = crate::service::$serviceName::builder();
+                    let builder = crate::service::$serviceName::builder_without_plugins();
                     """,
                     *codegenScope,
                 )
@@ -218,7 +218,7 @@ class PythonApplicationGenerator(
                         .layer(
                             #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(self.middlewares.clone(), middleware_locals),
                         )
-                        .service(builder.build());
+                        .service(builder.build().expect("One or more operations do not have a registered handler. This is a bug in the Python code generator."));
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
