@@ -21,10 +21,108 @@ have caching, while most others do not and need to be wrapped in `LazyCachingCre
 The goal of this RFC is to create an API where Rust's type system ensures caching is set up
 correctly, or explicitly opted out of.
 
-Option A: `ProvideCachedCredentials` trait
---------------------------------------------
+`CredentialsCache` and `ConfigLoader::credentials_cache`
+--------------------------------------------------------
 
-In this option, `aws-types` has a `ProvideCachedCredentials` in addition to `ProvideCredentials`.
+A new config method named `credentials_cache()` will be added to `ConfigLoader` and the
+generated service `Config` builders that takes a `CredentialsCache` instance. This `CredentialsCache`
+will be a struct with several functions on it to create and configure the cache.
+
+Client creation will ultimately be responsible for taking this `CredentialsCache` instance
+and wrapping the given (or default) credentials provider.
+
+The `CredentialsCache` would look as follows:
+
+```rust
+enum Inner {
+    Lazy(LazyConfig),
+    // Eager doesn't exist today, so this is purely for illustration
+    Eager(EagerConfig),
+    // Custom may not be implemented right away
+    // Not naming or specifying the custom cache trait for now since its out of scope
+    Custom(Box<dyn SomeCacheTrait>),
+
+    NoCaching,
+}
+pub struct CredentialsCache {
+    inner: Inner,
+}
+
+impl CredentialsCache {
+    // Methods prefixed with `default_` just use the default cache settings
+    pub fn default_lazy() -> Self { /* ... */ }
+    pub fn default_eager() -> Self { /* ... */ }
+
+    // Unprefixed methods return a builder that can take customizations
+    pub fn lazy() -> LazyBuilder { /* ... */ }
+    pub fn eager() -> EagerBuilder { /* ... */ }
+
+    // Later, when custom implementations are supported
+    pub fn custom(cache_impl: Box<dyn SomeCacheTrait>) -> Self { /* ... */ }
+
+    pub(crate) fn create_cache(
+        self,
+        provider: Box<dyn ProvideCredentials>,
+        sleep_impl: Arc<dyn AsyncSleep>
+    ) -> SharedCredentialsProvider {
+        SharedCredentialsProvider::new(
+            match self {
+                Self::Lazy(inner) => LazyCachingCredentialsProvider::new(provider, settings.time, /* ... */),
+                Self::Eager(_inner) => unimplemented!(),
+                Self::Custom(_custom) => unimplemented!(),
+                Self::NoCaching => unimplemented!(),
+            }
+        )
+    }
+}
+```
+
+Using a struct over a trait prevents custom caching implementations, but if customization is desired,
+a `Custom` variant could be added to the inner enum that has its own trait that customers implement.
+
+The `SharedCredentialsProvider` needs to be updated to take a cache implementation in addition to
+the `impl ProvideCredentials + 'static`. A sealed trait could be added to facilitate this.
+
+Customers that don't care about credential caching can configure credential providers
+without needing to think about it:
+
+```rust
+let sdk_config = aws_config::from_env()
+    .credentials_provider(ImdsCredentialsProvider::builder().build())
+    .load()
+    .await;
+```
+
+However, if they want to customize the caching, they can do so without modifying
+the credentials provider at all (in case they want to use the default):
+
+```rust
+let sdk_config = aws_config::from_env()
+    .credentials_cache(CredentialsCache::default_eager())
+    .load()
+    .await;
+```
+
+The `credentials_cache` will default to `CredentialsCache::default_lazy()` if not provided.
+
+Changes Checklist
+-----------------
+
+- [ ] Implement `CredentialsCache` with its `Lazy` variant and builder
+- [ ] Add `credentials_cache` method to `ConfigLoader`
+- [ ] Refactor `ConfigLoader` to take `CredentialsCache` instead of `impl ProvideCredentials + 'static`
+- [ ] Refactor `SharedCredentialsProvider` to take a cache implementation in addition to an `impl ProvideCredentials + 'static`
+- [ ] Rename `LazyCachingCredentialsProvider` -> `LazyCredentialsCache`
+- [ ] Refactor the SDK `Config` code generator to be consistent with `ConfigLoader`
+- [ ] Write changelog upgrade instructions
+- [ ] Fix examples (if there are any for configuring caching)
+
+Appendix: Alternatives Considered
+---------------------------------
+
+### Alternative A: `ProvideCachedCredentials` trait
+
+In this alternative, `aws-types` has a `ProvideCachedCredentials` in addition to `ProvideCredentials`.
 All individual credential providers (such as `ImdsCredentialsProvider`) implement `ProvideCredentials`,
 while credential caches (such as `LazyCachingCredentialsProvider`) implement the `ProvideCachedCredentials`.
 The `ConfigLoader` would only take `impl ProvideCachedCredentials`.
@@ -66,7 +164,7 @@ let sdk_config = aws_config::from_env()
     .await;
 ```
 
-### Pros/cons
+#### Pros/cons
 
 - :+1: It's flexible, and somewhat enforces correct cache setup through types.
 - :+1: Removes the possibility of double caching since the cache implementations won't
@@ -78,16 +176,15 @@ let sdk_config = aws_config::from_env()
 - :-1: It's possible to implement both `ProvideCachedCredentials` and `ProvideCredentials`, which
   breaks the type safety goals.
 
-Option B: `CacheCredentials` trait
-----------------------------------
+### Alternative B: `CacheCredentials` trait
 
-This option is similar to Option A, except that the cache trait is distinct from `ProvideCredentials` so
+This alternative is similar to alternative A, except that the cache trait is distinct from `ProvideCredentials` so
 that it's more apparent when mistakenly implementing the wrong trait for a custom credentials provider.
 
 A `CacheCredentials` trait would be added that looks as follows:
 ```rust
 pub trait CacheCredentials: Send + Sync + Debug {
-    pub async fn cached(&self, now: SystemTime) -> Result<Credentials, CredentialsError>;
+    async fn cached(&self, now: SystemTime) -> Result<Credentials, CredentialsError>;
 }
 ```
 
@@ -96,7 +193,7 @@ to make both lazy and eager credentials caching possible.
 
 The configuration examples look identical to Option A.
 
-### Pros/cons
+#### Pros/cons
 
 - :+1: It's flexible, and enforces correct cache setup through types slightly better than Option A.
 - :+1: Removes the possibility of double caching since the cache implementations won't
@@ -106,8 +203,7 @@ The configuration examples look identical to Option A.
 - :-1: It's possible to implement both `CacheCredentials` and `ProvideCredentials`, which
   breaks the type safety goals.
 
-Option C: `CredentialsCache` struct with composition
-----------------------------------------------------
+### Alternative C: `CredentialsCache` struct with composition
 
 The struct approach posits that customers don't need or want to implement custom credential caching,
 but at the same time, doesn't make it impossible to add custom caching later.
@@ -190,7 +286,7 @@ The `credentials_provider` method on `ConfigLoader` would only take `Credentials
 so that the SDK could not be configured without credentials caching, or if opting out of caching becomes
 a use case, then a `CredentialsCache::NoCache` variant could be made.
 
-Like Option A, a convenience method can be added to make using the default cache easier:
+Like alternative A, a convenience method can be added to make using the default cache easier:
 
 ```rust
 let sdk_config = aws_config::from_env()
@@ -223,121 +319,10 @@ pub async fn load(self) -> SdkConfig {
 }
 ```
 
-### Pros/cons
+#### Pros/cons
 
 - :+1: Removes the possibility of missing out on caching when implementing a custom provider.
 - :+1: Removes the possibility of double caching since the cache implementations won't
   implement `ProvideCredentials`.
+- :-1: Requires thinking about caching when only wanting to customize the credentials provider
 - :-1: Requires a lot of boilerplate in `aws-config` for the builders, enum variant structs, etc.
-
-Option D: `CredentialsCache` struct without composition
--------------------------------------------------------
-
-A new config field named `credentials_cache` will be added to `SdkConfig` and the
-generated service `Config`s that takes a `CredentialsCache` instance. This `CredentialsCache`
-will be a thin struct wrapper around an internal enum with several functions on it to
-create and configure the cache.
-
-Client creation will ultimately be responsible for taking this `CredentialsCache` instance
-and wrapping the given (or default) credentials provider.
-
-The `CredentialsCache` would look as follows:
-
-```rust
-enum Inner {
-    Lazy(LazyConfig),
-    // Eager doesn't exist today, so this is purely for illustration
-    Eager(EagerConfig),
-    // Custom may not be implemented right away
-    // Not naming or specifying the custom cache trait for now since its out of scope
-    Custom(Box<dyn SomeCacheTrait>),
-
-    NoCaching,
-}
-pub struct CredentialsCache {
-    inner: Inner,
-}
-
-impl CredentialsCache {
-    // Methods prefixed with `default_` just use the default cache settings
-    pub fn default_lazy() -> Self { /* ... */ }
-    pub fn default_eager() -> Self { /* ... */ }
-
-    // Unprefixed methods return a builder that can take customizations
-    pub fn lazy() -> LazyBuilder { /* ... */ }
-    pub fn eager() -> EagerBuilder { /* ... */ }
-
-    // Later, when custom implementations are supported
-    pub fn custom(cache_impl: Box<dyn SomeCacheTrait>) -> Self { /* ... */ }
-
-    pub(crate) fn create_cache(
-        self,
-        provider: Box<dyn ProvideCredentials>,
-        sleep_impl: Arc<dyn AsyncSleep>
-    ) -> SharedCredentialsProvider {
-        SharedCredentialsProvider::new(
-            match self {
-                Self::Lazy(inner) => LazyCachingCredentialsProvider::new(provider, settings.time, /* ... */),
-                Self::Eager(_inner) => unimplemented!(),
-                Self::Custom(_custom) => unimplemented!(),
-                Self::NoCaching => unimplemented!(),
-            }
-        )
-    }
-}
-```
-
-Using a struct over a trait prevents custom caching implementations, but if customization is desired,
-a `Custom` variant could be added to the inner enum that has its own trait that customers implement.
-
-The `SharedCredentialsProvider` needs to be updated to take a cache implementation rather
-than `impl ProvideCredentials + 'static`. A sealed trait could be added to facilitate this.
-
-Customers that don't care about credential caching can go on configuring credential providers
-without having to think about it:
-
-```rust
-let sdk_config = aws_config::from_env()
-    .credentials(ImdsCredentialsProvider::builder().build())
-    .load()
-    .await;
-```
-
-However, if they want to customize the caching, they can do so without modifying
-the credentials provider at all (in case they want to use the default):
-
-```rust
-let sdk_config = aws_config::from_env()
-    .credentials_cache(CredentialsCache::default_eager())
-    .load()
-    .await;
-```
-
-Commonalities
--------------
-
-All approaches propose renaming the `credentials_provider` method on `ConfigLoader` to
-`credentials` since it will take a cache instead of a provider. This also makes the proposed
-`credentials_with_default_cache` method name shorter.
-
-Recommendation
---------------
-
-Option D should be taken since it offers the greatest type safety while still maintaining
-enough flexibility.
-
-Changes Checklist
------------------
-
-Option D:
-- [ ] Implement `CredentialsCache` with its `Lazy` variant and builder
-- [ ] Add `credentials_cache` method to `ConfigLoader`
-- [ ] Refactor `ConfigLoader` to take `CredentialsCache` instead of `impl ProvideCredentials + 'static`
-- [ ] Refactor `SharedCredentialsProvider` to take a cache implementation in addition to an `impl ProvideCredentials + 'static`
-- [ ] Remove impl of `ProvideCredentials` from `SharedCredentialsProvider`, and refactor so
-      that `SharedCredentialsProvider` is always used directly rather than the trait where
-      actual credentials retrieval is done.
-- [ ] Rename `LazyCachingCredentialsProvider` -> `LazyCredentialsCache`
-- [ ] Refactor the SDK `Config` code generator to be consistent with `ConfigLoader`
-- [ ] Write changelog upgrade instructions
-- [ ] Fix examples
