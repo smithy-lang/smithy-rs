@@ -82,7 +82,8 @@ author = "ysaito1001"
 
 [[aws-sdk-rust]]
 message = """
-The HTTP connector used when making requests is now configurable. This is especially useful when testing:
+<details>
+<summary>The HTTP connector used when making requests is now configurable.</summary>
 
 ```rust
 use std::time::Duration;
@@ -124,10 +125,45 @@ let op = client
     .unwrap();
 ```
 
-The code above is just a snippet. See the full version of this test [here](./aws/sdk/integration-tests/s3/tests/connector-configuration.rs).
+</details>
 """
 references = ["smithy-rs#1225", "smithy-rs#1918"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+`<service>::Client::from_conf_conn` has been removed since it's now possible to configure the connection from the
+shared and service configs. To update your code, pass connections to the `http_connector` method during config creation.
+
+<details>
+<summary>Example</summary>
+
+before:
+
+```rust
+    let conf = aws_sdk_sts::Config::builder()
+        .region(Region::new("us-east-1"))
+        .build();
+    let (server, request) = capture_request(None);
+    let client = aws_sdk_sts::Client::from_conf_conn(conf, server);
+```
+
+after:
+
+```rust
+    let (server, request) = capture_request(None);
+    let conf = aws_sdk_sts::Config::builder()
+        .region(Region::new("us-east-1"))
+        .http_connector(server)
+        .build();
+    let client = aws_sdk_sts::Client::from_conf(conf);
+```
+
+</details>
+"""
+references = ["smithy-rs#1225"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
 
 [[aws-sdk-rust]]
