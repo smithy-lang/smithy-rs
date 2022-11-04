@@ -171,6 +171,10 @@ open class EnumGenerator(
         )
         writer.deprecatedShape(shape)
 
+        if (target == CodegenTarget.CLIENT) {
+            writer.renderForwardCompatibilityNote(enumName, sortedMembers, UnknownVariant, UnknownVariantValue)
+        }
+
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
@@ -242,4 +246,62 @@ open class EnumGenerator(
             """,
         )
     }
+}
+
+/**
+ * Generate the rustdoc describing how to write a match expression against a generated enum in a
+ * forward-compatible way.
+ */
+private fun RustWriter.renderForwardCompatibilityNote(
+    enumName: String, sortedMembers: List<EnumMemberModel>,
+    unknownVariant: String, unknownVariantValue: String,
+) {
+    docs(
+        """
+        When writing a match expression against `$enumName`, it is important to ensure
+        your code is forward-compatible. That is, if a match arm handles a case for a
+        feature that is supported by the service but has not been represented as an enum
+        variant in a current version of SDK, your code should continue to work when you
+        upgrade SDK to a future version in which the enum does include a variant for that
+        feature.
+        """.trimIndent(),
+    )
+    docs("")
+    docs("Here is an example of how you can make a match expression forward-compatible:")
+    docs("")
+    docs("```rust,no_run")
+    rust("/// ## let ${enumName.lowercase()} = unimplemented!();")
+    rust("/// match ${enumName.lowercase()} {")
+    sortedMembers.mapNotNull { it.name() }.forEach { member ->
+        rust("///     $enumName::${member.name} => { /* ... */ },")
+    }
+    rust("""///     other @ _ if other.as_str() == "NewFeature" => { /* handles a case for `NewFeature` */ },""")
+    rust("///     _ => { /* ... */ },")
+    rust("/// }")
+    docs("```")
+    docs(
+        """
+        The above code demonstrates that when `${enumName.lowercase()}` represents
+        `NewFeature`, the execution path will lead to the second last match arm,
+        even though the enum does not contain a variant `$enumName::NewFeature`
+        in the current version of SDK. The reason is that the variable `other`,
+        created by the `@` operator, is bound to
+        `$enumName::$unknownVariant($unknownVariantValue("NewFeature".to_owned()))`
+        and calling `as_str` on it yields `"NewFeature"`.
+        This match expression is forward-compatible when executed with a newer
+        version of SDK where the variant `$enumName::NewFeature` is defined.
+        Specifically, when `${enumName.lowercase()}` represents `NewFeature`,
+        the execution path will hit the second last match arm as before by virtue of
+        calling `as_str` on `$enumName::NewFeature` also yielding `"NewFeature"`.
+        """.trimIndent(),
+    )
+    docs("")
+    docs(
+        """
+        It is worth pointing out that explicitly matching on the `$unknownVariant` variant should
+        be avoided for two reasons:
+        - The inner data `$unknownVariantValue` is opaque, and no further information can be extracted.
+        - It might inadvertently shadow other intended match arms.
+        """.trimIndent(),
+    )
 }
