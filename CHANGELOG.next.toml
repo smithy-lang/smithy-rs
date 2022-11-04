@@ -126,7 +126,7 @@ let op = client
 
 The code above is just a snippet. See the full version of this test [here](./aws/sdk/integration-tests/s3/tests/connector-configuration.rs).
 """
-references = ["smithy-rs#1225"]
+references = ["smithy-rs#1225", "smithy-rs#1918"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
 
