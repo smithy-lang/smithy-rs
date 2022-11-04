@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldNam
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserSection
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSymbolToParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -106,11 +107,11 @@ class ServerAwsJsonProtocol(
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         fun builderSymbol(shape: StructureShape): Symbol =
             shape.serverBuilderSymbol(serverCodegenContext)
-        fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
+        fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
             if (shape.canReachConstrainedShape(codegenContext.model, symbolProvider)) {
-                true to serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape)
+                ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
             } else {
-                false to codegenContext.symbolProvider.toSymbol(shape)
+                ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
             }
         return JsonParserGenerator(
             codegenContext,
@@ -246,11 +247,11 @@ class ServerRestJsonProtocol(
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         fun builderSymbol(shape: StructureShape): Symbol =
             shape.serverBuilderSymbol(serverCodegenContext)
-        fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
+        fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
             if (shape.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)) {
-                true to serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape)
+                ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
             } else {
-                false to codegenContext.symbolProvider.toSymbol(shape)
+                ReturnSymbolToParse(serverCodegenContext.symbolProvider.toSymbol(shape), false)
             }
         return JsonParserGenerator(
             codegenContext,

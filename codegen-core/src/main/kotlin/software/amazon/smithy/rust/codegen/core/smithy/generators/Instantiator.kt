@@ -84,6 +84,10 @@ open class Instantiator(
      */
     interface BuilderKindBehavior {
         fun hasFallibleBuilder(shape: StructureShape): Boolean
+
+        // Client structure builders have two kinds of setters: one that always takes in `Option<T>`, and one that takes
+        // in the structure field's type. The latter's method name is the field's name, whereas the former is prefixed
+        // with `set_`. Client instantiators call the `set_*` builder setters.
         fun setterName(memberShape: MemberShape): String
         fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
     }

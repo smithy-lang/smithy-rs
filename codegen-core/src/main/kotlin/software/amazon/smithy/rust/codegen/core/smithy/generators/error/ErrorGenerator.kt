@@ -90,19 +90,20 @@ class ErrorGenerator(
             if (messageShape != null) {
                 val messageSymbol = symbolProvider.toSymbol(messageShape).mapRustType { t -> t.asDeref() }
                 val messageType = messageSymbol.rustType()
+                val memberName = symbolProvider.toMemberName(messageShape)
                 val (returnType, message) = if (messageType.stripOuter<RustType.Option>() is RustType.Opaque) {
                     // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
                     if (messageSymbol.isOptional()) {
                         "Option<&${messageType.stripOuter<RustType.Option>().render()}>" to
-                            "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                            "self.$memberName.as_ref()"
                     } else {
-                        "&${messageType.render()}" to "&self.${symbolProvider.toMemberName(messageShape)}"
+                        "&${messageType.render()}" to "&self.$memberName"
                     }
                 } else {
                     if (messageSymbol.isOptional()) {
-                        messageType.render() to "self.${symbolProvider.toMemberName(messageShape)}.as_deref()"
+                        messageType.render() to "self.$memberName.as_deref()"
                     } else {
-                        messageType.render() to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                        messageType.render() to "self.$memberName.as_ref()"
                     }
                 }
 

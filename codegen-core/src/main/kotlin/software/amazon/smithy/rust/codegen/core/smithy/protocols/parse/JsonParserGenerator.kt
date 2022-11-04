@@ -69,6 +69,8 @@ sealed class JsonParserSection(name: String) : Section(name) {
  */
 typealias JsonParserCustomization = NamedSectionGenerator<JsonParserSection>
 
+data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
+
 class JsonParserGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
@@ -82,10 +84,12 @@ class JsonParserGenerator(
      * user gets. This is only relevant for the server, that parses the incoming request and only after enforces
      * constraint traits.
      *
-     * The function returns a pair where the second component is the return symbol that should be parsed, and the first
-     * component is whether such symbol is unconstrained or not.
+     * The function returns a data class that signals the return symbol that should be parsed, and whether it's
+     * unconstrained or not.
      */
-    private val returnSymbolToParse: (Shape) -> Pair<Boolean, Symbol> = { shape -> false to codegenContext.symbolProvider.toSymbol(shape) },
+    private val returnSymbolToParse: (Shape) -> ReturnSymbolToParse = { shape ->
+        ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
+    },
     private val customizations: List<JsonParserCustomization> = listOf(),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
@@ -302,7 +306,7 @@ class JsonParserGenerator(
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
                 true -> {
-                    if (returnSymbolToParse(target).first) {
+                    if (returnSymbolToParse(target).isUnconstrained) {
                         rust("u.into_owned()")
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
@@ -353,7 +357,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val (returnUnconstrainedType, returnSymbol) = returnSymbolToParse(shape)
+        val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have lists with names prefixed with `__listOf__`,
             // which become `__list_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
@@ -404,7 +408,7 @@ class JsonParserGenerator(
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val (returnUnconstrainedType, returnSymbol) = returnSymbolToParse(shape)
+        val returnSymbolToParse = returnSymbolToParse(shape)
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have maps with names prefixed with `__mapOf__`,
             // which become `__map_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
@@ -414,7 +418,7 @@ class JsonParserGenerator(
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "ReturnType" to returnSymbol,
+                "ReturnType" to returnSymbolToParse.symbol,
                 *codegenScope,
             ) {
                 startObjectOrNull {
@@ -434,8 +438,8 @@ class JsonParserGenerator(
                             }
                         }
                     }
-                    if (returnUnconstrainedType) {
-                        rust("Ok(Some(#{T}(map)))", returnSymbol)
+                    if (returnSymbolToParse.isUnconstrained) {
+                        rust("Ok(Some(#{T}(map)))", returnSymbolToParse.symbol)
                     } else {
                         rust("Ok(Some(map))")
                     }
@@ -447,14 +451,14 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
-        val (returnBuilder, returnType) = returnSymbolToParse(shape)
+        val returnSymbolToParse = returnSymbolToParse(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             rustBlockTemplate(
                 """
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "ReturnType" to returnType,
+                "ReturnType" to returnSymbolToParse.symbol,
                 *codegenScope,
             ) {
                 startObjectOrNull {
@@ -462,7 +466,7 @@ class JsonParserGenerator(
                     rustTemplate("let mut builder = #{Builder}::default();", *codegenScope, "Builder" to builderSymbol(shape))
                     deserializeStructInner(shape.members())
                     // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
-                    if (returnBuilder) {
+                    if (returnSymbolToParse.isUnconstrained) {
                         rust("Ok(Some(builder))")
                     } else {
                         rust("Ok(Some(builder.build()))")
@@ -475,7 +479,7 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
-        val (_, symbol) = returnSymbolToParse(shape)
+        val returnSymbolToParse = returnSymbolToParse(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             rustBlockTemplate(
                 """
@@ -483,7 +487,7 @@ class JsonParserGenerator(
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
                 *codegenScope,
-                "Shape" to symbol,
+                "Shape" to returnSymbolToParse.symbol,
             ) {
                 rust("let mut variant = None;")
                 rustBlock("match tokens.next().transpose()?") {
@@ -507,7 +511,7 @@ class JsonParserGenerator(
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
-                                        withBlock("Some(#T::$variantName(", "))", symbol) {
+                                        withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
                                             deserializeMember(member)
                                             unwrapOrDefaultOrError(member)
                                         }
@@ -522,7 +526,8 @@ class JsonParserGenerator(
                                           Some(#{Union}::${UnionGenerator.UnknownVariantName})
                                         }
                                         """,
-                                        "Union" to symbol, *codegenScope,
+                                        "Union" to returnSymbolToParse.symbol,
+                                        *codegenScope,
                                     )
                                     // In server mode, use strict parsing.
                                     // Consultation: https://github.com/awslabs/smithy/issues/1222

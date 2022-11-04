@@ -439,7 +439,6 @@ class HttpBindingGenerator(
                         """,
                         "header_util" to headerUtil,
                     )
-//                }
                 }
             }
         }
