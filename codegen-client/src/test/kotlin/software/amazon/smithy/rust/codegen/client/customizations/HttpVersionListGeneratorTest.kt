@@ -7,15 +7,11 @@ package software.amazon.smithy.rust.codegen.client.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.testutil.AddRustTestsDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -27,9 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
-import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 // If any of these tests fail, and you want to understand why, run them with logging:
 // ```
@@ -113,33 +107,28 @@ internal class HttpVersionListGeneratorTest {
                 greeting: String
             }
         """.asSmithyModel()
-        val (ctx, testDir) = generatePluginContext(model)
-        val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> =
-            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations())
-                .withDecorator(
-                    AddRustTestsDecorator("validate_http") {
-                        TokioTest.render(this)
-                        rust(
-                            """
-                            async fn test_http_version_list_defaults() {
-                                let conf = $moduleName::Config::builder().build();
-                                let op = $moduleName::operation::SayHello::builder()
-                                    .greeting("hello")
-                                    .build().expect("valid operation")
-                                    .make_operation(&conf).await.expect("hello is a valid prefix");
-                                let properties = op.properties();
-                                let actual_http_versions = properties.get::<Vec<http::Version>>()
-                                    .expect("http versions list should be in property bag");
-                                let expected_http_versions = &vec![http::Version::HTTP_11, http::Version::HTTP_2];
-                                assert_eq!(actual_http_versions, expected_http_versions);
-                            }
-                            """,
-                        )
-                    },
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+            val moduleName = clientCodegenContext.moduleUseName()
+            rustCrate.integrationTest("validate_http") {
+                TokioTest.render(this)
+                rust(
+                    """
+                    async fn test_http_version_list_defaults() {
+                        let conf = $moduleName::Config::builder().build();
+                        let op = $moduleName::operation::SayHello::builder()
+                            .greeting("hello")
+                            .build().expect("valid operation")
+                            .make_operation(&conf).await.expect("hello is a valid prefix");
+                        let properties = op.properties();
+                        let actual_http_versions = properties.get::<Vec<http::Version>>()
+                            .expect("http versions list should be in property bag");
+                        let expected_http_versions = &vec![http::Version::HTTP_11, http::Version::HTTP_2];
+                        assert_eq!(actual_http_versions, expected_http_versions);
+                    }
+                    """,
                 )
-        CodegenVisitor(ctx, combinedCodegenDecorator).execute()
-        "cargo test".runCommand(testDir)
+            }
+        }
     }
 
     @Test
@@ -212,7 +201,7 @@ internal class HttpVersionListGeneratorTest {
 
 class FakeSigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "fakesigning"
-    override val order: Byte = -1
+    override val order: Byte = 0
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean = false
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -225,7 +214,7 @@ class FakeSigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
 
 class FakeSigningConfig(
     runtimeConfig: RuntimeConfig,
-) : ConfigCustomization() {
+) : EventStreamSigningConfig(runtimeConfig) {
     private val codegenScope = arrayOf(
         "SharedPropertyBag" to RuntimeType(
             "SharedPropertyBag",

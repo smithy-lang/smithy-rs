@@ -31,6 +31,9 @@ fun clientIntegrationTest(
     model: Model,
     addtionalDecorators: List<RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>> = listOf(),
     addModuleToEventStreamAllowList: Boolean = false,
+    service: String? = null,
+    runtimeConfig: RuntimeConfig? = null,
+    additionalSettings: ObjectNode = ObjectNode.builder().build(),
     test: (ClientCodegenContext, RustCrate) -> Unit,
 ): Path {
     return codegenIntegrationTest(
@@ -38,6 +41,9 @@ fun clientIntegrationTest(
         RustCodegenPlugin(),
         addtionalDecorators,
         addModuleToEventStreamAllowList = addModuleToEventStreamAllowList,
+        service = service,
+        runtimeConfig = runtimeConfig,
+        additionalSettings = additionalSettings,
         test = test,
     )
 }
