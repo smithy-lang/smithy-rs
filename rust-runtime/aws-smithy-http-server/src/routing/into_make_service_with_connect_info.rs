@@ -100,7 +100,7 @@ where
 /// See [`Router::into_make_service_with_connect_info`] for more details.
 ///
 /// [`Router::into_make_service_with_connect_info`]: crate::routing::Router::into_make_service_with_connect_info
-pub trait Connected<T>: Clone + Send + Sync + 'static {
+pub trait Connected<T>: Clone {
     /// Create type holding information about the connection.
     fn connect_info(target: T) -> Self;
 }
@@ -138,7 +138,7 @@ opaque_future! {
         std::future::Ready<Result<AddExtension<S, ConnectInfo<C>>, Infallible>>;
 }
 
-/// Extractor for getting connection information produced by a [`Connected`].
+/// Extractor for getting connection information produced by a `Connected`.
 ///
 /// Note this extractor requires you to use
 /// [`Router::into_make_service_with_connect_info`] to run your app
