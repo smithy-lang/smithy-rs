@@ -308,6 +308,11 @@ class ServerServiceGeneratorV2(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
+                /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::routing::into_make_service_with_connect_info::ConnectInfo).
+                pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
+                    #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
+                }
+
                 /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                 pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
                 where
