@@ -46,16 +46,15 @@ class RustCodegenPlugin : DecoratableBuildPlugin<ClientProtocolGenerator, Client
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        var codegenDecorator =
+        val codegenDecorator =
             CombinedCodegenDecorator.fromClasspath(
                 context,
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
                 NoOpEventStreamSigningDecorator(),
+                *decorator,
             )
-
-        codegenDecorator = codegenDecorator.withDecorator(*decorator)
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code
         CodegenVisitor(context, codegenDecorator).execute()
