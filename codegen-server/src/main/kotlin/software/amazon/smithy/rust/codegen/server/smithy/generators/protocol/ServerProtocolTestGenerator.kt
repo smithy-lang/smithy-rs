@@ -533,8 +533,8 @@ class ServerProtocolTestGenerator(
                 // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
                 // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
                 //
-                // We also replace `#` with `##` to avoid interactions with templating in the case where the body contains `#`.
-                val sanitizedBody = body.replace("\u000c", "\\u{000c}").replace("#", "##").dq()
+                // We also escape to avoid interactions with templating in the case where the body contains `#`.
+                val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
                 "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
             } else {
