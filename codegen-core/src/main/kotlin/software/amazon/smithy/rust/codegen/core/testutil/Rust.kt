@@ -216,11 +216,14 @@ class TestWriterDelegator(
     ) {
     val baseDir: Path = fileManifest.baseDir
 
-    fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
     fun printGeneratedFiles() {
-        generatedFiles().forEach { path ->
-            println("file:///$path")
-        }
+        fileManifest.printGeneratedFiles()
+    }
+}
+
+fun FileManifest.printGeneratedFiles() {
+    this.files.forEach { path ->
+        println("file:///$path")
     }
 }
 
@@ -384,4 +387,15 @@ fun String.compileAndRun(vararg strings: String) {
     val contents = this + "\nfn main() { \n ${strings.joinToString("\n")} }"
     val binary = contents.shouldCompile()
     binary.absolutePath.runCommand()
+}
+
+fun RustCrate.integrationTest(name: String, writable: Writable) = this.withFile("tests/$name.rs", writable)
+
+fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
+    lib {
+        unitTest(safeName("test")) {
+            test(this)
+        }
+    }
+    return this
 }
