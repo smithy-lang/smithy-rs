@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -70,6 +71,7 @@ internal class PaginatorGeneratorTest {
     fun `generate paginators that compile`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("paginators_generated") {
+                Attribute.Custom("allow(unused_imports)").render(this)
                 rust("use ${clientCodegenContext.moduleUseName()}::paginator::PaginatedListPaginator;")
             }
         }

@@ -99,6 +99,6 @@ private fun <T, C : CodegenContext> codegenIntegrationTest(
     }
     buildPlugin.executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
     ctx.fileManifest.printGeneratedFiles()
-    "cargo test".runCommand(testDir)
+    "cargo test".runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
     return testDir
 }
