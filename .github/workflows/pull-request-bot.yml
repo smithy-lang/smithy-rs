@@ -46,7 +46,7 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         path: smithy-rs
     - name: Generate diff
@@ -80,8 +80,8 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-preview.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/cache@v2
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
       name: Gradle Cache
       with:
         path: |
@@ -92,8 +92,10 @@ jobs:
           ${{ runner.os }}-gradle-
       # JDK is needed to generate code
     - name: Set up JDK
-      uses: actions/setup-java@v1
+      uses: actions/setup-java@v3
       with:
+        distribution: corretto
+        java-package: jdk
         java-version: ${{ env.java_version }}
     - uses: actions-rs/toolchain@v1
       with:
@@ -155,7 +157,7 @@ jobs:
         set -eux
         echo ::set-output name=codegen-diff::"$(cat ./bot-message-codegen-diff)"
     - name: Post bot comment
-      uses: actions/github-script@v5
+      uses: actions/github-script@v6
       with:
         script: |
           await github.rest.issues.createComment({

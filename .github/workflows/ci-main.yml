@@ -28,7 +28,7 @@ jobs:
       contents: read
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Build image
       run: |
         IMAGE_TAG="$(./tools/ci-build/tools-hash)"

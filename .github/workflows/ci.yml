@@ -121,11 +121,13 @@ jobs:
       RUSTFLAGS: -D warnings
     steps:
     - uses: actions/checkout@v3
-      # Pinned to the commit hash of v1.3.0
-    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      # Pinned to the commit hash of v2.1.0
+    - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
       with:
-        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
-        target-dir: ./target
+        shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        workspaces: |
+          .
+          tools
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -181,12 +183,14 @@ jobs:
       CROSS_CONFIG: Cross.toml
     steps:
     - name: Checkout
-      uses: actions/checkout@v1
-      # Pinned to the commit hash of v1.3.0
-    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      uses: actions/checkout@v3
+      # Pinned to the commit hash of v2.1.0
+    - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
       with:
-        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
-        target-dir: ./target
+        shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
+        workspaces: |
+          .
+          tools
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -280,6 +284,7 @@ jobs:
     name: Matrix Success
     steps:
     - name: Verify jobs succeeded
-      uses: re-actors/alls-green@3a2de129f0713010a71314c74e33c0e3ef90e696
+      # Pinned to commit hash of v1.2.2
+      uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
       with:
         jobs: ${{ toJSON(needs) }}
