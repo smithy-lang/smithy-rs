@@ -65,8 +65,8 @@ abstract class DecoratableBuildPlugin<T, C : CodegenContext> : SmithyBuildPlugin
     }
 }
 
-// TODO: move to core once CodgenDecorator is in core
-private inline fun <T, C : CodegenContext> codegenIntegrationTest(
+// TODO(https://github.com/awslabs/smithy-rs/issues/1864): move to core once CodegenDecorator is in core
+private fun <T, C : CodegenContext> codegenIntegrationTest(
     model: Model,
     buildPlugin: DecoratableBuildPlugin<T, C>,
     additionalDecorators: List<RustCodegenDecorator<T, C>>,
@@ -74,7 +74,7 @@ private inline fun <T, C : CodegenContext> codegenIntegrationTest(
     addModuleToEventStreamAllowList: Boolean = false,
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
-    overrideTestDir: File? = null, crossinline test: (C, RustCrate) -> Unit,
+    overrideTestDir: File? = null, test: (C, RustCrate) -> Unit,
 ): Path {
     val (ctx, testDir) = generatePluginContext(
         model,
