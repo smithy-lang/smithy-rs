@@ -112,7 +112,7 @@ let sdk_config = SdkConfig::builder()
     .http_connector(smithy_connector)
     .build();
 
-let client = Client::new(&conf);
+let client = Client::new(&sdk_config);
 
 // When sent, this operation will go through the custom smithy connector instead of
 // the default HTTP connector.
