@@ -322,10 +322,9 @@ Note that the `S` and `L` are specified by logic written, in Rust, by the custom
 The procedure of taking a struct and transforming it into a HTTP service is formalized by the [`Upgradable`](https://github.com/awslabs/smithy-rs/blob/9a6de1f533f8743dbbc3fa6ad974d104c8b841f4/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L220-L225) trait:
 
 ```rust
-/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
-/// canonical associated types.
+/// An interface to convert a representation of a Smithy operation into a [`Route`].
 pub trait Upgradable<Protocol, Operation, ...> {
-    /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
+    /// Upgrade the representation of a Smithy operation to a [`Route`].
     fn upgrade(self, plugin: &Plugin) -> Route<B>;
 }
 ```
