@@ -379,7 +379,7 @@ class EnumGeneratorTest {
     @Test
     fun `matching on enum should be forward-compatible`() {
         fun expectMatchExpressionCompiles(model: Model, shapeId: String, enumToMatchOn: String) {
-            val shape = model.lookup<StringShape>("test#SomeEnum")
+            val shape = model.lookup<StringShape>(shapeId)
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
