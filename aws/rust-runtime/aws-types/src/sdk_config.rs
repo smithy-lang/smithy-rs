@@ -362,7 +362,7 @@ impl Builder {
     /// Sets the HTTP connector to use when making requests.
     ///
     /// ## Examples
-    /// ```
+    /// ```no_run
     /// # #[cfg(test)]
     /// # mod tests {
     /// # #[test]
@@ -401,7 +401,7 @@ impl Builder {
     /// Sets the HTTP connector to use when making requests.
     ///
     /// ## Examples
-    /// ```
+    /// ```no_run
     /// # #[cfg(test)]
     /// # mod tests {
     /// # #[test]

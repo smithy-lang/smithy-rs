@@ -67,7 +67,7 @@ class HttpConnectorConfigCustomization(
                     /// Sets the HTTP connector to use when making requests.
                     ///
                     /// ## Examples
-                    /// ```
+                    /// ```no_run
                     /// ## ##[cfg(test)]
                     /// ## mod tests {
                     /// ## ##[test]
@@ -103,7 +103,7 @@ class HttpConnectorConfigCustomization(
                     /// Sets the HTTP connector to use when making requests.
                     ///
                     /// ## Examples
-                    /// ```
+                    /// ```no_run
                     /// ## ##[cfg(test)]
                     /// ## mod tests {
                     /// ## ##[test]

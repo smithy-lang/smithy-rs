@@ -270,7 +270,7 @@ mod loader {
         /// Override the [`HttpConnector`] used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// ## Examples
-        /// ```
+        /// ```no_run
         /// # #[cfg(test)]
         /// # mod tests {
         /// # #[test]
