@@ -92,3 +92,8 @@ references = ["smithy-rs#1935"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = "Generate enums that guide the users to write match expressions in a forward-compatible way."
+references = ["smithy-rs#1945"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "ysaito1001"
