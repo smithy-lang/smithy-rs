@@ -97,10 +97,9 @@ jobs:
         distribution: corretto
         java-package: jdk
         java-version: ${{ env.java_version }}
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
-        default: true
     - name: Generate doc preview
       id: generate-preview
       # Only generate three of the smallest services since the doc build can be very large. STS and SSO must be

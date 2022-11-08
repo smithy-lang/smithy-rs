@@ -30,9 +30,7 @@ jobs:
         java-version: 11
       # Rust is only used to `rustfmt` the generated code; doesn't need to match MSRV
     - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
+      uses: dtolnay/rust-toolchain@stable
     - name: Delete old SDK
       run: |
     - name: Generate a fresh SDK

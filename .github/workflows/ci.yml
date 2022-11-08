@@ -128,11 +128,10 @@ jobs:
         workspaces: |
           .
           tools
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
-        default: true
     - name: Run tests
       shell: bash
       run: |
@@ -191,13 +190,11 @@ jobs:
         workspaces: |
           .
           tools
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
-        profile: minimal
-        override: true
-        target: ${{ matrix.target }}
+        targets: ${{ matrix.target }}
     - name: Sets OpenSSL env vars on i686
       run: |
         echo "OPENSSL_LIB_DIR=/usr/lib/i386-linux-gnu" >> $GITHUB_ENV
@@ -212,6 +209,8 @@ jobs:
       # configure and cross compile openssl locally on ppc and ppc64 to be able to run aws-smithy-client tests.
       # since cross dropped support for openssl, we use the build script from version 0.16.
       run: |
+        cargo install cross --locked --version 0.2.4
+
         cat > Cross.toml << EOF
         [target.i686-unknown-linux-gnu]
         pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
@@ -230,29 +229,17 @@ jobs:
         passthrough = ["OPENSSL_DIR"]
         EOF
     - name: Build Smithy-rs rust-runtime crates
-      uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: build
-        args: -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
+      shell: bash
+      run: cross build -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
     - name: Build AWS rust-runtime crates
-      uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: build
-        args: -vv --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
+      shell: bash
+      run: cross build -vv --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
     - name: Test Smithy-rs rust-runtime crates
-      uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: test
-        args: --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
+      shell: bash
+      run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
     - name: Test AWS rust-runtime crates
-      uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: test
-        args: --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
+      shell: bash
+      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
