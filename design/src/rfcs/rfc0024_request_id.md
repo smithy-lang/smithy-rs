@@ -67,6 +67,7 @@ For privacy reasons, any format that provides service details should be avoided.
 The proposed format is to use UUID, version 4.
 
 AWS Lambda sends a RequestID in the request context; there is no need to modify it.
+Services will apply their `Service` if they need to extract the "AWS request ID" from the context given by the Lambda invocation.
 
 A `Service` that inserts a RequestId in the extensions will be implemented as follows:
 ```rust
@@ -83,7 +84,7 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
-        request.extensions_mut().insert(ServiceRequestId::new());
+        request.extensions_mut().insert(ServerRequestId::new());
         self.inner.call(req)
     }
 }
@@ -91,7 +92,9 @@ where
 
 For client request IDs, the process will be, in order:
 * If a header is found matching one of the possible ones, use it
-* If a way to generate the ID is provided, use it; also, provide a default generator (UUIDv4)
+* Otherwise, None
+
+`Option` is used to distinguish whether a client had provided an ID or not.
 ```rust
 impl<R, S> Service<http::Request<R>> for ClientRequestIdProvider<S>
 where
@@ -108,25 +111,26 @@ where
     fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
         for possible_header in self.possible_headers {
             if let Some(id) = req.headers.get(possible_header) {
-                req.extensions_mut().insert(ClientRequestId::new(id));
+                req.extensions_mut().insert(Some(ClientRequestId::new(id)));
                 return self.inner.call(req)
             }
         }
-        if let Some(generator) = self.id_generator {
-            req.extensions_mut().insert(ClientRequestId::new(generator()));
-        }
+        req.extensions_mut().insert(None);
         self.inner.call(req)
     }
 }
 ```
 
+The string representation of a generated `ServerRequestId` will be valid for this regex:
+```
+/^[A-Za-z0-9_-]{,48}$/
+```
+Although the generated ID is opaque, this will give guarantees to customers as to what they can expect, if the ID is ever updated to a different format.
+
 Changes checklist
 -----------------
 
 - [ ] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
-- [ ] Implement `ClientRequestId`:
-  - `new()` that wraps a string (the header value), with `Display`, `Debug` and `ToStr` implementations
-  - `with_generator()` that applies an ID generator if no usable header is found
-  - `with_default_generator()` that sets the generator to be UUIDv4
+- [ ] Implement `ClientRequestId`: `new()` that wraps a string (the header value), with `Display`, `Debug` and `ToStr` implementations
 - [x] Implement `FromParts` for `Extension<ServerRequestId>`
 - [x] Implement `FromParts` for `Extension<ClientRequestId>`
