@@ -9,9 +9,9 @@ mod stack;
 
 use crate::operation::Operation;
 
-pub use filter::*;
-pub use identity::*;
-pub use stack::*;
+pub use filter::FilterByOperationName;
+pub use identity::IdentityPlugin;
+pub use stack::PluginStack;
 
 /// Provides a standard interface for applying [`Plugin`]s to a service builder. This is implemented automatically for
 /// all builders.
