@@ -157,7 +157,7 @@ open class EnumGenerator(
     }
 
     private fun renderEnum() {
-        if (target == CodegenTarget.CLIENT) {
+        if (target.renderUnknownVariant()) {
             writer.renderForwardCompatibilityNote(enumName, sortedMembers, UnknownVariant, UnknownVariantValue)
         }
 
@@ -175,7 +175,7 @@ open class EnumGenerator(
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
-            if (target == CodegenTarget.CLIENT) {
+            if (target.renderUnknownVariant()) {
                 docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
                 rust("$UnknownVariant(#T)", unknownVariantValue())
             }
@@ -190,7 +190,7 @@ open class EnumGenerator(
                     sortedMembers.forEach { member ->
                         rust("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
-                    if (target == CodegenTarget.CLIENT) {
+                    if (target.renderUnknownVariant()) {
                         rust("$enumName::$UnknownVariant(value) => value.as_str()")
                     }
                 }
