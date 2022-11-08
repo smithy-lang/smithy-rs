@@ -324,7 +324,7 @@ The procedure of taking a struct and transforming it into a HTTP service is form
 ```rust
 /// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
-pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
+pub trait Upgradable<Protocol, Operation, ...> {
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
     fn upgrade(self, plugin: &Plugin) -> Route<B>;
 }
