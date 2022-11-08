@@ -188,9 +188,10 @@ pub fn expect_number_or_null(
 /// Expects a [Token::ValueString] or [Token::ValueNull]. If the value is a string, it interprets it as a base64 encoded [Blob] value.
 pub fn expect_blob_or_null(token: Option<Result<Token<'_>, Error>>) -> Result<Option<Blob>, Error> {
     Ok(match expect_string_or_null(token)? {
-        Some(value) => Some(Blob::new(base64::decode(value.as_escaped_str()).map_err(
-            |err| Error::custom(format!("failed to decode base64: {}", err)),
-        )?)),
+        Some(value) => Some(Blob::new(
+            base64::decode(value.as_escaped_str())
+                .map_err(|err| Error::custom_source("failed to decode base64", err))?,
+        )),
         None => None,
     })
 }
@@ -218,7 +219,7 @@ pub fn expect_timestamp_or_null(
         Format::DateTime | Format::HttpDate => expect_string_or_null(token)?
             .map(|v| DateTime::from_str(v.as_escaped_str(), timestamp_format))
             .transpose()
-            .map_err(|err| Error::custom(format!("failed to parse timestamp: {}", err)))?,
+            .map_err(|err| Error::custom_source("failed to parse timestamp", err))?,
     })
 }
 
