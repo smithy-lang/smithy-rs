@@ -177,7 +177,7 @@ class ServerServiceGeneratorV2(
             """
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
             ///
-            /// It returns an error if you forgot to register a handler for one or more operations.
+            /// Forgetting to register a handler for one or more operations will result in an error.
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
                 let router = {
