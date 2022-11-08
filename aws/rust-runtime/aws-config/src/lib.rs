@@ -222,11 +222,13 @@ mod loader {
         ///
         /// # Examples
         /// ```no_run
-        /// # use aws_smithy_types::retry::RetryConfig;
         /// # async fn create_config() {
-        ///     let config = aws_config::from_env()
-        ///         .retry_config(RetryConfig::standard().with_max_attempts(2))
-        ///         .load().await;
+        /// use aws_smithy_types::retry::RetryConfig;
+        ///
+        /// let config = aws_config::from_env()
+        ///     .retry_config(RetryConfig::standard().with_max_attempts(2))
+        ///     .load()
+        ///     .await;
         /// # }
         /// ```
         pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
@@ -242,16 +244,16 @@ mod loader {
         /// ```no_run
         /// # use std::time::Duration;
         /// # async fn create_config() {
-        ///  use aws_smithy_types::timeout::TimeoutConfig;
+        /// use aws_smithy_types::timeout::TimeoutConfig;
         ///
-        ///  let config = aws_config::from_env()
-        ///     .timeout_config(
-        ///         TimeoutConfig::builder()
-        ///             .operation_timeout(Duration::from_secs(5))
-        ///             .build()
-        ///     )
-        ///     .load()
-        ///     .await;
+        /// let config = aws_config::from_env()
+        ///    .timeout_config(
+        ///        TimeoutConfig::builder()
+        ///            .operation_timeout(Duration::from_secs(5))
+        ///            .build()
+        ///    )
+        ///    .load()
+        ///    .await;
         /// # }
         /// ```
         pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
@@ -267,19 +269,18 @@ mod loader {
             self
         }
 
-        /// Override the [`HttpConnector`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the [`HttpConnector`] for this [`ConfigLoader`]. The connector will be used when
+        /// sending operations. This **does not set** the HTTP connector used by config providers.
+        /// To change that connector, use [ConfigLoader::configure].
         ///
         /// ## Examples
         /// ```no_run
-        /// # #[cfg(test)]
-        /// # mod tests {
-        /// # #[test]
-        /// # fn example() {
+        /// # #[cfg(feature = "hyper-client")]
+        /// # async fn create_config() {
         /// use std::time::Duration;
         /// use aws_smithy_client::{Client, hyper_ext};
         /// use aws_smithy_client::erase::DynConnector;
         /// use aws_smithy_client::http_connector::ConnectorSettings;
-        /// use aws_types::SdkConfig;
         ///
         /// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
         ///     .with_webpki_roots()
@@ -295,10 +296,10 @@ mod loader {
         ///             .build()
         ///     )
         ///     .build(https_connector);
-        /// let sdk_config = SdkConfig::builder()
+        /// let sdk_config = aws_config::from_env()
         ///     .http_connector(smithy_connector)
-        ///     .build();
-        /// # }
+        ///     .load()
+        ///     .await;
         /// # }
         /// ```
         pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
@@ -341,11 +342,12 @@ mod loader {
         ///
         /// Use a static endpoint for all services
         /// ```no_run
-        /// # async fn doc() {
+        /// # async fn creat_config() {
         /// use aws_smithy_http::endpoint::Endpoint;
+        ///
         /// let sdk_config = aws_config::from_env()
-        ///   .endpoint_resolver(Endpoint::immutable("http://localhost:1234".parse().expect("valid URI")))
-        ///   .load().await;
+        ///     .endpoint_resolver(Endpoint::immutable("http://localhost:1234".parse().expect("valid URI")))
+        ///     .load().await;
         /// # }
         pub fn endpoint_resolver(
             mut self,
@@ -358,12 +360,14 @@ mod loader {
         /// Set configuration for all sub-loaders (credentials, region etc.)
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
-        /// the HTTPs connector used or to stub in an in memory `Env` or `Fs` for testing.
+        /// the HTTPs connector used by providers or to stub in an in memory `Env` or `Fs` for testing.
+        /// This **does not set** the HTTP connector used when sending operations. To change that
+        /// connector, use [ConfigLoader::http_connector].
         ///
         /// # Examples
         /// ```no_run
         /// # #[cfg(feature = "hyper-client")]
-        /// # async fn docs() {
+        /// # async fn create_config() {
         /// use aws_config::provider_config::ProviderConfig;
         /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new().
         ///     with_webpki_roots()

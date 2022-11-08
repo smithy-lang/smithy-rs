@@ -108,9 +108,10 @@ let smithy_connector = hyper_ext::Adapter::builder()
     )
     .build(https_connector);
 
-let sdk_config = SdkConfig::builder()
+let sdk_config = aws_config::from_env()
     .http_connector(smithy_connector)
-    .build();
+    .load()
+    .await;
 
 let client = Client::new(&sdk_config);
 
@@ -143,7 +144,7 @@ before:
 
 ```rust
     let conf = aws_sdk_sts::Config::builder()
-        .region(Region::new("us-east-1"))
+        // The builder has no defaults but setting other fields is omitted for brevity...
         .build();
     let (server, request) = capture_request(None);
     let client = aws_sdk_sts::Client::from_conf_conn(conf, server);
@@ -154,7 +155,7 @@ after:
 ```rust
     let (server, request) = capture_request(None);
     let conf = aws_sdk_sts::Config::builder()
-        .region(Region::new("us-east-1"))
+        // The builder has no defaults but setting other fields is omitted for brevity...
         .http_connector(server)
         .build();
     let client = aws_sdk_sts::Client::from_conf(conf);
