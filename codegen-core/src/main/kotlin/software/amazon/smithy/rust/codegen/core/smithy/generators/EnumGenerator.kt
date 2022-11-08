@@ -12,6 +12,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -111,10 +112,6 @@ open class EnumGenerator(
             // pub enum Blah { V1, V2, .. }
             renderEnum()
             writer.insertTrailingNewline()
-            if (target == CodegenTarget.CLIENT) {
-                renderUnknownVariantValue()
-            }
-            writer.insertTrailingNewline()
             // impl From<str> for Blah { ... }
             renderFromForStr()
             // impl FromStr for Blah { ... }
@@ -180,7 +177,7 @@ open class EnumGenerator(
             sortedMembers.forEach { member -> member.render(writer) }
             if (target == CodegenTarget.CLIENT) {
                 docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
-                rust("$UnknownVariant($UnknownVariantValue)")
+                rust("$UnknownVariant(#T)", unknownVariantValue())
             }
         }
     }
@@ -209,16 +206,16 @@ open class EnumGenerator(
         }
     }
 
-    private fun renderUnknownVariantValue() {
-        // No doc or note comes with this inner opaque struct.
-        // We do want to mark it as #[allow(missing_docs)] to suppress the missing docs lint.
-        writer.docWithNote(null, null)
-        meta.render(writer)
-        writer.write("struct $UnknownVariantValue(String);")
-        writer.rustBlock("impl $UnknownVariantValue") {
-            // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
-            rustBlock("fn as_str(&self) -> &str") {
-                rust("&self.0")
+    private fun unknownVariantValue(): RuntimeType {
+        return RuntimeType.forInlineFun(UnknownVariantValue, RustModule.Model) {
+            rust("##[allow(missing_docs)]")
+            meta.render(this)
+            rust("struct $UnknownVariantValue(String);")
+            rustBlock("impl $UnknownVariantValue") {
+                // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
+                rustBlock("fn as_str(&self) -> &str") {
+                    rust("&self.0")
+                }
             }
         }
     }
@@ -230,7 +227,7 @@ open class EnumGenerator(
                     sortedMembers.forEach { member ->
                         rust("""${member.value.dq()} => $enumName::${member.derivedName()},""")
                     }
-                    rust("other => $enumName::$UnknownVariant($UnknownVariantValue(other.to_owned()))")
+                    rust("other => $enumName::$UnknownVariant(#T(other.to_owned()))", unknownVariantValue())
                 }
             }
         }
