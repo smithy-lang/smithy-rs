@@ -152,19 +152,15 @@ class ServerServiceGeneratorV2(
     }
 
     private fun buildMethod(): Writable = writable {
-        val routesVariableName = "routes"
         val missingOperationsVariableName = "missing_operation_names"
 
-        val pairs = writable {
+        val nullabilityChecks = writable {
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
-                val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
                 val operationZstTypeName = operationStructNames[operationShape]!!
                 rustTemplate(
                     """
-                    if let Some(route) = self.$fieldName {
-                        $routesVariableName.push(($requestSpecsModuleName::$specBuilderFunctionName(), route));
-                    } else {
+                    if self.$fieldName.is_none() {
                         $missingOperationsVariableName.insert(crate::operation_shape::$operationZstTypeName::NAME, ".$fieldName()");
                     }
                     """,
@@ -172,7 +168,17 @@ class ServerServiceGeneratorV2(
                 )
             }
         }
-        val nOperations = operations.size
+        val routesArrayElements = writable {
+            for (operationShape in operations) {
+                val fieldName = builderFieldNames[operationShape]!!
+                val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
+                rustTemplate(
+                    """
+                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.unwrap()),
+                    """,
+                )
+            }
+        }
         rustTemplate(
             """
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
@@ -182,15 +188,14 @@ class ServerServiceGeneratorV2(
             {
                 let router = {
                     use #{SmithyHttpServer}::operation::OperationShape;
-                    let mut $routesVariableName = Vec::with_capacity($nOperations);
                     let mut $missingOperationsVariableName = std::collections::HashMap::new();
-                    #{Pairs:W}
+                    #{NullabilityChecks:W}
                     if !$missingOperationsVariableName.is_empty() {
                         return Err(MissingOperationsError {
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
-                    #{Router}::from_iter($routesVariableName.into_iter())
+                    #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
                 Ok($serviceName {
                     router: #{SmithyHttpServer}::routers::RoutingService::new(router),
@@ -198,7 +203,8 @@ class ServerServiceGeneratorV2(
             }
             """,
             "Router" to protocol.routerType(),
-            "Pairs" to pairs,
+            "NullabilityChecks" to nullabilityChecks,
+            "RoutesArrayElements" to routesArrayElements,
             "SmithyHttpServer" to smithyHttpServer,
         )
     }
