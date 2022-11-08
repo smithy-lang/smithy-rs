@@ -124,9 +124,9 @@ class BaseSymbolMetadataProvider(
         return containerDefault.withDerives(
             RuntimeType.std.member("hash::Hash"),
         ).withDerives(
-            // enums can be eq because the inner data also implements Eq
+            // enums can be eq because they can only contain ints and strings
             RuntimeType.std.member("cmp::Eq"),
-            // enums can be Ord because the inner data also implements Ord
+            // enums can be Ord because they can only contain ints and strings
             RuntimeType.std.member("cmp::PartialOrd"),
             RuntimeType.std.member("cmp::Ord"),
         )
