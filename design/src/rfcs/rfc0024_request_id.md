@@ -13,24 +13,26 @@ Terminology
 - **RequestID**: a service-wide unique identifier
 - **UUID**: a universally unique identifier
 
-<!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
 RequestID is an element that uniquely identifies a client request. RequestID is used by services to map all logs, events and
 specific data to a single operation. This RFC discusses whether and how smithy-rs can make that value available to customers.
 
 Services use a RequestID to collect logs related to the same request and see its flow through the various operations,
-help clients debug requests by sharing this value and, in some cases, use this value to perform their business logic. RequestID is unique across a service.
+help clients debug requests by sharing this value and, in some cases, use this value to perform their business logic. RequestID is unique across a service at least within a certain timeframe.
 
 This value for the purposes above must be set by the service. Clients could send any value not conforming to the valid, chosen format,
 avoid sending one altogether or exploit how some service is using that value
 (like in [1](https://en.wikipedia.org/wiki/Shellshock_(software_bug)) and
 [2](https://cwiki.apache.org/confluence/display/WW/S2-045)).
+
 Having the client send the value bring the following challenges:
 * The client could repeatedly send the same RequestID
 * The client could send no RequestID
 * The client could send a malformed or malicious RequestID
 
-To minimise the attack surface and provide a uniform experience to customers, servers must generate the value.
-Services are free to read the ID sent by clients in HTTP headers.
+To minimise the attack surface and provide a uniform experience to customers, servers should generate the value.
+However, services should be free to read the ID sent by clients in HTTP headers: it is common for services to
+read the request ID a client sends, record it and send it back upon success. A client may want to send the same value to multiple services.
+Services should still decide to have their own unique request ID per actual call.
 
 RequestIDs are not to be used by multiple services, but only within a service.
 
@@ -39,6 +41,7 @@ The user experience if this RFC is implemented
 ----------------------------------------------
 
 The proposal is to implement a `RequestId` type and make it available to middleware and business logic handlers, through [FromParts](../server/from-parts.md) and as a `Service`.
+To aid customers already relying on clients' request IDs, there will be two types: `ClientRequestId` and `ServerRequestId`.
 
 1. Implementing `FromParts` for `Extension<RequestId>` gives customers the ability to write their handlers:
 
@@ -64,11 +67,10 @@ For privacy reasons, any format that provides service details should be avoided.
 The proposed format is to use UUID, version 4.
 
 AWS Lambda sends a RequestID in the request context; there is no need to modify it.
-There should be a `Service` for Lambda users that extracts the value and injects it as for non-Lambda other requests.
 
-A `Service` that inserts a RequestId in the extensions:
+A `Service` that inserts a RequestId in the extensions will be implemented as follows:
 ```rust
-impl<R, S> Service<http::Request<R>> for RequestIdProvider<S>
+impl<R, S> Service<http::Request<R>> for ServerRequestIdProvider<S>
 where
     S: Service<http::Request<R>>,
 {
@@ -81,25 +83,50 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
-        req.extensions_mut().insert(RequestId::new());
+        request.extensions_mut().insert(ServiceRequestId::new());
         self.inner.call(req)
     }
 }
 ```
 
-A `Service` that inserts a RequestId in the extensions:
+For client request IDs, the process will be, in order:
+* If a header is found matching one of the possible ones, use it
+* If a way to generate the ID is provided, use it; also, provide a default generator (UUIDv4)
 ```rust
-fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
-    let req_id = RequestId::new();
-    let span = span!(request_id = %req_id);
-    request.extensions_mut().insert(req_id);
-    self.inner.call(request).instrument(span)
+impl<R, S> Service<http::Request<R>> for ClientRequestIdProvider<S>
+where
+    S: Service<http::Request<R>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
+        for possible_header in self.possible_headers {
+            if let Some(id) = req.headers.get(possible_header) {
+                req.extensions_mut().insert(ClientRequestId::new(id));
+                return self.inner.call(req)
+            }
+        }
+        if let Some(generator) = self.id_generator {
+            req.extensions_mut().insert(ClientRequestId::new(generator()));
+        }
+        self.inner.call(req)
+    }
 }
 ```
 
 Changes checklist
 -----------------
 
-- [ ] Implement `RequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
-- [x] Implement `FromParts` for `Extension<RequestId>`
-- [ ] Implement a `Service` that injects `RequestId` in the extensions and one that is compatible with Lambda
+- [ ] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
+- [ ] Implement `ClientRequestId`:
+  - `new()` that wraps a string (the header value), with `Display`, `Debug` and `ToStr` implementations
+  - `with_generator()` that applies an ID generator if no usable header is found
+  - `with_default_generator()` that sets the generator to be UUIDv4
+- [x] Implement `FromParts` for `Extension<ServerRequestId>`
+- [x] Implement `FromParts` for `Extension<ClientRequestId>`
