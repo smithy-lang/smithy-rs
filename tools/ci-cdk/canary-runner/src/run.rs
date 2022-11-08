@@ -375,13 +375,13 @@ async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Resu
         .await
         .context(here!("failed to invoke the canary Lambda"))?;
 
-    if let Some(log_result) = response.log_result {
+    if let Some(log_result) = response.log_result() {
         info!(
             "Last 4 KB of canary logs:\n----\n{}\n----\n",
-            std::str::from_utf8(&base64::decode(&log_result)?)?
+            std::str::from_utf8(&base64::decode(log_result)?)?
         );
     }
-    if response.status_code != 200 {
+    if response.status_code() != 200 || response.function_error().is_some() {
         bail!(
             "Canary failed: {}",
             response
