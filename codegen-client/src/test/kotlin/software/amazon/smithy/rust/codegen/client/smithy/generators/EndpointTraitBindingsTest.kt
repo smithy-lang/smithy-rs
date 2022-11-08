@@ -20,8 +20,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -79,7 +79,7 @@ internal class EndpointTraitBindingsTest {
             implBlock(model.lookup("test#GetStatusInput"), sym) {
                 rustBlock(
                     "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
-                    TestRuntimeConfig.smithyHttp(),
+                    smithyHttp(TestRuntimeConfig),
                     TestRuntimeConfig.operationBuildError(),
                 ) {
                     endpointBindingGenerator.render(this, "self")

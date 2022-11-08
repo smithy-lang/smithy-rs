@@ -21,13 +21,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyEventStream
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyEventstream
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
@@ -60,10 +60,10 @@ class HttpBoundProtocolPayloadGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
+        "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
         "BuildError" to runtimeConfig.operationBuildError(),
-        "SmithyHttp" to runtimeConfig.smithyHttp(),
-        "NoOpSigner" to runtimeConfig.smithyEventStream().member("frame::NoOpSigner"),
+        "SmithyHttp" to smithyHttp(runtimeConfig),
+        "NoOpSigner" to smithyEventstream(runtimeConfig).member("frame::NoOpSigner"),
     )
 
     override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {

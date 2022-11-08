@@ -14,13 +14,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.AddRustTestsDecorator
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyEventstream
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
@@ -222,26 +222,10 @@ class FakeSigningConfig(
     runtimeConfig: RuntimeConfig,
 ) : ConfigCustomization() {
     private val codegenScope = arrayOf(
-        "SharedPropertyBag" to RuntimeType(
-            "SharedPropertyBag",
-            CargoDependency.smithyHttp(runtimeConfig),
-            "aws_smithy_http::property_bag",
-        ),
-        "SignMessageError" to RuntimeType(
-            "SignMessageError",
-            CargoDependency.smithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame",
-        ),
-        "SignMessage" to RuntimeType(
-            "SignMessage",
-            CargoDependency.smithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame",
-        ),
-        "Message" to RuntimeType(
-            "Message",
-            CargoDependency.smithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame",
-        ),
+        "SharedPropertyBag" to smithyHttp(runtimeConfig).member("property_bag::SharedPropertyBag"),
+        "SignMessageError" to smithyEventstream(runtimeConfig).member("frame::SignMessageError"),
+        "SignMessage" to smithyEventstream(runtimeConfig).member("frame::SignMessage"),
+        "Message" to smithyEventstream(runtimeConfig).member("frame::Message"),
     )
 
     override fun section(section: ServiceConfig): Writable {

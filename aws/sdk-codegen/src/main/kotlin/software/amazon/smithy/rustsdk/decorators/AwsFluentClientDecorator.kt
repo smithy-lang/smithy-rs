@@ -27,13 +27,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyClient
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyClient
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -45,17 +45,17 @@ import software.amazon.smithy.rustsdk.awsRuntimeCrate
 import software.amazon.smithy.rustsdk.awsTypes
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    val clientBuilder = runtimeConfig.smithyClient().member("Builder")
-    val connectorError = runtimeConfig.smithyHttp().member("result::ConnectorError")
-    val connectorSettings = runtimeConfig.smithyClient().member("http_connector::ConnectorSettings")
+    val clientBuilder = smithyClient(runtimeConfig).member("Builder")
+    val connectorError = smithyHttp(runtimeConfig).member("result::ConnectorError")
+    val connectorSettings = smithyClient(runtimeConfig).member("http_connector::ConnectorSettings")
     val defaultMiddleware = runtimeConfig.defaultMiddleware()
-    val dynConnector = runtimeConfig.smithyClient().member("erase::DynConnector")
-    val dynMiddleware = runtimeConfig.smithyClient().member("erase::DynMiddleware")
-    val retryConfig = runtimeConfig.smithyTypes().member("retry::RetryConfig")
-    val sdkConfig = runtimeConfig.awsTypes().member("SdkConfig")
-    val smithyClientRetry = runtimeConfig.smithyClient().member("retry")
-    val smithyConnector = runtimeConfig.smithyClient().member("bounds::SmithyConnector")
-    val timeoutConfig = runtimeConfig.smithyTypes().member("timeout::TimeoutConfig")
+    val dynConnector = smithyClient(runtimeConfig).member("erase::DynConnector")
+    val dynMiddleware = smithyClient(runtimeConfig).member("erase::DynMiddleware")
+    val retryConfig = smithyTypes(runtimeConfig).member("retry::RetryConfig")
+    val sdkConfig = awsTypes(runtimeConfig).member("SdkConfig")
+    val smithyClientRetry = smithyClient(runtimeConfig).member("retry")
+    val smithyConnector = smithyClient(runtimeConfig).member("bounds::SmithyConnector")
+    val timeoutConfig = smithyTypes(runtimeConfig).member("timeout::TimeoutConfig")
 }
 
 private class AwsClientGenerics(private val types: Types) : FluentClientGenerics {
@@ -103,7 +103,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
                 AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
-            retryClassifier = runtimeConfig.awsHttp().member("retry::AwsResponseRetryClassifier"),
+            retryClassifier = awsHttp(runtimeConfig).member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
         rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
@@ -281,9 +281,9 @@ private fun renderCustomizableOperationSendMethod(
     val codegenScope = arrayOf(
         "combined_generics_decl" to combinedGenerics.declaration(),
         "handle_generics_bounds" to handleGenerics.bounds(),
-        "SdkSuccess" to runtimeConfig.smithyHttp().member("result::SdkSuccess"),
-        "ClassifyRetry" to runtimeConfig.smithyHttp().member("retry::ClassifyRetry"),
-        "ParseHttpResponse" to runtimeConfig.smithyHttp().member("response::ParseHttpResponse"),
+        "SdkSuccess" to smithyHttp(runtimeConfig).member("result::SdkSuccess"),
+        "ClassifyRetry" to smithyHttp(runtimeConfig).member("retry::ClassifyRetry"),
+        "ParseHttpResponse" to smithyHttp(runtimeConfig).member("response::ParseHttpResponse"),
     )
 
     writer.rustTemplate(

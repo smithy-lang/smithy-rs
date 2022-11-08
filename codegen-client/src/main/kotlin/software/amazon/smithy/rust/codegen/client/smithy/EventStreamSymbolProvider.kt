@@ -10,13 +10,13 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyEventStream
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyEventstream
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
@@ -53,7 +53,7 @@ class EventStreamSymbolProvider(
             if (operationShape != null) {
                 val unionShape = model.expectShape(shape.target).asUnionShape().get()
                 val error = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-                    runtimeConfig.smithyEventStream().member("event_stream::MessageStreamError").toSymbol()
+                    smithyEventstream(runtimeConfig).member("event_stream::MessageStreamError").toSymbol()
                 } else {
                     unionShape.eventStreamErrorSymbol(model, this, target).toSymbol()
                 }
@@ -70,7 +70,7 @@ class EventStreamSymbolProvider(
                     .name(rustType.name)
                     .rustType(rustType)
                     .addReference(initial)
-                    .addDependency(CargoDependency.smithyHttp(runtimeConfig).withFeature("event-stream"))
+                    .addDependency(smithyHttp(runtimeConfig).withFeature("event-stream"))
                     .addReference(error)
                     .build()
             }

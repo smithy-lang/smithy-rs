@@ -26,6 +26,7 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -37,15 +38,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyJson
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyJson
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyXml
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.extractSymbolFromOption
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
@@ -132,10 +133,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
         "Cow" to ServerRuntimeType.Cow,
-        "DateTime" to RuntimeType.DateTime(runtimeConfig),
+        "DateTime" to RuntimeType.dateTime(runtimeConfig),
         "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.asType(),
         "HttpBody" to CargoDependency.HttpBody.asType(),
-        "header_util" to runtimeConfig.smithyHttp().member("header"),
+        "header_util" to smithyHttp(runtimeConfig).member("header"),
         "Hyper" to CargoDependency.Hyper.asType(),
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
         "Mime" to ServerCargoDependency.Mime.asType(),
@@ -143,12 +144,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "OnceCell" to ServerCargoDependency.OnceCell.asType(),
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
-        "SmithyHttp" to runtimeConfig.smithyHttp(),
+        "SmithyHttp" to smithyHttp(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
-        "http" to RuntimeType.http,
+        "http" to Http.asType(),
     )
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
@@ -1022,7 +1023,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                         it.location,
                                         protocol.defaultTimestampFormat,
                                     )
-                                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                                 rustTemplate(
                                     """
                                     let v = #{DateTime}::from_str(&v, #{format})?#{ConvertInto:W};
@@ -1034,10 +1035,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             }
                             else -> { // Number or boolean.
                                 rust(
-                                    """
-                                    let v = <_ as #T>::parse_smithy_primitive(&v)?;
-                                    """.trimIndent(),
-                                    runtimeConfig.smithyTypes().member("primitive::Parse"),
+                                    "let v = <_ as #T>::parse_smithy_primitive(&v)?;",
+                                    smithyTypes(runtimeConfig).member("primitive::Parse"),
                                 )
                             }
                         }
@@ -1158,7 +1157,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 binding.location,
                                 protocol.defaultTimestampFormat,
                             )
-                        val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                        val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
 
                         if (percentDecoding) {
                             rustTemplate(
@@ -1219,10 +1218,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
         when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                return runtimeConfig.smithyJson().member("deserialize").member("Error")
+                return smithyJson(runtimeConfig).member("deserialize").member("Error")
             }
             RestXmlTrait.ID -> {
-                return runtimeConfig.smithyXml().member("decode").member("XmlError")
+                return smithyXml(runtimeConfig).member("decode").member("XmlError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

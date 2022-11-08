@@ -10,10 +10,10 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
@@ -56,9 +56,9 @@ private fun hasDateTimes(model: Model): Boolean {
 internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<RuntimeType> {
     return (
         listOf(
-            PubUseType(RuntimeType.Blob(runtimeConfig), ::hasBlobs),
-            PubUseType(RuntimeType.DateTime(runtimeConfig), ::hasDateTimes),
-        ) + runtimeConfig.smithyHttp().let { http ->
+            PubUseType(RuntimeType.blob(runtimeConfig), ::hasBlobs),
+            PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
+        ) + smithyHttp(runtimeConfig).let { http ->
             listOf(
                 PubUseType(http.member("result::SdkError")) { true },
                 PubUseType(http.member("byte_stream::ByteStream"), ::hasStreamingOperations),

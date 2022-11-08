@@ -14,7 +14,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndRun
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -26,7 +26,7 @@ class RustWriterTest {
     @Test
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
-        val requestBuilder = RuntimeType.HttpRequestBuilder
+        val requestBuilder = Http.asType().member("request::Builder")
         sut.withModule(RustModule.public("inner")) {
             rustBlock("fn build(builder: #T)", requestBuilder) {
             }
@@ -155,7 +155,7 @@ class RustWriterTest {
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
-            "http" to CargoDependency.Http.asType().member("foo"),
+            "http" to Http.asType().member("foo"),
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
     }

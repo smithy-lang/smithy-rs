@@ -62,7 +62,7 @@ class ServerOperationRegistryGenerator(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "Tower" to ServerCargoDependency.Tower.asType(),
+        "Tower" to ServerTower.asType(),
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError,
         "Display" to RuntimeType.Display,

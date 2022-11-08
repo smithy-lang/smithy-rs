@@ -8,7 +8,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpChecksumRequiredTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Md5
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -44,15 +45,15 @@ class HttpChecksumRequiredGenerator(
                             .expect("checksum can only be computed for non-streaming operations");
                         let checksum = <#{md5}::Md5 as #{md5}::Digest>::digest(data);
                         req.headers_mut().insert(
-                            #{http}::header::HeaderName::from_static("content-md5"),
+                            #{HeaderName}::from_static("content-md5"),
                             #{base64_encode}(&checksum[..]).parse().expect("checksum is valid header value")
                         );
                         Result::<_, #{BuildError}>::Ok(req)
                     })?;
                     """,
-                    "md5" to CargoDependency.Md5.asType(),
-                    "http" to CargoDependency.Http.asType(),
-                    "base64_encode" to RuntimeType.Base64Encode(codegenContext.runtimeConfig),
+                    "md5" to Md5.asType(),
+                    "HeaderName" to Http.asType().member("header::HeaderName"),
+                    "base64_encode" to RuntimeType.base64Encode(codegenContext.runtimeConfig),
                     "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
                 )
             }

@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDe
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tower
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -30,11 +30,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
@@ -147,10 +147,10 @@ class AwsInputPresignedMethod(
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
-        "aws_sigv4" to runtimeConfig.awsSigv4(),
-        "sig_auth" to runtimeConfig.awsSigAuth(),
-        "tower" to CargoDependency.Tower.asType(),
+        "SdkError" to smithyHttp(runtimeConfig).member("result::SdkError"),
+        "aws_sigv4" to awsSigv4(runtimeConfig),
+        "sig_auth" to awsSigAuth(runtimeConfig),
+        "tower" to Tower.asType(),
         "Middleware" to runtimeConfig.defaultMiddleware(),
     )
 
@@ -255,7 +255,7 @@ class AwsPresignedFluentBuilderMethod(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
+        "SdkError" to smithyHttp(runtimeConfig).member("result::SdkError"),
     )
 
     override fun section(section: FluentClientSection): Writable =

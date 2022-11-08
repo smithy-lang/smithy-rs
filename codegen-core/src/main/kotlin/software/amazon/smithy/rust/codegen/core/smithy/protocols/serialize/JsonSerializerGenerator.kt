@@ -28,12 +28,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyJson
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyJson
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -160,10 +160,10 @@ class JsonSerializerGenerator(
     private val codegenScope = arrayOf(
         "ByteSlab" to RuntimeType.ByteSlab,
         "Error" to runtimeConfig.serializationError(),
-        "JsonObjectWriter" to runtimeConfig.smithyJson().member("serialize::JsonObjectWriter"),
-        "JsonValueWriter" to runtimeConfig.smithyJson().member("serialize::JsonValueWriter"),
-        "Number" to runtimeConfig.smithyTypes().member("Number"),
-        "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
+        "JsonObjectWriter" to smithyJson(runtimeConfig).member("serialize::JsonObjectWriter"),
+        "JsonValueWriter" to smithyJson(runtimeConfig).member("serialize::JsonValueWriter"),
+        "Number" to smithyTypes(runtimeConfig).member("Number"),
+        "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
         "String" to RuntimeType.String,
     )
     private val serializerUtil = SerializerUtil(model)
@@ -269,7 +269,7 @@ class JsonSerializerGenerator(
                     out.into_bytes()
                 }
                 """,
-                "Document" to RuntimeType.Document(runtimeConfig), *codegenScope,
+                "Document" to RuntimeType.document(runtimeConfig), *codegenScope,
             )
         }
     }
@@ -375,12 +375,12 @@ class JsonSerializerGenerator(
             }
             is BlobShape -> rust(
                 "$writer.string_unchecked(&#T(${value.asRef()}));",
-                RuntimeType.Base64Encode(runtimeConfig),
+                RuntimeType.base64Encode(runtimeConfig),
             )
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rustTemplate(
                     "$writer.date_time(${value.asRef()}#{ConvertInto:W}, #{FormatType})?;",
                     "FormatType" to timestampFormatType,

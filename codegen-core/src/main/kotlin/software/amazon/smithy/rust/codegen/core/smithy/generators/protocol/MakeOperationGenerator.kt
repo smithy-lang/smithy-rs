@@ -9,16 +9,18 @@ import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -46,7 +48,7 @@ open class MakeOperationGenerator(
     protected val runtimeConfig = codegenContext.runtimeConfig
     protected val symbolProvider = codegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
-    private val defaultClassifier = runtimeConfig.smithyHttp().member("retry::DefaultResponseRetryClassifier")
+    private val defaultClassifier = smithyHttp(runtimeConfig).member("retry::DefaultResponseRetryClassifier")
 
     private val sdkId =
         codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
@@ -54,12 +56,12 @@ open class MakeOperationGenerator(
 
     private val codegenScope = arrayOf(
         "config" to RuntimeType.Config,
-        "header_util" to runtimeConfig.smithyHttp().member("header"),
-        "http" to RuntimeType.http,
-        "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+        "header_util" to smithyHttp(runtimeConfig).member("header"),
+        "http" to Http.asType(),
+        "HttpRequestBuilder" to Http.asType().member("request::Builder"),
         "OpBuildError" to runtimeConfig.operationBuildError(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
-        "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
+        "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
     )
 
     fun generateMakeOperation(
@@ -94,7 +96,7 @@ open class MakeOperationGenerator(
             withBlock("let mut request = {", "};") {
                 createHttpRequest(this, shape)
             }
-            rust("let mut properties = #T::new();", runtimeConfig.smithyHttp().member("property_bag::SharedPropertyBag"))
+            rust("let mut properties = #T::new();", smithyHttp(runtimeConfig).member("property_bag::SharedPropertyBag"))
 
             // When the payload is a `ByteStream`, `into_inner()` already returns an `SdkBody`, so we mute this
             // Clippy warning to make the codegen a little simpler in that case.
@@ -170,7 +172,7 @@ open class MakeOperationGenerator(
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
 
-        writer.rust("let mut builder = update_http_builder(&self, #T::new())?;", RuntimeType.HttpRequestBuilder)
+        writer.rust("let mut builder = update_http_builder(&self, #T::new())?;", Http.asType().member("request::Builder"))
         if (includeDefaultPayloadHeaders && contentType != null) {
             writer.rustTemplate(
                 "builder = #{header_util}::set_request_header_if_absent(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",

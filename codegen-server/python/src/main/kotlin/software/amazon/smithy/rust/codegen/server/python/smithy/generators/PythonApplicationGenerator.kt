@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -17,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.Errors
 import software.amazon.smithy.rust.codegen.core.smithy.Inputs
 import software.amazon.smithy.rust.codegen.core.smithy.Outputs
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -76,7 +76,7 @@ class PythonApplicationGenerator(
     private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).asType(),
             "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
@@ -88,7 +88,7 @@ class PythonApplicationGenerator(
             "hyper" to PythonServerCargoDependency.Hyper.asType(),
             "HashMap" to RustType.HashMap.RuntimeType,
             "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
-            "http" to RuntimeType.http,
+            "http" to Http.asType(),
         )
 
     fun render(writer: RustWriter) {

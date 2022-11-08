@@ -9,21 +9,21 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyAsync
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyAsync
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "AsyncSleep" to runtimeConfig.smithyAsync().member("rt::sleep::AsyncSleep"),
-        "RetryConfig" to runtimeConfig.smithyTypes().member("retry::RetryConfig"),
-        "Sleep" to runtimeConfig.smithyAsync().member("rt::sleep::Sleep"),
-        "TimeoutConfig" to runtimeConfig.smithyTypes().member("timeout::TimeoutConfig"),
+        "AsyncSleep" to smithyAsync(runtimeConfig).member("rt::sleep::AsyncSleep"),
+        "RetryConfig" to smithyTypes(runtimeConfig).member("retry::RetryConfig"),
+        "Sleep" to smithyAsync(runtimeConfig).member("rt::sleep::Sleep"),
+        "TimeoutConfig" to smithyTypes(runtimeConfig).member("timeout::TimeoutConfig"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -244,9 +244,9 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                     pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
                 }
                 """,
-                "retry" to runtimeConfig.smithyTypes().member("retry"),
-                "sleep" to runtimeConfig.smithyAsync().member("rt::sleep"),
-                "timeout" to runtimeConfig.smithyTypes().member("timeout"),
+                "retry" to smithyTypes(runtimeConfig).member("retry"),
+                "sleep" to smithyAsync(runtimeConfig).member("rt::sleep"),
+                "timeout" to smithyTypes(runtimeConfig).member("timeout"),
             )
         }
     }

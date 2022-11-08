@@ -17,7 +17,7 @@ import software.amazon.smithy.model.traits.HttpQueryParamsTrait
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.plus
@@ -118,7 +118,7 @@ sealed class HeaderSensitivity(
 ) {
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
+        "Http" to Http.asType(),
     )
 
     /** The case where `prefixHeaders` value is not sensitive. */
@@ -308,7 +308,7 @@ class ServerHttpSensitivityGenerator(
 ) {
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
+        "Http" to Http.asType(),
     )
 
     /** Constructs `StatusCodeSensitivity` of a `Shape` */

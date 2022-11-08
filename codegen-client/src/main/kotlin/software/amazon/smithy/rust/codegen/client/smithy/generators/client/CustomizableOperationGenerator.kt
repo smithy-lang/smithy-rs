@@ -5,7 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -15,10 +15,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyClient
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyClient
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
@@ -47,9 +47,9 @@ class CustomizableOperationGenerator(
                 pub use #{ClassifyRetry};
                 pub use #{RetryKind};
                 """,
-                "Operation" to runtimeConfig.smithyHttp().member("operation::Operation"),
-                "ClassifyRetry" to runtimeConfig.smithyHttp().member("retry::ClassifyRetry"),
-                "RetryKind" to runtimeConfig.smithyTypes().member("retry::RetryKind"),
+                "Operation" to smithyHttp(runtimeConfig).member("operation::Operation"),
+                "ClassifyRetry" to smithyHttp(runtimeConfig).member("retry::ClassifyRetry"),
+                "RetryKind" to smithyTypes(runtimeConfig).member("retry::RetryKind"),
             )
             renderCustomizableOperationModule(this)
 
@@ -66,9 +66,9 @@ class CustomizableOperationGenerator(
 
         val codegenScope = arrayOf(
             // SDK Types
-            "http_result" to runtimeConfig.smithyHttp().member("result"),
-            "http_body" to runtimeConfig.smithyHttp().member("body"),
-            "HttpRequest" to CargoDependency.Http.asType().member("Request"),
+            "http_result" to smithyHttp(runtimeConfig).member("result"),
+            "http_body" to smithyHttp(runtimeConfig).member("body"),
+            "HttpRequest" to Http.asType().member("Request"),
             "handle_generics_decl" to handleGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),
@@ -150,9 +150,9 @@ class CustomizableOperationGenerator(
         val codegenScope = arrayOf(
             "combined_generics_decl" to combinedGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
-            "ParseHttpResponse" to runtimeConfig.smithyHttp().member("response::ParseHttpResponse"),
-            "NewRequestPolicy" to runtimeConfig.smithyClient().member("retry::NewRequestPolicy"),
-            "SmithyRetryPolicy" to runtimeConfig.smithyClient().member("bounds::SmithyRetryPolicy"),
+            "ParseHttpResponse" to smithyHttp(runtimeConfig).member("response::ParseHttpResponse"),
+            "NewRequestPolicy" to smithyClient(runtimeConfig).member("retry::NewRequestPolicy"),
+            "SmithyRetryPolicy" to smithyClient(runtimeConfig).member("bounds::SmithyRetryPolicy"),
         )
 
         writer.rustTemplate(

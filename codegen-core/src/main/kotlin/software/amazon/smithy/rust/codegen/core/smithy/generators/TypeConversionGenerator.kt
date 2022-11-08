@@ -28,8 +28,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 class TypeConversionGenerator(private val model: Model, private val symbolProvider: RustSymbolProvider, private val runtimeConfig: RuntimeConfig) {
     private fun findOldSymbol(shape: Shape): Symbol {
         return when (shape) {
-            is BlobShape -> RuntimeType.Blob(runtimeConfig).toSymbol()
-            is TimestampShape -> RuntimeType.DateTime(runtimeConfig).toSymbol()
+            is BlobShape -> RuntimeType.blob(runtimeConfig).toSymbol()
+            is TimestampShape -> RuntimeType.dateTime(runtimeConfig).toSymbol()
             else -> symbolProvider.toSymbol(shape)
         }
     }

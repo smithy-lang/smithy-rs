@@ -79,11 +79,11 @@ private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serv
             // PKG_VERSION comes from CrateVersionGenerator
             rustTemplate(
                 "static API_METADATA: #{ApiMetadata} = #{ApiMetadata}::new(${serviceId.dq()}, PKG_VERSION);",
-                "ApiMetadata" to runtimeConfig.awsHttp().member("user_agent::ApiMetadata"),
+                "ApiMetadata" to awsHttp(runtimeConfig).member("user_agent::ApiMetadata"),
             )
 
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
-            rust("pub use #T;", runtimeConfig.awsTypes().member("app_name::AppName"))
+            rust("pub use #T;", awsTypes(runtimeConfig).member("app_name::AppName"))
         }
         else -> emptySection
     }
@@ -103,8 +103,8 @@ private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : Opera
                 }
                 ${section.request}.properties_mut().insert(user_agent);
                 """,
-                "AwsUserAgent" to runtimeConfig.awsHttp().member("user_agent::AwsUserAgent"),
-                "Env" to runtimeConfig.awsTypes().member("os_shim_internal::Env"),
+                "AwsUserAgent" to awsHttp(runtimeConfig).member("user_agent::AwsUserAgent"),
+                "Env" to awsTypes(runtimeConfig).member("os_shim_internal::Env"),
             )
         }
         else -> emptySection
@@ -112,7 +112,7 @@ private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : Opera
 }
 
 private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val codegenScope = arrayOf("AppName" to runtimeConfig.awsTypes().member("app_name::AppName"))
+    private val codegenScope = arrayOf("AppName" to awsTypes(runtimeConfig).member("app_name::AppName"))
 
     override fun section(section: ServiceConfig): Writable =
         when (section) {

@@ -9,9 +9,19 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStd
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStream
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.BytesUtils
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Criterion
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FuturesCore
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FuturesUtil
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Hound
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.SerdeJson
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Smol
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TempFile
-import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tokio
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tracing
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -72,7 +82,7 @@ class IntegrationTestDependencies(
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
-                addDependency(Tracing)
+                addDependency(Tracing.copy(scope = DependencyScope.Dev))
                 addDependency(TracingSubscriber)
             }
             if (hasBenches) {
@@ -106,25 +116,19 @@ class S3TestDependencies(
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
+            val smithyClient = CargoDependency.smithyClient(runtimeConfig)
+                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+            val smithyAsync = CargoDependency.smithyAsync(runtimeConfig).copy(scope = DependencyScope.Dev)
+            val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).copy(scope = DependencyScope.Dev)
+            val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).copy(scope = DependencyScope.Dev)
+
             addDependency(AsyncStd)
-            addDependency(BytesUtils)
+            addDependency(BytesUtils.copy(scope = DependencyScope.Dev))
             addDependency(Smol)
             addDependency(TempFile)
-            runtimeConfig.smithyRuntimeCrate("smithy-async", scope = DependencyScope.Dev)
-            runtimeConfig.smithyRuntimeCrate("smithy-client", scope = DependencyScope.Dev)
-            runtimeConfig.smithyRuntimeCrate("smithy-http", scope = DependencyScope.Dev)
-            runtimeConfig.smithyRuntimeCrate("smithy-types", scope = DependencyScope.Dev)
+            addDependency(smithyAsync)
+            addDependency(smithyClient)
+            addDependency(smithyHttp)
+            addDependency(smithyTypes)
         }
 }
-
-private val AsyncStd = CargoDependency("async-std", CratesIo("1.12.0"), scope = DependencyScope.Dev)
-private val AsyncStream = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
-private val Criterion = CargoDependency("criterion", CratesIo("0.4.0"), scope = DependencyScope.Dev)
-private val FuturesCore = CargoDependency("futures-core", CratesIo("0.3.0"), DependencyScope.Dev)
-private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3.0"), scope = DependencyScope.Dev)
-private val Hound = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
-private val SerdeJson = CargoDependency("serde_json", CratesIo("1.0.0"), features = emptySet(), scope = DependencyScope.Dev)
-private val Smol = CargoDependency("smol", CratesIo("1.2.0"), scope = DependencyScope.Dev)
-private val Tokio = CargoDependency("tokio", CratesIo("1.8.4"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
-private val Tracing = CargoDependency("tracing", CratesIo("0.1.0"), scope = DependencyScope.Dev)
-private val TracingSubscriber = CargoDependency("tracing-subscriber", CratesIo("0.3.15"), scope = DependencyScope.Dev, features = setOf("env-filter"))

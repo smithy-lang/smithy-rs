@@ -5,10 +5,11 @@
 
 package software.amazon.smithy.rustsdk.servicedecorators.glacier
 
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -22,12 +23,14 @@ class ApiVersionHeader(
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
-            rust(
-                """${section.request}
-                .http_mut()
-                .headers_mut()
-                .insert("x-amz-glacier-version", #T::HeaderValue::from_static(${apiVersion.dq()}));""",
-                RuntimeType.http,
+            rustTemplate(
+                """
+                ${section.request}
+                    .http_mut()
+                    .headers_mut()
+                    .insert("x-amz-glacier-version", #{HeaderValue}::from_static(${apiVersion.dq()}));
+                """,
+                "HeaderValue" to Http.asType().member("HeaderValue"),
             )
         }
         else -> emptySection

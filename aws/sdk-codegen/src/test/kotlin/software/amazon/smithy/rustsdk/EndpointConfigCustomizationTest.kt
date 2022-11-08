@@ -16,8 +16,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDe
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.stubConfigCustomization
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -32,9 +30,8 @@ import software.amazon.smithy.rustsdk.decorators.PubUseEndpoint
 internal class EndpointConfigCustomizationTest {
     private val runtimeConfig = AwsTestRuntimeConfig
     private val codegenScope = arrayOf(
-        "http" to CargoDependency.Http.asType(),
-        "PlaceholderParams" to runtimeConfig.awsEndpoint().member("Params"),
-        "Region" to runtimeConfig.awsTypes().member("region::Region"),
+        "PlaceholderParams" to awsEndpoint(runtimeConfig).member("Params"),
+        "Region" to awsTypes(runtimeConfig).member("region::Region"),
     )
 
     private val model = """

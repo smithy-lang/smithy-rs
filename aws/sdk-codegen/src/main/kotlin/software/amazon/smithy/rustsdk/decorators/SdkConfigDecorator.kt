@@ -45,7 +45,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                     }
                 }
                 """,
-                "SdkConfig" to codegenContext.runtimeConfig.awsTypes().member("sdk_config::SdkConfig"),
+                "SdkConfig" to awsTypes(codegenContext.runtimeConfig).member("sdk_config::SdkConfig"),
             )
         }
     }
@@ -65,7 +65,7 @@ class NewFromShared(private val runtimeConfig: RuntimeConfig) : ConfigCustomizat
                         Builder::from(config).build()
                     }
                     """,
-                    "SdkConfig" to runtimeConfig.awsTypes().member("sdk_config::SdkConfig"),
+                    "SdkConfig" to awsTypes(runtimeConfig).member("sdk_config::SdkConfig"),
                 )
             }
             else -> emptySection

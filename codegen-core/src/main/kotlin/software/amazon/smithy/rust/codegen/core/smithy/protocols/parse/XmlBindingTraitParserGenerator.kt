@@ -34,13 +34,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyXml
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
@@ -97,15 +97,15 @@ class XmlBindingTraitParserGenerator(
 
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val xmlError = runtimeConfig.smithyXml().member("decode::XmlError")
+    private val xmlError = smithyXml(runtimeConfig).member("decode::XmlError")
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType.Blob(runtimeConfig),
-        "Document" to runtimeConfig.smithyXml().member("decode::Document"),
+        "Blob" to RuntimeType.blob(runtimeConfig),
+        "Document" to smithyXml(runtimeConfig).member("decode::Document"),
         "XmlError" to xmlError,
-        "next_start_element" to runtimeConfig.smithyXml().member("decode::next_start_element"),
-        "try_data" to runtimeConfig.smithyXml().member("decode::try_data"),
-        "ScopedDecoder" to runtimeConfig.smithyXml().member("decode::ScopedDecoder"),
-        "aws_smithy_types" to runtimeConfig.smithyTypes(),
+        "next_start_element" to smithyXml(runtimeConfig).member("decode::next_start_element"),
+        "try_data" to smithyXml(runtimeConfig).member("decode::try_data"),
+        "ScopedDecoder" to smithyXml(runtimeConfig).member("decode::ScopedDecoder"),
+        "aws_smithy_types" to smithyTypes(runtimeConfig),
     )
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
@@ -628,8 +628,8 @@ class XmlBindingTraitParserGenerator(
                         HttpBinding.Location.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                withBlock("#T::from_str(", ")", RuntimeType.DateTime(runtimeConfig)) {
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                withBlock("#T::from_str(", ")", RuntimeType.dateTime(runtimeConfig)) {
                     provider()
                     rust(", #T", timestampFormatType)
                 }
@@ -639,7 +639,7 @@ class XmlBindingTraitParserGenerator(
                 )
             }
             is BlobShape -> {
-                withBlock("#T(", ")", RuntimeType.Base64Decode(runtimeConfig)) {
+                withBlock("#T(", ")", RuntimeType.base64Decode(runtimeConfig)) {
                     provider()
                 }
                 rustTemplate(

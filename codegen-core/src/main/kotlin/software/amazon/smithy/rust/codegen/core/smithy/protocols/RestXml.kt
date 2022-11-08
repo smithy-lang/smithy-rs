@@ -8,12 +8,15 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -24,11 +27,11 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.GenericError(runtimeConfig),
-        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "Response" to RuntimeType.http.member("Response"),
-        "XmlError" to runtimeConfig.smithyXml().member("decode::XmlError"),
+        "Bytes" to Bytes.asType().member("Bytes"),
+        "Error" to RuntimeType.genericError(runtimeConfig),
+        "HeaderMap" to Http.asType().member("HeaderMap"),
+        "Response" to Http.asType().member("Response"),
+        "XmlError" to smithyXml(runtimeConfig).member("decode::XmlError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")
 

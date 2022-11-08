@@ -87,7 +87,7 @@ class SigV4SigningConfig(
     private val sigV4Trait: SigV4Trait,
 ) : EventStreamSigningConfig(runtimeConfig) {
     private val codegenScope = arrayOf(
-        "SigV4Signer" to runtimeConfig.awsSigAuthEventStream().member("event_stream::SigV4Signer"),
+        "SigV4Signer" to awsSigAuthEventStream(runtimeConfig).member("event_stream::SigV4Signer"),
     )
 
     override fun configImplSection(): Writable {
@@ -142,11 +142,11 @@ class SigV4SigningFeature(
     private val service: ServiceShape,
 ) : OperationCustomization() {
     private val codegenScope = arrayOf(
-        "OperationSigningConfig" to runtimeConfig.awsSigAuth().member("signer::OperationSigningConfig"),
-        "SignableBody" to runtimeConfig.awsSigAuth().member("signer::SignableBody"),
-        "SigningRegion" to runtimeConfig.awsTypes().member("region::SigningRegion"),
-        "SigningRequirements" to runtimeConfig.awsSigAuth().member("signer::SigningRequirements"),
-        "SigningService" to runtimeConfig.awsTypes().member("SigningService"),
+        "OperationSigningConfig" to awsSigAuth(runtimeConfig).member("signer::OperationSigningConfig"),
+        "SignableBody" to awsSigAuth(runtimeConfig).member("signer::SignableBody"),
+        "SigningRegion" to awsTypes(runtimeConfig).member("region::SigningRegion"),
+        "SigningRequirements" to awsSigAuth(runtimeConfig).member("signer::SigningRequirements"),
+        "SigningService" to awsTypes(runtimeConfig).member("SigningService"),
     )
 
     private val serviceIndex = ServiceIndex.of(model)

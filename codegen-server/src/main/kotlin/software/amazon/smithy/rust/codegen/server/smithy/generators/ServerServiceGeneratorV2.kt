@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBody
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -20,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency.Tower
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
@@ -29,12 +32,12 @@ class ServerServiceGeneratorV2(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "Bytes" to CargoDependency.Bytes.asType(),
-            "Http" to CargoDependency.Http.asType(),
-            "HttpBody" to CargoDependency.HttpBody.asType(),
+            "Bytes" to Bytes.asType().member("Bytes"),
+            "Http" to Http.asType(),
+            "HttpBody" to HttpBody.asType(),
             "SmithyHttpServer" to
                 ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
-            "Tower" to CargoDependency.Tower.asType(),
+            "Tower" to Tower.asType(),
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider

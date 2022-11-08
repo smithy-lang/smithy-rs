@@ -30,21 +30,21 @@ import software.amazon.smithy.rustsdk.servicedecorators.sts.STSDecorator
 
 val DECORATORS = listOf(
     // General AWS Decorators
-    AwsEndpointDecorator(),
-    AwsFluentClientDecorator(),
-    AwsPresigningDecorator(),
-    AwsReadmeDecorator(),
-    CrateLicenseDecorator(),
     CredentialsProviderDecorator(),
+    RegionDecorator(),
+    AwsEndpointDecorator(),
+    UserAgentDecorator(),
+    SigV4SigningDecorator(),
     HttpRequestChecksumDecorator(),
     HttpResponseChecksumDecorator(),
-    IntegrationTestDecorator(),
-    RegionDecorator(),
     ResiliencyDecorator(),
+    IntegrationTestDecorator(),
+    AwsFluentClientDecorator(),
+    CrateLicenseDecorator(),
     SdkConfigDecorator(),
     ServiceConfigDecorator(),
-    SigV4SigningDecorator(),
-    UserAgentDecorator(),
+    AwsPresigningDecorator(),
+    AwsReadmeDecorator(),
 
     // Service specific decorators
     ApiGatewayDecorator(),
@@ -88,7 +88,7 @@ fun generateImplFromRefSdkConfigForConfigBuilder(
     rustCrate: RustCrate,
     customizations: List<AwsCustomization>,
 ) {
-    val codegenContext = arrayOf("SdkConfig" to runtimeConfig.awsTypes().member("sdk_config::SdkConfig"))
+    val codegenContext = arrayOf("SdkConfig" to awsTypes(runtimeConfig).member("sdk_config::SdkConfig"))
 
     rustCrate.withModule(RustModule.Config) {
         rustBlockTemplate("impl From<&#{SdkConfig}> for Builder", *codegenContext) {

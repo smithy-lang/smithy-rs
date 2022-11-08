@@ -7,12 +7,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyEventstream
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 
 /**
@@ -47,10 +46,7 @@ class NoOpEventStreamSigningConfig(
     private val serviceHasEventStream: Boolean,
     runtimeConfig: RuntimeConfig,
 ) : EventStreamSigningConfig(runtimeConfig) {
-    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
-    private val codegenScope = arrayOf(
-        "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
-    )
+    private val codegenScope = arrayOf("NoOpSigner" to smithyEventstream(runtimeConfig).member("frame::NoOpSigner"))
 
     override fun configImplSection() = renderEventStreamSignerFn {
         writable {

@@ -24,7 +24,10 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Hyper
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.PrettyAssertions
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -41,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
@@ -55,6 +59,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency.Tower
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
@@ -102,14 +107,14 @@ class ServerProtocolTestGenerator(
     private val instantiator = serverInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "SmithyHttp" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
-        "Hyper" to CargoDependency.Hyper.asType(),
+        "Bytes" to Bytes.asType().member("Bytes"),
+        "SmithyHttp" to smithyHttp(codegenContext.runtimeConfig),
+        "Http" to Http.asType(),
+        "Hyper" to Hyper.asType(),
         "Tokio" to ServerCargoDependency.TokioDev.asType(),
-        "Tower" to CargoDependency.Tower.asType(),
+        "Tower" to Tower.asType(),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).asType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
+        "AssertEq" to PrettyAssertions.asType().member("assert_eq!"),
         "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
     )
 
@@ -690,7 +695,7 @@ class ServerProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals")
+                                RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals")
                                     .toSymbol(),
                             )
                             rustWriter.rust(
@@ -788,8 +793,8 @@ class ServerProtocolTestGenerator(
                     "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType"),
+                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
+                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
                 )
             }
         }
@@ -842,7 +847,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             rust(
                 "#T($actualExpression, $variableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers"),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_headers"),
             )
         }
     }
@@ -863,7 +868,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             rustWriter.rust(
                 "#T($actualExpression, $expectedVariableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, checkFunction),
             )
         }
     }
@@ -873,7 +878,7 @@ class ServerProtocolTestGenerator(
      * for pretty printing protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
-        rustWriter.rust("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.rust("#T(", RuntimeType.protocolTest(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }

@@ -123,7 +123,7 @@ class CombinedErrorGenerator(
     private val errors: List<StructureShape>,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
-    private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
+    private val genericError = RuntimeType.genericError(symbolProvider.config().runtimeConfig)
 
     fun render(writer: RustWriter) {
         val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
@@ -151,7 +151,7 @@ class CombinedErrorGenerator(
                 /// Additional metadata about the error, including error code, message, and request ID.
                 pub (crate) meta: #T
                 """,
-                RuntimeType.GenericError(runtimeConfig),
+                RuntimeType.genericError(runtimeConfig),
             )
         }
         writer.rust("/// Types of errors that can occur for the `${operationSymbol.name}` operation.")

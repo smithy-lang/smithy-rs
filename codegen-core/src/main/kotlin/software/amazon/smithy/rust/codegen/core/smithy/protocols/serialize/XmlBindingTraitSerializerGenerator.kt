@@ -32,13 +32,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyXml
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyXml
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
@@ -66,9 +66,9 @@ class XmlBindingTraitSerializerGenerator(
     private val target = codegenContext.target
     private val codegenScope =
         arrayOf(
-            "XmlWriter" to runtimeConfig.smithyXml().member("encode::XmlWriter"),
-            "ElementWriter" to runtimeConfig.smithyXml().member("encode::ElWriter"),
-            "SdkBody" to runtimeConfig.smithyHttp().member("body::SdkBody"),
+            "XmlWriter" to smithyXml(runtimeConfig).member("encode::XmlWriter"),
+            "ElementWriter" to smithyXml(runtimeConfig).member("encode::ElWriter"),
+            "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
             "Error" to runtimeConfig.serializationError(),
         )
     private val operationSerModule = RustModule.private("operation_ser")
@@ -296,10 +296,10 @@ class XmlBindingTraitSerializerGenerator(
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
-                    runtimeConfig.smithyTypes().member("primitive::Encoder"),
+                    smithyTypes(runtimeConfig).member("primitive::Encoder"),
                 )
             }
-            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
+            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(
@@ -307,7 +307,7 @@ class XmlBindingTraitSerializerGenerator(
                         HttpLocation.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rust("$input.fmt(#T)?.as_ref()", timestampFormatType)
             }
             else -> TODO(member.toString())

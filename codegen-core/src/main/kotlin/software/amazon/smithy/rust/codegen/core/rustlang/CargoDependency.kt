@@ -185,43 +185,49 @@ data class CargoDependency(
     }
 
     companion object {
+        // Regular dependencies
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.0.0"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
-        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.0"))
+        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2.0.0"))
-        val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1.0.0"), scope = DependencyScope.Dev)
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
         val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.16.0"))
-        val TempFile: CargoDependency = CargoDependency("tempfile", CratesIo("3.2.0"), scope = DependencyScope.Dev)
         val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.7"))
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
 
+        // Test-only dependencies
+        val AsyncStd: CargoDependency = CargoDependency("async-std", CratesIo("1.12.0"), DependencyScope.Dev)
+        val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
+        val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
+        val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.0"), DependencyScope.Dev)
+        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.0"), DependencyScope.Dev)
+        val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
+        val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1.0.0"), DependencyScope.Dev)
+        val SerdeJson: CargoDependency = CargoDependency("serde_json", CratesIo("1.0.0"), DependencyScope.Dev)
+        val Smol: CargoDependency = CargoDependency("smol", CratesIo("1.2.0"), DependencyScope.Dev)
+        val TempFile: CargoDependency = CargoDependency("tempfile", CratesIo("3.2.0"), DependencyScope.Dev)
+        val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.8.4"), DependencyScope.Dev, features = setOf("macros", "test-util"))
+        val TracingSubscriber: CargoDependency = CargoDependency("tracing-subscriber", CratesIo("0.3.15"), DependencyScope.Dev, features = setOf("env-filter"))
+
+        fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
         fun smithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-client")
-        fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
+        fun smithyEventstream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
         fun smithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-tower")
+        fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-protocol-test", scope = DependencyScope.Dev)
+        fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
     }
 }
-
-fun RuntimeConfig.smithyAsync() = smithyRuntimeCrate("smithy-async").asType()
-fun RuntimeConfig.smithyChecksums() = smithyRuntimeCrate("smithy-checksums").asType()
-fun RuntimeConfig.smithyClient() = smithyRuntimeCrate("smithy-client").asType()
-fun RuntimeConfig.smithyEventStream() = smithyRuntimeCrate("smithy-eventstream").asType()
-fun RuntimeConfig.smithyHttp() = smithyRuntimeCrate("smithy-http").asType()
-fun RuntimeConfig.smithyJson() = smithyRuntimeCrate("smithy-json").asType()
-fun RuntimeConfig.smithyQuery() = smithyRuntimeCrate("smithy-query").asType()
-fun RuntimeConfig.smithyTypes() = smithyRuntimeCrate("smithy-types").asType()
-fun RuntimeConfig.smithyXml() = smithyRuntimeCrate("smithy-xml").asType()

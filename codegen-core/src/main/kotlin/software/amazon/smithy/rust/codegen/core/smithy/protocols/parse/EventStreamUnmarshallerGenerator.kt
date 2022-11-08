@@ -30,12 +30,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyEventStream
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyEventstream
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
@@ -59,23 +59,23 @@ class EventStreamUnmarshallerGenerator(
 ) {
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val errorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-        runtimeConfig.smithyEventStream().member("event_stream::MessageStreamError").toSymbol()
+        smithyEventstream(runtimeConfig).member("event_stream::MessageStreamError").toSymbol()
     } else {
         unionShape.eventStreamErrorSymbol(model, symbolProvider, target).toSymbol()
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "Blob" to runtimeConfig.smithyTypes().member("Blob"),
-        "Error" to runtimeConfig.smithyEventStream().member("error::Error"),
-        "expect_fns" to runtimeConfig.smithyEventStream().member("smithy"),
-        "Header" to runtimeConfig.smithyEventStream().member("frame::Header"),
-        "HeaderValue" to runtimeConfig.smithyEventStream().member("frame::HeaderValue"),
-        "Message" to runtimeConfig.smithyEventStream().member("frame::Message"),
+        "Blob" to smithyTypes(runtimeConfig).member("Blob"),
+        "Error" to smithyEventstream(runtimeConfig).member("error::Error"),
+        "expect_fns" to smithyEventstream(runtimeConfig).member("smithy"),
+        "Header" to smithyEventstream(runtimeConfig).member("frame::Header"),
+        "HeaderValue" to smithyEventstream(runtimeConfig).member("frame::HeaderValue"),
+        "Message" to smithyEventstream(runtimeConfig).member("frame::Message"),
         "OpError" to errorSymbol,
-        "SmithyError" to runtimeConfig.smithyTypes().member("Error"),
+        "SmithyError" to smithyTypes(runtimeConfig).member("Error"),
         "tracing" to CargoDependency.Tracing.asType(),
-        "UnmarshalledMessage" to runtimeConfig.smithyEventStream().member("frame::UnmarshalledMessage"),
-        "UnmarshallMessage" to runtimeConfig.smithyEventStream().member("frame::UnmarshallMessage"),
+        "UnmarshalledMessage" to smithyEventstream(runtimeConfig).member("frame::UnmarshalledMessage"),
+        "UnmarshallMessage" to smithyEventstream(runtimeConfig).member("frame::UnmarshallMessage"),
     )
 
     fun render(): RuntimeType {

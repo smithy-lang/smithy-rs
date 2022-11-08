@@ -14,14 +14,16 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -48,7 +50,7 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
  * Generates methods to serialize and deserialize requests based on the HTTP trait. Specifically:
  * 1. `fn update_http_request(builder: http::request::Builder) -> Builder`
  *
- * This method takes a builder (perhaps pre configured with some headers) from the caller and sets the HTTP
+ * This method takes a builder (perhaps pre-configured with some headers) from the caller and sets the HTTP
  * headers & URL based on the HTTP trait implementation.
  */
 class RequestBindingGenerator(
@@ -63,11 +65,11 @@ class RequestBindingGenerator(
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
     private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
     private val index = HttpBindingIndex.of(model)
-    private val Encoder = runtimeConfig.smithyTypes().member("primitive::Encoder")
+    private val Encoder = smithyTypes(runtimeConfig).member("primitive::Encoder")
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),
-        "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+        "HttpRequestBuilder" to Http.asType().member("request::Builder"),
         "Input" to symbolProvider.toSymbol(inputShape),
     )
 
@@ -89,20 +91,15 @@ class RequestBindingGenerator(
             """,
             *codegenScope,
         ) {
-            write("let mut uri = String::new();")
-            write("uri_base(input, &mut uri)?;")
+            rust("let mut uri = String::new();")
+            rust("uri_base(input, &mut uri)?;")
             if (hasQuery) {
-                write("uri_query(input, &mut uri)?;")
+                rust("uri_query(input, &mut uri)?;")
             }
             if (addHeadersFn != null) {
-                rust(
-                    """
-                    let builder = #{T}(input, builder)?;
-                    """.trimIndent(),
-                    addHeadersFn,
-                )
+                rust("let builder = #{T}(input, builder)?;", addHeadersFn)
             }
-            write("Ok(builder.method(${httpTrait.method.dq()}).uri(uri))")
+            rust("Ok(builder.method(${httpTrait.method.dq()}).uri(uri))")
         }
     }
 
@@ -120,7 +117,7 @@ class RequestBindingGenerator(
             "${label.content} = ${local(member)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
-        writer.addImport(RuntimeType.stdfmt.member("Write").toSymbol(), null)
+        writer.addImport(RuntimeType.stdFmt.member("Write").toSymbol(), null)
         writer.rustBlockTemplate(
             "fn uri_base(_input: &#{Input}, output: &mut String) -> Result<(), #{BuildError}>",
             *codegenScope,
@@ -163,7 +160,7 @@ class RequestBindingGenerator(
             "fn uri_query(_input: &#{Input}, mut output: &mut String) -> Result<(), #{BuildError}>",
             *codegenScope,
         ) {
-            write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Writer"))
+            write("let mut query = #T::new(&mut output);", RuntimeType.queryFormat(runtimeConfig, "Writer"))
             literalParams.forEach { (k, v) ->
                 // When `v` is an empty string, no value should be set.
                 // this generates a query string like `?k=v&xyz`
@@ -182,7 +179,7 @@ class RequestBindingGenerator(
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
                 val targetShape = model.expectShape(memberShape.target, MapShape::class.java)
-                val stringFormatter = RuntimeType.QueryFormat(runtimeConfig, "fmt_string")
+                val stringFormatter = RuntimeType.queryFormat(runtimeConfig, "fmt_string")
                 ifSet(model.expectShape(param.member.target), memberSymbol, "&_input.$memberName") { field ->
                     rustBlock("for (k, v) in $field") {
                         // if v is a list, generate another level of iteration
@@ -223,14 +220,14 @@ class RequestBindingGenerator(
     private fun paramFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String): String {
         return when {
             target.isStringShape -> {
-                val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
+                val func = writer.format(RuntimeType.queryFormat(runtimeConfig, "fmt_string"))
                 "&$func(&$targetName)"
             }
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.QUERY, protocol.defaultTimestampFormat)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_timestamp"))
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val func = writer.format(RuntimeType.queryFormat(runtimeConfig, "fmt_timestamp"))
                 "&$func($targetName, ${writer.format(timestampFormatType)})?"
             }
             target.isListShape || target.isMemberShape -> {
@@ -259,19 +256,19 @@ class RequestBindingGenerator(
         }
         when {
             target.isStringShape -> {
-                val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_string"))
+                val func = format(RuntimeType.labelFormat(runtimeConfig, "fmt_string"))
                 val encodingStrategy = if (label.isGreedyLabel) {
-                    RuntimeType.LabelFormat(runtimeConfig, "EncodingStrategy::Greedy")
+                    RuntimeType.labelFormat(runtimeConfig, "EncodingStrategy::Greedy")
                 } else {
-                    RuntimeType.LabelFormat(runtimeConfig, "EncodingStrategy::Default")
+                    RuntimeType.labelFormat(runtimeConfig, "EncodingStrategy::Default")
                 }
                 rust("let $outputVar = $func($input, #T);", encodingStrategy)
             }
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.LABEL, protocol.defaultTimestampFormat)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                val func = format(RuntimeType.labelFormat(runtimeConfig, "fmt_timestamp"))
                 rust("let $outputVar = $func($input, ${format(timestampFormatType)})?;")
             }
             else -> {

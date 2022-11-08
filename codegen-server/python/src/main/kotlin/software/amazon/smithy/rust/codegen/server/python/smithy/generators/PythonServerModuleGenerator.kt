@@ -26,7 +26,7 @@ class PythonServerModuleGenerator(
     private val serviceShapes: Set<Shape>,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(codegenContext.runtimeConfig).asType(),
+        "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(codegenContext.runtimeConfig).asType(),
         "pyo3" to PythonServerCargoDependency.PyO3.asType(),
     )
     private val symbolProvider = codegenContext.symbolProvider

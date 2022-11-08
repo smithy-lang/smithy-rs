@@ -21,7 +21,9 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.PrettyAssertions
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -32,10 +34,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyProtocolTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
@@ -69,9 +72,8 @@ class ProtocolTestGenerator(
     private val instantiator = clientInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
-        "SmithyHttp" to runtimeConfig.smithyHttp(),
-        "Http" to CargoDependency.Http.asType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
+        "SmithyHttp" to smithyHttp(runtimeConfig),
+        "AssertEq" to PrettyAssertions.asType().member("assert_eq!"),
     )
 
     sealed class TestCase {
@@ -188,10 +190,11 @@ class ProtocolTestGenerator(
                 rustTemplate(
                     """
                     let mut http_request = http_request;
-                    let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(#{Http}::Uri::from_static(${withScheme.dq()}));
+                    let ep = #{Endpoint}::mutable(#{Uri}::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
                     """,
-                    *codegenScope,
+                    "Endpoint" to smithyHttp(runtimeConfig).member("endpoint::Endpoint"),
+                    "Uri" to Http.asType().member("Uri"),
                 )
             }
             rustTemplate(
@@ -252,10 +255,10 @@ class ProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-        writeInline("let expected_output =")
+        write("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let http_response = #T::new()", RuntimeType.HttpResponseBuilder)
+        rust("let http_response = #T::new()", Http.asType().member("response::Builder"))
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -265,11 +268,11 @@ class ProtocolTestGenerator(
             .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
             .unwrap();
             """,
-            RuntimeType.sdkBody(runtimeConfig = codegenContext.runtimeConfig),
+            RuntimeType.sdkBody(runtimeConfig),
         )
-        write(
+        rust(
             "let mut op_response = #T::new(http_response);",
-            RuntimeType.operationModule(codegenContext.runtimeConfig).member("Response"),
+            RuntimeType.operationModule(runtimeConfig).member("Response"),
         )
         rustTemplate(
             """
@@ -283,9 +286,8 @@ class ProtocolTestGenerator(
             });
             """,
             "op" to operationSymbol,
-            "bytes" to RuntimeType.Bytes,
-            "parse_http_response" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).asType()
-                .member("response::ParseHttpResponse"),
+            "bytes" to Bytes.asType().member("Bytes"),
+            "parse_http_response" to smithyHttp(runtimeConfig).member("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = operationShape.errorSymbol(codegenContext.model, codegenContext.symbolProvider, codegenContext.target)
@@ -315,12 +317,14 @@ class ProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             addUseImports(
-                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals").toSymbol(),
+                                smithyProtocolTest(codegenContext.runtimeConfig).member("FloatEquals").toSymbol(),
                             )
                             rust(
                                 """
-                                assert!(parsed.$memberName.float_equals(&expected_output.$memberName),
-                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName);
+                                assert!(
+                                    parsed.$memberName.float_equals(&expected_output.$memberName),
+                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected_output.$memberName, parsed.$memberName
+                                );
                                 """,
                             )
                         }
@@ -332,25 +336,25 @@ class ProtocolTestGenerator(
         }
     }
 
-    private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
+    private fun checkBody(rustWriter: RustWriter, expectedBody: String, mediaType: String?) {
         rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
-        if (body == "") {
+        if (expectedBody == "") {
             rustWriter.rustTemplate(
                 """
                 // No body
-                #{AssertEq}(std::str::from_utf8(body).unwrap(), "");
+                assert!(std::str::from_utf8(body).unwrap().is_empty());
                 """,
                 *codegenScope,
             )
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
-                rustWriter.write(
-                    "#T(&body, ${
-                    rustWriter.escape(body).dq()
-                    }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType"),
+                val escapedExpectedBody = rustWriter.escape(expectedBody).dq()
+                val rawMediaType = (mediaType ?: "unknown").dq()
+                rustTemplate(
+                    "#{validate_body}(&body, $escapedExpectedBody, #{MediaType}::from($rawMediaType))",
+                    "validate_body" to smithyProtocolTest(runtimeConfig).member("validate_body"),
+                    "MediaType" to smithyProtocolTest(runtimeConfig).member("MediaType"),
                 )
             }
         }
@@ -391,7 +395,7 @@ class ProtocolTestGenerator(
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $variableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers"),
+                RuntimeType.protocolTest(runtimeConfig, "validate_headers"),
             )
         }
     }
@@ -445,7 +449,7 @@ class ProtocolTestGenerator(
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $expectedVariableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction),
+                RuntimeType.protocolTest(runtimeConfig, checkFunction),
             )
         }
     }
@@ -455,7 +459,7 @@ class ProtocolTestGenerator(
      * for pretty printing protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
-        rustWriter.write("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.write("#T(", RuntimeType.protocolTest(runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }

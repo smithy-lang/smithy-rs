@@ -39,12 +39,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyJson
-import software.amazon.smithy.rust.codegen.core.rustlang.smithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyJson
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyTypes
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -93,7 +93,7 @@ open class Instantiator(
             // Wrapped Shapes
             is TimestampShape -> writer.rust(
                 "#T::from_secs(${(data as NumberNode).value})",
-                RuntimeType.DateTime(runtimeConfig),
+                RuntimeType.dateTime(runtimeConfig),
             )
 
             /**
@@ -104,12 +104,12 @@ open class Instantiator(
             is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
                 writer.rust(
                     "#T::from_static(b${(data as StringNode).value.dq()})",
-                    RuntimeType.ByteStream(runtimeConfig),
+                    RuntimeType.byteStream(runtimeConfig),
                 )
             } else {
                 writer.rust(
                     "#T::new(${(data as StringNode).value.dq()})",
-                    RuntimeType.Blob(runtimeConfig),
+                    RuntimeType.blob(runtimeConfig),
                 )
             }
 
@@ -124,7 +124,7 @@ open class Instantiator(
                         <#{Number} as #{Parse}>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")
                         """,
                         "Number" to numberSymbol,
-                        "Parse" to runtimeConfig.smithyTypes().member("primitive::Parse"),
+                        "Parse" to smithyTypes(runtimeConfig).member("primitive::Parse"),
                     )
                 }
 
@@ -139,8 +139,8 @@ open class Instantiator(
                     let mut tokens = #{json_token_iter}(json_bytes).peekable();
                     #{expect_document}(&mut tokens).expect("well formed json")
                     """,
-                    "expect_document" to runtimeConfig.smithyJson().member("deserialize::token::expect_document"),
-                    "json_token_iter" to runtimeConfig.smithyJson().member("deserialize::json_token_iter"),
+                    "expect_document" to smithyJson(runtimeConfig).member("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson(runtimeConfig).member("deserialize::json_token_iter"),
                 )
             }
 
