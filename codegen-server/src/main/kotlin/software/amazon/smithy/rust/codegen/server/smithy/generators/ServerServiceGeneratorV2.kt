@@ -187,7 +187,6 @@ class ServerServiceGeneratorV2(
                     #{Pairs:W}
                     if !$missingOperationsVariableName.is_empty() {
                         return Err(MissingOperationsError {
-                            service_name: "$serviceName",
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
@@ -408,7 +407,6 @@ class ServerServiceGeneratorV2(
             """
             ##[derive(Debug)]
             pub struct MissingOperationsError {
-                service_name: &'static str,
                 operation_names2setter_methods: std::collections::HashMap<&'static str, &'static str>,
             }
 
@@ -416,15 +414,14 @@ class ServerServiceGeneratorV2(
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     write!(
                         f,
-                        "You must specify a handler for all operations attached to the `{}` service.\n\
+                        "You must specify a handler for all operations attached to `$serviceName`.\n\
                         We are missing handlers for the following operations:\n",
-                        self.service_name
                     )?;
                     for operation_name in self.operation_names2setter_methods.keys() {
                         writeln!(f, "- {}", operation_name)?;
                     }
 
-                    writeln!(f, "\nUse the dedicated methods on `{}Builder` to register the missing handlers:", self.service_name)?;
+                    writeln!(f, "\nUse the dedicated methods on `$builderName` to register the missing handlers:")?;
                     for setter_name in self.operation_names2setter_methods.values() {
                         writeln!(f, "- {}", setter_name)?;
                     }
