@@ -162,7 +162,7 @@ after:
 
 </details>
 """
-references = ["smithy-rs#1225"]
+references = ["smithy-rs#1225", "smithy-rs#1918"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
 
