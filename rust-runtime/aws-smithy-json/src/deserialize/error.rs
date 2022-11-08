@@ -5,13 +5,16 @@
 
 use crate::escape::EscapeError;
 use std::borrow::Cow;
+use std::error::Error as StdError;
 use std::fmt;
 use std::str::Utf8Error;
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
 pub(in crate::deserialize) enum DeserializeErrorKind {
-    Custom(Cow<'static, str>),
+    Custom {
+        message: Cow<'static, str>,
+        source: Option<Box<dyn StdError + Send + Sync + 'static>>,
+    },
     ExpectedLiteral(String),
     InvalidEscape(char),
     InvalidNumber,
@@ -23,10 +26,9 @@ pub(in crate::deserialize) enum DeserializeErrorKind {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct DeserializeError {
-    kind: DeserializeErrorKind,
-    offset: Option<usize>,
+    pub(in crate::deserialize) kind: DeserializeErrorKind,
+    pub(in crate::deserialize) offset: Option<usize>,
 }
 
 impl DeserializeError {
@@ -36,16 +38,46 @@ impl DeserializeError {
 
     /// Returns a custom error without an offset.
     pub fn custom(message: impl Into<Cow<'static, str>>) -> Self {
-        Self::new(DeserializeErrorKind::Custom(message.into()), None)
+        Self::new(
+            DeserializeErrorKind::Custom {
+                message: message.into(),
+                source: None,
+            },
+            None,
+        )
+    }
+
+    /// Returns a custom error with an error source without an offset.
+    pub fn custom_source(
+        message: impl Into<Cow<'static, str>>,
+        source: impl Into<Box<dyn StdError + Send + Sync + 'static>>,
+    ) -> Self {
+        Self::new(
+            DeserializeErrorKind::Custom {
+                message: message.into(),
+                source: Some(source.into()),
+            },
+            None,
+        )
+    }
+
+    /// Adds an offset to the error.
+    pub fn with_offset(mut self, offset: usize) -> Self {
+        self.offset = Some(offset);
+        self
     }
 }
 
-impl std::error::Error for DeserializeError {
+impl StdError for DeserializeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         use DeserializeErrorKind::*;
         match &self.kind {
             UnescapeFailed(source) => Some(source),
-            Custom(_)
+            Custom {
+                source: Some(source),
+                ..
+            } => Some(source.as_ref()),
+            Custom { source: None, .. }
             | ExpectedLiteral(_)
             | InvalidEscape(_)
             | InvalidNumber
@@ -64,7 +96,7 @@ impl fmt::Display for DeserializeError {
             write!(f, "Error at offset {}: ", offset)?;
         }
         match &self.kind {
-            Custom(msg) => write!(f, "failed to parse JSON: {msg}"),
+            Custom { message, .. } => write!(f, "failed to parse JSON: {message}"),
             ExpectedLiteral(literal) => write!(f, "expected literal: {literal}"),
             InvalidEscape(escape) => write!(f, "invalid JSON escape: \\{escape}"),
             InvalidNumber => write!(f, "invalid number"),

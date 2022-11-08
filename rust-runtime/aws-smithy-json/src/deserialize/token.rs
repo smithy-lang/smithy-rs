@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::deserialize::error::{DeserializeError as Error, DeserializeErrorKind as ErrorKind};
+use crate::deserialize::error::DeserializeError as Error;
 use crate::deserialize::must_not_be_finite;
 use crate::escape::unescape_string;
 pub use crate::escape::EscapeError;
@@ -43,7 +43,7 @@ pub struct Offset(pub usize);
 impl Offset {
     /// Creates a custom error from the offset
     pub fn error(&self, msg: Cow<'static, str>) -> Error {
-        Error::new(ErrorKind::Custom(msg), Some(self.0))
+        Error::custom(msg).with_offset(self.0)
     }
 }
 
@@ -163,9 +163,7 @@ pub fn expect_number_or_null(
         Some(Token::ValueNull { .. }) => Ok(None),
         Some(Token::ValueNumber { value, .. }) => Ok(Some(value)),
         Some(Token::ValueString { value, offset }) => match value.to_unescaped() {
-            Err(err) => Err(Error::new(
-                ErrorKind::Custom(format!("expected a valid string, escape was invalid: {}", err).into()), Some(offset.0))
-            ),
+            Err(err) => Err(Error::custom_source( "expected a valid string, escape was invalid", err).with_offset(offset.0)),
             Ok(v) => f64::parse_smithy_primitive(v.as_ref())
                 // disregard the exact error
                 .map_err(|_|())
@@ -174,13 +172,11 @@ pub fn expect_number_or_null(
                 .map(|float| Some(aws_smithy_types::Number::Float(float)))
                 // convert to a helpful error
                 .map_err(|_| {
-                    Error::new(
-                        ErrorKind::Custom(Cow::Owned(format!(
+                    Error::custom(
+                        format!(
                         "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `{}`",
                         v
-                    ))),
-                        Some(offset.0),
-                    )
+                    )).with_offset(offset.0)
                 }),
         },
         _ => Err(Error::custom(
@@ -337,6 +333,7 @@ fn skip_inner<'a>(
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use crate::deserialize::error::DeserializeErrorKind as ErrorKind;
     use crate::deserialize::error::DeserializeErrorKind::UnexpectedToken;
     use crate::deserialize::json_token_iter;
 
@@ -398,6 +395,16 @@ pub mod test {
         }))
     }
 
+    #[track_caller]
+    fn expect_err_custom<T>(message: &str, offset: Option<usize>, result: Result<T, Error>) {
+        let err = result.err().expect("expected error");
+        let (actual_message, actual_offset) = match &err.kind {
+            ErrorKind::Custom { message, .. } => (message.as_ref(), err.offset),
+            _ => panic!("expected ErrorKind::Custom, got {:?}", err),
+        };
+        assert_eq!((message, offset), (actual_message, actual_offset));
+    }
+
     #[test]
     fn skip_simple_value() {
         let mut tokens = json_token_iter(b"null true");
@@ -455,18 +462,27 @@ pub mod test {
     fn mismatched_braces() {
         // The skip_value function doesn't need to explicitly handle these cases since
         // token iterator's parser handles them. This test confirms that assumption.
-        assert_eq!(
-            Err(Error::new(UnexpectedToken(']', "'}', ','"), Some(10),)),
-            skip_value(&mut json_token_iter(br#"[{"foo": 5]}"#))
-        );
-        assert_eq!(
-            Err(Error::new(UnexpectedToken(']', "'}', ','"), Some(9),)),
-            skip_value(&mut json_token_iter(br#"{"foo": 5]}"#))
-        );
-        assert_eq!(
-            Err(Error::new(UnexpectedToken('}', "']', ','"), Some(4),)),
-            skip_value(&mut json_token_iter(br#"[5,6}"#))
-        );
+        assert!(matches!(
+            skip_value(&mut json_token_iter(br#"[{"foo": 5]}"#)),
+            Err(Error {
+                kind: UnexpectedToken(']', "'}', ','"),
+                offset: Some(10)
+            })
+        ));
+        assert!(matches!(
+            skip_value(&mut json_token_iter(br#"{"foo": 5]}"#)),
+            Err(Error {
+                kind: UnexpectedToken(']', "'}', ','"),
+                offset: Some(9)
+            })
+        ));
+        assert!(matches!(
+            skip_value(&mut json_token_iter(br#"[5,6}"#)),
+            Err(Error {
+                kind: UnexpectedToken('}', "']', ','"),
+                offset: Some(4)
+            })
+        ));
     }
 
     #[test]
@@ -488,61 +504,58 @@ pub mod test {
 
     #[test]
     fn test_expect_start_object() {
-        assert_eq!(
-            Err(Error::new(
-                ErrorKind::Custom("expected StartObject".into()),
-                Some(2)
-            )),
-            expect_start_object(value_bool(2, true))
+        expect_err_custom(
+            "expected StartObject",
+            Some(2),
+            expect_start_object(value_bool(2, true)),
         );
-        assert_eq!(Ok(()), expect_start_object(start_object(0)));
+        assert!(expect_start_object(start_object(0)).is_ok());
     }
 
     #[test]
     fn test_expect_start_array() {
-        assert_eq!(
-            Err(Error::new(
-                ErrorKind::Custom("expected StartArray".into()),
-                Some(2)
-            )),
-            expect_start_array(value_bool(2, true))
+        expect_err_custom(
+            "expected StartArray",
+            Some(2),
+            expect_start_array(value_bool(2, true)),
         );
-        assert_eq!(Ok(()), expect_start_array(start_array(0)));
+        assert!(expect_start_array(start_array(0)).is_ok());
     }
 
     #[test]
     fn test_expect_string_or_null() {
-        assert_eq!(Ok(None), expect_string_or_null(value_null(0)));
+        assert_eq!(None, expect_string_or_null(value_null(0)).unwrap());
         assert_eq!(
-            Ok(Some(EscapedStr("test\\n"))),
-            expect_string_or_null(value_string(0, "test\\n"))
+            Some(EscapedStr("test\\n")),
+            expect_string_or_null(value_string(0, "test\\n")).unwrap()
         );
-        assert_eq!(
-            Err(Error::custom("expected ValueString or ValueNull")),
-            expect_string_or_null(value_bool(0, true))
+        expect_err_custom(
+            "expected ValueString or ValueNull",
+            None,
+            expect_string_or_null(value_bool(0, true)),
         );
     }
 
     #[test]
     fn test_expect_number_or_null() {
-        assert_eq!(Ok(None), expect_number_or_null(value_null(0)));
+        assert_eq!(None, expect_number_or_null(value_null(0)).unwrap());
         assert_eq!(
-            Ok(Some(Number::PosInt(5))),
-            expect_number_or_null(value_number(0, Number::PosInt(5)))
+            Some(Number::PosInt(5)),
+            expect_number_or_null(value_number(0, Number::PosInt(5))).unwrap()
+        );
+        expect_err_custom(
+            "expected ValueString, ValueNumber, or ValueNull",
+            None,
+            expect_number_or_null(value_bool(0, true)),
         );
         assert_eq!(
-            Err(Error::custom(
-                "expected ValueString, ValueNumber, or ValueNull"
-            )),
-            expect_number_or_null(value_bool(0, true))
+            Some(Number::Float(f64::INFINITY)),
+            expect_number_or_null(value_string(0, "Infinity")).unwrap()
         );
-        assert_eq!(
-            Ok(Some(Number::Float(f64::INFINITY))),
-            expect_number_or_null(value_string(0, "Infinity"))
-        );
-        assert_eq!(
-            Err(Error::new(ErrorKind::Custom("only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `123`".into()), Some(0))),
-            expect_number_or_null(value_string(0, "123"))
+        expect_err_custom(
+            "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `123`",
+            Some(0),
+            expect_number_or_null(value_string(0, "123")),
         );
         match expect_number_or_null(value_string(0, "NaN")) {
             Ok(Some(Number::Float(v))) if v.is_nan() => {
@@ -556,63 +569,62 @@ pub mod test {
 
     #[test]
     fn test_expect_blob_or_null() {
-        assert_eq!(Ok(None), expect_blob_or_null(value_null(0)));
+        assert_eq!(None, expect_blob_or_null(value_null(0)).unwrap());
         assert_eq!(
-            Ok(Some(Blob::new(b"hello!".to_vec()))),
-            expect_blob_or_null(value_string(0, "aGVsbG8h"))
+            Some(Blob::new(b"hello!".to_vec())),
+            expect_blob_or_null(value_string(0, "aGVsbG8h")).unwrap()
         );
-        assert_eq!(
-            Err(Error::custom("expected ValueString or ValueNull")),
-            expect_blob_or_null(value_bool(0, true))
+        expect_err_custom(
+            "expected ValueString or ValueNull",
+            None,
+            expect_blob_or_null(value_bool(0, true)),
         );
     }
 
     #[test]
     fn test_expect_timestamp_or_null() {
         assert_eq!(
-            Ok(None),
-            expect_timestamp_or_null(value_null(0), Format::HttpDate)
+            None,
+            expect_timestamp_or_null(value_null(0), Format::HttpDate).unwrap()
         );
         for (invalid, display_name) in &[
             ("NaN", "NaN"),
             ("Infinity", "infinity"),
             ("-Infinity", "infinity"),
         ] {
-            assert_eq!(
-                Err(Error::custom(format!(
-                    "{display_name} is not a valid epoch"
-                ))),
-                expect_timestamp_or_null(value_string(0, invalid), Format::EpochSeconds)
+            expect_err_custom(
+                format!("{display_name} is not a valid epoch").as_str(),
+                None,
+                expect_timestamp_or_null(value_string(0, invalid), Format::EpochSeconds),
             );
         }
         assert_eq!(
-            Ok(Some(DateTime::from_secs_f64(2048.0))),
+            Some(DateTime::from_secs_f64(2048.0)),
             expect_timestamp_or_null(value_number(0, Number::Float(2048.0)), Format::EpochSeconds)
+                .unwrap()
         );
         assert_eq!(
-            Ok(Some(DateTime::from_secs_f64(1445412480.0))),
+            Some(DateTime::from_secs_f64(1445412480.0)),
             expect_timestamp_or_null(
                 value_string(0, "Wed, 21 Oct 2015 07:28:00 GMT"),
                 Format::HttpDate
             )
+            .unwrap()
         );
         assert_eq!(
-            Ok(Some(DateTime::from_secs_f64(1445412480.0))),
+            Some(DateTime::from_secs_f64(1445412480.0)),
             expect_timestamp_or_null(value_string(0, "2015-10-21T07:28:00Z"), Format::DateTime)
+                .unwrap()
         );
-        let err = Error::new(
-            ErrorKind::Custom(
-                "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `wrong`".into(),
-            ),
-            Some(0),
-        );
-        assert_eq!(
-            Err(err),
+        expect_err_custom(
+                "only `Infinity`, `-Infinity`, `NaN` can represent a float as a string but found `wrong`",
+                Some(0),
             expect_timestamp_or_null(value_string(0, "wrong"), Format::EpochSeconds)
         );
-        assert_eq!(
-            Err(Error::custom("expected ValueString or ValueNull")),
-            expect_timestamp_or_null(value_number(0, Number::Float(0.0)), Format::DateTime)
+        expect_err_custom(
+            "expected ValueString or ValueNull",
+            None,
+            expect_timestamp_or_null(value_number(0, Number::Float(0.0)), Format::DateTime),
         );
     }
 
@@ -687,22 +699,20 @@ pub mod test {
         let mut value = String::new();
         value.extend(std::iter::repeat('[').take(300));
         value.extend(std::iter::repeat(']').take(300));
-        assert_eq!(
-            Err(Error::custom(
-                "exceeded max recursion depth while parsing document"
-            )),
-            expect_document(&mut json_token_iter(value.as_bytes()).peekable())
+        expect_err_custom(
+            "exceeded max recursion depth while parsing document",
+            None,
+            expect_document(&mut json_token_iter(value.as_bytes()).peekable()),
         );
 
         value = String::new();
         value.extend(std::iter::repeat("{\"t\":").take(300));
         value.push('1');
         value.extend(std::iter::repeat('}').take(300));
-        assert_eq!(
-            Err(Error::custom(
-                "exceeded max recursion depth while parsing document"
-            )),
-            expect_document(&mut json_token_iter(value.as_bytes()).peekable())
+        expect_err_custom(
+            "exceeded max recursion depth while parsing document",
+            None,
+            expect_document(&mut json_token_iter(value.as_bytes()).peekable()),
         );
     }
 }
