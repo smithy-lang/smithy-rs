@@ -83,7 +83,7 @@ author = "ysaito1001"
 [[aws-sdk-rust]]
 message = """
 <details>
-<summary>The HTTP connector used when making requests is now configurable.</summary>
+<summary>The HTTP connector used when making requests is now configurable through `SdkConfig`.</summary>
 
 ```rust
 use std::time::Duration;
