@@ -298,7 +298,7 @@ private fun RustWriter.renderForwardCompatibilityNote(
     docs("")
     docs(
         """
-        It is worth pointing out that explicitly matching on the `$unknownVariant` variant should
+        Explicitly matching on the `$unknownVariant` variant should
         be avoided for two reasons:
         - The inner data `$unknownVariantValue` is opaque, and no further information can be extracted.
         - It might inadvertently shadow other intended match arms.
