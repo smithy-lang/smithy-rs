@@ -424,7 +424,7 @@ class ServerServiceGeneratorV2(
                         writeln!(f, "- {}", operation_name)?;
                     }
 
-                    writeln!(f, "\nUse the dedicated methods on `PokemonServiceBuilder` to register the missing handlers:")?;
+                    writeln!(f, "\nUse the dedicated methods on `{}Builder` to register the missing handlers:", self.service_name)?;
                     for setter_name in self.operation_names2setter_methods.values() {
                         writeln!(f, "- {}", setter_name)?;
                     }
