@@ -116,19 +116,9 @@ class S3TestDependencies(
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
-            val smithyClient = CargoDependency.smithyClient(runtimeConfig)
-                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-            val smithyAsync = CargoDependency.smithyAsync(runtimeConfig).copy(scope = DependencyScope.Dev)
-            val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).copy(scope = DependencyScope.Dev)
-            val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).copy(scope = DependencyScope.Dev)
-
             addDependency(AsyncStd)
             addDependency(BytesUtils.copy(scope = DependencyScope.Dev))
             addDependency(Smol)
             addDependency(TempFile)
-            addDependency(smithyAsync)
-            addDependency(smithyClient)
-            addDependency(smithyHttp)
-            addDependency(smithyTypes)
         }
 }
