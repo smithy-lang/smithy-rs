@@ -91,7 +91,7 @@
 //! # }
 //! ```
 
-pub use aws_smithy_types::endpoint;
+pub use aws_smithy_http::endpoint;
 // Re-export types from smithy-types
 pub use aws_smithy_types::retry;
 pub use aws_smithy_types::timeout;
@@ -167,7 +167,7 @@ pub async fn load_from_env() -> aws_types::SdkConfig {
 mod loader {
     use std::sync::Arc;
 
-    use aws_smithy_async::rt::sleep::{AsyncSleep, default_async_sleep};
+    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::{ConnectorSettings, HttpConnector};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
