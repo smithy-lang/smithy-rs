@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency.Tower
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
@@ -62,7 +63,7 @@ class ServerOperationRegistryGenerator(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "Tower" to ServerTower.asType(),
+        "Tower" to Tower.asType(),
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError,
         "Display" to RuntimeType.Display,
