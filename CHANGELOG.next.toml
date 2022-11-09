@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[smithy-rs]]
+message = "Upgrade Rust MSRV to 1.62.1"
+references = ["smithy-rs#0"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "jjantdev"
+
+[[smithy-rs]]
 message = "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This architecture cannot compile `ring`, so the implementation has been updated to rely on `hamc` + `sha2` to achive the same result with broader platform compatibility and higher performance. We also updated the CI which is now running as many tests as possible against i686 and PowerPC 32 and 64 bit."
 references = ["smithy-rs#1847"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
@@ -79,3 +85,16 @@ message = "Fix cargo audit issue on criterion."
 references = ["smithy-rs#1923"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Ability to add an inline policy or a list of policy ARNs to the `AssumeRoleProvider` builder."
+references = ["aws-sdk-rust#641", "smithy-rs#1892"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "albe-rosado"
+
+[[aws-sdk-rust]]
+message = "Removed re-export of `aws_smithy_client::retry::Config` from the `middleware` module."
+references = ["smithy-rs#1935"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+

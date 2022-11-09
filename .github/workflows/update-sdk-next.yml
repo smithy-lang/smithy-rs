@@ -23,14 +23,14 @@ jobs:
         path: aws-sdk-rust
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Set up JDK
-      uses: actions/setup-java@v1
+      uses: actions/setup-java@v3
       with:
+        distribution: corretto
+        java-package: jdk
         java-version: 11
       # Rust is only used to `rustfmt` the generated code; doesn't need to match MSRV
     - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
+      uses: dtolnay/rust-toolchain@stable
     - name: Delete old SDK
       run: |
     - name: Generate a fresh SDK
