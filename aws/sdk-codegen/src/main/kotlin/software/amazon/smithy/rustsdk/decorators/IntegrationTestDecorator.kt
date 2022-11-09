@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rustsdk.SdkSettings
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.absolute
 
 class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val order: Byte = 0
@@ -42,7 +43,7 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
     ): List<LibRsCustomization> {
         val integrationTestPath = Paths.get(SdkSettings.from(codegenContext.settings).integrationTestPath)
         check(Files.exists(integrationTestPath)) {
-            "Failed to find the AWS SDK integration tests. Make sure the integration test path is configured " +
+            "Failed to find the AWS SDK integration tests (${integrationTestPath.absolute()}). Make sure the integration test path is configured " +
                 "correctly in the smithy-build.json."
         }
 

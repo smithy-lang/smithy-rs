@@ -6,32 +6,19 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.testutil.stubConfigCustomization
+import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.runCommand
-import software.amazon.smithy.rustsdk.decorators.EndpointConfigCustomization
-import software.amazon.smithy.rustsdk.decorators.PubUseEndpoint
+import java.io.File
 
 internal class EndpointConfigCustomizationTest {
-    private val runtimeConfig = AwsTestRuntimeConfig
     private val codegenScope = arrayOf(
-        "PlaceholderParams" to awsEndpoint(runtimeConfig).resolve("Params"),
-        "Region" to awsTypes(runtimeConfig).resolve("region::Region"),
+        "PlaceholderParams" to awsEndpoint(AwsTestRuntimeConfig).resolve("Params"),
+        "Region" to awsTypes(AwsTestRuntimeConfig).resolve("region::Region"),
     )
 
     private val model = """
@@ -51,6 +38,7 @@ internal class EndpointConfigCustomizationTest {
         }
 
         @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
+        @title("test")
         @restJson1
         service NoRegions {
             version: "123",
@@ -58,6 +46,7 @@ internal class EndpointConfigCustomizationTest {
         }
 
         @aws.api#service(sdkId: "Test")
+        @title("test")
         @restJson1
         service NoEndpointPrefix {
             version: "123",
@@ -126,39 +115,26 @@ internal class EndpointConfigCustomizationTest {
     """.let { ObjectNode.parse(it).expectObjectNode() }
 
     private fun validateEndpointCustomizationForService(service: String, test: ((RustCrate) -> Unit)? = null) {
-        val (context, testDir) = generatePluginContext(model, service = service, runtimeConfig = AwsTestRuntimeConfig)
-        val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-            override val order: Byte = 0
-            override fun configCustomizations(
-                codegenContext: ClientCodegenContext,
-                baseCustomizations: List<ConfigCustomization>,
-            ): List<ConfigCustomization> =
-                baseCustomizations +
-                    stubConfigCustomization("a") +
-                    EndpointConfigCustomization(codegenContext, endpointConfig) +
-                    stubConfigCustomization("b")
-
-            override fun libRsCustomizations(
-                codegenContext: ClientCodegenContext,
-                baseCustomizations: List<LibRsCustomization>,
-            ): List<LibRsCustomization> =
-                baseCustomizations +
-                    PubUseEndpoint(AwsTestRuntimeConfig) +
-                    AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
-
-            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-                if (test != null) {
-                    test(rustCrate)
-                }
+        val endpointsFile = File.createTempFile("endpoints", ".json")
+        endpointsFile.writeText(Node.printJson(endpointConfig))
+        clientIntegrationTest(
+            model,
+            listOf(),
+            service = service,
+            runtimeConfig = AwsTestRuntimeConfig,
+            additionalSettings = ObjectNode.builder().withMember(
+                "customizationConfig",
+                ObjectNode.builder().withMember(
+                    "awsSdk",
+                    ObjectNode.builder().withMember("integrationTestPath", "../sdk/integration-tests")
+                        .withMember("endpointsConfigPath", endpointsFile.absolutePath).build(),
+                ).build(),
+            ).withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
+        ) { _, rustCrate ->
+            if (test != null) {
+                test(rustCrate)
             }
-
-            override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
-        val customization = CombinedCodegenDecorator(listOf(RequiredCustomizations(), codegenDecorator))
-        CodegenVisitor(context, customization).execute()
-        println("file:///$testDir")
-        "cargo test".runCommand(testDir)
     }
 
     @Test

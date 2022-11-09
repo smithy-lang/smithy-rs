@@ -58,8 +58,9 @@ object AwsRuntimeType {
             smithyHttpTower(this),
             smithyClient(this),
             Tower,
-            awsRuntimeCrate("aws-http"),
             awsRuntimeCrate("aws-endpoint"),
+            awsRuntimeCrate("aws-http"),
+            awsRuntimeCrate("aws-sig-auth"),
         ),
     ).resolve("DefaultMiddleware")
 }
