@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_ec2::{Client, Config, Credentials, model::InstanceType, Region};
+use tokio_stream::StreamExt;
+
+use aws_sdk_ec2::{model::InstanceType, Client, Config, Credentials, Region};
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_client::test_connection::TestConnection;
-use tokio_stream::StreamExt;
 
 fn stub_config(conn: impl Into<HttpConnector>) -> Config {
     Config::builder()

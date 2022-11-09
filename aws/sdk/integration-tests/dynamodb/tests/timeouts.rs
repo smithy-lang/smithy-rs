@@ -11,9 +11,9 @@ use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::never::NeverConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::{Credentials, SdkConfig};
 use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
+use aws_types::{Credentials, SdkConfig};
 
 #[derive(Debug, Clone)]
 struct InstantSleep;

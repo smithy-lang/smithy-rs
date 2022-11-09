@@ -50,10 +50,10 @@ class HttpConnectorConfigCustomization(
             is ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
-                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
-                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
-                            self.http_connector.as_ref()
-                        }
+                    /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
+                    pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
+                        self.http_connector.as_ref()
+                    }
                     """,
                     *codegenScope,
                 )
@@ -131,7 +131,7 @@ class HttpConnectorConfigCustomization(
                     ///         .build(https_connector);
                     ///     builder.set_http_connector(Some(smithy_connector));
                     /// }
-                    /// 
+                    ///
                     /// let mut builder = $moduleUseName::Config::builder();
                     /// override_http_connector(&mut builder);
                     /// let config = builder.build();
