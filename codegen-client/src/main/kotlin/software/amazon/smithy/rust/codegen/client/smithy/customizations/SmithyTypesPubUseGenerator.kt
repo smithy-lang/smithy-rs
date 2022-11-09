@@ -8,10 +8,9 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -76,8 +75,7 @@ class SmithyTypesPubUseGenerator(private val runtimeConfig: RuntimeConfig) : Lib
                 is LibRsSection.Body -> {
                     val types = pubUseTypes(runtimeConfig, section.model)
                     if (types.isNotEmpty()) {
-                        docs("Re-exported types from supporting crates.")
-                        rustBlock("pub mod types") {
+                        withModule(RustModule.Types) {
                             types.forEach { type -> rust("pub use #T;", type) }
                         }
                     }

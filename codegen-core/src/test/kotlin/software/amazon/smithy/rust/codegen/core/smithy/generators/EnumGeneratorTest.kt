@@ -125,7 +125,7 @@ class EnumGeneratorTest {
                     let instance = InstanceType::T2Micro;
                     assert_eq!(instance.as_str(), "t2.micro");
                     assert_eq!(InstanceType::from("t2.nano"), InstanceType::T2Nano);
-                    assert_eq!(InstanceType::from("other"), InstanceType::Unknown(UnknownVariantValue("other".to_owned())));
+                    assert_eq!(InstanceType::from("other"), InstanceType::Unknown(crate::types::UnknownVariantValue("other".to_owned())));
                     // round trip unknown variants:
                     assert_eq!(InstanceType::from("other").as_str(), "other");
                     """,
@@ -279,7 +279,7 @@ class EnumGeneratorTest {
                     """
                     assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
                     assert_eq!(SomeEnum::from("UnknownValue"), SomeEnum::UnknownValue_);
-                    assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(UnknownVariantValue("SomethingNew".to_owned())));
+                    assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(crate::types::UnknownVariantValue("SomethingNew".to_owned())));
                     """.trimIndent(),
                 )
             }
@@ -369,7 +369,7 @@ class EnumGeneratorTest {
                 "it_handles_variants_that_clash_with_rust_reserved_words",
                 """
                 assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
-                assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(UnknownVariantValue("SomethingNew".to_owned())));
+                assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown(crate::types::UnknownVariantValue("SomethingNew".to_owned())));
                 """.trimIndent(),
             )
         }
@@ -410,7 +410,7 @@ class EnumGeneratorTest {
             ])
             string SomeEnum
         """.asSmithyModel()
-        val variant3AsUnknown = """SomeEnum::Unknown(UnknownVariantValue("Variant3".to_owned()))"""
+        val variant3AsUnknown = """SomeEnum::from("Variant3")"""
         expectMatchExpressionCompiles(modelV1, "test#SomeEnum", variant3AsUnknown)
 
         val modelV2 = """

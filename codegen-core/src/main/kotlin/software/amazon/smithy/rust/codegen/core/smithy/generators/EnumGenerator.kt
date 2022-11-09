@@ -207,13 +207,13 @@ open class EnumGenerator(
     }
 
     private fun unknownVariantValue(): RuntimeType {
-        return RuntimeType.forInlineFun(UnknownVariantValue, RustModule.Model) {
+        return RuntimeType.forInlineFun(UnknownVariantValue, RustModule.Types) {
             rust("##[allow(missing_docs)]")
             meta.render(this)
-            rust("struct $UnknownVariantValue(String);")
+            rust("struct $UnknownVariantValue(pub(crate) String);")
             rustBlock("impl $UnknownVariantValue") {
                 // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
-                rustBlock("fn as_str(&self) -> &str") {
+                rustBlock("pub(crate) fn as_str(&self) -> &str") {
                     rust("&self.0")
                 }
             }
