@@ -38,7 +38,7 @@ jobs:
           -t "${{ env.ecr_repository }}:main" \
           .
     - name: Acquire credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v1-node16
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
