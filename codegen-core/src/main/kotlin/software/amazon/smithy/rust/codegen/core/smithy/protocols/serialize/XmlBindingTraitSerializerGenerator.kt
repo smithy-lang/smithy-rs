@@ -66,9 +66,9 @@ class XmlBindingTraitSerializerGenerator(
     private val target = codegenContext.target
     private val codegenScope =
         arrayOf(
-            "XmlWriter" to smithyXml(runtimeConfig).member("encode::XmlWriter"),
-            "ElementWriter" to smithyXml(runtimeConfig).member("encode::ElWriter"),
-            "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
+            "XmlWriter" to smithyXml(runtimeConfig).resolve("encode::XmlWriter"),
+            "ElementWriter" to smithyXml(runtimeConfig).resolve("encode::ElWriter"),
+            "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
             "Error" to runtimeConfig.serializationError(),
         )
     private val operationSerModule = RustModule.private("operation_ser")
@@ -296,7 +296,7 @@ class XmlBindingTraitSerializerGenerator(
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
-                    smithyTypes(runtimeConfig).member("primitive::Encoder"),
+                    smithyTypes(runtimeConfig).resolve("primitive::Encoder"),
                 )
             }
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.base64Encode(runtimeConfig))

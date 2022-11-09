@@ -16,8 +16,8 @@ open class EventStreamSigningConfig(
     runtimeConfig: RuntimeConfig,
 ) : ConfigCustomization() {
     private val codegenScope = arrayOf(
-        "SharedPropertyBag" to smithyHttp(runtimeConfig).member("property_bag::SharedPropertyBag"),
-        "SignMessage" to smithyEventstream(runtimeConfig).member("frame::SignMessage"),
+        "SharedPropertyBag" to smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"),
+        "SignMessage" to smithyEventstream(runtimeConfig).resolve("frame::SignMessage"),
     )
 
     override fun section(section: ServiceConfig): Writable {

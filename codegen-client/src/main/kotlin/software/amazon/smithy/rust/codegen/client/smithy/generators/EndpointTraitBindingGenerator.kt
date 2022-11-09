@@ -32,7 +32,7 @@ class EndpointTraitBindings(
     private val endpointTrait: EndpointTrait,
 ) {
     private val inputShape = operationShape.inputShape(model)
-    private val endpointPrefix = smithyHttp(runtimeConfig).member("endpoint::EndpointPrefix")
+    private val endpointPrefix = smithyHttp(runtimeConfig).resolve("endpoint::EndpointPrefix")
 
     /**
      * Render the `EndpointPrefix` struct. [input] refers to the symbol referring to the input of this operation.

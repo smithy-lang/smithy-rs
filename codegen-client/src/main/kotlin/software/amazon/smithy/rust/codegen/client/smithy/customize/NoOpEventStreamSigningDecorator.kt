@@ -46,7 +46,7 @@ class NoOpEventStreamSigningConfig(
     private val serviceHasEventStream: Boolean,
     runtimeConfig: RuntimeConfig,
 ) : EventStreamSigningConfig(runtimeConfig) {
-    private val codegenScope = arrayOf("NoOpSigner" to smithyEventstream(runtimeConfig).member("frame::NoOpSigner"))
+    private val codegenScope = arrayOf("NoOpSigner" to smithyEventstream(runtimeConfig).resolve("frame::NoOpSigner"))
 
     override fun configImplSection() = renderEventStreamSignerFn {
         writable {

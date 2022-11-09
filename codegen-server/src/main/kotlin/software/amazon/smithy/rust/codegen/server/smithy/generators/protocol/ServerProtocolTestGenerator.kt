@@ -34,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -96,7 +95,7 @@ class ServerProtocolTestGenerator(
         val outputT = if (it.errors.isEmpty()) {
             t
         } else {
-            val errorType = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+            val errorType = RuntimeType("crate::error::${operationSymbol.name}Error")
             val e = errorType.fullyQualifiedName()
             "Result<$t, $e>"
         }
@@ -107,14 +106,14 @@ class ServerProtocolTestGenerator(
     private val instantiator = serverInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
-        "Bytes" to Bytes.asType().member("Bytes"),
+        "Bytes" to Bytes.asType().resolve("Bytes"),
         "SmithyHttp" to smithyHttp(codegenContext.runtimeConfig),
         "Http" to Http.asType(),
         "Hyper" to Hyper.asType(),
         "Tokio" to ServerCargoDependency.TokioDev.asType(),
         "Tower" to Tower.asType(),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).asType(),
-        "AssertEq" to PrettyAssertions.asType().member("assert_eq!"),
+        "AssertEq" to PrettyAssertions.asType().resolve("assert_eq!"),
         "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
     )
 

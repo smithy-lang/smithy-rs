@@ -88,7 +88,7 @@ fun generateImplFromRefSdkConfigForConfigBuilder(
     rustCrate: RustCrate,
     customizations: List<AwsCustomization>,
 ) {
-    val codegenContext = arrayOf("SdkConfig" to awsTypes(runtimeConfig).member("sdk_config::SdkConfig"))
+    val codegenContext = arrayOf("SdkConfig" to awsTypes(runtimeConfig).resolve("sdk_config::SdkConfig"))
 
     rustCrate.withModule(RustModule.Config) {
         rustBlockTemplate("impl From<&#{SdkConfig}> for Builder", *codegenContext) {

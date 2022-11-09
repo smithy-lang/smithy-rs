@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -47,9 +46,9 @@ class CustomizableOperationGenerator(
                 pub use #{ClassifyRetry};
                 pub use #{RetryKind};
                 """,
-                "Operation" to smithyHttp(runtimeConfig).member("operation::Operation"),
-                "ClassifyRetry" to smithyHttp(runtimeConfig).member("retry::ClassifyRetry"),
-                "RetryKind" to smithyTypes(runtimeConfig).member("retry::RetryKind"),
+                "Operation" to smithyHttp(runtimeConfig).resolve("operation::Operation"),
+                "ClassifyRetry" to smithyHttp(runtimeConfig).resolve("retry::ClassifyRetry"),
+                "RetryKind" to smithyTypes(runtimeConfig).resolve("retry::RetryKind"),
             )
             renderCustomizableOperationModule(this)
 
@@ -66,9 +65,9 @@ class CustomizableOperationGenerator(
 
         val codegenScope = arrayOf(
             // SDK Types
-            "http_result" to smithyHttp(runtimeConfig).member("result"),
-            "http_body" to smithyHttp(runtimeConfig).member("body"),
-            "HttpRequest" to Http.asType().member("Request"),
+            "http_result" to smithyHttp(runtimeConfig).resolve("result"),
+            "http_body" to smithyHttp(runtimeConfig).resolve("body"),
+            "HttpRequest" to Http.asType().resolve("Request"),
             "handle_generics_decl" to handleGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),
@@ -150,9 +149,9 @@ class CustomizableOperationGenerator(
         val codegenScope = arrayOf(
             "combined_generics_decl" to combinedGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
-            "ParseHttpResponse" to smithyHttp(runtimeConfig).member("response::ParseHttpResponse"),
-            "NewRequestPolicy" to smithyClient(runtimeConfig).member("retry::NewRequestPolicy"),
-            "SmithyRetryPolicy" to smithyClient(runtimeConfig).member("bounds::SmithyRetryPolicy"),
+            "ParseHttpResponse" to smithyHttp(runtimeConfig).resolve("response::ParseHttpResponse"),
+            "NewRequestPolicy" to smithyClient(runtimeConfig).resolve("retry::NewRequestPolicy"),
+            "SmithyRetryPolicy" to smithyClient(runtimeConfig).resolve("bounds::SmithyRetryPolicy"),
         )
 
         writer.rustTemplate(

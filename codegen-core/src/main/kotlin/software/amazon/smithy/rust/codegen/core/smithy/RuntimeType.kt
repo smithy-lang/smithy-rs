@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -110,22 +109,33 @@ data class RuntimeConfig(
 /**
  * `RuntimeType` captures all necessary information to render a type into a Rust file:
  * - [name]: What type is this?
- * - [dependency]: What other crates, if any, are required to use this type?
  * - [namespace]: Where can we find this type.
+ * - [dependency]: What other crates, if any, are required to use this type?
  *
  * For example:
  *
+ * `RuntimeType("header::HeaderName", CargoDependency.Http)`, when passed to a [RustWriter] would appear as such:
+ *
  * `http::header::HeaderName`
  *  ------------  ----------
- *      |           |
- *  [namespace]   [name]
+ *       |            |
+ *  `[namespace]` `[name]`
  *
- *  This type would have a [CargoDependency] pointing to the `http` crate.
- *
- *  By grouping all of this information, when we render a type into a [RustWriter], we can not only render a fully qualified
- *  name, but also ensure that we automatically add any dependencies **as they are used**.
+ *  This type would have a [CargoDependency] pointing to the `http` crate. Writing it multiple times would still only
+ *  add the dependency once.
  */
-data class RuntimeType(val name: String?, val dependency: RustDependency?, val namespace: String) {
+data class RuntimeType(val path: String, val dependency: RustDependency? = null) {
+    val name: String
+    val namespace: String
+
+    init {
+        val splitPath = path.split("::").toMutableList()
+        // get the name at the end
+        this.name = splitPath.removeLast()
+        // get all parts that aren't the name at the end
+        this.namespace = splitPath.joinToString("::")
+    }
+
     /**
      * Get a writable for this `RuntimeType`
      */
@@ -143,32 +153,33 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
      * (e.g. when bringing a trait into scope). See [CodegenWriter.addUseImports].
      */
     fun toSymbol(): Symbol {
-        val builder = Symbol.builder().name(name).namespace(namespace, "::")
-            .rustType(RustType.Opaque(name ?: "", namespace = namespace))
+        val builder = Symbol
+            .builder()
+            .name(name)
+            .namespace(namespace, "::")
+            .rustType(RustType.Opaque(name, namespace))
 
         dependency?.run { builder.addDependency(this) }
         return builder.build()
     }
 
     /**
-     * Create a new [RuntimeType] with a nested name.
+     * Create a new [RuntimeType] with a nested path.
      *
      * # Example
      * ```kotlin
-     * val http = CargoDependency.http.member("Request")
+     * val http = CargoDependency.http.resolve("Request")
      * ```
      */
-    fun member(member: String): RuntimeType {
-        val newName = name?.let { "$name::$member" } ?: member
-        return copy(name = newName)
+    fun resolve(subPath: String): RuntimeType {
+        return copy(path = "$path::$subPath")
     }
 
     /**
      * Returns the fully qualified name for this type
      */
     fun fullyQualifiedName(): String {
-        val postFix = name?.let { "::$name" } ?: ""
-        return "$namespace$postFix"
+        return path
     }
 
     /**
@@ -176,22 +187,24 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
      */
     companion object {
         // stdlib types
-        val std = RuntimeType(null, dependency = null, namespace = "std")
-        val stdFmt = std.member("fmt")
-        val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
-        val ByteSlab = RuntimeType("Vec<u8>", dependency = null, namespace = "std::vec")
-        val Clone = std.member("clone::Clone")
-        val Debug = stdFmt.member("Debug")
-        val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
-        val Display = stdFmt.member("Display")
-        val From = RuntimeType("From", dependency = null, namespace = "std::convert")
-        val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
-        val PartialEq = std.member("cmp::PartialEq")
-        val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
-        val String = RuntimeType("String", dependency = null, namespace = "std::string")
+        val std = RuntimeType("std")
+        val stdFmt = std.resolve("fmt")
+        val AsRef = RuntimeType("std::convert::AsRef")
+        val ByteSlab = RuntimeType("std::vec::Vec<u8>")
+        val Clone = std.resolve("clone::Clone")
+        val Debug = stdFmt.resolve("Debug")
+        val Default = RuntimeType("std::default::Default")
+        val Display = stdFmt.resolve("Display")
+        val From = RuntimeType("std::convert::From")
+        val TryFrom = RuntimeType("std::convert::TryFrom")
+        val PartialEq = std.resolve("cmp::PartialEq")
+        val StdError = RuntimeType("std::error::Error")
+        val String = RuntimeType("std::string::String")
+        val Phantom = RuntimeType("std::marker::PhantomData")
+        val Cow = RuntimeType("std::borrow::Cow")
 
         // codegen types
-        val Config = RuntimeType("config", null, "crate")
+        val Config = RuntimeType("crate::config")
 
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).asType()
@@ -206,25 +219,25 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun smithyProtocolTest(runtimeConfig: RuntimeConfig) = CargoDependency.smithyProtocolTestHelpers(runtimeConfig).asType()
 
         // smithy runtime type members
-        fun base64Decode(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).member("base64::decode")
-        fun base64Encode(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).member("base64::encode")
-        fun blob(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).member("Blob")
-        fun byteStream(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).member("byte_stream::ByteStream")
-        fun dateTime(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).member("DateTime")
-        fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).member("Document")
-        fun errorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).member("retry::ErrorKind")
-        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).member("event_stream::Receiver")
-        fun genericError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).member("Error")
+        fun base64Decode(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("base64::decode")
+        fun base64Encode(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("base64::encode")
+        fun blob(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Blob")
+        fun byteStream(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("byte_stream::ByteStream")
+        fun dateTime(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("DateTime")
+        fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("Document")
+        fun errorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")
+        fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
+        fun genericError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Error")
         fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
-        fun labelFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).member("label::$func")
-        fun operation(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).member("operation::Operation")
-        fun operationModule(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).member("operation")
-        fun parseResponse(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).member("response::ParseHttpResponse")
-        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).member("response::ParseStrictResponse")
-        fun protocolTest(runtimeConfig: RuntimeConfig, func: String): RuntimeType = smithyProtocolTest(runtimeConfig).member(func)
-        fun provideErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).member("retry::ProvideErrorKind")
-        fun queryFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).member("query::$func")
-        fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).member("body::SdkBody")
+        fun labelFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("label::$func")
+        fun operation(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation::Operation")
+        fun operationModule(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation")
+        fun parseResponse(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("response::ParseHttpResponse")
+        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("response::ParseStrictResponse")
+        fun protocolTest(runtimeConfig: RuntimeConfig, func: String): RuntimeType = smithyProtocolTest(runtimeConfig).resolve(func)
+        fun provideErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ProvideErrorKind")
+        fun queryFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("query::$func")
+        fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("body::SdkBody")
         fun timestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {
                 TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
@@ -233,16 +246,14 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 TimestampFormatTrait.Format.UNKNOWN -> TODO()
             }
 
-            return smithyTypes(runtimeConfig).member("date_time::Format::$timestampFormat")
+            return smithyTypes(runtimeConfig).resolve("date_time::Format::$timestampFormat")
         }
 
-        fun forInlineDependency(inlineDependency: InlineDependency) =
-            RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
+        fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType("crate::${inlineDependency.name}", inlineDependency)
 
         fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
-            name = name,
+            "crate::${module.name}::$name",
             dependency = InlineDependency(name, module, listOf(), func),
-            namespace = "crate::${module.name}",
         )
 
         // inlinable types

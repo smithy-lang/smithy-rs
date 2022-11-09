@@ -60,9 +60,9 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
             PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
         ) + smithyHttp(runtimeConfig).let { http ->
             listOf(
-                PubUseType(http.member("result::SdkError")) { true },
-                PubUseType(http.member("byte_stream::ByteStream"), ::hasStreamingOperations),
-                PubUseType(http.member("byte_stream::AggregatedBytes"), ::hasStreamingOperations),
+                PubUseType(http.resolve("result::SdkError")) { true },
+                PubUseType(http.resolve("byte_stream::ByteStream"), ::hasStreamingOperations),
+                PubUseType(http.resolve("byte_stream::AggregatedBytes"), ::hasStreamingOperations),
             )
         }
         ).filter { pubUseType -> pubUseType.shouldExport(model) }.map { it.type }

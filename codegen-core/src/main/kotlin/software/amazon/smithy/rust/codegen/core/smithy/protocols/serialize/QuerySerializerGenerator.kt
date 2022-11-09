@@ -98,9 +98,9 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
-        "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
-        "QueryWriter" to smithyQuery(runtimeConfig).member("QueryWriter"),
-        "QueryValueWriter" to smithyQuery(runtimeConfig).member("QueryValueWriter"),
+        "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
+        "QueryWriter" to smithyQuery(runtimeConfig).resolve("QueryWriter"),
+        "QueryValueWriter" to smithyQuery(runtimeConfig).resolve("QueryValueWriter"),
     )
     private val operationSerModule = RustModule.private("operation_ser")
     private val querySerModule = RustModule.private("query_ser")
@@ -218,7 +218,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes(runtimeConfig).member("Number"),
+                    smithyTypes(runtimeConfig).resolve("Number"),
                 )
             }
             is BlobShape -> rust(

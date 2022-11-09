@@ -33,7 +33,8 @@ val Route53: ShapeId = ShapeId.from("com.amazonaws.route53#AWSDnsV20130401")
 class Route53Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
-    private val resourceShapes = setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
+    private val resourceShapes =
+        setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
 
     private fun applies(service: ServiceShape) = service.id == Route53
 
@@ -72,11 +73,9 @@ class TrimResourceIdCustomization(private val fieldName: String) : OperationCust
     override fun mutSelf(): Boolean = true
     override fun consumesSelf(): Boolean = true
 
-    private val trimResourceId =
-        RuntimeType.forInlineDependency(
-            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
-        )
-            .member("trim_resource_id")
+    private val trimResourceId = RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
+    ).resolve("trim_resource_id")
 
     override fun section(section: OperationSection): Writable {
         return when (section) {
@@ -86,6 +85,7 @@ class TrimResourceIdCustomization(private val fieldName: String) : OperationCust
                     "trim_resource_id" to trimResourceId,
                 )
             }
+
             else -> emptySection
         }
     }

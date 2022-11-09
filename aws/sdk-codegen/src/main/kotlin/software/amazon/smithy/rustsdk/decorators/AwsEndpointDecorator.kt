@@ -106,11 +106,11 @@ class EndpointConfigCustomization(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "SmithyResolver" to smithyHttp(runtimeConfig).member("endpoint::ResolveEndpoint"),
-        "PlaceholderParams" to awsEndpoint(runtimeConfig).member("Params"),
-        "ResolveAwsEndpoint" to awsEndpoint(runtimeConfig).member("ResolveAwsEndpoint"),
-        "EndpointShim" to awsEndpoint(runtimeConfig).member("EndpointShim"),
-        "Region" to awsTypes(runtimeConfig).member("region::Region"),
+        "SmithyResolver" to smithyHttp(runtimeConfig).resolve("endpoint::ResolveEndpoint"),
+        "PlaceholderParams" to awsEndpoint(runtimeConfig).resolve("Params"),
+        "ResolveAwsEndpoint" to awsEndpoint(runtimeConfig).resolve("ResolveAwsEndpoint"),
+        "EndpointShim" to awsEndpoint(runtimeConfig).resolve("EndpointShim"),
+        "Region" to awsTypes(runtimeConfig).resolve("region::Region"),
     )
 
     override fun section(section: ServiceConfig): Writable = writable {
@@ -191,8 +191,8 @@ class EndpointConfigCustomization(
 
 class EndpointResolverFeature(runtimeConfig: RuntimeConfig) : OperationCustomization() {
     private val codegenScope = arrayOf(
-        "PlaceholderParams" to awsEndpoint(runtimeConfig).member("Params"),
-        "EndpointResult" to smithyHttp(runtimeConfig).member("endpoint::Result"),
+        "PlaceholderParams" to awsEndpoint(runtimeConfig).resolve("Params"),
+        "EndpointResult" to smithyHttp(runtimeConfig).resolve("endpoint::Result"),
         "BuildError" to runtimeConfig.operationBuildError(),
     )
 
@@ -223,7 +223,7 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T;",
-                    smithyHttp(runtimeConfig).member("endpoint::Endpoint"),
+                    smithyHttp(runtimeConfig).resolve("endpoint::Endpoint"),
                 )
             }
 
@@ -239,16 +239,16 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
     private val awsTypes = awsTypes(runtimeConfig)
     private val codegenScope =
         arrayOf(
-            "Partition" to awsEndpoint.member("Partition"),
-            "endpoint" to awsEndpoint.member("partition::endpoint"),
-            "CredentialScope" to awsEndpoint.member("CredentialScope"),
-            "Regionalized" to awsEndpoint.member("partition::Regionalized"),
-            "Protocol" to awsEndpoint.member("partition::endpoint::Protocol"),
-            "SignatureVersion" to awsEndpoint.member("partition::endpoint::SignatureVersion"),
-            "PartitionResolver" to awsEndpoint.member("PartitionResolver"),
-            "ResolveAwsEndpoint" to awsEndpoint.member("ResolveAwsEndpoint"),
-            "SigningService" to awsTypes.member("SigningService"),
-            "SigningRegion" to awsTypes.member("region::SigningRegion"),
+            "Partition" to awsEndpoint.resolve("Partition"),
+            "endpoint" to awsEndpoint.resolve("partition::endpoint"),
+            "CredentialScope" to awsEndpoint.resolve("CredentialScope"),
+            "Regionalized" to awsEndpoint.resolve("partition::Regionalized"),
+            "Protocol" to awsEndpoint.resolve("partition::endpoint::Protocol"),
+            "SignatureVersion" to awsEndpoint.resolve("partition::endpoint::SignatureVersion"),
+            "PartitionResolver" to awsEndpoint.resolve("PartitionResolver"),
+            "ResolveAwsEndpoint" to awsEndpoint.resolve("ResolveAwsEndpoint"),
+            "SigningService" to awsTypes.resolve("SigningService"),
+            "SigningRegion" to awsTypes.resolve("region::SigningRegion"),
         )
 
     fun resolver(): RuntimeType {

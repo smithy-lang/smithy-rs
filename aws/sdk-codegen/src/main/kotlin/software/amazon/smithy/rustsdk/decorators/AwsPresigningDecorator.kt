@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tower
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -143,11 +142,11 @@ class AwsInputPresignedMethod(
     private val symbolProvider = codegenContext.symbolProvider
 
     private val codegenScope = arrayOf(
-        "Error" to AwsRuntimeType.Presigning.member("config::Error"),
-        "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
-        "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
-        "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to smithyHttp(runtimeConfig).member("result::SdkError"),
+        "Error" to AwsRuntimeType.Presigning.resolve("config::Error"),
+        "PresignedRequest" to AwsRuntimeType.Presigning.resolve("request::PresignedRequest"),
+        "PresignedRequestService" to AwsRuntimeType.Presigning.resolve("service::PresignedRequestService"),
+        "PresigningConfig" to AwsRuntimeType.Presigning.resolve("config::PresigningConfig"),
+        "SdkError" to smithyHttp(runtimeConfig).resolve("result::SdkError"),
         "aws_sigv4" to awsSigv4(runtimeConfig),
         "sig_auth" to awsSigAuth(runtimeConfig),
         "tower" to Tower.asType(),
@@ -252,10 +251,10 @@ class AwsPresignedFluentBuilderMethod(
     runtimeConfig: RuntimeConfig,
 ) : FluentClientCustomization() {
     private val codegenScope = arrayOf(
-        "Error" to AwsRuntimeType.Presigning.member("config::Error"),
-        "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
-        "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to smithyHttp(runtimeConfig).member("result::SdkError"),
+        "Error" to AwsRuntimeType.Presigning.resolve("config::Error"),
+        "PresignedRequest" to AwsRuntimeType.Presigning.resolve("request::PresignedRequest"),
+        "PresigningConfig" to AwsRuntimeType.Presigning.resolve("config::PresigningConfig"),
+        "SdkError" to smithyHttp(runtimeConfig).resolve("result::SdkError"),
     )
 
     override fun section(section: FluentClientSection): Writable =

@@ -57,11 +57,11 @@ class FluentClientGenerator(
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
-        retryDefault = smithyClient(codegenContext.runtimeConfig).member("retry::Standard"),
+        retryDefault = smithyClient(codegenContext.runtimeConfig).resolve("retry::Standard"),
         client = smithyClient(codegenContext.runtimeConfig),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryClassifier: RuntimeType = smithyHttp(codegenContext.runtimeConfig).member("retry::DefaultResponseRetryClassifier"),
+    private val retryClassifier: RuntimeType = smithyHttp(codegenContext.runtimeConfig).resolve("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -304,11 +304,11 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "ClassifyRetry" to smithyHttp(runtimeConfig).member("retry::ClassifyRetry"),
+                        "ClassifyRetry" to smithyHttp(runtimeConfig).resolve("retry::ClassifyRetry"),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
-                        "SdkError" to smithyHttp(runtimeConfig).member("result::SdkError"),
-                        "SdkSuccess" to smithyHttp(runtimeConfig).member("result::SdkSuccess"),
+                        "SdkError" to smithyHttp(runtimeConfig).resolve("result::SdkError"),
+                        "SdkSuccess" to smithyHttp(runtimeConfig).resolve("result::SdkSuccess"),
                         "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),

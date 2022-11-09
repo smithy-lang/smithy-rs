@@ -7,7 +7,6 @@ package software.amazon.smithy.rustsdk.servicedecorators.glacier
 
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -30,7 +29,7 @@ class ApiVersionHeader(
                     .headers_mut()
                     .insert("x-amz-glacier-version", #{HeaderValue}::from_static(${apiVersion.dq()}));
                 """,
-                "HeaderValue" to Http.asType().member("HeaderValue"),
+                "HeaderValue" to Http.asType().resolve("HeaderValue"),
             )
         }
         else -> emptySection

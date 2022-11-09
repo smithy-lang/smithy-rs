@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -48,7 +47,7 @@ open class MakeOperationGenerator(
     protected val runtimeConfig = codegenContext.runtimeConfig
     protected val symbolProvider = codegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
-    private val defaultClassifier = smithyHttp(runtimeConfig).member("retry::DefaultResponseRetryClassifier")
+    private val defaultClassifier = smithyHttp(runtimeConfig).resolve("retry::DefaultResponseRetryClassifier")
 
     private val sdkId =
         codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
@@ -56,12 +55,12 @@ open class MakeOperationGenerator(
 
     private val codegenScope = arrayOf(
         "config" to RuntimeType.Config,
-        "header_util" to smithyHttp(runtimeConfig).member("header"),
+        "header_util" to smithyHttp(runtimeConfig).resolve("header"),
         "http" to Http.asType(),
-        "HttpRequestBuilder" to Http.asType().member("request::Builder"),
+        "HttpRequestBuilder" to Http.asType().resolve("request::Builder"),
         "OpBuildError" to runtimeConfig.operationBuildError(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
-        "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
+        "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
     )
 
     fun generateMakeOperation(
@@ -96,7 +95,7 @@ open class MakeOperationGenerator(
             withBlock("let mut request = {", "};") {
                 createHttpRequest(this, shape)
             }
-            rust("let mut properties = #T::new();", smithyHttp(runtimeConfig).member("property_bag::SharedPropertyBag"))
+            rust("let mut properties = #T::new();", smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"))
 
             // When the payload is a `ByteStream`, `into_inner()` already returns an `SdkBody`, so we mute this
             // Clippy warning to make the codegen a little simpler in that case.
@@ -172,7 +171,7 @@ open class MakeOperationGenerator(
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
 
-        writer.rust("let mut builder = update_http_builder(&self, #T::new())?;", Http.asType().member("request::Builder"))
+        writer.rust("let mut builder = update_http_builder(&self, #T::new())?;", Http.asType().resolve("request::Builder"))
         if (includeDefaultPayloadHeaders && contentType != null) {
             writer.rustTemplate(
                 "builder = #{header_util}::set_request_header_if_absent(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",

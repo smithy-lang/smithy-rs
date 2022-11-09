@@ -11,7 +11,6 @@ import software.amazon.smithy.model.traits.HttpChecksumRequiredTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Md5
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -52,7 +51,7 @@ class HttpChecksumRequiredGenerator(
                     })?;
                     """,
                     "md5" to Md5.asType(),
-                    "HeaderName" to Http.asType().member("header::HeaderName"),
+                    "HeaderName" to Http.asType().resolve("header::HeaderName"),
                     "base64_encode" to RuntimeType.base64Encode(codegenContext.runtimeConfig),
                     "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
                 )

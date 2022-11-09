@@ -110,7 +110,7 @@ class RegionDecorator : AwsCodegenDecorator {
 class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf("Region" to awsTypes(runtimeConfig).member("region::Region"))
+    private val codegenScope = arrayOf("Region" to awsTypes(runtimeConfig).resolve("region::Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
@@ -179,7 +179,7 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T;",
-                    awsTypes(runtimeConfig).member("region::Region"),
+                    awsTypes(runtimeConfig).resolve("region::Region"),
                 )
             }
             else -> emptySection

@@ -159,8 +159,8 @@ class SymbolVisitorTest {
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render(false) shouldBe "${RustType.HashSet.Type}<String>"
-        setSymbol.referenceClosure().map { it.name } shouldBe listOf(RustType.HashSet.Type, "String")
+        setSymbol.rustType().render(false) shouldBe "${RustType.HashSet.RuntimeType.name}<String>"
+        setSymbol.referenceClosure().map { it.name } shouldBe listOf(RustType.HashSet.RuntimeType.name, "String")
     }
 
     @Test

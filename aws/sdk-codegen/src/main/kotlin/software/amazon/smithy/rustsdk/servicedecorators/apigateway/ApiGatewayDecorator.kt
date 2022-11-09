@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDe
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -50,7 +49,7 @@ class ApiGatewayAddAcceptHeader : OperationCustomization() {
                     .headers_mut()
                     .insert("Accept", #{HeaderValue}::from_static("application/json"));
                 """,
-                "HeaderValue" to Http.asType().member("HeaderValue"),
+                "HeaderValue" to Http.asType().resolve("HeaderValue"),
             )
         }
         else -> emptySection

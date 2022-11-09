@@ -26,14 +26,13 @@ internal class RustTypeParametersTest {
 
     @Test
     fun `rustTypeParameters accepts Symbol`() {
-        val symbol = RuntimeType("Operation", namespace = "crate::operation", dependency = null).toSymbol()
+        val symbol = RuntimeType("crate::operation::Operation").toSymbol()
         forInputExpectOutput(symbol, "'<crate::operation::Operation>'")
     }
 
     @Test
     fun `rustTypeParameters accepts RuntimeType`() {
-        val runtimeType = RuntimeType("String", namespace = "std::string", dependency = null)
-        forInputExpectOutput(runtimeType, "'<std::string::String>'")
+        forInputExpectOutput(RuntimeType.String, "'<std::string::String>'")
     }
 
     @Test
@@ -50,9 +49,9 @@ internal class RustTypeParametersTest {
     fun `rustTypeParameters accepts heterogeneous inputs`() {
         val writer = RustWriter.forModule("model")
         val tps = rustTypeParameters(
-            RuntimeType("Operation", namespace = "crate::operation", dependency = null).toSymbol(),
+            RuntimeType("crate::operation::Operation").toSymbol(),
             RustType.Unit,
-            RuntimeType("String", namespace = "std::string", dependency = null),
+            RuntimeType.String,
             "T",
             RustGenerics(GenericTypeArg("A"), GenericTypeArg("B")),
         )

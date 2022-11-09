@@ -32,7 +32,7 @@ open class ServerCombinedErrorGenerator(
     private val errors: List<StructureShape>,
 ) {
     open fun render(writer: RustWriter) {
-        val symbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+        val symbol = RuntimeType("crate::error::${operationSymbol.name}Error")
         if (errors.isNotEmpty()) {
             renderErrors(writer, symbol, operationSymbol)
         }

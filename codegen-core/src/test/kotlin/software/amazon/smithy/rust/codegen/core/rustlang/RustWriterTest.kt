@@ -26,7 +26,7 @@ class RustWriterTest {
     @Test
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
-        val requestBuilder = Http.asType().member("request::Builder")
+        val requestBuilder = Http.asType().resolve("request::Builder")
         sut.withModule(RustModule.public("inner")) {
             rustBlock("fn build(builder: #T)", requestBuilder) {
             }
@@ -58,11 +58,11 @@ class RustWriterTest {
         }
         val output = sut.toString()
         output.shouldCompile()
-        output shouldContain RustType.HashSet.Type
+        output shouldContain RustType.HashSet.RuntimeType.name
         output shouldContain "struct Test"
         output.compileAndRun(
             """
-            let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
+            let test = Test { member: ${RustType.HashSet.RuntimeType.namespace}::${RustType.HashSet.RuntimeType.name}::default(), otherMember: "hello".to_string() };
             assert_eq!(test.otherMember, "hello");
             assert_eq!(test.member.is_empty(), true);
             """,
@@ -155,7 +155,7 @@ class RustWriterTest {
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
-            "http" to Http.asType().member("foo"),
+            "http" to Http.asType().resolve("foo"),
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
     }

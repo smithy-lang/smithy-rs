@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -64,7 +63,7 @@ class ServerOperationRegistryGenerator(
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "Tower" to Tower.asType(),
-        "Phantom" to ServerRuntimeType.Phantom,
+        "Phantom" to RuntimeType.Phantom,
         "StdError" to RuntimeType.StdError,
         "Display" to RuntimeType.Display,
         "From" to RuntimeType.From,
@@ -401,6 +400,6 @@ ${operationImplementationStubs(operations)}
         this,
         symbolProvider.toSymbol(this).name,
         serviceName,
-        ServerCargoDependency.smithyHttpServer(runtimeConfig).asType().member("routing::request_spec"),
+        ServerRuntimeType.RequestSpecModule(runtimeConfig),
     )
 }

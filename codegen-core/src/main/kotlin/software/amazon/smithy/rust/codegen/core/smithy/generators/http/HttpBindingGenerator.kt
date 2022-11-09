@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -101,7 +100,7 @@ class HttpBindingGenerator(
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
-    private val headerUtil = smithyHttp(runtimeConfig).member("header")
+    private val headerUtil = smithyHttp(runtimeConfig).resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val dateTime = RuntimeType.dateTime(runtimeConfig).toSymbol().rustType()
     private val httpSerdeModule = RustModule.private("http_serde")
@@ -129,10 +128,10 @@ class HttpBindingGenerator(
                     let headers = header_map.get_all(${binding.locationName.dq()}).iter();
                     #{deserializeFromHeader:W}
                 }
-            """,
-                "HeaderMap" to Http.asType().member("HeaderMap"),
+                """,
+                "HeaderMap" to Http.asType().resolve("HeaderMap"),
                 "Output" to outputT,
-                "ParseError" to smithyHttp(runtimeConfig).member("header::ParseError"),
+                "ParseError" to smithyHttp(runtimeConfig).resolve("header::ParseError"),
                 "deserializeFromHeader" to deserializeFromHeader(
                     model.expectShape(binding.member.target),
                     binding.member,
@@ -154,11 +153,11 @@ class HttpBindingGenerator(
                 pub fn ${fnName}_inner(headers: #{ValueIter}<http::HeaderValue>) -> std::result::Result<Option<#{Output}>, #{ParseError}> {
                     #{deserializeFromHeader:W}
                 }
-            """,
-                "ValueIter" to Http.asType().member("header::ValueIter"),
-                "HeaderValue" to Http.asType().member("HeaderValue"),
+                """,
+                "ValueIter" to Http.asType().resolve("header::ValueIter"),
+                "HeaderValue" to Http.asType().resolve("HeaderValue"),
                 "Output" to symbolProvider.toSymbol(model.expectShape(target.value.target)),
-                "ParseError" to smithyHttp(runtimeConfig).member("header::ParseError"),
+                "ParseError" to smithyHttp(runtimeConfig).resolve("header::ParseError"),
                 "deserializeFromHeader" to deserializeFromHeader(
                     model.expectShape(target.value.target),
                     binding.member,
@@ -179,11 +178,11 @@ class HttpBindingGenerator(
                     }).collect();
                     out.map(Some)
                 }
-            """,
-                "HeaderMap" to Http.asType().member("HeaderMap"),
+                """,
+                "HeaderMap" to Http.asType().resolve("HeaderMap"),
                 "Output" to outputSymbol.mapRustType { it.asOptional() },
-                "ParseError" to smithyHttp(runtimeConfig).member("header::ParseError"),
-                "headers_for_prefix" to smithyHttp(runtimeConfig).member("header::headers_for_prefix"),
+                "ParseError" to smithyHttp(runtimeConfig).resolve("header::ParseError"),
+                "headers_for_prefix" to smithyHttp(runtimeConfig).resolve("header::headers_for_prefix"),
                 "inner" to inner,
             )
         }
@@ -206,7 +205,7 @@ class HttpBindingGenerator(
                 val outputT = symbolProvider.toSymbol(binding.member)
                 rustBlock(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
-                    smithyHttp(runtimeConfig).member("body::SdkBody"),
+                    smithyHttp(runtimeConfig).resolve("body::SdkBody"),
                     outputT,
                     errorT,
                 ) {
@@ -250,7 +249,7 @@ class HttpBindingGenerator(
             let body = std::mem::replace(body, #{SdkBody}::taken());
             Ok(#{Receiver}::new(unmarshaller, body))
             """,
-            "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
+            "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
             "unmarshallerConstructorFn" to unmarshallerConstructorFn,
             "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
         )
@@ -266,7 +265,7 @@ class HttpBindingGenerator(
             let body = std::mem::replace(body, #{SdkBody}::taken());
             Ok(#{ByteStream}::new(body))
             """,
-            "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
+            "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
             "ByteStream" to symbolProvider.toSymbol(member),
         )
     }
@@ -373,12 +372,12 @@ class HttpBindingGenerator(
                 if (coreShape.hasTrait<MediaTypeTrait>()) {
                     rustTemplate(
                         """
-                    let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
-                        .iter().map(|s|
-                            #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new_with_message("failed to decode base64"))
-                            .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new_with_message("base64 encoded data was not valid utf-8")))
-                        ).collect();
-                    """,
+                        let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
+                            .iter().map(|s|
+                                #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new_with_message("failed to decode base64"))
+                                .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new_with_message("base64 encoded data was not valid utf-8")))
+                            ).collect();
+                        """,
                         "base_64_decode" to RuntimeType.base64Decode(runtimeConfig),
                         "header" to headerUtil,
                     )
@@ -389,34 +388,34 @@ class HttpBindingGenerator(
                 is RustType.Vec ->
                     rust(
                         """
-                    Ok(if !$parsedValue.is_empty() {
-                        Some($parsedValue)
-                    } else {
-                        None
-                    })
-                    """,
+                        Ok(if !$parsedValue.is_empty() {
+                            Some($parsedValue)
+                        } else {
+                            None
+                        })
+                        """,
                     )
 
                 is RustType.HashSet ->
                     rust(
                         """
-                    Ok(if !$parsedValue.is_empty() {
-                        Some($parsedValue.into_iter().collect())
-                    } else {
-                        None
-                    })
-                    """,
+                        Ok(if !$parsedValue.is_empty() {
+                            Some($parsedValue.into_iter().collect())
+                        } else {
+                            None
+                        })
+                        """,
                     )
 
                 else -> rustTemplate(
                     """
-                if $parsedValue.len() > 1 {
-                    Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
-                } else {
-                    let mut $parsedValue = $parsedValue;
-                    Ok($parsedValue.pop())
-                }
-                """,
+                    if $parsedValue.len() > 1 {
+                        Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
+                    } else {
+                        let mut $parsedValue = $parsedValue;
+                        Ok($parsedValue.pop())
+                    }
+                    """,
                     "header_util" to headerUtil,
                 )
             }
@@ -473,8 +472,8 @@ class HttpBindingGenerator(
             )
             val codegenScope = arrayOf(
                 "BuildError" to runtimeConfig.operationBuildError(),
-                HttpMessageType.REQUEST.name to Http.asType().member("request::Builder"),
-                HttpMessageType.RESPONSE.name to Http.asType().member("response::Builder"),
+                HttpMessageType.REQUEST.name to Http.asType().resolve("request::Builder"),
+                HttpMessageType.RESPONSE.name to Http.asType().resolve("response::Builder"),
                 "Shape" to shapeSymbol,
             )
             rustBlockTemplate(
@@ -509,7 +508,7 @@ class HttpBindingGenerator(
                 if (innerMemberType.isPrimitive()) {
                     rust(
                         "let mut encoder = #T::from(${autoDeref(innerField)});",
-                        smithyTypes(runtimeConfig).member("primitive::Encoder"),
+                        smithyTypes(runtimeConfig).resolve("primitive::Encoder"),
                     )
                 }
                 val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField, isListHeader)
@@ -586,7 +585,7 @@ class HttpBindingGenerator(
         fun quoteValue(value: String): String {
             // Timestamp shapes are not quoted in header lists
             return if (isListHeader && !target.isTimestampShape) {
-                val quoteFn = writer.format(headerUtil.member("quote_header_value"))
+                val quoteFn = writer.format(headerUtil.resolve("quote_header_value"))
                 "$quoteFn($value)"
             } else {
                 value

@@ -53,7 +53,7 @@ class EventStreamSymbolProvider(
             if (operationShape != null) {
                 val unionShape = model.expectShape(shape.target).asUnionShape().get()
                 val error = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-                    smithyEventstream(runtimeConfig).member("event_stream::MessageStreamError").toSymbol()
+                    smithyEventstream(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
                 } else {
                     unionShape.eventStreamErrorSymbol(model, this, target).toSymbol()
                 }

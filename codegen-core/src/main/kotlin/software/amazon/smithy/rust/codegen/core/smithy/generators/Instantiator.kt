@@ -124,7 +124,7 @@ open class Instantiator(
                         <#{Number} as #{Parse}>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")
                         """,
                         "Number" to numberSymbol,
-                        "Parse" to smithyTypes(runtimeConfig).member("primitive::Parse"),
+                        "Parse" to smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                     )
                 }
 
@@ -139,8 +139,8 @@ open class Instantiator(
                     let mut tokens = #{json_token_iter}(json_bytes).peekable();
                     #{expect_document}(&mut tokens).expect("well formed json")
                     """,
-                    "expect_document" to smithyJson(runtimeConfig).member("deserialize::token::expect_document"),
-                    "json_token_iter" to smithyJson(runtimeConfig).member("deserialize::json_token_iter"),
+                    "expect_document" to smithyJson(runtimeConfig).resolve("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson(runtimeConfig).resolve("deserialize::json_token_iter"),
                 )
             }
 

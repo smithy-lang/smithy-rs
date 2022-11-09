@@ -47,8 +47,10 @@ class EventStreamMarshallerGeneratorTest {
         )
 
         test.project.lib {
-            val protocolTestHelpers = CargoDependency.smithyProtocolTestHelpers(TestRuntimeConfig)
+            val protocolTestHelpers = CargoDependency
+                .smithyProtocolTestHelpers(TestRuntimeConfig)
                 .copy(scope = DependencyScope.Compile)
+                .asType()
             rustTemplate(
                 """
                 use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
@@ -72,8 +74,8 @@ class EventStreamMarshallerGeneratorTest {
                     HeaderValue::String(value.into())
                 }
                 """,
-                "validate_body" to protocolTestHelpers.rustName("validate_body"),
-                "MediaType" to protocolTestHelpers.rustName("MediaType"),
+                "validate_body" to protocolTestHelpers.resolve("validate_body"),
+                "MediaType" to protocolTestHelpers.resolve("MediaType"),
             )
 
             unitTest(

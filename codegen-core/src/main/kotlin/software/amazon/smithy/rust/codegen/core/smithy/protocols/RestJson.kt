@@ -17,7 +17,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -66,11 +65,11 @@ class RestJsonHttpBindingResolver(
 open class RestJson(val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
-        "Bytes" to Bytes.asType().member("Bytes"),
+        "Bytes" to Bytes.asType().resolve("Bytes"),
         "Error" to RuntimeType.genericError(runtimeConfig),
-        "HeaderMap" to Http.asType().member("HeaderMap"),
-        "JsonError" to smithyJson(runtimeConfig).member("deserialize::Error"),
-        "Response" to Http.asType().member("Response"),
+        "HeaderMap" to Http.asType().resolve("HeaderMap"),
+        "JsonError" to smithyJson(runtimeConfig).resolve("deserialize::Error"),
+        "Response" to Http.asType().resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
     private val jsonDeserModule = RustModule.private("json_deser")

@@ -17,7 +17,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -60,10 +59,10 @@ class HttpBoundProtocolPayloadGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
+        "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
         "BuildError" to runtimeConfig.operationBuildError(),
         "SmithyHttp" to smithyHttp(runtimeConfig),
-        "NoOpSigner" to smithyEventstream(runtimeConfig).member("frame::NoOpSigner"),
+        "NoOpSigner" to smithyEventstream(runtimeConfig).resolve("frame::NoOpSigner"),
     )
 
     override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {

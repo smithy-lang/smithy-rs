@@ -106,7 +106,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             };
             """,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to smithyChecksums(runtimeConfig).member("ChecksumAlgorithm"),
+            "ChecksumAlgorithm" to smithyChecksums(runtimeConfig).resolve("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing
@@ -139,6 +139,7 @@ class HttpRequestChecksumCustomization(
                     emptySection
                 }
             }
+
             is OperationSection.MutateRequest -> {
                 // Return early if no request checksum can be set nor is it required
                 if (!checksumTrait.isRequestChecksumRequired && checksumAlgorithm == null) {
@@ -161,12 +162,13 @@ class HttpRequestChecksumCustomization(
                                 operationShape,
                             ),
                             "add_checksum_calculation_to_request" to runtimeConfig.awsInlineableBodyWithChecksum()
-                                .member("add_checksum_calculation_to_request"),
+                                .resolve("add_checksum_calculation_to_request"),
                             "BuildError" to runtimeConfig.operationBuildError(),
                         )
                     }
                 }
             }
+
             else -> {
                 return emptySection
             }

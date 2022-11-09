@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.assignment
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -82,7 +81,7 @@ class HttpBoundProtocolTraitImplGenerator(
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
         "http" to Http.asType(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
-        "Bytes" to Bytes.asType().member("Bytes"),
+        "Bytes" to Bytes.asType().resolve("Bytes"),
     )
 
     override fun generateTraitImpls(

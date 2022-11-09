@@ -92,7 +92,7 @@ fun OperationShape.errorSymbol(
 
 fun UnionShape.eventStreamErrorSymbol(model: Model, symbolProvider: RustSymbolProvider, target: CodegenTarget): RuntimeType {
     val symbol = symbolProvider.toSymbol(this)
-    val errorSymbol = RuntimeType("${symbol.name}Error", null, "crate::error")
+    val errorSymbol = RuntimeType("crate::error::${symbol.name}Error")
     return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
         val errors = this@eventStreamErrorSymbol.eventStreamErrors().map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
         when (target) {
@@ -126,7 +126,7 @@ class CombinedErrorGenerator(
     private val genericError = RuntimeType.genericError(symbolProvider.config().runtimeConfig)
 
     fun render(writer: RustWriter) {
-        val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+        val errorSymbol = RuntimeType("crate::error::${operationSymbol.name}Error")
         renderErrors(writer, errorSymbol, operationSymbol)
     }
 

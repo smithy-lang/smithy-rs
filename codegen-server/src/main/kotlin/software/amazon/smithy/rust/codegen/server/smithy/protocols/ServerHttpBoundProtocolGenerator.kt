@@ -31,7 +31,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -132,11 +131,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "Cow" to ServerRuntimeType.Cow,
+        "Cow" to RuntimeType.Cow,
         "DateTime" to RuntimeType.dateTime(runtimeConfig),
         "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.asType(),
         "HttpBody" to CargoDependency.HttpBody.asType(),
-        "header_util" to smithyHttp(runtimeConfig).member("header"),
+        "header_util" to smithyHttp(runtimeConfig).resolve("header"),
         "Hyper" to CargoDependency.Hyper.asType(),
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
         "Mime" to ServerCargoDependency.Mime.asType(),
@@ -1036,7 +1035,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             else -> { // Number or boolean.
                                 rust(
                                     "let v = <_ as #T>::parse_smithy_primitive(&v)?;",
-                                    smithyTypes(runtimeConfig).member("primitive::Parse"),
+                                    smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                                 )
                             }
                         }
@@ -1216,12 +1215,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         if (model.expectShape(binding.member.target) is StringShape) {
             return ServerRuntimeType.RequestRejection(runtimeConfig)
         }
-        when (codegenContext.protocol) {
+        return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                return smithyJson(runtimeConfig).member("deserialize").member("Error")
+                smithyJson(runtimeConfig).resolve("deserialize::Error")
             }
             RestXmlTrait.ID -> {
-                return smithyXml(runtimeConfig).member("decode").member("XmlError")
+                smithyXml(runtimeConfig).resolve("decode::XmlError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

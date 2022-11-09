@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency.smithyHttpServer
 
 /**
  * Object used *exclusively* in the runtime of the server, for separation concerns.
@@ -15,32 +16,20 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * For a runtime type that is used in the client, or in both the client and the server, use [RuntimeType] directly.
  */
 object ServerRuntimeType {
-    fun forInlineDependency(inlineDependency: InlineDependency) =
-        RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
+    private fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType.forInlineDependency(inlineDependency)
 
-    val Phantom = RuntimeType("PhantomData", dependency = null, namespace = "std::marker")
-    val Cow = RuntimeType("Cow", dependency = null, namespace = "std::borrow")
+    fun Router(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("routing::Router")
 
-    fun Router(runtimeConfig: RuntimeConfig) =
-        RuntimeType("Router", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::routing")
-
-    fun RequestSpecModule(runtimeConfig: RuntimeConfig) =
-        RuntimeType("request_spec", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::routing")
+    fun RequestSpecModule(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("routing::request_spec")
 
     fun OperationHandler(runtimeConfig: RuntimeConfig) =
         forInlineDependency(ServerInlineDependency.serverOperationHandler(runtimeConfig))
 
-    fun RuntimeError(runtimeConfig: RuntimeConfig) =
-        RuntimeType("RuntimeError", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::runtime_error")
+    fun RuntimeError(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("runtime_error::RuntimeError")
 
-    fun RequestRejection(runtimeConfig: RuntimeConfig) =
-        RuntimeType("RequestRejection", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::rejection")
+    fun RequestRejection(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("rejection::RequestRejection")
 
-    fun ResponseRejection(runtimeConfig: RuntimeConfig) =
-        RuntimeType("ResponseRejection", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::rejection")
+    fun ResponseRejection(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("rejection::ResponseRejection")
 
-    fun Protocol(name: String, path: String, runtimeConfig: RuntimeConfig) =
-        RuntimeType(name, ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::proto::" + path)
-
-    fun Protocol(runtimeConfig: RuntimeConfig) = Protocol("Protocol", "", runtimeConfig)
+    fun Protocol(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("proto")
 }

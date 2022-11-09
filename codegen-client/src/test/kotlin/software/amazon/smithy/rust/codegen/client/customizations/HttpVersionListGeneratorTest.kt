@@ -222,10 +222,10 @@ class FakeSigningConfig(
     runtimeConfig: RuntimeConfig,
 ) : ConfigCustomization() {
     private val codegenScope = arrayOf(
-        "SharedPropertyBag" to smithyHttp(runtimeConfig).member("property_bag::SharedPropertyBag"),
-        "SignMessageError" to smithyEventstream(runtimeConfig).member("frame::SignMessageError"),
-        "SignMessage" to smithyEventstream(runtimeConfig).member("frame::SignMessage"),
-        "Message" to smithyEventstream(runtimeConfig).member("frame::Message"),
+        "SharedPropertyBag" to smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"),
+        "SignMessageError" to smithyEventstream(runtimeConfig).resolve("frame::SignMessageError"),
+        "SignMessage" to smithyEventstream(runtimeConfig).resolve("frame::SignMessage"),
+        "Message" to smithyEventstream(runtimeConfig).resolve("frame::Message"),
     )
 
     override fun section(section: ServiceConfig): Writable {

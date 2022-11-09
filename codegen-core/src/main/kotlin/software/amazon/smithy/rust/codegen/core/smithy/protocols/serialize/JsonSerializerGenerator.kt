@@ -160,10 +160,10 @@ class JsonSerializerGenerator(
     private val codegenScope = arrayOf(
         "ByteSlab" to RuntimeType.ByteSlab,
         "Error" to runtimeConfig.serializationError(),
-        "JsonObjectWriter" to smithyJson(runtimeConfig).member("serialize::JsonObjectWriter"),
-        "JsonValueWriter" to smithyJson(runtimeConfig).member("serialize::JsonValueWriter"),
-        "Number" to smithyTypes(runtimeConfig).member("Number"),
-        "SdkBody" to smithyHttp(runtimeConfig).member("body::SdkBody"),
+        "JsonObjectWriter" to smithyJson(runtimeConfig).resolve("serialize::JsonObjectWriter"),
+        "JsonValueWriter" to smithyJson(runtimeConfig).resolve("serialize::JsonValueWriter"),
+        "Number" to smithyTypes(runtimeConfig).resolve("Number"),
+        "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
         "String" to RuntimeType.String,
     )
     private val serializerUtil = SerializerUtil(model)

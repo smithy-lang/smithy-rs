@@ -8,15 +8,12 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -25,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyEventstream
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -46,20 +44,19 @@ class EventStreamErrorMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     payloadContentType: String,
 ) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType) {
-    private val smithyEventStream = CargoDependency.smithyEventstream(runtimeConfig)
     private val operationErrorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-        RuntimeType("MessageStreamError", smithyEventStream, "aws_smithy_http::event_stream").toSymbol()
+        smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError")
     } else {
-        unionShape.eventStreamErrorSymbol(model, symbolProvider, target).toSymbol()
+        unionShape.eventStreamErrorSymbol(model, symbolProvider, target)
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
     private val codegenScope = arrayOf(
-        "MarshallMessage" to smithyEventstream(runtimeConfig).member("frame::MarshallMessage"),
-        "Message" to smithyEventstream(runtimeConfig).member("frame::Message"),
-        "Header" to smithyEventstream(runtimeConfig).member("frame::Header"),
-        "HeaderValue" to smithyEventstream(runtimeConfig).member("frame::HeaderValue"),
-        "Error" to smithyEventstream(runtimeConfig).member("error::Error"),
+        "MarshallMessage" to smithyEventstream(runtimeConfig).resolve("frame::MarshallMessage"),
+        "Message" to smithyEventstream(runtimeConfig).resolve("frame::Message"),
+        "Header" to smithyEventstream(runtimeConfig).resolve("frame::Header"),
+        "HeaderValue" to smithyEventstream(runtimeConfig).resolve("frame::HeaderValue"),
+        "Error" to smithyEventstream(runtimeConfig).resolve("error::Error"),
     )
 
     override fun render(): RuntimeType {
@@ -90,7 +87,7 @@ class EventStreamErrorMarshallerGenerator(
             "impl #{MarshallMessage} for ${marshallerType.name}",
             *codegenScope,
         ) {
-            rust("type Input = ${operationErrorSymbol.rustType().render(fullyQualified = true)};")
+            rust("type Input = #T;", operationErrorSymbol)
 
             rustBlockTemplate(
                 "fn marshall(&self, _input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
@@ -106,7 +103,7 @@ class EventStreamErrorMarshallerGenerator(
                     rust("let payload = Vec::new();")
                 } else {
                     rustBlock("let payload = match _input$kind") {
-                        val symbol = operationErrorSymbol
+                        val symbol = operationErrorSymbol.fullyQualifiedName()
                         val errorName = when (target) {
                             CodegenTarget.CLIENT -> "${symbol}Kind"
                             CodegenTarget.SERVER -> "$symbol"
@@ -138,7 +135,7 @@ class EventStreamErrorMarshallerGenerator(
         }
     }
 
-    fun RustWriter.renderMarshallEvent(unionMember: MemberShape, eventStruct: StructureShape) {
+    private fun RustWriter.renderMarshallEvent(unionMember: MemberShape, eventStruct: StructureShape) {
         val headerMembers = eventStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
         val payloadMember = eventStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
         for (member in headerMembers) {
@@ -161,11 +158,6 @@ class EventStreamErrorMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("${symbol.name.toPascalCase()}ErrorMarshaller", null, "crate::event_stream_serde")
-    }
-
-    private fun OperationShape.eventStreamMarshallerType(): RuntimeType {
-        val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("${symbol.name.toPascalCase()}ErrorMarshaller", null, "crate::event_stream_serde")
+        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}ErrorMarshaller")
     }
 }

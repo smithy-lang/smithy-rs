@@ -16,7 +16,6 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -65,11 +64,11 @@ class RequestBindingGenerator(
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
     private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
     private val index = HttpBindingIndex.of(model)
-    private val Encoder = smithyTypes(runtimeConfig).member("primitive::Encoder")
+    private val Encoder = smithyTypes(runtimeConfig).resolve("primitive::Encoder")
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),
-        "HttpRequestBuilder" to Http.asType().member("request::Builder"),
+        "HttpRequestBuilder" to Http.asType().resolve("request::Builder"),
         "Input" to symbolProvider.toSymbol(inputShape),
     )
 
@@ -117,7 +116,7 @@ class RequestBindingGenerator(
             "${label.content} = ${local(member)}"
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
-        writer.addImport(RuntimeType.stdFmt.member("Write").toSymbol(), null)
+        writer.addImport(RuntimeType.stdFmt.resolve("Write").toSymbol(), null)
         writer.rustBlockTemplate(
             "fn uri_base(_input: &#{Input}, output: &mut String) -> Result<(), #{BuildError}>",
             *codegenScope,

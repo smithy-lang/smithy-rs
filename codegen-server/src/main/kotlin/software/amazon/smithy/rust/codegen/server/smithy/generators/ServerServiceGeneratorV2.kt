@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -32,7 +31,7 @@ class ServerServiceGeneratorV2(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "Bytes" to Bytes.asType().member("Bytes"),
+            "Bytes" to Bytes.asType().resolve("Bytes"),
             "Http" to Http.asType(),
             "HttpBody" to HttpBody.asType(),
             "SmithyHttpServer" to
@@ -340,7 +339,7 @@ class ServerServiceGeneratorV2(
             impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
             where
                 S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
-                RespB: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + Send + 'static,
+                RespB: #{HttpBody}::Body<Data = #{Bytes}> + Send + 'static,
                 RespB::Error: Into<Box<dyn std::error::Error + Send + Sync>>
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;

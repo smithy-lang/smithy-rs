@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDe
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Bytes
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -68,8 +67,8 @@ private class TestProtocolTraitImplGenerator(
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
             "error" to operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target),
-            "response" to Http.asType().member("Response"),
-            "bytes" to Bytes.asType().member("Bytes"),
+            "response" to Http.asType().resolve("Response"),
+            "bytes" to Bytes.asType().resolve("Bytes"),
         )
     }
 }
@@ -87,7 +86,7 @@ private class TestProtocolMakeOperationGenerator(
     includeDefaultPayloadHeaders = true,
 ) {
     override fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
-        writer.rust("#T::new()", Http.asType().member("request::Builder"))
+        writer.rust("#T::new()", Http.asType().resolve("request::Builder"))
         writer.writeWithNoFormatting(httpRequestBuilder)
     }
 }

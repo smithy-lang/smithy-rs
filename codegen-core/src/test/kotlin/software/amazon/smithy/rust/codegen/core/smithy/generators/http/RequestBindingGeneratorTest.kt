@@ -14,7 +14,6 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -145,11 +144,11 @@ class RequestBindingGeneratorTest {
 
             rustBlock(
                 "pub fn test_request_builder_base(&self) -> Result<#T, #T>",
-                Http.asType().member("request::Builder"),
+                Http.asType().resolve("request::Builder"),
                 TestRuntimeConfig.operationBuildError(),
             ) {
                 bindingGen.renderUpdateHttpBuilder(this)
-                rust("let builder = #T::new();", Http.asType().member("request::Builder"))
+                rust("let builder = #T::new();", Http.asType().resolve("request::Builder"))
                 rust("update_http_builder(self, builder)")
             }
         }

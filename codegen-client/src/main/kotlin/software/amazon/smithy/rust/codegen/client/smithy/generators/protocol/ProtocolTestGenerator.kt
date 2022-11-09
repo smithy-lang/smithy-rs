@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -73,7 +72,7 @@ class ProtocolTestGenerator(
 
     private val codegenScope = arrayOf(
         "SmithyHttp" to smithyHttp(runtimeConfig),
-        "AssertEq" to PrettyAssertions.asType().member("assert_eq!"),
+        "AssertEq" to PrettyAssertions.asType().resolve("assert_eq!"),
     )
 
     sealed class TestCase {
@@ -193,8 +192,8 @@ class ProtocolTestGenerator(
                     let ep = #{Endpoint}::mutable(#{Uri}::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
                     """,
-                    "Endpoint" to smithyHttp(runtimeConfig).member("endpoint::Endpoint"),
-                    "Uri" to Http.asType().member("Uri"),
+                    "Endpoint" to smithyHttp(runtimeConfig).resolve("endpoint::Endpoint"),
+                    "Uri" to Http.asType().resolve("Uri"),
                 )
             }
             rustTemplate(
@@ -258,7 +257,7 @@ class ProtocolTestGenerator(
         write("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        rust("let http_response = #T::new()", Http.asType().member("response::Builder"))
+        rust("let http_response = #T::new()", Http.asType().resolve("response::Builder"))
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -272,7 +271,7 @@ class ProtocolTestGenerator(
         )
         rust(
             "let mut op_response = #T::new(http_response);",
-            RuntimeType.operationModule(runtimeConfig).member("Response"),
+            RuntimeType.operationModule(runtimeConfig).resolve("Response"),
         )
         rustTemplate(
             """
@@ -286,8 +285,8 @@ class ProtocolTestGenerator(
             });
             """,
             "op" to operationSymbol,
-            "bytes" to Bytes.asType().member("Bytes"),
-            "parse_http_response" to smithyHttp(runtimeConfig).member("response::ParseHttpResponse"),
+            "bytes" to Bytes.asType().resolve("Bytes"),
+            "parse_http_response" to smithyHttp(runtimeConfig).resolve("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = operationShape.errorSymbol(codegenContext.model, codegenContext.symbolProvider, codegenContext.target)
@@ -317,7 +316,7 @@ class ProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             addUseImports(
-                                smithyProtocolTest(codegenContext.runtimeConfig).member("FloatEquals").toSymbol(),
+                                smithyProtocolTest(codegenContext.runtimeConfig).resolve("FloatEquals").toSymbol(),
                             )
                             rust(
                                 """
@@ -353,8 +352,8 @@ class ProtocolTestGenerator(
                 val rawMediaType = (mediaType ?: "unknown").dq()
                 rustTemplate(
                     "#{validate_body}(&body, $escapedExpectedBody, #{MediaType}::from($rawMediaType))",
-                    "validate_body" to smithyProtocolTest(runtimeConfig).member("validate_body"),
-                    "MediaType" to smithyProtocolTest(runtimeConfig).member("MediaType"),
+                    "validate_body" to smithyProtocolTest(runtimeConfig).resolve("validate_body"),
+                    "MediaType" to smithyProtocolTest(runtimeConfig).resolve("MediaType"),
                 )
             }
         }

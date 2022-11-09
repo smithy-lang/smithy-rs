@@ -108,17 +108,17 @@ sealed class RustType {
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
         // validating that `key` is a string occurs in the constructor in SymbolVisitor
 
-        override val name: kotlin.String = "HashMap"
-        override val namespace = "std::collections"
+        override val name: kotlin.String = RuntimeType.name
+        override val namespace = RuntimeType.namespace
 
         companion object {
-            val RuntimeType = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
+            val RuntimeType = RuntimeType("std::collections::HashMap")
         }
     }
 
     data class HashSet(override val member: RustType) : RustType(), Container {
-        override val name = Type
-        override val namespace = Namespace
+        override val name: kotlin.String = RuntimeType.name
+        override val namespace = RuntimeType.namespace
 
         companion object {
             // This is Vec intentionally. Note the following passage from the Smithy spec:
@@ -126,9 +126,7 @@ sealed class RustType {
             //    support ordered sets, requiring them may be overly burdensome for users, or conflict with language
             //    idioms. Such languages SHOULD store the values of sets in a list and rely on validation to ensure uniqueness.
             // It's possible that we could provide our own wrapper type in the future.
-            const val Type = "Vec"
-            const val Namespace = "std::vec"
-            val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
+            val RuntimeType = RuntimeType("std::vec::Vec")
         }
     }
 

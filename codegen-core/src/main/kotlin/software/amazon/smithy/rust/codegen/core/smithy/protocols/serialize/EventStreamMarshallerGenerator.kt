@@ -55,11 +55,11 @@ open class EventStreamMarshallerGenerator(
 ) {
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "MarshallMessage" to smithyEventstream(runtimeConfig).member("frame::MarshallMessage"),
-        "Message" to smithyEventstream(runtimeConfig).member("frame::Message"),
-        "Header" to smithyEventstream(runtimeConfig).member("frame::Header"),
-        "HeaderValue" to smithyEventstream(runtimeConfig).member("frame::HeaderValue"),
-        "Error" to smithyEventstream(runtimeConfig).member("error::Error"),
+        "MarshallMessage" to smithyEventstream(runtimeConfig).resolve("frame::MarshallMessage"),
+        "Message" to smithyEventstream(runtimeConfig).resolve("frame::Message"),
+        "Header" to smithyEventstream(runtimeConfig).resolve("frame::Header"),
+        "HeaderValue" to smithyEventstream(runtimeConfig).resolve("frame::HeaderValue"),
+        "Error" to smithyEventstream(runtimeConfig).resolve("error::Error"),
     )
 
     open fun render(): RuntimeType {
@@ -249,6 +249,6 @@ open class EventStreamMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("${symbol.name.toPascalCase()}Marshaller", null, "crate::event_stream_serde")
+        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}Marshaller")
     }
 }

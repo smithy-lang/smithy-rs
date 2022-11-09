@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -93,21 +92,24 @@ class ServerAwsJsonProtocol(
         ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver, awsJsonVersion)
 
     companion object {
-        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol = ServerAwsJsonProtocol(awsJson.codegenContext, awsJson.version)
+        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol =
+            ServerAwsJsonProtocol(awsJson.codegenContext, awsJson.version)
     }
 
     override fun markerStruct(): RuntimeType {
         return when (version) {
             is AwsJsonVersion.Json10 -> {
-                ServerRuntimeType.Protocol("AwsJson1_0", "aws_json_10", runtimeConfig)
+                ServerRuntimeType.Protocol(runtimeConfig).resolve("aws_json_10::AwsJson1_0")
             }
+
             is AwsJsonVersion.Json11 -> {
-                ServerRuntimeType.Protocol("AwsJson1_1", "aws_json_11", runtimeConfig)
+                ServerRuntimeType.Protocol(runtimeConfig).resolve("aws_json_11::AwsJson1_1")
             }
         }
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::proto::aws_json::router")
+    override fun routerType() =
+        ServerRuntimeType.Protocol(runtimeConfig).resolve("aws_json::router::AwsJsonRouter")
 
     override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
         val allOperationShapes = allOperations(codegenContext)
@@ -158,13 +160,15 @@ class ServerAwsJsonProtocol(
     }
 }
 
-private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.smithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server::proto::rest::router")
+private fun restRouterType(runtimeConfig: RuntimeConfig) =
+    ServerRuntimeType.Protocol(runtimeConfig).resolve("rest::router::RestRouter")
 
 private fun restRouterConstruction(
     protocol: ServerProtocol,
     operationValues: Iterable<Writable>,
     codegenContext: CodegenContext,
 ): Writable = writable {
+    val runtimeConfig = codegenContext.runtimeConfig
     val operations = allOperations(codegenContext)
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol visitor
@@ -178,7 +182,7 @@ private fun restRouterConstruction(
                 operationShape,
                 operationName,
                 serviceName,
-                ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).asType().member("routing::request_spec"),
+                ServerRuntimeType.RequestSpecModule(runtimeConfig),
             )
             rustTemplate(
                 """
@@ -189,7 +193,7 @@ private fun restRouterConstruction(
                 """,
                 "Key" to key,
                 "OperationValue" to operationValue,
-                "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).asType(),
+                "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
             )
         }
     }
@@ -208,14 +212,16 @@ class ServerRestJsonProtocol(
     val runtimeConfig = codegenContext.runtimeConfig
 
     companion object {
-        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext)
+        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol =
+            ServerRestJsonProtocol(restJson.codegenContext)
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestJson1", "rest_json_1", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol(runtimeConfig).resolve("rest_json_1::RestJson1")
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, codegenContext)
+    override fun routerConstruction(operationValues: Iterable<Writable>): Writable =
+        restRouterConstruction(this, operationValues, codegenContext)
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
@@ -240,11 +246,12 @@ class ServerRestXmlProtocol(
         }
     }
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestXml", "rest_xml", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.Protocol(runtimeConfig).resolve("rest_xml::RestXml")
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, codegenContext)
+    override fun routerConstruction(operationValues: Iterable<Writable>): Writable =
+        restRouterConstruction(this, operationValues, codegenContext)
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,

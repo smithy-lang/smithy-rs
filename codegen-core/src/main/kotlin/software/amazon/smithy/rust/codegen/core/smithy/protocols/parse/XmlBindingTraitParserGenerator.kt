@@ -97,14 +97,14 @@ class XmlBindingTraitParserGenerator(
 
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val xmlError = smithyXml(runtimeConfig).member("decode::XmlError")
+    private val xmlError = smithyXml(runtimeConfig).resolve("decode::XmlError")
     private val codegenScope = arrayOf(
         "Blob" to RuntimeType.blob(runtimeConfig),
-        "Document" to smithyXml(runtimeConfig).member("decode::Document"),
+        "Document" to smithyXml(runtimeConfig).resolve("decode::Document"),
         "XmlError" to xmlError,
-        "next_start_element" to smithyXml(runtimeConfig).member("decode::next_start_element"),
-        "try_data" to smithyXml(runtimeConfig).member("decode::try_data"),
-        "ScopedDecoder" to smithyXml(runtimeConfig).member("decode::ScopedDecoder"),
+        "next_start_element" to smithyXml(runtimeConfig).resolve("decode::next_start_element"),
+        "try_data" to smithyXml(runtimeConfig).resolve("decode::try_data"),
+        "ScopedDecoder" to smithyXml(runtimeConfig).resolve("decode::ScopedDecoder"),
         "aws_smithy_types" to smithyTypes(runtimeConfig),
     )
     private val model = codegenContext.model

@@ -30,8 +30,8 @@ import software.amazon.smithy.rustsdk.decorators.PubUseEndpoint
 internal class EndpointConfigCustomizationTest {
     private val runtimeConfig = AwsTestRuntimeConfig
     private val codegenScope = arrayOf(
-        "PlaceholderParams" to awsEndpoint(runtimeConfig).member("Params"),
-        "Region" to awsTypes(runtimeConfig).member("region::Region"),
+        "PlaceholderParams" to awsEndpoint(runtimeConfig).resolve("Params"),
+        "Region" to awsTypes(runtimeConfig).resolve("region::Region"),
     )
 
     private val model = """

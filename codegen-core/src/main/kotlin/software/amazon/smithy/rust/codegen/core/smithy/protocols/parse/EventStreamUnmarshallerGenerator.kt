@@ -25,7 +25,6 @@ import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -59,23 +58,23 @@ class EventStreamUnmarshallerGenerator(
 ) {
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val errorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-        smithyEventstream(runtimeConfig).member("event_stream::MessageStreamError").toSymbol()
+        smithyEventstream(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
     } else {
         unionShape.eventStreamErrorSymbol(model, symbolProvider, target).toSymbol()
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "Blob" to smithyTypes(runtimeConfig).member("Blob"),
-        "Error" to smithyEventstream(runtimeConfig).member("error::Error"),
-        "expect_fns" to smithyEventstream(runtimeConfig).member("smithy"),
-        "Header" to smithyEventstream(runtimeConfig).member("frame::Header"),
-        "HeaderValue" to smithyEventstream(runtimeConfig).member("frame::HeaderValue"),
-        "Message" to smithyEventstream(runtimeConfig).member("frame::Message"),
+        "Blob" to smithyTypes(runtimeConfig).resolve("Blob"),
+        "Error" to smithyEventstream(runtimeConfig).resolve("error::Error"),
+        "expect_fns" to smithyEventstream(runtimeConfig).resolve("smithy"),
+        "Header" to smithyEventstream(runtimeConfig).resolve("frame::Header"),
+        "HeaderValue" to smithyEventstream(runtimeConfig).resolve("frame::HeaderValue"),
+        "Message" to smithyEventstream(runtimeConfig).resolve("frame::Message"),
         "OpError" to errorSymbol,
-        "SmithyError" to smithyTypes(runtimeConfig).member("Error"),
+        "SmithyError" to smithyTypes(runtimeConfig).resolve("Error"),
         "tracing" to CargoDependency.Tracing.asType(),
-        "UnmarshalledMessage" to smithyEventstream(runtimeConfig).member("frame::UnmarshalledMessage"),
-        "UnmarshallMessage" to smithyEventstream(runtimeConfig).member("frame::UnmarshallMessage"),
+        "UnmarshalledMessage" to smithyEventstream(runtimeConfig).resolve("frame::UnmarshalledMessage"),
+        "UnmarshallMessage" to smithyEventstream(runtimeConfig).resolve("frame::UnmarshallMessage"),
     )
 
     fun render(): RuntimeType {
@@ -407,6 +406,6 @@ class EventStreamUnmarshallerGenerator(
 
     private fun UnionShape.eventStreamUnmarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("${symbol.name.toPascalCase()}Unmarshaller", null, "crate::event_stream_serde")
+        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}Unmarshaller")
     }
 }

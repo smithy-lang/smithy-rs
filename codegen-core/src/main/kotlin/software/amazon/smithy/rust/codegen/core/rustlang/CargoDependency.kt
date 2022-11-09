@@ -112,8 +112,6 @@ class InlineDependency(
     }
 }
 
-fun CargoDependency.asType() = RuntimeType(null, dependency = this, namespace = rustName)
-
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
 /**
@@ -137,8 +135,6 @@ data class CargoDependency(
         is CratesIo -> location.version
         is Local -> "local"
     }
-
-    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.rustName)
 
     fun toMap(): Map<String, Any> {
         val attribs = mutableMapOf<String, Any>()
@@ -182,6 +178,11 @@ data class CargoDependency(
             }
         }
         return "$name = { ${attribs.joinToString(",")} }"
+    }
+
+    // TODO rename to `toType` to maintain naming convention of the above methods
+    fun asType(): RuntimeType {
+        return RuntimeType(rustName, this)
     }
 
     companion object {

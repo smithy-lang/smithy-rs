@@ -20,10 +20,10 @@ class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCust
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "AsyncSleep" to smithyAsync(runtimeConfig).member("rt::sleep::AsyncSleep"),
-        "RetryConfig" to smithyTypes(runtimeConfig).member("retry::RetryConfig"),
-        "Sleep" to smithyAsync(runtimeConfig).member("rt::sleep::Sleep"),
-        "TimeoutConfig" to smithyTypes(runtimeConfig).member("timeout::TimeoutConfig"),
+        "AsyncSleep" to smithyAsync(runtimeConfig).resolve("rt::sleep::AsyncSleep"),
+        "RetryConfig" to smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
+        "Sleep" to smithyAsync(runtimeConfig).resolve("rt::sleep::Sleep"),
+        "TimeoutConfig" to smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -244,9 +244,9 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                     pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
                 }
                 """,
-                "retry" to smithyTypes(runtimeConfig).member("retry"),
-                "sleep" to smithyAsync(runtimeConfig).member("rt::sleep"),
-                "timeout" to smithyTypes(runtimeConfig).member("timeout"),
+                "retry" to smithyTypes(runtimeConfig).resolve("retry"),
+                "sleep" to smithyAsync(runtimeConfig).resolve("rt::sleep"),
+                "timeout" to smithyTypes(runtimeConfig).resolve("timeout"),
             )
         }
     }

@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyHttp
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyHttpTower
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -62,7 +61,7 @@ object AwsRuntimeType {
             awsRuntimeCrate("aws-http"),
             awsRuntimeCrate("aws-endpoint"),
         ),
-    ).member("DefaultMiddleware")
+    ).resolve("DefaultMiddleware")
 }
 
 fun RuntimeConfig.awsRuntimeCrate(name: String, features: Set<String> = setOf()): CargoDependency =

@@ -63,25 +63,25 @@ class JsonParserGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val target = codegenContext.target
-    private val smithyJsonDeser = smithyJson(runtimeConfig).member("deserialize")
+    private val smithyJsonDeser = smithyJson(runtimeConfig).resolve("deserialize")
     private val jsonDeserModule = RustModule.private("json_deser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
-        "Error" to smithyJsonDeser.member("Error"),
-        "ErrorReason" to smithyJsonDeser.member("ErrorReason"),
-        "expect_blob_or_null" to smithyJsonDeser.member("token::expect_blob_or_null"),
-        "expect_bool_or_null" to smithyJsonDeser.member("token::expect_bool_or_null"),
-        "expect_document" to smithyJsonDeser.member("token::expect_document"),
-        "expect_number_or_null" to smithyJsonDeser.member("token::expect_number_or_null"),
-        "expect_start_array" to smithyJsonDeser.member("token::expect_start_array"),
-        "expect_start_object" to smithyJsonDeser.member("token::expect_start_object"),
-        "expect_string_or_null" to smithyJsonDeser.member("token::expect_string_or_null"),
-        "expect_timestamp_or_null" to smithyJsonDeser.member("token::expect_timestamp_or_null"),
-        "json_token_iter" to smithyJsonDeser.member("json_token_iter"),
-        "Peekable" to RuntimeType.std.member("iter::Peekable"),
-        "skip_value" to smithyJsonDeser.member("token::skip_value"),
-        "skip_to_end" to smithyJsonDeser.member("token::skip_to_end"),
-        "Token" to smithyJsonDeser.member("Token"),
+        "Error" to smithyJsonDeser.resolve("Error"),
+        "ErrorReason" to smithyJsonDeser.resolve("ErrorReason"),
+        "expect_blob_or_null" to smithyJsonDeser.resolve("token::expect_blob_or_null"),
+        "expect_bool_or_null" to smithyJsonDeser.resolve("token::expect_bool_or_null"),
+        "expect_document" to smithyJsonDeser.resolve("token::expect_document"),
+        "expect_number_or_null" to smithyJsonDeser.resolve("token::expect_number_or_null"),
+        "expect_start_array" to smithyJsonDeser.resolve("token::expect_start_array"),
+        "expect_start_object" to smithyJsonDeser.resolve("token::expect_start_object"),
+        "expect_string_or_null" to smithyJsonDeser.resolve("token::expect_string_or_null"),
+        "expect_timestamp_or_null" to smithyJsonDeser.resolve("token::expect_timestamp_or_null"),
+        "json_token_iter" to smithyJsonDeser.resolve("json_token_iter"),
+        "Peekable" to RuntimeType.std.resolve("iter::Peekable"),
+        "skip_value" to smithyJsonDeser.resolve("token::skip_value"),
+        "skip_to_end" to smithyJsonDeser.resolve("token::skip_to_end"),
+        "Token" to smithyJsonDeser.resolve("Token"),
         "or_empty" to orEmptyJson(),
     )
 

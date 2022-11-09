@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -34,7 +35,7 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
     WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val initial = base.toSymbol(shape)
-        // We are only targetting member shapes
+        // We are only targeting member shapes
         if (shape !is MemberShape) {
             return initial
         }
@@ -48,7 +49,14 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
 
         // We are only targeting streaming blobs
         return if (target is BlobShape && shape.isStreaming(model)) {
-            RuntimeType.byteStream(config().runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
+            CargoDependency
+                .smithyHttp(config().runtimeConfig)
+                .asType()
+                .resolve("byte_stream::ByteStream")
+                .toSymbol()
+                .toBuilder()
+                .setDefault(Default.RustDefault)
+                .build()
         } else {
             base.toSymbol(shape)
         }
