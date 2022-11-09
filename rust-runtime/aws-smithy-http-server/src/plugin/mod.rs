@@ -3,12 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+mod composer;
 mod filter;
 mod identity;
 mod stack;
 
 use crate::operation::Operation;
 
+pub use composer::PluginPipeline;
 pub use filter::FilterByOperationName;
 pub use identity::IdentityPlugin;
 pub use stack::PluginStack;
@@ -53,41 +55,3 @@ pub trait Plugin<Protocol, Op, S, L> {
     /// Maps an [`Operation`] to another.
     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
 }
-
-/// An extension trait for [`Plugin`].
-pub trait PluginExt<P, Op, S, L>: Plugin<P, Op, S, L> {
-    /// Stacks another [`Plugin`], running them sequentially.
-    fn stack<Other>(self, other: Other) -> PluginStack<Self, Other>
-    where
-        Self: Sized,
-    {
-        PluginStack::new(self, other)
-    }
-
-    /// Filters the application of the [`Plugin`] using a predicate over the
-    /// [`OperationShape::NAME`](crate::operation::OperationShape).
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use aws_smithy_http_server::{plugin::{Plugin, PluginExt}, operation::{Operation, OperationShape}};
-    /// # struct Pl;
-    /// # struct CheckHealth;
-    /// # impl OperationShape for CheckHealth { const NAME: &'static str = ""; type Input = (); type Output = (); type Error = (); }
-    /// # impl Plugin<(), CheckHealth, (), ()> for Pl { type Service = (); type Layer = (); fn map(&self, input: Operation<(), ()>) -> Operation<(), ()> { input }}
-    /// # let plugin = Pl;
-    /// # let operation = Operation { inner: (), layer: () };
-    /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-    /// let filtered_plugin = plugin.filter_by_operation_name(|name| name != CheckHealth::NAME);
-    /// let new_operation = filtered_plugin.map(operation);
-    /// ```
-    fn filter_by_operation_name<F>(self, predicate: F) -> FilterByOperationName<Self, F>
-    where
-        Self: Sized,
-        F: Fn(&str) -> bool,
-    {
-        FilterByOperationName::new(self, predicate)
-    }
-}
-
-impl<Pl, P, Op, S, L> PluginExt<P, Op, S, L> for Pl where Pl: Plugin<P, Op, S, L> {}
