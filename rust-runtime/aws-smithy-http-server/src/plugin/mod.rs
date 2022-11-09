@@ -16,7 +16,7 @@ pub use pipeline::PluginPipeline;
 pub use stack::PluginStack;
 
 /// A mapping from one [`Operation`] to another. Used to modify the behavior of
-/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder,
+/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder.
 ///
 /// The generics `Protocol` and `Op` allow the behavior to be parameterized.
 pub trait Plugin<Protocol, Op, S, L> {
