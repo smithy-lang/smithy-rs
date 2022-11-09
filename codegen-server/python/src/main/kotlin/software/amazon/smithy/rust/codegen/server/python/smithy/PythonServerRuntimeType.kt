@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency.smithyHttpServerPython
 
 /**
  * Object used *exclusively* in the runtime of the Python server, for separation concerns.
@@ -15,18 +16,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  */
 object PythonServerRuntimeType {
 
-    fun PySocket(runtimeConfig: RuntimeConfig) =
-        RuntimeType("PySocket", PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server_python")
+    fun PySocket(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("PySocket")
 
-    fun Blob(runtimeConfig: RuntimeConfig) =
-        RuntimeType("Blob", PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server_python::types")
+    fun Blob(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("types::Blob")
 
-    fun ByteStream(runtimeConfig: RuntimeConfig) =
-        RuntimeType("ByteStream", PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server_python::types")
+    fun ByteStream(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("types::ByteStream")
 
-    fun DateTime(runtimeConfig: RuntimeConfig) =
-        RuntimeType("DateTime", PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server_python::types")
+    fun DateTime(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("types::DateTime")
 
-    fun PyError(runtimeConfig: RuntimeConfig) =
-        RuntimeType("Error", PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_smithy_http_server_python")
+    fun PyError(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("Error")
 }

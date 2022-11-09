@@ -31,9 +31,9 @@ class ServerInstantiatorTest {
     // This model started off from the one in `InstantiatorTest.kt` from `codegen-core`.
     private val model = """
         namespace com.test
-        
+
         use smithy.framework#ValidationException
-        
+
         @documentation("this documents the shape")
         structure MyStruct {
            foo: String,
@@ -83,7 +83,7 @@ class ServerInstantiatorTest {
             @required
             num: Integer
         }
-        
+
         structure MyStructRequired {
             @required
             str: String,
@@ -106,13 +106,13 @@ class ServerInstantiatorTest {
             @required
             doc: Document
         }
-        
+
         @enum([
             { value: "t2.nano" },
             { value: "t2.micro" },
         ])
         string UnnamedEnum
-        
+
         @enum([
             {
                 value: "t2.nano",

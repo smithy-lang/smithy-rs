@@ -399,7 +399,7 @@ project.registerGenerateCargoConfigTomlTask(outputDir)
 tasks["test"].finalizedBy(
     Cargo.CHECK.toString,
     Cargo.TEST.toString,
-    Cargo.DOCS.toString
+    Cargo.DOCS.toString,
 )
 
 tasks.register<Delete>("deleteSdk") {

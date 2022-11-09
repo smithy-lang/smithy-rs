@@ -63,9 +63,9 @@ class SafeCounter:
 #
 # Synchronization:
 #   Instance of `Context` class will be cloned for every worker and all state kept in `Context`
-#   will be specific to that process. There is no protection provided by default, 
-#   it is up to you to have synchronization between processes. 
-#   If you really want to share state between different processes you need to use `multiprocessing` primitives: 
+#   will be specific to that process. There is no protection provided by default,
+#   it is up to you to have synchronization between processes.
+#   If you really want to share state between different processes you need to use `multiprocessing` primitives:
 #   https://docs.python.org/3/library/multiprocessing.html#sharing-state-between-processes
 @dataclass
 class Context:
