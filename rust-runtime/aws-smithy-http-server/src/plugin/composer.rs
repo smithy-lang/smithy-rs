@@ -12,22 +12,22 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 ///
 /// ## Applying plugins in a sequence
 ///
-/// You can use the `add` method to apply a new plugin after the ones that have already been
-/// registered.
+/// You can use the [`push`](PluginPipeline::push) method to apply a new plugin after the ones that
+/// have already been registered.
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::PluginPipeline;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 ///
-/// let composer = PluginPipeline::empty().add(LoggingPlugin).add(MetricsPlugin);
+/// let composer = PluginPipeline::empty().push(LoggingPlugin).push(MetricsPlugin);
 /// ```
 ///
 /// ## Wrapping the current plugin pipeline
 ///
 /// From time to time, you might have a need to transform the entire pipeline that has been built
 /// so far - e.g. you only want to apply those plugins for a specified operation.
-/// You can use the `map` method to grab the current pipeline and transform it:
+/// You can use the [`map`](PluginPipeline::map) method to grab the current pipeline and transform it:
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::{FilterByOperationName, PluginPipeline};
@@ -38,13 +38,13 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # impl CheckHealth { const NAME: &'static str = "MyName"; }
 ///
 /// let composer = PluginPipeline::new(LoggingPlugin)
-///     .add(MetricsPlugin)
+///     .push(MetricsPlugin)
 ///     .map(|current_pipeline| {
 ///         // The logging and metrics plugins will not be applied to the `CheckHealth` operation.
 ///         FilterByOperationName::new(current_pipeline, |name| name != CheckHealth::NAME)
 ///     })
 ///     // The auth plugin will be applied to all operations
-///     .add(AuthPlugin);
+///     .push(AuthPlugin);
 /// ```
 ///
 /// ## Concatenating two plugin pipelines
@@ -62,7 +62,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 ///
 /// pub fn get_bundled_pipeline() -> PluginPipeline<PluginStack<LoggingPlugin, MetricsPlugin>> {
-///     PluginPipeline::new(LoggingPlugin).add(MetricsPlugin)
+///     PluginPipeline::new(LoggingPlugin).push(MetricsPlugin)
 /// }
 ///
 /// let composer = PluginPipeline::new(AuthPlugin)
@@ -86,7 +86,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 ///
 /// impl<CurrentPlugins> AuthPluginExt<CurrentPlugins> for PluginPipeline<CurrentPlugins> {
 ///     fn with_auth(self) -> PluginPipeline<PluginStack<CurrentPlugins, AuthPlugin>> {
-///         self.add(AuthPlugin)
+///         self.push(AuthPlugin)
 ///     }
 /// }
 ///
@@ -107,7 +107,7 @@ impl<P> PluginPipeline<P> {
         PluginPipeline(new_plugin)
     }
 
-    pub fn add<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<P, NewPlugin>> {
+    pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<P, NewPlugin>> {
         PluginPipeline(PluginStack::new(self.0, new_plugin))
     }
 
