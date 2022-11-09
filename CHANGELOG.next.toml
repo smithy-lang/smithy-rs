@@ -97,3 +97,30 @@ message = "Generate enums that guide the users to write match expressions in a f
 references = ["smithy-rs#1945"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = """
+Before this change, users could write a match expression against an enum in a non-forward-compatible way:
+```rust
+match some_enum {
+    SomeEnum::Variant1 => { /* ... */ },
+    SomeEnum::Variant2 => { /* ... */ },
+    Unknown(value) if value == "NewVariant" => { /* ... */ },
+    _ => { /* ... */ },
+}
+```
+This code can handle a case for "NewVariant" with a version of SDK where the enum does not yet include `SomeEnum::NewVariant`, but breaks with another version of SDK where the enum defines `SomeEnum::NewVariant` because the execution will hit a different match arm, i.e. the last one.
+After this change, users are guided to write the above match expression as follows:
+```rust
+match some_enum {
+    SomeEnum::Variant1 => { /* ... */ },
+    SomeEnum::Variant2 => { /* ... */ },
+    other @ _ if other.as_str() == "NewVariant" => { /* ... */ },
+    _ => { /* ... */ },
+}
+```
+This is forward-compatible because the execution will hit the second last match arm regardless of whether the enum defines `SomeEnum::NewVariant` or not.
+"""
+references = ["smithy-rs#1945"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
