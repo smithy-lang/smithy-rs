@@ -335,10 +335,10 @@ class ServerServiceGeneratorV2(
                 /// You must specify what plugins should be applied to the operations in this service.
                 ///
                 /// Use [`$serviceName::builder_without_plugins`] if you don't need to apply plugins.
-                pub fn builder_with_plugins<Body, Plugin>(plugin: Plugin) -> $builderName<Body, Plugin> {
+                pub fn builder_with_plugins<Body, Plugin>(plugin_pipeline: #{SmithyHttpServer}::plugin::PluginPipeline<Plugin>) -> $builderName<Body, Plugin> {
                     $builderName {
                         #{NotSetFields:W},
-                        plugin
+                        plugin: plugin_pipeline.inner()
                     }
                 }
 
@@ -346,7 +346,7 @@ class ServerServiceGeneratorV2(
                 ///
                 /// Use [`$serviceName::builder_without_plugins`] if you need to specify plugins.
                 pub fn builder_without_plugins<Body>() -> $builderName<Body, #{SmithyHttpServer}::plugin::IdentityPlugin> {
-                    Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin)
+                    Self::builder_with_plugins(#{SmithyHttpServer}::plugin::PluginPipeline::empty())
                 }
             }
 
