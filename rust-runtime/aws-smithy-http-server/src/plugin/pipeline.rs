@@ -20,7 +20,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 ///
-/// let composer = PluginPipeline::empty().push(LoggingPlugin).push(MetricsPlugin);
+/// let pipeline = PluginPipeline::empty().push(LoggingPlugin).push(MetricsPlugin);
 /// ```
 ///
 /// ## Wrapping the current plugin pipeline
@@ -37,7 +37,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # struct CheckHealth;
 /// # impl CheckHealth { const NAME: &'static str = "MyName"; }
 ///
-/// let composer = PluginPipeline::new(LoggingPlugin)
+/// let pipeline = PluginPipeline::new(LoggingPlugin)
 ///     .push(MetricsPlugin)
 ///     .map(|current_pipeline| {
 ///         // The logging and metrics plugins will not be applied to the `CheckHealth` operation.
@@ -65,7 +65,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 ///     PluginPipeline::new(LoggingPlugin).push(MetricsPlugin)
 /// }
 ///
-/// let composer = PluginPipeline::new(AuthPlugin)
+/// let pipeline = PluginPipeline::new(AuthPlugin)
 ///     .concat(get_bundled_pipeline());
 /// ```
 ///
@@ -90,7 +90,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 ///     }
 /// }
 ///
-/// let composer = PluginPipeline::new(LoggingPlugin)
+/// let pipeline = PluginPipeline::new(LoggingPlugin)
 ///     // Our custom method!
 ///     .with_auth();
 /// ```
