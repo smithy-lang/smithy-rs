@@ -98,3 +98,8 @@ references = ["smithy-rs#1935"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[aws-sdk-rust]]
+message = "Neglecting to include an upload ID when sending an AbortMultipartUpload request will no longer result in accidental deletion of data."
+references = ["smithy-rs#1957"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
