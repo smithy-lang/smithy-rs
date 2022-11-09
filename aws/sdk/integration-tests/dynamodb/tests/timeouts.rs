@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use aws_sdk_dynamodb::types::SdkError;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::never::NeverConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
+use aws_types::{Credentials, SdkConfig};
 use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
-use aws_types::{Credentials, SdkConfig};
-use std::sync::Arc;
-use std::time::Duration;
 
 #[derive(Debug, Clone)]
 struct InstantSleep;
@@ -39,9 +40,7 @@ async fn api_call_timeout_retries() {
         .retry_config(RetryConfig::standard())
         .sleep_impl(Arc::new(InstantSleep))
         .build();
-    let client = aws_sdk_dynamodb::Client::from_conf(
-        aws_sdk_dynamodb::Config::new(&conf),
-    );
+    let client = aws_sdk_dynamodb::Client::from_conf(aws_sdk_dynamodb::Config::new(&conf));
     let resp = client
         .list_tables()
         .send()
@@ -76,9 +75,7 @@ async fn no_retries_on_operation_timeout() {
         .retry_config(RetryConfig::standard())
         .sleep_impl(Arc::new(InstantSleep))
         .build();
-    let client = aws_sdk_dynamodb::Client::from_conf(
-        aws_sdk_dynamodb::Config::new(&conf),
-    );
+    let client = aws_sdk_dynamodb::Client::from_conf(aws_sdk_dynamodb::Config::new(&conf));
     let resp = client
         .list_tables()
         .send()

@@ -12,13 +12,13 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
-use http::header::{CONTENT_TYPE, HeaderName};
+use http::header::{HeaderName, CONTENT_TYPE};
 use http::Request;
 use tokio::sync::oneshot;
 
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use aws_smithy_protocol_test::{assert_ok, MediaType, validate_body};
+use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
 
 #[doc(inline)]
 pub use crate::never;
@@ -262,8 +262,8 @@ mod tests {
     use aws_smithy_http::result::ConnectorError;
 
     use crate::bounds::SmithyConnector;
-    use crate::Client;
     use crate::test_connection::{capture_request, never::NeverService, TestConnection};
+    use crate::Client;
 
     fn is_send_sync<T: Send + Sync>(_: T) {}
 
@@ -279,6 +279,7 @@ mod tests {
         T: SmithyConnector,
     {
     }
+
     fn quacks_like_a_connector<T>(_: &T)
     where
         T: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>>

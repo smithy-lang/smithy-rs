@@ -6,8 +6,8 @@
 //! Test connectors that never return data
 
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use http::Uri;

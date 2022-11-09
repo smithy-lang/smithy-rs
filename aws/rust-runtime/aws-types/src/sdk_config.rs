@@ -435,7 +435,10 @@ impl Builder {
     /// # }
     /// # }
     /// ```
-    pub fn set_http_connector(&mut self, http_connector: Option<impl Into<HttpConnector>>) -> &mut Self {
+    pub fn set_http_connector(
+        &mut self,
+        http_connector: Option<impl Into<HttpConnector>>,
+    ) -> &mut Self {
         self.http_connector = http_connector.map(|inner| inner.into());
         self
     }

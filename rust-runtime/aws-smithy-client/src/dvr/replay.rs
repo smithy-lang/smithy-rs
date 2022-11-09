@@ -6,8 +6,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 use bytes::{Bytes, BytesMut};

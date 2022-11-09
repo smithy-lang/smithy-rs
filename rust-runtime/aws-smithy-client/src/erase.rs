@@ -13,7 +13,7 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use boxclone::*;
 
-use crate::{bounds, Client, retry};
+use crate::{bounds, retry, Client};
 
 // These types are technically public in that they're reachable from the public trait impls on
 // DynMiddleware, but no-one should ever look at them or use them.
