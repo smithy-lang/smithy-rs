@@ -91,6 +91,18 @@
 //! # }
 //! ```
 
+pub use aws_smithy_types::endpoint;
+// Re-export types from smithy-types
+pub use aws_smithy_types::retry;
+pub use aws_smithy_types::timeout;
+// Re-export types from aws-types
+pub use aws_types::{
+    app_name::{AppName, InvalidAppName},
+    SdkConfig,
+};
+/// Load default sources for all configuration with override support
+pub use loader::ConfigLoader;
+
 #[allow(dead_code)]
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -132,16 +144,6 @@ pub mod connector;
 
 pub mod credential_process;
 
-// Re-export types from smithy-types
-pub use aws_smithy_types::retry;
-pub use aws_smithy_types::timeout;
-
-// Re-export types from aws-types
-pub use aws_types::{
-    app_name::{AppName, InvalidAppName},
-    SdkConfig,
-};
-
 /// Create an environment loader for AWS Configuration
 ///
 /// # Examples
@@ -162,14 +164,10 @@ pub async fn load_from_env() -> aws_types::SdkConfig {
     from_env().load().await
 }
 
-/// Load default sources for all configuration with override support
-pub use loader::ConfigLoader;
-
 mod loader {
     use std::sync::Arc;
 
-    use crate::connector::default_connector;
-    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+    use aws_smithy_async::rt::sleep::{AsyncSleep, default_async_sleep};
     use aws_smithy_client::http_connector::{ConnectorSettings, HttpConnector};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
@@ -178,6 +176,7 @@ mod loader {
     use aws_types::endpoint::ResolveAwsEndpoint;
     use aws_types::SdkConfig;
 
+    use crate::connector::default_connector;
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::provider_config::ProviderConfig;
@@ -223,7 +222,7 @@ mod loader {
         /// # Examples
         /// ```no_run
         /// # async fn create_config() {
-        /// use aws_smithy_types::retry::RetryConfig;
+        /// use aws_config::retry::RetryConfig;
         ///
         /// let config = aws_config::from_env()
         ///     .retry_config(RetryConfig::standard().with_max_attempts(2))
@@ -244,7 +243,7 @@ mod loader {
         /// ```no_run
         /// # use std::time::Duration;
         /// # async fn create_config() {
-        /// use aws_smithy_types::timeout::TimeoutConfig;
+        /// use aws_config::timeout::TimeoutConfig;
         ///
         /// let config = aws_config::from_env()
         ///    .timeout_config(
@@ -342,12 +341,13 @@ mod loader {
         ///
         /// Use a static endpoint for all services
         /// ```no_run
-        /// # async fn creat_config() {
-        /// use aws_smithy_http::endpoint::Endpoint;
+        /// # async fn create_config() {
+        /// use aws_config::endpoint::Endpoint;
         ///
         /// let sdk_config = aws_config::from_env()
         ///     .endpoint_resolver(Endpoint::immutable("http://localhost:1234".parse().expect("valid URI")))
-        ///     .load().await;
+        ///     .load()
+        ///     .await;
         /// # }
         pub fn endpoint_resolver(
             mut self,
@@ -481,13 +481,14 @@ mod loader {
 
     #[cfg(test)]
     mod test {
-        use crate::from_env;
-        use crate::provider_config::ProviderConfig;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::DynConnector;
         use aws_smithy_client::never::NeverConnector;
         use aws_types::credentials::ProvideCredentials;
         use aws_types::os_shim_internal::Env;
+
+        use crate::from_env;
+        use crate::provider_config::ProviderConfig;
 
         #[tokio::test]
         async fn provider_config_used() {
