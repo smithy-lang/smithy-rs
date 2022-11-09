@@ -20,20 +20,20 @@ Previously, crates were organized as such:
 ├── client
 |   ├── fluent_builders
 |   |   └── <One fluent builder per operation>
-|   ├── Builder
+|   ├── Builder (*)
 |   └── Client
 ├── config
 |   ├── retry
-|   |   ├── RetryConfig
-|   |   ├── RetryConfigBuilder
-|   |   └── RetryMode
+|   |   ├── RetryConfig (*)
+|   |   ├── RetryConfigBuilder (*)
+|   |   └── RetryMode (*)
 |   ├── timeout
-|   |   ├── TimeoutConfig
-|   |   └── TimeoutConfigBuilder
-|   ├── AsyncSleep
+|   |   ├── TimeoutConfig (*)
+|   |   └── TimeoutConfigBuilder (*)
+|   ├── AsyncSleep (*)
 |   ├── Builder
 |   ├── Config
-|   └── Sleep
+|   └── Sleep (*)
 ├── error
 |   ├── <One module per error to contain a single struct named `Builder`>
 |   ├── <One struct per error named `${error}`>
@@ -51,10 +51,10 @@ Previously, crates were organized as such:
 |   └── <One struct per shape>
 ├── operation
 |   ├── customize
-|   |   ├── ClassifyRetry
+|   |   ├── ClassifyRetry (*)
 |   |   ├── CustomizableOperation
-|   |   ├── Operation
-|   |   ├── RetryKind
+|   |   ├── Operation (*)
+|   |   ├── RetryKind (*)
 |   └── <One struct per operation>
 ├── output
 |   ├── <One module per output to contain a single struct named `Builder`>
@@ -70,21 +70,23 @@ Previously, crates were organized as such:
 |   └── request
 |       └── PresignedRequest
 ├── types
-|   ├── AggregatedBytes
-|   ├── Blob
-|   ├── ByteStream
-|   ├── DateTime
-|   └── SdkError
-├── AppName
+|   ├── AggregatedBytes (*)
+|   ├── Blob (*)
+|   ├── ByteStream (*)
+|   ├── DateTime (*)
+|   └── SdkError (*)
+├── AppName (*)
 ├── Client
 ├── Config
-├── Credentials
-├── Endpoint
+├── Credentials (*)
+├── Endpoint (*)
 ├── Error
 ├── ErrorExt (for some services)
 ├── PKG_VERSION
-└── Region
+└── Region (*)
 ```
+
+`(*)` - signifies that a type is re-exported from one of the runtime crates
 
 The Crate Root
 --------------
@@ -350,28 +352,28 @@ All combined, the following is the new publicly visible organization:
 ├── client
 |   ├── fluent_builders
 |   |   └── <One fluent builder per operation>
-|   ├── Builder (only in non-SDK crates)
+|   ├── Builder (only in non-SDK crates) (*)
 |   └── Client
 ├── config
 |   ├── retry
-|   |   ├── RetryConfig
-|   |   ├── RetryConfigBuilder
-|   |   └── RetryMode
+|   |   ├── RetryConfig (*)
+|   |   ├── RetryConfigBuilder (*)
+|   |   └── RetryMode (*)
 |   ├── timeout
-|   |   ├── TimeoutConfig
-|   |   └── TimeoutConfigBuilder
-|   ├── AppName
-|   ├── AsyncSleep
+|   |   ├── TimeoutConfig (*)
+|   |   └── TimeoutConfigBuilder (*)
+|   ├── AppName (*)
+|   ├── AsyncSleep (*)
 |   ├── Builder
 |   ├── Config
-|   ├── Credentials
-|   ├── Endpoint
-|   ├── Region
-|   └── Sleep
+|   ├── Credentials (*)
+|   ├── Endpoint (*)
+|   ├── Region (*)
+|   └── Sleep (*)
 ├── error
-|   ├── DisplayErrorContext
+|   ├── DisplayErrorContext (*)
 |   ├── ErrorExt (for some services)
-|   └── SdkError
+|   └── SdkError (*)
 ├── meta
 |   └── PKG_VERSION
 ├── middleware
@@ -395,10 +397,10 @@ All combined, the following is the new publicly visible organization:
 |   └── <One struct per shape>
 ├── operation
 |   ├── customize
-|   |   ├── ClassifyRetry
+|   |   ├── ClassifyRetry (*)
 |   |   ├── CustomizableOperation
-|   |   ├── Operation
-|   |   └── RetryKind
+|   |   ├── Operation (*)
+|   |   └── RetryKind (*)
 |   └── paginator
 |       ├── <One struct per paginated operation named `${operation}Paginator`>
 |       └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
@@ -408,14 +410,16 @@ All combined, the following is the new publicly visible organization:
 |   ├── PresigningConfig
 |   └── PresignedRequest
 ├── types
-|   ├── AggregatedBytes
-|   ├── Blob
-|   ├── ByteStream
-|   └── DateTime
+|   ├── AggregatedBytes (*)
+|   ├── Blob (*)
+|   ├── ByteStream (*)
+|   └── DateTime (*)
 ├── Client
 ├── Config
 └── Error
 ```
+
+`(*)` - signifies that a type is re-exported from one of the runtime crates
 
 Changes Checklist
 -----------------
