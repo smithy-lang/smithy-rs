@@ -123,7 +123,7 @@ jobs:
         popd
         ./tools/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
-        echo '::set-output name=bot-message::A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.'
+        echo 'bot-message=A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.' >> "${GITHUB_OUTPUT}"
     - uses: aws-actions/configure-aws-credentials@v1-node16
       name: Acquire credentials for uploading to S3
       with:
@@ -154,7 +154,7 @@ jobs:
       id: bot-messages
       run: |
         set -eux
-        echo ::set-output name=codegen-diff::"$(cat ./bot-message-codegen-diff)"
+        echo "codegen-diff=$(cat ./bot-message-codegen-diff)" >> "${GITHUB_OUTPUT}"
     - name: Post bot comment
       uses: actions/github-script@v6
       with:
