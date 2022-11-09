@@ -19,9 +19,6 @@ pub use stack::PluginStack;
 /// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder,
 ///
 /// The generics `Protocol` and `Op` allow the behavior to be parameterized.
-///
-/// Every service builder enjoys [`Pluggable`] and therefore can be provided with a [`Plugin`] using
-/// [`Pluggable::apply`].
 pub trait Plugin<Protocol, Op, S, L> {
     type Service;
     type Layer;
