@@ -132,7 +132,11 @@ impl<'a> QueryListWriter<'a> {
     }
 
     pub fn finish(self) {
-        // Calling this drops self
+        // https://github.com/awslabs/smithy/commit/715b1d94ab14764ad43496b016b0c2e85bcf1d1f
+        // If the list was empty, just serialize the parameter name
+        if self.next_index == 1 {
+            QueryValueWriter::new(self.output, self.prefix).write_param_name();
+        }
     }
 }
 
