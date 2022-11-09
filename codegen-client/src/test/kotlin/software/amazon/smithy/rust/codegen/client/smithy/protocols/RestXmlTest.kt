@@ -6,10 +6,8 @@
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.RustCodegenPlugin
+import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 internal class RestXmlTest {
 
@@ -87,8 +85,6 @@ internal class RestXmlTest {
 
     @Test
     fun `generate a rest xml service that compiles`() {
-        val (pluginContext, testDir) = generatePluginContext(model)
-        RustCodegenPlugin().execute(pluginContext)
-        "cargo check".runCommand(testDir)
+        clientIntegrationTest(model) { _, _ -> }
     }
 }

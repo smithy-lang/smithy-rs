@@ -73,10 +73,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
-        default: true
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
       with:
