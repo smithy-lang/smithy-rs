@@ -103,8 +103,8 @@ impl PluginPipeline<IdentityPlugin> {
 }
 
 impl<P> PluginPipeline<P> {
-    pub fn new(new_plugin: P) -> PluginPipeline<P> {
-        PluginPipeline(new_plugin)
+    pub fn new(new_plugin: P) -> Self {
+        Self(new_plugin)
     }
 
     pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<P, NewPlugin>> {
