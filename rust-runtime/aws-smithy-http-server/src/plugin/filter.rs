@@ -45,10 +45,7 @@ where
 
 impl<Inner, F> FilterByOperationName<Inner, F> {
     /// Creates a new [`FilterByOperationName`].
-    fn new(inner: Inner, predicate: F) -> Self
-    where
-        F: Fn(&str) -> bool,
-    {
+    fn new(inner: Inner, predicate: F) -> Self {
         Self { inner, predicate }
     }
 }
