@@ -338,7 +338,7 @@ class ServerServiceGeneratorV2(
                 pub fn builder_with_plugins<Body, Plugin>(plugin_pipeline: #{SmithyHttpServer}::plugin::PluginPipeline<Plugin>) -> $builderName<Body, Plugin> {
                     $builderName {
                         #{NotSetFields:W},
-                        plugin: plugin_pipeline.inner()
+                        plugin: plugin_pipeline.into_inner()
                     }
                 }
 
