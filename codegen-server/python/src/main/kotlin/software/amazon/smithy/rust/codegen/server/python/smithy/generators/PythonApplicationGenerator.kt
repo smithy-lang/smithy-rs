@@ -218,7 +218,7 @@ class PythonApplicationGenerator(
                         .layer(
                             #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(self.middlewares.clone(), middleware_locals),
                         )
-                        .service(builder.build().expect("One or more operations do not have a registered handler. This is a bug in the Python code generator."));
+                        .service(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
