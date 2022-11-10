@@ -56,8 +56,8 @@ open class MakeOperationGenerator(
     private val codegenScope = arrayOf(
         "config" to RuntimeType.Config,
         "header_util" to smithyHttp(runtimeConfig).resolve("header"),
-        "http" to Http.asType(),
-        "HttpRequestBuilder" to Http.asType().resolve("request::Builder"),
+        "http" to Http.toType(),
+        "HttpRequestBuilder" to Http.toType().resolve("request::Builder"),
         "OpBuildError" to runtimeConfig.operationBuildError(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
         "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
@@ -171,7 +171,7 @@ open class MakeOperationGenerator(
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
 
-        writer.rust("let mut builder = update_http_builder(&self, #T::new())?;", Http.asType().resolve("request::Builder"))
+        writer.rust("let mut builder = update_http_builder(&self, #T::new())?;", Http.toType().resolve("request::Builder"))
         if (includeDefaultPayloadHeaders && contentType != null) {
             writer.rustTemplate(
                 "builder = #{header_util}::set_request_header_if_absent(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",

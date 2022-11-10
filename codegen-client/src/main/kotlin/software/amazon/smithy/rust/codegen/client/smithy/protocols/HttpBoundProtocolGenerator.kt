@@ -79,9 +79,9 @@ class HttpBoundProtocolTraitImplGenerator(
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
         "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
-        "http" to Http.asType(),
+        "http" to Http.toType(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
-        "Bytes" to Bytes.asType().resolve("Bytes"),
+        "Bytes" to Bytes.toType().resolve("Bytes"),
     )
 
     override fun generateTraitImpls(

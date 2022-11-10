@@ -72,7 +72,7 @@ class EventStreamUnmarshallerGenerator(
         "Message" to smithyEventstream(runtimeConfig).resolve("frame::Message"),
         "OpError" to errorSymbol,
         "SmithyError" to smithyTypes(runtimeConfig).resolve("Error"),
-        "tracing" to CargoDependency.Tracing.asType(),
+        "tracing" to CargoDependency.Tracing.toType(),
         "UnmarshalledMessage" to smithyEventstream(runtimeConfig).resolve("frame::UnmarshalledMessage"),
         "UnmarshallMessage" to smithyEventstream(runtimeConfig).resolve("frame::UnmarshallMessage"),
     )

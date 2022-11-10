@@ -58,7 +58,7 @@ class HttpBoundProtocolPayloadGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationSerModule = RustModule.private("operation_ser")
     private val codegenScope = arrayOf(
-        "hyper" to CargoDependency.HyperWithStream.asType(),
+        "hyper" to CargoDependency.HyperWithStream.toType(),
         "SdkBody" to smithyHttp(runtimeConfig).resolve("body::SdkBody"),
         "BuildError" to runtimeConfig.operationBuildError(),
         "SmithyHttp" to smithyHttp(runtimeConfig),

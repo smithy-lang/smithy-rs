@@ -35,7 +35,7 @@ class PythonServerStructureGenerator(
     private val shape: StructureShape,
 ) : StructureGenerator(model, symbolProvider, writer, shape) {
 
-    private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
+    private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.toType())
 
     override fun renderStructure() {
         if (shape.hasTrait<ErrorTrait>()) {

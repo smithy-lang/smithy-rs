@@ -83,7 +83,7 @@ class ServerAwsJsonProtocol(
 ) : AwsJson(codegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
     )
     private val symbolProvider = codegenContext.symbolProvider
     private val service = codegenContext.serviceShape
@@ -193,7 +193,7 @@ private fun restRouterConstruction(
                 """,
                 "Key" to key,
                 "OperationValue" to operationValue,
-                "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
+                "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             )
         }
     }

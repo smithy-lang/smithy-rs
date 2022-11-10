@@ -106,14 +106,14 @@ class ServerProtocolTestGenerator(
     private val instantiator = serverInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
-        "Bytes" to Bytes.asType().resolve("Bytes"),
+        "Bytes" to Bytes.toType().resolve("Bytes"),
         "SmithyHttp" to smithyHttp(codegenContext.runtimeConfig),
-        "Http" to Http.asType(),
-        "Hyper" to Hyper.asType(),
-        "Tokio" to ServerCargoDependency.TokioDev.asType(),
-        "Tower" to Tower.asType(),
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).asType(),
-        "AssertEq" to PrettyAssertions.asType().resolve("assert_eq!"),
+        "Http" to Http.toType(),
+        "Hyper" to Hyper.toType(),
+        "Tokio" to ServerCargoDependency.TokioDev.toType(),
+        "Tower" to Tower.toType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+        "AssertEq" to PrettyAssertions.toType().resolve("assert_eq!"),
         "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
     )
 

@@ -149,7 +149,7 @@ class AwsInputPresignedMethod(
         "SdkError" to smithyHttp(runtimeConfig).resolve("result::SdkError"),
         "aws_sigv4" to awsSigv4(runtimeConfig),
         "sig_auth" to awsSigAuth(runtimeConfig),
-        "tower" to Tower.asType(),
+        "tower" to Tower.toType(),
         "Middleware" to runtimeConfig.defaultMiddleware(),
     )
 

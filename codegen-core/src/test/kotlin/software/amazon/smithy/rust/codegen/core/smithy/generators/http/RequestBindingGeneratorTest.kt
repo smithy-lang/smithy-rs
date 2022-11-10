@@ -144,11 +144,11 @@ class RequestBindingGeneratorTest {
 
             rustBlock(
                 "pub fn test_request_builder_base(&self) -> Result<#T, #T>",
-                Http.asType().resolve("request::Builder"),
+                Http.toType().resolve("request::Builder"),
                 TestRuntimeConfig.operationBuildError(),
             ) {
                 bindingGen.renderUpdateHttpBuilder(this)
-                rust("let builder = #T::new();", Http.asType().resolve("request::Builder"))
+                rust("let builder = #T::new();", Http.toType().resolve("request::Builder"))
                 rust("update_http_builder(self, builder)")
             }
         }

@@ -129,7 +129,7 @@ class HttpBindingGenerator(
                     #{deserializeFromHeader:W}
                 }
                 """,
-                "HeaderMap" to Http.asType().resolve("HeaderMap"),
+                "HeaderMap" to Http.toType().resolve("HeaderMap"),
                 "Output" to outputT,
                 "ParseError" to smithyHttp(runtimeConfig).resolve("header::ParseError"),
                 "deserializeFromHeader" to deserializeFromHeader(
@@ -154,8 +154,8 @@ class HttpBindingGenerator(
                     #{deserializeFromHeader:W}
                 }
                 """,
-                "ValueIter" to Http.asType().resolve("header::ValueIter"),
-                "HeaderValue" to Http.asType().resolve("HeaderValue"),
+                "ValueIter" to Http.toType().resolve("header::ValueIter"),
+                "HeaderValue" to Http.toType().resolve("HeaderValue"),
                 "Output" to symbolProvider.toSymbol(model.expectShape(target.value.target)),
                 "ParseError" to smithyHttp(runtimeConfig).resolve("header::ParseError"),
                 "deserializeFromHeader" to deserializeFromHeader(
@@ -179,7 +179,7 @@ class HttpBindingGenerator(
                     out.map(Some)
                 }
                 """,
-                "HeaderMap" to Http.asType().resolve("HeaderMap"),
+                "HeaderMap" to Http.toType().resolve("HeaderMap"),
                 "Output" to outputSymbol.mapRustType { it.asOptional() },
                 "ParseError" to smithyHttp(runtimeConfig).resolve("header::ParseError"),
                 "headers_for_prefix" to smithyHttp(runtimeConfig).resolve("header::headers_for_prefix"),
@@ -472,8 +472,8 @@ class HttpBindingGenerator(
             )
             val codegenScope = arrayOf(
                 "BuildError" to runtimeConfig.operationBuildError(),
-                HttpMessageType.REQUEST.name to Http.asType().resolve("request::Builder"),
-                HttpMessageType.RESPONSE.name to Http.asType().resolve("response::Builder"),
+                HttpMessageType.REQUEST.name to Http.toType().resolve("request::Builder"),
+                HttpMessageType.RESPONSE.name to Http.toType().resolve("response::Builder"),
                 "Shape" to shapeSymbol,
             )
             rustBlockTemplate(

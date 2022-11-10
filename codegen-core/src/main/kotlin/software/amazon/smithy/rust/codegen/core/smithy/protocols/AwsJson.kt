@@ -112,11 +112,11 @@ open class AwsJson(
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
-        "Bytes" to Bytes.asType().resolve("Bytes"),
+        "Bytes" to Bytes.toType().resolve("Bytes"),
         "Error" to RuntimeType.genericError(runtimeConfig),
-        "HeaderMap" to Http.asType().resolve("HeaderMap"),
+        "HeaderMap" to Http.toType().resolve("HeaderMap"),
         "JsonError" to smithyJson(runtimeConfig).resolve("deserialize::Error"),
-        "Response" to Http.asType().resolve("Response"),
+        "Response" to Http.toType().resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
     private val jsonDeserModule = RustModule.private("json_deser")

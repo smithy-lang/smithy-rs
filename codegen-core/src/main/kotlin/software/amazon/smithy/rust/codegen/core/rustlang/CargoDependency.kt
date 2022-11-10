@@ -180,8 +180,7 @@ data class CargoDependency(
         return "$name = { ${attribs.joinToString(",")} }"
     }
 
-    // TODO rename to `toType` to maintain naming convention of the above methods
-    fun asType(): RuntimeType {
+    fun toType(): RuntimeType {
         return RuntimeType(rustName, this)
     }
 

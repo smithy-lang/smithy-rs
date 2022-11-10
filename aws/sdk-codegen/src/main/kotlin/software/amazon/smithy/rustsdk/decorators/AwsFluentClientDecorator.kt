@@ -258,7 +258,7 @@ private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : 
                         /// let client = $crateName::Client::from_conf(config);
                         /// ## }
                         """,
-                        "aws_config" to runtimeConfig.awsRuntimeCrate("aws-config").copy(scope = DependencyScope.Dev).asType(),
+                        "aws_config" to runtimeConfig.awsRuntimeCrate("aws-config").copy(scope = DependencyScope.Dev).toType(),
                     )
                 }
             }

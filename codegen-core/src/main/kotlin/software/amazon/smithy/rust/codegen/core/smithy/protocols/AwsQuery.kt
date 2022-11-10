@@ -44,10 +44,10 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsQueryErrors: RuntimeType = RuntimeType.wrappedXmlErrors(runtimeConfig)
     private val errorScope = arrayOf(
-        "Bytes" to Bytes.asType().resolve("Bytes"),
+        "Bytes" to Bytes.toType().resolve("Bytes"),
         "Error" to RuntimeType.genericError(runtimeConfig),
-        "HeaderMap" to Http.asType().resolve("HeaderMap"),
-        "Response" to Http.asType().resolve("Response"),
+        "HeaderMap" to Http.toType().resolve("HeaderMap"),
+        "Response" to Http.toType().resolve("Response"),
         "XmlError" to smithyXml(runtimeConfig).resolve("decode::XmlError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")

@@ -50,8 +50,8 @@ class HttpChecksumRequiredGenerator(
                         Result::<_, #{BuildError}>::Ok(req)
                     })?;
                     """,
-                    "md5" to Md5.asType(),
-                    "HeaderName" to Http.asType().resolve("header::HeaderName"),
+                    "md5" to Md5.toType(),
+                    "HeaderName" to Http.toType().resolve("header::HeaderName"),
                     "base64_encode" to RuntimeType.base64Encode(codegenContext.runtimeConfig),
                     "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
                 )

@@ -72,7 +72,7 @@ class ProtocolTestGenerator(
 
     private val codegenScope = arrayOf(
         "SmithyHttp" to smithyHttp(runtimeConfig),
-        "AssertEq" to PrettyAssertions.asType().resolve("assert_eq!"),
+        "AssertEq" to PrettyAssertions.toType().resolve("assert_eq!"),
     )
 
     sealed class TestCase {
@@ -193,7 +193,7 @@ class ProtocolTestGenerator(
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
                     """,
                     "Endpoint" to smithyHttp(runtimeConfig).resolve("endpoint::Endpoint"),
-                    "Uri" to Http.asType().resolve("Uri"),
+                    "Uri" to Http.toType().resolve("Uri"),
                 )
             }
             rustTemplate(
@@ -257,7 +257,7 @@ class ProtocolTestGenerator(
         write("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        rust("let http_response = #T::new()", Http.asType().resolve("response::Builder"))
+        rust("let http_response = #T::new()", Http.toType().resolve("response::Builder"))
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -285,7 +285,7 @@ class ProtocolTestGenerator(
             });
             """,
             "op" to operationSymbol,
-            "bytes" to Bytes.asType().resolve("Bytes"),
+            "bytes" to Bytes.toType().resolve("Bytes"),
             "parse_http_response" to smithyHttp(runtimeConfig).resolve("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {

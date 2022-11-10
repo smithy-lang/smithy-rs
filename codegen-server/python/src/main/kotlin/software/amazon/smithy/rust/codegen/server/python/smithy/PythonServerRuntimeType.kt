@@ -16,13 +16,13 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCarg
  */
 object PythonServerRuntimeType {
 
-    fun PySocket(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("PySocket")
+    fun PySocket(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).toType().resolve("PySocket")
 
-    fun Blob(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("types::Blob")
+    fun Blob(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).toType().resolve("types::Blob")
 
-    fun ByteStream(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("types::ByteStream")
+    fun ByteStream(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).toType().resolve("types::ByteStream")
 
-    fun DateTime(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("types::DateTime")
+    fun DateTime(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).toType().resolve("types::DateTime")
 
-    fun PyError(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).asType().resolve("Error")
+    fun PyError(runtimeConfig: RuntimeConfig) = smithyHttpServerPython(runtimeConfig).toType().resolve("Error")
 }

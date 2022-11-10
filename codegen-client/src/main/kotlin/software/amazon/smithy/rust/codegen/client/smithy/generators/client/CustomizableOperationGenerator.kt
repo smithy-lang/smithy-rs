@@ -67,7 +67,7 @@ class CustomizableOperationGenerator(
             // SDK Types
             "http_result" to smithyHttp(runtimeConfig).resolve("result"),
             "http_body" to smithyHttp(runtimeConfig).resolve("body"),
-            "HttpRequest" to Http.asType().resolve("Request"),
+            "HttpRequest" to Http.toType().resolve("Request"),
             "handle_generics_decl" to handleGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),

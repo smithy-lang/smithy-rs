@@ -130,25 +130,25 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
 
     private val codegenScope = arrayOf(
-        "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
+        "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
         "Cow" to RuntimeType.Cow,
         "DateTime" to RuntimeType.dateTime(runtimeConfig),
-        "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.asType(),
-        "HttpBody" to CargoDependency.HttpBody.asType(),
+        "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
+        "HttpBody" to CargoDependency.HttpBody.toType(),
         "header_util" to smithyHttp(runtimeConfig).resolve("header"),
-        "Hyper" to CargoDependency.Hyper.asType(),
-        "LazyStatic" to CargoDependency.LazyStatic.asType(),
-        "Mime" to ServerCargoDependency.Mime.asType(),
-        "Nom" to ServerCargoDependency.Nom.asType(),
-        "OnceCell" to ServerCargoDependency.OnceCell.asType(),
-        "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
-        "Regex" to CargoDependency.Regex.asType(),
+        "Hyper" to CargoDependency.Hyper.toType(),
+        "LazyStatic" to CargoDependency.LazyStatic.toType(),
+        "Mime" to ServerCargoDependency.Mime.toType(),
+        "Nom" to ServerCargoDependency.Nom.toType(),
+        "OnceCell" to ServerCargoDependency.OnceCell.toType(),
+        "PercentEncoding" to CargoDependency.PercentEncoding.toType(),
+        "Regex" to CargoDependency.Regex.toType(),
         "SmithyHttp" to smithyHttp(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
-        "http" to Http.asType(),
+        "http" to Http.toType(),
     )
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {

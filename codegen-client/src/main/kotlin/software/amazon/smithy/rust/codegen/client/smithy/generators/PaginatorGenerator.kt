@@ -117,7 +117,7 @@ class PaginatorGenerator private constructor(
         "fn_stream" to smithyAsync(runtimeConfig).resolve("future::fn_stream"),
 
         // External Types
-        "Stream" to TokioStream.asType().resolve("Stream"),
+        "Stream" to TokioStream.toType().resolve("Stream"),
 
     )
 

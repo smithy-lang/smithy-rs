@@ -68,7 +68,7 @@ class RequestBindingGenerator(
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),
-        "HttpRequestBuilder" to Http.asType().resolve("request::Builder"),
+        "HttpRequestBuilder" to Http.toType().resolve("request::Builder"),
         "Input" to symbolProvider.toSymbol(inputShape),
     )
 

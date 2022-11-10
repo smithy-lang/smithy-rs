@@ -67,8 +67,8 @@ private class TestProtocolTraitImplGenerator(
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
             "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
             "error" to operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target),
-            "response" to Http.asType().resolve("Response"),
-            "bytes" to Bytes.asType().resolve("Bytes"),
+            "response" to Http.toType().resolve("Response"),
+            "bytes" to Bytes.toType().resolve("Bytes"),
         )
     }
 }
@@ -86,7 +86,7 @@ private class TestProtocolMakeOperationGenerator(
     includeDefaultPayloadHeaders = true,
 ) {
     override fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
-        writer.rust("#T::new()", Http.asType().resolve("request::Builder"))
+        writer.rust("#T::new()", Http.toType().resolve("request::Builder"))
         writer.writeWithNoFormatting(httpRequestBuilder)
     }
 }

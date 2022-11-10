@@ -38,14 +38,14 @@ open class ServerOperationHandlerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "Tower" to Tower.asType(),
-        "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
+        "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
+        "Tower" to Tower.toType(),
+        "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
         "SmithyHttp" to smithyHttp(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         "Phantom" to RuntimeType.Phantom,
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "http" to Http.asType(),
+        "http" to Http.toType(),
     )
 
     open fun render(writer: RustWriter) {

@@ -60,9 +60,9 @@ class ServerOperationRegistryGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "Tower" to Tower.asType(),
+        "Tower" to Tower.toType(),
         "Phantom" to RuntimeType.Phantom,
         "StdError" to RuntimeType.StdError,
         "Display" to RuntimeType.Display,
@@ -159,8 +159,8 @@ ${operationImplementationStubs(operations)}
             "Router" to ServerRuntimeType.Router(runtimeConfig),
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
-            "Tokio" to ServerCargoDependency.TokioDev.asType(),
-            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType(),
+            "Tokio" to ServerCargoDependency.TokioDev.toType(),
+            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).toType(),
         )
     }
 

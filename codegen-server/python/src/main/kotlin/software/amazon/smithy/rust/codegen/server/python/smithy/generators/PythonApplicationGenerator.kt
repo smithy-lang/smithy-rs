@@ -75,19 +75,19 @@ class PythonApplicationGenerator(
     private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-            "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType(),
-            "tower" to PythonServerCargoDependency.Tower.asType(),
-            "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
-            "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
-            "hyper" to PythonServerCargoDependency.Hyper.asType(),
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "tokio" to PythonServerCargoDependency.Tokio.toType(),
+            "tracing" to PythonServerCargoDependency.Tracing.toType(),
+            "tower" to PythonServerCargoDependency.Tower.toType(),
+            "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
+            "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
+            "hyper" to PythonServerCargoDependency.Hyper.toType(),
             "HashMap" to RustType.HashMap.RuntimeType,
-            "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
-            "http" to Http.asType(),
+            "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
+            "http" to Http.toType(),
         )
 
     fun render(writer: RustWriter) {

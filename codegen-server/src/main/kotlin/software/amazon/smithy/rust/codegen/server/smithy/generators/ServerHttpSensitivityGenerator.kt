@@ -34,7 +34,7 @@ import java.util.Optional
 /** Models the ways status codes can be bound and sensitive. */
 class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: RuntimeConfig) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
     )
 
     /** Returns the type of the `MakeFmt`. */
@@ -64,7 +64,7 @@ data class GreedyLabel(
 
 /** Models the ways labels can be bound and sensitive. */
 class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedyLabel: GreedyLabel?, runtimeConfig: RuntimeConfig) {
-    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType())
+    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType())
 
     /** Returns the closure used during construction. */
     fun closure(): Writable = writable {
@@ -116,8 +116,8 @@ sealed class HeaderSensitivity(
     runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
-        "Http" to Http.asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "Http" to Http.toType(),
     )
 
     /** The case where `prefixHeaders` value is not sensitive. */
@@ -218,7 +218,7 @@ sealed class QuerySensitivity(
     val allKeysSensitive: Boolean,
     runtimeConfig: RuntimeConfig,
 ) {
-    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType())
+    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType())
 
     /** The case where the `httpQueryParams` value is not sensitive. */
     class NotSensitiveMapValue(
@@ -306,8 +306,8 @@ class ServerHttpSensitivityGenerator(
     private val runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
-        "Http" to Http.asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "Http" to Http.toType(),
     )
 
     /** Constructs `StatusCodeSensitivity` of a `Shape` */

@@ -18,18 +18,18 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency.s
 object ServerRuntimeType {
     private fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType.forInlineDependency(inlineDependency)
 
-    fun Router(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("routing::Router")
+    fun Router(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).toType().resolve("routing::Router")
 
-    fun RequestSpecModule(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("routing::request_spec")
+    fun RequestSpecModule(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).toType().resolve("routing::request_spec")
 
     fun OperationHandler(runtimeConfig: RuntimeConfig) =
         forInlineDependency(ServerInlineDependency.serverOperationHandler(runtimeConfig))
 
-    fun RuntimeError(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("runtime_error::RuntimeError")
+    fun RuntimeError(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).toType().resolve("runtime_error::RuntimeError")
 
-    fun RequestRejection(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("rejection::RequestRejection")
+    fun RequestRejection(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).toType().resolve("rejection::RequestRejection")
 
-    fun ResponseRejection(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("rejection::ResponseRejection")
+    fun ResponseRejection(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).toType().resolve("rejection::ResponseRejection")
 
-    fun Protocol(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).asType().resolve("proto")
+    fun Protocol(runtimeConfig: RuntimeConfig) = smithyHttpServer(runtimeConfig).toType().resolve("proto")
 }

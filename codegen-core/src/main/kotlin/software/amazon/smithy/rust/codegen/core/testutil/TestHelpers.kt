@@ -121,4 +121,4 @@ val TokioWithTestMacros = CargoDependency(
     scope = DependencyScope.Dev,
 )
 
-val TokioTest = Attribute.Custom("tokio::test", listOf(TokioWithTestMacros.asType()))
+val TokioTest = Attribute.Custom("tokio::test", listOf(TokioWithTestMacros.toType()))

@@ -29,7 +29,7 @@ class ApiVersionHeader(
                     .headers_mut()
                     .insert("x-amz-glacier-version", #{HeaderValue}::from_static(${apiVersion.dq()}));
                 """,
-                "HeaderValue" to Http.asType().resolve("HeaderValue"),
+                "HeaderValue" to Http.toType().resolve("HeaderValue"),
             )
         }
         else -> emptySection

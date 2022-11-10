@@ -52,7 +52,7 @@ class PythonServerCombinedErrorGenerator(
             }
 
             """,
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
             "Error" to operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER),
             "From" to RuntimeType.From,
             "CastPyErrToRustError" to castPyErrToRustError(),

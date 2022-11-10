@@ -85,7 +85,7 @@ class RestRequestSpecGenerator(
                 *codegenScope,
                 "PathSegmentsVec" to pathSegmentsVec,
                 "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to Http.asType().resolve("Method"),
+                "Method" to Http.toType().resolve("Method"),
             )
         }
     }

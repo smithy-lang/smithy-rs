@@ -51,7 +51,7 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
         return if (target is BlobShape && shape.isStreaming(model)) {
             CargoDependency
                 .smithyHttp(config().runtimeConfig)
-                .asType()
+                .toType()
                 .resolve("byte_stream::ByteStream")
                 .toSymbol()
                 .toBuilder()

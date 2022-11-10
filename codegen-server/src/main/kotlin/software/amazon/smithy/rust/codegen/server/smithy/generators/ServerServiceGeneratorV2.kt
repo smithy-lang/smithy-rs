@@ -31,12 +31,12 @@ class ServerServiceGeneratorV2(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "Bytes" to Bytes.asType().resolve("Bytes"),
-            "Http" to Http.asType(),
-            "HttpBody" to HttpBody.asType(),
+            "Bytes" to Bytes.toType().resolve("Bytes"),
+            "Http" to Http.toType(),
+            "HttpBody" to HttpBody.toType(),
             "SmithyHttpServer" to
-                ServerCargoDependency.smithyHttpServer(runtimeConfig).asType(),
-            "Tower" to Tower.asType(),
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+            "Tower" to Tower.toType(),
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider

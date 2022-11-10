@@ -49,7 +49,7 @@ class ApiGatewayAddAcceptHeader : OperationCustomization() {
                     .headers_mut()
                     .insert("Accept", #{HeaderValue}::from_static("application/json"));
                 """,
-                "HeaderValue" to Http.asType().resolve("HeaderValue"),
+                "HeaderValue" to Http.toType().resolve("HeaderValue"),
             )
         }
         else -> emptySection
