@@ -58,7 +58,7 @@ let pokemon_service = PokemonService::builder_without_plugins()
     .get_pokemon_species_operation(get_pokemon_species_op)
     /* other operation setters */
     .build()
-    .expect("Failed to create an instance of the pokemon service");
+    .expect("failed to create an instance of the Pokémon service");
 ```
 
 ## Operations
