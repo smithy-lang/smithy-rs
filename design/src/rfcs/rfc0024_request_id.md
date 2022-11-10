@@ -121,16 +121,16 @@ where
 }
 ```
 
-The string representation of a generated `ServerRequestId` will be valid for this regex:
-```
-/^[A-Za-z0-9_-]{,48}$/
-```
-Although the generated ID is opaque, this will give guarantees to customers as to what they can expect, if the ID is ever updated to a different format.
+The string representation of a generated ID will be valid for this regex:
+* For `ServerRequestId`: `/^[A-Za-z0-9_-]{,48}$/`
+* For `ClientRequestId`: `/^[ -~]$/` (printable ASCII characters)
+
+Although the generated ID is opaque, this will give guarantees to customers as to what they can expect, if the server ID is ever updated to a different format.
 
 Changes checklist
 -----------------
 
 - [ ] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
-- [ ] Implement `ClientRequestId`: `new()` that wraps a string (the header value), with `Display`, `Debug` and `ToStr` implementations
+- [ ] Implement `ClientRequestId`: `new()` that wraps a string (the header value) and the header in which the value could be found, with `Display`, `Debug` and `ToStr` implementations
 - [x] Implement `FromParts` for `Extension<ServerRequestId>`
 - [x] Implement `FromParts` for `Extension<ClientRequestId>`
