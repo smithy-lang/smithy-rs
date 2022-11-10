@@ -98,3 +98,8 @@ references = ["smithy-rs#1935"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = "Upgrade to Smithy 1.26.2"
+references = ["smithy-rs#1972"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
