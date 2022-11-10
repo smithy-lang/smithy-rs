@@ -33,11 +33,13 @@ pub trait PyMutableMapping {
 
     fn len(&self) -> PyResult<usize>;
     fn contains(&self, key: Self::Key) -> PyResult<bool>;
-    fn keys(&self) -> PyResult<Vec<Self::Key>>;
-    fn values(&self) -> PyResult<Vec<Self::Value>>;
     fn get(&self, key: Self::Key) -> PyResult<Option<Self::Value>>;
     fn set(&mut self, key: Self::Key, value: Self::Value) -> PyResult<()>;
     fn del(&mut self, key: Self::Key) -> PyResult<()>;
+
+    // TODO(Perf): This methods should return iterators instead of `Vec`s.
+    fn keys(&self) -> PyResult<Vec<Self::Key>>;
+    fn values(&self) -> PyResult<Vec<Self::Value>>;
 }
 
 /// Macro that provides mixin methods of [collections.abc.MutableMapping] to the implementing type.
@@ -77,6 +79,8 @@ macro_rules! mutable_mapping_pymethods {
 
             // -- collections.abc.Iterable
 
+            /// Returns an iterator over the keys of the dictionary.
+            /// NOTE: This method currently causes all keys to be cloned.
             fn __iter__(&self) -> pyo3::PyResult<$keys_iter> {
                 Ok($keys_iter(self.keys()?.into_iter()))
             }
@@ -98,14 +102,20 @@ macro_rules! mutable_mapping_pymethods {
                 Ok(<$ty as PyMutableMapping>::get(&self, key)?.or(default))
             }
 
+            /// Returns keys of the dictionary.
+            /// NOTE: This method currently causes all keys to be cloned.
             fn keys(&self) -> pyo3::PyResult<Vec<<$ty as PyMutableMapping>::Key>> {
                 <$ty as PyMutableMapping>::keys(&self)
             }
 
+            /// Returns values of the dictionary.
+            /// NOTE: This method currently causes all values to be cloned.
             fn values(&self) -> pyo3::PyResult<Vec<<$ty as PyMutableMapping>::Value>> {
                 <$ty as PyMutableMapping>::values(&self)
             }
 
+            /// Returns items (key, value) of the dictionary.
+            /// NOTE: This method currently causes all keys and values to be cloned.
             fn items(
                 &self,
             ) -> pyo3::PyResult<
