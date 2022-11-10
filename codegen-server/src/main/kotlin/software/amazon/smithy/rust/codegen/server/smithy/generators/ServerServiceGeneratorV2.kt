@@ -158,13 +158,12 @@ class ServerServiceGeneratorV2(
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
                 val operationZstTypeName = operationStructNames[operationShape]!!
-                rustTemplate(
+                rust(
                     """
                     if self.$fieldName.is_none() {
                         $missingOperationsVariableName.insert(crate::operation_shape::$operationZstTypeName::NAME, ".$fieldName()");
                     }
                     """,
-                    "SmithyHttpServer" to smithyHttpServer,
                 )
             }
         }
@@ -172,7 +171,7 @@ class ServerServiceGeneratorV2(
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                rustTemplate(
+                rust(
                     """
                     ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.unwrap()),
                     """,
@@ -409,7 +408,7 @@ class ServerServiceGeneratorV2(
     }
 
     private fun missingOperationsError(): Writable = writable {
-        rustTemplate(
+        rust(
             """
             ##[derive(Debug)]
             pub struct MissingOperationsError {
