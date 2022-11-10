@@ -125,7 +125,7 @@ impl<P> PluginPipeline<P> {
         PluginPipeline(f(self.0))
     }
 
-    pub fn inner(self) -> P {
+    pub fn into_inner(self) -> P {
         self.0
     }
 }
