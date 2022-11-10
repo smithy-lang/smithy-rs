@@ -151,7 +151,6 @@ class PythonServerModuleGenerator(
             middleware.add_class::<#{SmithyPython}::PyRequest>()?;
             middleware.add_class::<#{SmithyPython}::PyResponse>()?;
             middleware.add_class::<#{SmithyPython}::PyMiddlewareException>()?;
-            middleware.add_class::<#{SmithyPython}::PyHttpVersion>()?;
             pyo3::py_run!(
                 py,
                 middleware,
