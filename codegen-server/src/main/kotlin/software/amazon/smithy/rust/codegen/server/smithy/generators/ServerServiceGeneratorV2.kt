@@ -68,9 +68,8 @@ class ServerServiceGeneratorV2(
     private val requestSpecsModuleName = "request_specs"
 
     /** Associate each operation with a function that returns its request spec. */
-    private val requestSpecMap: HashMap<OperationShape, Pair<String, Writable>> by lazy {
-        val map = HashMap<OperationShape, Pair<String, Writable>>()
-        for (operationShape in operations) {
+    private val requestSpecMap: Map<OperationShape, Pair<String, Writable>> =
+        operations.associateWith { operationShape ->
             val operationName = symbolProvider.toSymbol(operationShape).name
             val spec = protocol.serverRouterRequestSpec(
                 operationShape,
@@ -90,10 +89,8 @@ class ServerServiceGeneratorV2(
                     "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.member("routing::request_spec")),
                 )
             }
-            map[operationShape] = Pair(functionName, functionBody)
+            Pair(functionName, functionBody)
         }
-        map
-    }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
