@@ -393,7 +393,7 @@ sealed class Attribute {
                 return
             }
             writer.raw("#[derive(")
-            derives.sortedBy { it.name }.forEach { derive ->
+            derives.sortedBy { it.path }.forEach { derive ->
                 writer.writeInline("#T, ", derive)
             }
             writer.write(")]")
