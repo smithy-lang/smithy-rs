@@ -172,7 +172,7 @@ class ServerServiceGeneratorV2(
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
                 rust(
                     """
-                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.unwrap()),
+                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect("this should never panic since we are supported to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues")),
                     """,
                 )
             }
