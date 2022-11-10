@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, setup_tracing,
@@ -22,12 +27,13 @@ pub async fn get_storage_with_local_approved(
     tracing::debug!("attempting to authenticate storage user");
     let local = conn_info.0 .0.ip() == "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
 
-    // We currently only support Ash and he has nothing stored
+    // We currently support Ash: he has nothing stored
     if input.user == "ash" && input.passcode == "pikachu123" {
         return Ok(pokemon_service_server_sdk::output::GetStorageOutput { collection: vec![] });
     }
+    // We support trainers in our gym
     if local {
-        tracing::debug!("welcome back");
+        tracing::info!("welcome back");
         return Ok(pokemon_service_server_sdk::output::GetStorageOutput {
             collection: vec![
                 String::from("bulbasaur"),
