@@ -66,7 +66,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// }
 ///
 /// let pipeline = PluginPipeline::new(AuthPlugin)
-///     .concat(get_bundled_pipeline());
+///     .append(get_bundled_pipeline());
 /// ```
 ///
 /// ## Providing custom methods on `PluginPipeline`
@@ -111,7 +111,7 @@ impl<P> PluginPipeline<P> {
         PluginPipeline(PluginStack::new(self.0, new_plugin))
     }
 
-    pub fn concat<OtherPlugin>(
+    pub fn append<OtherPlugin>(
         self,
         other_pipeline: PluginPipeline<OtherPlugin>,
     ) -> PluginPipeline<PluginStack<P, OtherPlugin>> {
