@@ -28,10 +28,7 @@ class ServerRuntimeTypesReExportsGenerator(
             pub use #{Router};
             pub use #{SmithyHttpServer}::operation::OperationShape;
             pub use #{SmithyHttpServer}::operation::Operation;
-
-            ##[doc(hidden)]
             pub use #{SmithyHttpServer}::instrumentation;
-            ##[doc(hidden)]
             pub use #{SmithyHttpServer}::proto;
             """,
             *codegenScope,
