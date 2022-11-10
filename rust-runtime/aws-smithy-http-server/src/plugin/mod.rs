@@ -10,7 +10,7 @@ mod stack;
 
 use crate::operation::Operation;
 
-pub use filter::FilterByOperationName;
+pub use filter::{filter_operation_by_name, FilterByOperationName};
 pub use identity::IdentityPlugin;
 pub use pipeline::PluginPipeline;
 pub use stack::PluginStack;

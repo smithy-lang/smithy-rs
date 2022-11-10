@@ -30,7 +30,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// You can use the [`map`](PluginPipeline::map) method to grab the current pipeline and transform it:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{FilterByOperationName, PluginPipeline};
+/// use aws_smithy_http_server::plugin::{filter_operation_by_name, PluginPipeline};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
@@ -41,7 +41,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 ///     .push(MetricsPlugin)
 ///     .map(|current_pipeline| {
 ///         // The logging and metrics plugins will not be applied to the `CheckHealth` operation.
-///         FilterByOperationName::new(current_pipeline, |name| name != CheckHealth::NAME)
+///         filter_operation_by_name(current_pipeline, |name| name != CheckHealth::NAME)
 ///     })
 ///     // The auth plugin will be applied to all operations
 ///     .push(AuthPlugin);

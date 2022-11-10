@@ -12,10 +12,20 @@ use super::Plugin;
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`OperationShape::NAME`](crate::operation::OperationShape).
 ///
+/// See [`filter_operation_by_name`] for more details.
+pub struct FilterByOperationName<Inner, F> {
+    inner: Inner,
+    predicate: F,
+}
+
+/// Filters the application of an inner [`Plugin`] using a predicate over the
+/// [`OperationShape::NAME`](crate::operation::OperationShape).
+///
 /// # Example
 ///
 /// ```rust
-/// # use aws_smithy_http_server::{plugin::{Plugin, FilterByOperationName}, operation::{Operation, OperationShape}};
+/// use aws_smithy_http_server::plugin::filter_operation_by_name;
+/// # use aws_smithy_http_server::{plugin::Plugin, operation::{Operation, OperationShape}};
 /// # struct Pl;
 /// # struct CheckHealth;
 /// # impl OperationShape for CheckHealth { const NAME: &'static str = ""; type Input = (); type Output = (); type Error = (); }
@@ -23,17 +33,19 @@ use super::Plugin;
 /// # let plugin = Pl;
 /// # let operation = Operation { inner: (), layer: () };
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-/// let filtered_plugin = FilterByOperationName::new(plugin, |name| name != CheckHealth::NAME);
+/// let filtered_plugin = filter_operation_by_name(plugin, |name| name != CheckHealth::NAME);
 /// let new_operation = filtered_plugin.map(operation);
 /// ```
-pub struct FilterByOperationName<Inner, F> {
-    inner: Inner,
-    predicate: F,
+pub fn filter_operation_by_name<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationName<Inner, F>
+where
+    F: Fn(&str) -> bool,
+{
+    FilterByOperationName::new(plugins, predicate)
 }
 
 impl<Inner, F> FilterByOperationName<Inner, F> {
     /// Creates a new [`FilterByOperationName`].
-    pub fn new(inner: Inner, predicate: F) -> Self
+    fn new(inner: Inner, predicate: F) -> Self
     where
         F: Fn(&str) -> bool,
     {
