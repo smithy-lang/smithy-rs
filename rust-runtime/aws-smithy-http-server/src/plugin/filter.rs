@@ -12,7 +12,7 @@ use super::Plugin;
 /// Filters the application of an inner [`Plugin`] using a predicate over the
 /// [`OperationShape::NAME`](crate::operation::OperationShape).
 ///
-/// See [`filter_operation_by_name`] for more details.
+/// See [`filter_by_operation_name`] for more details.
 pub struct FilterByOperationName<Inner, F> {
     inner: Inner,
     predicate: F,
