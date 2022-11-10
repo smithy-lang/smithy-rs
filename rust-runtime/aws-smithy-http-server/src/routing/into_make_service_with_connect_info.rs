@@ -147,7 +147,7 @@ opaque_future! {
 /// See [`Router::into_make_service_with_connect_info`] for more details.
 ///
 /// [`Router::into_make_service_with_connect_info`]: crate::routing::Router::into_make_service_with_connect_info
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ConnectInfo<T>(pub T);
 
 impl<P, T> FromParts<P> for ConnectInfo<T>
