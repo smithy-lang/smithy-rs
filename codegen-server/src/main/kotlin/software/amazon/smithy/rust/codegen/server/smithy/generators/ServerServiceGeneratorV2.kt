@@ -45,7 +45,6 @@ class ServerServiceGeneratorV2(
     private val builderName = "${serviceName}Builder"
     private val builderPluginGenericTypeName = "Plugin"
     private val builderBodyGenericTypeName = "Body"
-    private val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
