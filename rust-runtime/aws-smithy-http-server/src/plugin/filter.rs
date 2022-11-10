@@ -24,7 +24,7 @@ pub struct FilterByOperationName<Inner, F> {
 /// # Example
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::filter_operation_by_name;
+/// use aws_smithy_http_server::plugin::filter_by_operation_name;
 /// # use aws_smithy_http_server::{plugin::Plugin, operation::{Operation, OperationShape}};
 /// # struct Pl;
 /// # struct CheckHealth;
@@ -33,10 +33,10 @@ pub struct FilterByOperationName<Inner, F> {
 /// # let plugin = Pl;
 /// # let operation = Operation { inner: (), layer: () };
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-/// let filtered_plugin = filter_operation_by_name(plugin, |name| name != CheckHealth::NAME);
+/// let filtered_plugin = filter_by_operation_name(plugin, |name| name != CheckHealth::NAME);
 /// let new_operation = filtered_plugin.map(operation);
 /// ```
-pub fn filter_operation_by_name<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationName<Inner, F>
+pub fn filter_by_operation_name<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationName<Inner, F>
 where
     F: Fn(&str) -> bool,
 {
