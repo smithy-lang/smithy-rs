@@ -9,7 +9,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-client-hyper = ["aws-smithy-client/client-hyper", "hyper-rustls"]
+client-hyper = ["aws-smithy-client/client-hyper"]
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
@@ -31,11 +31,6 @@ aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-tower" }
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
-
-# cargo does not support optional doc dependencies, so to completely disable rustls when
-# the native-tls feature is enabled, we need to add the webpki-roots feature here.
-# https://github.com/rust-lang/cargo/issues/1596
-hyper-rustls = { version = "0.23.0", optional = true, features = ["webpki-tokio", "http2", "http1"] }
 
 # implementation detail of SSO credential caching
 ring = "0.16"
