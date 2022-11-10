@@ -59,7 +59,7 @@ pub fn error_scope<'a, 'b>(
         // otherwise, ignore it
     }
     Err(XmlDecodeError::custom(
-        "No Error found inside of ErrorResponse",
+        "no error found inside of ErrorResponse",
     ))
 }
 

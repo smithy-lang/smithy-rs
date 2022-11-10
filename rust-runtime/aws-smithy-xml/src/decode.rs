@@ -439,7 +439,7 @@ pub fn try_data<'a, 'inp>(
             Some(Ok(Token::Text { text })) => return unescape(text.as_str()),
             Some(Ok(e @ Token::ElementStart { .. })) => {
                 return Err(XmlDecodeError::custom(format!(
-                    "Looking for a data element, found: {:?}",
+                    "looking for a data element, found: {:?}",
                     e
                 )))
             }
