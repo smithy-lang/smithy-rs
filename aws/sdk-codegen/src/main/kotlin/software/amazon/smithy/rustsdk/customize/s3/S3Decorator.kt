@@ -7,13 +7,11 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
@@ -34,8 +32,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
-import software.amazon.smithy.rust.codegen.core.smithy.traits.Mandatory
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import java.util.logging.Logger
@@ -73,8 +69,6 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
                 shape.letIf(isInInvalidXmlRootAllowList(shape)) {
                     logger.info("Adding AllowInvalidXmlRoot trait to $it")
                     (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
-                }.letIf(isRequiredUploadId(shape)) {
-                    (it as MemberShape).toBuilder().addTrait(Mandatory()).build()
                 }
             }
         }
@@ -92,12 +86,6 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
-    }
-
-    private fun isRequiredUploadId(shape: Shape): Boolean {
-        return shape.isMemberShape &&
-            shape.id.toString().endsWith("UploadId") &&
-            shape.hasTrait<RequiredTrait>()
     }
 }
 
