@@ -274,7 +274,7 @@ mod loader {
         ///
         /// ## Examples
         /// ```no_run
-        /// # #[cfg(feature = "hyper-client")]
+        /// # #[cfg(feature = "client-hyper")]
         /// # async fn create_config() {
         /// use std::time::Duration;
         /// use aws_smithy_client::{Client, hyper_ext};

@@ -9,6 +9,8 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 hardcoded-credentials = []
+# This feature is to be used only for doc comments
+examples = ["aws-smithy-client/client-hyper", "aws-smithy-client/rustls"]
 
 [dependencies]
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
@@ -20,10 +22,8 @@ zeroize = "1"
 http = "0.2.6"
 
 [dev-dependencies]
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["rustls", "client-hyper"] }
 futures-util = "0.3.16"
 http = "0.2.4"
-hyper-rustls = "0.23.0"
 tracing-test = "0.2.1"
 
 [build-dependencies]

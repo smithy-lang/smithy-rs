@@ -363,9 +363,7 @@ impl Builder {
     ///
     /// ## Examples
     /// ```no_run
-    /// # #[cfg(test)]
-    /// # mod tests {
-    /// # #[test]
+    /// # #[cfg(feature = "examples")]
     /// # fn example() {
     /// use std::time::Duration;
     /// use aws_smithy_client::{Client, hyper_ext};
@@ -391,7 +389,6 @@ impl Builder {
     ///     .http_connector(smithy_connector)
     ///     .build();
     /// # }
-    /// # }
     /// ```
     pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
         self.set_http_connector(Some(http_connector));
@@ -402,9 +399,7 @@ impl Builder {
     ///
     /// ## Examples
     /// ```no_run
-    /// # #[cfg(test)]
-    /// # mod tests {
-    /// # #[test]
+    /// # #[cfg(feature = "examples")]
     /// # fn example() {
     /// use std::time::Duration;
     /// use aws_smithy_client::hyper_ext;
@@ -432,7 +427,6 @@ impl Builder {
     /// let mut builder = SdkConfig::builder();
     /// override_http_connector(&mut builder);
     /// let config = builder.build();
-    /// # }
     /// # }
     /// ```
     pub fn set_http_connector(
