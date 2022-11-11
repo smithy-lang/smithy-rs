@@ -208,7 +208,15 @@ open class EnumGenerator(
 
     private fun unknownVariantValue(): RuntimeType {
         return RuntimeType.forInlineFun(UnknownVariantValue, RustModule.Types) {
-            rust("##[allow(missing_docs)]")
+            docs(
+                """
+                Opaque struct used as inner data for the `Unknown` variant defined in enums in
+                the crate
+
+                While this is not used by users directly, it is marked as `pub` because it is
+                part of the enums that are public interface.
+                """.trimIndent(),
+            )
             meta.render(this)
             rust("struct $UnknownVariantValue(pub(crate) String);")
             rustBlock("impl $UnknownVariantValue") {
