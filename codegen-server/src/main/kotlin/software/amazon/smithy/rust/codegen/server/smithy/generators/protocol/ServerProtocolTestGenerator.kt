@@ -903,7 +903,6 @@ class ServerProtocolTestGenerator(
         private val ExpectFail: Set<FailingTest> = setOf(
             // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
             FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedMapNullKey", TestType.MalformedRequest),
 
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
@@ -917,15 +916,6 @@ class ServerProtocolTestGenerator(
             // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
-
-            // Work in progress PR, see https://github.com/awslabs/smithy-rs/pull/1294.
-            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),
-            FailingTest(
-                RestJson,
-                "RestJsonHeaderMalformedStringInvalidBase64MediaType_case1",
-                TestType.MalformedRequest,
-            ),
 
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),

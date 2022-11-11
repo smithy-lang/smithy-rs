@@ -85,7 +85,8 @@ open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<Rust
     override val order: Byte
         get() = 0
 
-    fun withDecorator(decorator: RustCodegenDecorator<T, C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
+    fun withDecorator(vararg decorator: RustCodegenDecorator<T, C>) =
+        CombinedCodegenDecorator(orderedDecorators + decorator)
 
     override fun configCustomizations(
         codegenContext: C,
