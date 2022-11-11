@@ -376,10 +376,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "called `Result::unwrap()` on an `Err` value: UnknownChecksumAlgorithmError { checksum_algorithm: \"some invalid checksum algorithm\" }"]
     fn test_checksum_algorithm_returns_error_for_unknown() {
-        "some invalid checksum algorithm"
+        let error = "some invalid checksum algorithm"
             .parse::<ChecksumAlgorithm>()
-            .unwrap();
+            .err()
+            .expect("it should error");
+        assert_eq!(
+            "some invalid checksum algorithm",
+            error.checksum_algorithm()
+        );
     }
 }
