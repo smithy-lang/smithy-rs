@@ -103,3 +103,9 @@ message = "Neglecting to include an upload ID when sending an AbortMultipartUplo
 references = ["smithy-rs#1957"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Upgrade to Smithy 1.26.2"
+references = ["smithy-rs#1972"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
