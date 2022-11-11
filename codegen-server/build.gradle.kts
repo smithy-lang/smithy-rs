@@ -51,7 +51,7 @@ tasks.jar {
 val sourcesJar by tasks.creating(Jar::class) {
     group = "publishing"
     description = "Assembles Kotlin sources jar"
-    classifier = "sources"
+    archiveClassifier.set("sources")
     from(sourceSets.getByName("main").allSource)
 }
 
