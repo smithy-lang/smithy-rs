@@ -11,11 +11,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 
@@ -68,21 +66,12 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
         ).filter { pubUseType -> pubUseType.shouldExport(model) }.map { it.type }
 }
 
-class SmithyTypesPubUseGenerator(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
-    override fun section(section: LibRsSection) =
-        writable {
-            when (section) {
-                is LibRsSection.Body -> {
-                    val types = pubUseTypes(runtimeConfig, section.model)
-                    if (types.isNotEmpty()) {
-                        withModule(RustModule.Types) {
-                            types.forEach { type -> rust("pub use #T;", type) }
-                        }
-                    }
-                }
-
-                else -> {
-                }
-            }
+/** Adds re-export statements in a separate file for the types module */
+fun pubUseSmithyTypes(runtimeConfig: RuntimeConfig, model: Model, rustCrate: RustCrate) {
+    rustCrate.withModule(RustModule.Types) {
+        val types = pubUseTypes(runtimeConfig, model)
+        if (types.isNotEmpty()) {
+            types.forEach { type -> rust("pub use #T;", type) }
         }
+    }
 }

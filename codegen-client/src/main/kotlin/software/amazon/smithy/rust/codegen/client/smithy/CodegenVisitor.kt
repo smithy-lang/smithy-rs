@@ -88,6 +88,7 @@ class CodegenVisitor(
             RustModule.Input,
             RustModule.Output,
             RustModule.Config,
+            RustModule.Types,
             RustModule.operation(Visibility.PUBLIC),
         ).associateBy { it.name }
         rustCrate = RustCrate(
