@@ -7175,7 +7175,7 @@ Establish automation for enforcing minimum secure versions for the direct depend
 <!-- # Links -->
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-error-context-and-compatibility"><a class="header" href="#rfc-error-context-and-compatibility">RFC: Error Context and Compatibility</a></h1>
 <blockquote>
-<p>Status: Accepted</p>
+<p>Status: Implemented</p>
 <p>Applies to: Generated clients and shared rust-runtime crates</p>
 </blockquote>
 <p>This RFC proposes a pattern for writing Rust errors to provide consistent
@@ -7540,11 +7540,11 @@ fn write_err(f: &amp;mut fmt::Formatter&lt;'_&gt;, err: &amp;dyn Error) -&gt; fm
 </span></code></pre></pre>
 <h2 id="changes-checklist-16"><a class="header" href="#changes-checklist-16">Changes Checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Update every struct/enum that implements <code>Error</code> in all the non-server Rust runtime crates</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Hide error source type in <code>Unhandled</code> variant in code generated errors</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Remove <code>Clone</code> from <code>ProfileParseError</code> and any others that have it</li>
 </ul>
 <h2 id="error-code-review-checklist"><a class="header" href="#error-code-review-checklist">Error Code Review Checklist</a></h2>
@@ -7567,7 +7567,7 @@ Error enum variants that don't have a separate error context struct are <code>#[
 <li><input disabled="" type="checkbox"/>
 Error context is exposed via accessors rather than by public fields</li>
 <li><input disabled="" type="checkbox"/>
-Errors and their context structs are in an <code>error</code> submodule for any given module. They are not mixed with other non-error code</li>
+Actionable errors and their context structs are in an <code>error</code> submodule for any given module. They are not mixed with other non-error code</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-evolving-the-new-service-builder-api"><a class="header" href="#rfc-evolving-the-new-service-builder-api">RFC: Evolving the new service builder API</a></h1>
 <blockquote>
