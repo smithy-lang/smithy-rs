@@ -7,8 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 internal fun unhandledError(): RuntimeType = RuntimeType.forInlineFun("Unhandled", RustModule.Error) {
@@ -19,23 +18,28 @@ internal fun unhandledError(): RuntimeType = RuntimeType.forInlineFun("Unhandled
         Call [`Error::source`](std::error::Error::source) for more details about the underlying cause.
         """,
     )
-    rust("##[derive(Debug)]")
-    rustBlock("pub struct Unhandled") {
-        rust("source: Box<dyn #T + Send + Sync + 'static>", RuntimeType.StdError)
-    }
-    rustBlock("impl Unhandled") {
-        rustBlock("pub(crate) fn new(source: Box<dyn #T + Send + Sync + 'static>) -> Self", RuntimeType.StdError) {
-            rust("Self { source }")
+    rustTemplate(
+        """
+        ##[derive(Debug)]
+        pub struct Unhandled {
+            source: Box<dyn #{StdError} + Send + Sync + 'static>,
         }
-    }
-    rustBlock("impl std::fmt::Display for Unhandled") {
-        rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>") {
-            rust("write!(f, \"unhandled error\")")
+        impl Unhandled {
+            pub(crate) fn new(source: Box<dyn #{StdError} + Send + Sync + 'static>) -> Self {
+                Self { source }
+            }
         }
-    }
-    rustBlock("impl std::error::Error for Unhandled") {
-        rustBlock("fn source(&self) -> Option<&(dyn std::error::Error + 'static)>") {
-            rust("Some(self.source.as_ref() as _)")
+        impl std::fmt::Display for Unhandled {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+                write!(f, "unhandled error")
+            }
         }
-    }
+        impl #{StdError} for Unhandled {
+            fn source(&self) -> Option<&(dyn #{StdError} + 'static)> {
+                Some(self.source.as_ref() as _)
+            }
+        }
+        """,
+        "StdError" to RuntimeType.StdError,
+    )
 }
