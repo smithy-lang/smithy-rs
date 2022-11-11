@@ -91,7 +91,7 @@ class PythonServerOperationHandlerGenerator(
         writable {
             rustTemplate(
                 """
-                #{tracing}::debug!("Executing Python handler function `$name()`");
+                #{tracing}::trace!(name = "$name", "executing python handler function");
                 #{pyo3}::Python::with_gil(|py| {
                     let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
                     let output = if handler.args == 1 {
@@ -110,7 +110,7 @@ class PythonServerOperationHandlerGenerator(
         writable {
             rustTemplate(
                 """
-                #{tracing}::debug!("Executing Python handler coroutine `$name()`");
+                #{tracing}::trace!(name = "$name", "executing python handler coroutine");
                 let result = #{pyo3}::Python::with_gil(|py| {
                     let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
                     let coroutine = if handler.args == 1 {
@@ -132,15 +132,9 @@ class PythonServerOperationHandlerGenerator(
                 """
                 // Catch and record a Python traceback.
                 result.map_err(|e| {
-                    let traceback = #{pyo3}::Python::with_gil(|py| {
-                        match e.traceback(py) {
-                            Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
-                            None => "Unknown traceback\n".to_string()
-                        }
-                    });
-                    let error = e.into();
-                    #{tracing}::error!("{}{}", traceback, error);
-                    error
+                    let rich_py_err = #{SmithyPython}::rich_py_err(#{pyo3}::Python::with_gil(|py| { e.clone_ref(py) }));
+                    #{tracing}::error!(error = ?rich_py_err, "handler error");
+                    e.into()
                 })
                 """,
                 *codegenScope,
