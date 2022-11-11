@@ -7,12 +7,13 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.AbstractShapeBuilder
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
@@ -34,10 +35,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.smithy.traits.Mandatory
-import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
-import software.amazon.smithy.utils.ToSmithyBuilder
 import java.util.logging.Logger
 
 /**
@@ -50,10 +50,6 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
     private val invalidXmlRootAllowList = setOf(
         // API returns GetObjectAttributes_Response_ instead of Output
         ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
-    )
-    private val mandatoryShapesList = setOf(
-        // Must be included or else S3 interprets the request as a get, put, or delete object request.
-        ShapeId.from("com.amazonaws.s3#MultipartUploadId"),
     )
 
     private fun applies(serviceId: ShapeId) =
@@ -75,18 +71,10 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
         return model.letIf(applies(service.id)) {
             ModelTransformer.create().mapShapes(model) { shape ->
                 shape.letIf(isInInvalidXmlRootAllowList(shape)) {
-                    logger.info("Adding AllowInvalidXmlRoot trait to $shape")
-                    (shape as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
-                }
-
-                shape.letIf(isInMandatoryList(shape)) {
-                    logger.info("Adding Mandatory trait to $shape")
-
-                    if (shape is ToSmithyBuilder<*>) {
-                        (shape.toBuilder() as AbstractShapeBuilder<*, *>).addTrait(Mandatory()).build()
-                    } else {
-                        PANIC("can't add Mandatory trait to $shape because it has no builder")
-                    }
+                    logger.info("Adding AllowInvalidXmlRoot trait to $it")
+                    (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+                }.letIf(isRequiredUploadId(shape)) {
+                    (it as MemberShape).toBuilder().addTrait(Mandatory()).build()
                 }
             }
         }
@@ -106,8 +94,10 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
     }
 
-    private fun isInMandatoryList(shape: Shape): Boolean {
-        return mandatoryShapesList.contains(shape.id)
+    private fun isRequiredUploadId(shape: Shape): Boolean {
+        return shape.isMemberShape &&
+            shape.id.toString().endsWith("UploadId") &&
+            shape.hasTrait<RequiredTrait>()
     }
 }
 

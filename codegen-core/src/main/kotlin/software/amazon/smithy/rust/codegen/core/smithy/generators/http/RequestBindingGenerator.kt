@@ -203,7 +203,7 @@ class RequestBindingGenerator(
                 val memberName = symbolProvider.toMemberName(memberShape)
                 val outerTarget = model.expectShape(memberShape.target)
 
-                if (outerTarget.isMandatory()) {
+                if (memberShape.isMandatory()) {
                     val buildError = OperationBuildError(runtimeConfig).missingField(
                         this,
                         memberName,
