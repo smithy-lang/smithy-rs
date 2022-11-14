@@ -6,11 +6,11 @@
 use std::time::{Duration, UNIX_EPOCH};
 
 use aws_http::user_agent::AwsUserAgent;
-use aws_sdk_s3::{Credentials, Region};
 use aws_sdk_s3::middleware::DefaultMiddleware;
 use aws_sdk_s3::operation::AbortMultipartUpload;
-use aws_smithy_client::Client as CoreClient;
+use aws_sdk_s3::{Credentials, Region};
 use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_client::Client as CoreClient;
 use aws_smithy_http::body::SdkBody;
 
 pub type Client<C> = CoreClient<C, DefaultMiddleware>;
@@ -40,7 +40,10 @@ async fn test_mandatory_query_param_is_unset() {
         .credentials_provider(creds)
         .region(Region::new("us-east-1"))
         .build();
-    let conn = TestConnection::new(vec![(abort_multipart_upload_response_with_empty_upload_id(), empty_ok_response())]);
+    let conn = TestConnection::new(vec![(
+        abort_multipart_upload_response_with_empty_upload_id(),
+        empty_ok_response(),
+    )]);
     let client = Client::new(conn.clone());
     let mut op = AbortMultipartUpload::builder()
         .bucket("test-bucket")
@@ -71,7 +74,10 @@ async fn test_mandatory_query_param_is_set_but_empty() {
         .credentials_provider(creds)
         .region(Region::new("us-east-1"))
         .build();
-    let conn = TestConnection::new(vec![(abort_multipart_upload_response_with_empty_upload_id(), empty_ok_response())]);
+    let conn = TestConnection::new(vec![(
+        abort_multipart_upload_response_with_empty_upload_id(),
+        empty_ok_response(),
+    )]);
     let client = Client::new(conn.clone());
     let mut op = AbortMultipartUpload::builder()
         .bucket("test-bucket")
