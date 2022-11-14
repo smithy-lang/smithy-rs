@@ -55,7 +55,7 @@ pub struct MessageStreamError {
 }
 
 #[derive(Debug)]
-pub enum MessageStreamErrorKind {
+enum MessageStreamErrorKind {
     Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 

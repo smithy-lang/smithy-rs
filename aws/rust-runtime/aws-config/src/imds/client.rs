@@ -218,7 +218,7 @@ impl Client {
                     InnerImdsError::InvalidUtf8 => {
                         ImdsError::Unexpected("IMDS returned invalid UTF-8".into())
                     }
-                    _ => ImdsError::ErrorResponse {
+                    InnerImdsError::BadStatus => ImdsError::ErrorResponse {
                         response: context.into_raw().into_parts().0,
                     },
                 },

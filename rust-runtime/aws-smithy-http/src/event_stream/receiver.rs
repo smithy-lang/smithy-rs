@@ -162,10 +162,7 @@ impl<T, E> Receiver<T, E> {
                     Err(SdkError::service_error(err, RawMessage::Decoded(message)))
                 }
             },
-            Err(err) => Err(SdkError::response_error(
-                Box::new(err),
-                RawMessage::Decoded(message),
-            )),
+            Err(err) => Err(SdkError::response_error(err, RawMessage::Decoded(message))),
         }
     }
 
@@ -195,7 +192,7 @@ impl<T, E> Receiver<T, E> {
                     .decode_frame(self.buffer.buffered())
                     .map_err(|err| {
                         SdkError::response_error(
-                            Box::new(err),
+                            err,
                             // the buffer has been consumed
                             RawMessage::Invalid(None),
                         )
