@@ -20,8 +20,8 @@ name = "pokemon-service-lambda"
 path = "src/bin/pokemon-service-lambda.rs"
 
 [[bin]]
-name = "pokemon-service-conninfo"
-path = "src/bin/pokemon-service-conninfo.rs"
+name = "pokemon-service-connect-info"
+path = "src/bin/pokemon-service-connect-info.rs"
 
 [dependencies]
 async-stream = "0.3"

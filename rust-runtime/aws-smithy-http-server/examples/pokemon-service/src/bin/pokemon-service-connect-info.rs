@@ -19,13 +19,13 @@ struct Args {
     port: u16,
 }
 
-/// Retrieves the users storage. No authentication required for locals.
+/// Retrieves the user's storage. No authentication required for locals.
 pub async fn get_storage_with_local_approved(
     input: pokemon_service_server_sdk::input::GetStorageInput,
-    conn_info: aws_smithy_http_server::Extension<aws_smithy_http_server::routing::ConnectInfo<std::net::SocketAddr>>,
+    connect_info: aws_smithy_http_server::Extension<aws_smithy_http_server::routing::ConnectInfo<std::net::SocketAddr>>,
 ) -> Result<pokemon_service_server_sdk::output::GetStorageOutput, pokemon_service_server_sdk::error::GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
-    let local = conn_info.0 .0.ip() == "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
+    let local = connect_info.0 .0.ip() == "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
 
     // We currently support Ash: he has nothing stored
     if input.user == "ash" && input.passcode == "pikachu123" {
