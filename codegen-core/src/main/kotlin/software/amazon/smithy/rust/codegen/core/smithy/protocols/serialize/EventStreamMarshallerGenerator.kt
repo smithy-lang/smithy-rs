@@ -112,7 +112,7 @@ open class EventStreamMarshallerGenerator(
                         rustTemplate(
                             """
                             Self::Input::${UnionGenerator.UnknownVariantName} => return Err(
-                                #{Error}::Marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
+                                #{Error}::marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                             )
                             """,
                             *codegenScope,
@@ -212,7 +212,7 @@ open class EventStreamMarshallerGenerator(
                     rustTemplate(
                         """
                         #{serializerFn}(&$input)
-                            .map_err(|err| #{Error}::Marshalling(format!("{}", err)))?
+                            .map_err(|err| #{Error}::marshalling(format!("{}", err)))?
                         """,
                         "serializerFn" to serializerFn,
                         *codegenScope,
