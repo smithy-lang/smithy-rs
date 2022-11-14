@@ -452,19 +452,30 @@ event_loop.add_signal_handler(signal.SIGINT,
         use aws_smithy_http_server::routing::LambdaHandler;
 
         let event_loop = self.configure_python_event_loop(py)?;
+        // Register signals on the Python event loop.
+        self.register_python_signals(py, event_loop.to_object(py))?;
+
         let service = self.build_and_configure_service(py, event_loop)?;
-        let rt = runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("unable to start a new tokio runtime for this process");
-        rt.block_on(async move {
-            let handler = LambdaHandler::new(service);
-            let lambda = lambda_http::run(handler);
-            tracing::debug!("starting lambda handler");
-            if let Err(err) = lambda.await {
-                tracing::error!(error = %err, "unable to start lambda handler");
-            }
+
+        // Spawn a new background [std::thread] to run the application.
+        tracing::trace!("start the tokio runtime in a background task");
+        thread::spawn(move || {
+            let rt = runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("unable to start a new tokio runtime for this process");
+            rt.block_on(async move {
+                let handler = LambdaHandler::new(service);
+                let lambda = lambda_http::run(handler);
+                tracing::debug!("starting lambda handler");
+                if let Err(err) = lambda.await {
+                    tracing::error!(error = %err, "unable to start lambda handler");
+                }
+            });
         });
+        // Block on the event loop forever.
+        tracing::trace!("run and block on the python event loop until a signal is received");
+        event_loop.call_method0("run_forever")?;
         Ok(())
     }
 
