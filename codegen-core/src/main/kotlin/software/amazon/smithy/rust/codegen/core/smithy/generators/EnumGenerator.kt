@@ -215,7 +215,7 @@ open class EnumGenerator(
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
                 the crate
 
-                While this is not used by users directly, it is marked as `pub` because it is
+                While this is not intended to be used directly, it is marked as `pub` because it is
                 part of the enums that are public interface.
                 """.trimIndent(),
             )
