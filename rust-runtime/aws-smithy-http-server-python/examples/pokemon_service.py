@@ -12,6 +12,7 @@ from typing import List, Optional, Callable, Awaitable
 
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.tls import TlsConfig  # type: ignore
+from libpokemon_service_server_sdk.lambda_ import LambdaContext  # type: ignore
 from libpokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
 from libpokemon_service_server_sdk.input import (  # type: ignore
     DoNothingInput,
@@ -80,6 +81,9 @@ class SafeCounter:
 #   https://docs.python.org/3/library/multiprocessing.html#sharing-state-between-processes
 @dataclass
 class Context:
+    # Inject Lambda context if service is running on Lambda
+    lambda_ctx: LambdaContext = None
+
     # In our case it simulates an in-memory database containing the description of Pikachu in multiple
     # languages.
     _pokemon_database = {
@@ -197,6 +201,8 @@ def do_nothing(_: DoNothingInput) -> DoNothingOutput:
 def get_pokemon_species(
     input: GetPokemonSpeciesInput, context: Context
 ) -> GetPokemonSpeciesOutput:
+    if context.lambda_ctx is not None:
+        logging.debug("Lambda Context: %s", context.lambda_ctx)
     context.increment_calls_count()
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:

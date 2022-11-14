@@ -39,7 +39,7 @@ release: codegen
 	ln -sf $(RELEASE_SHARED_LIBRARY_SRC) $(SHARED_LIBRARY_DST)
 
 run: build
-	python $(CUR_DIR)/pokemon_service.py
+	python3 $(CUR_DIR)/pokemon_service.py
 
 test: build
 	cargo test
