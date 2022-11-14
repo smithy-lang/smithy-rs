@@ -155,6 +155,7 @@ impl DateTimeExt for DateTime {
 mod test {
     use super::DateTimeExt;
     use aws_smithy_types::date_time::{DateTime, Format};
+    use chrono::Timelike;
 
     #[cfg(feature = "convert-time")]
     use super::Error;
@@ -164,18 +165,28 @@ mod test {
     fn from_chrono() {
         use chrono::{FixedOffset, TimeZone, Utc};
 
-        let chrono = Utc.ymd(2039, 7, 8).and_hms_nano(9, 3, 11, 123_000_000);
+        let chrono = Utc
+            .with_ymd_and_hms(2039, 7, 8, 9, 3, 11)
+            .unwrap()
+            .with_nanosecond(123_000_000)
+            .unwrap();
         let expected = DateTime::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
         assert_eq!(expected, DateTime::from_chrono_utc(chrono));
 
-        let chrono = Utc.ymd(1000, 7, 8).and_hms_nano(9, 3, 11, 456_000_000);
+        let chrono = Utc
+            .with_ymd_and_hms(1000, 7, 8, 9, 3, 11)
+            .unwrap()
+            .with_nanosecond(456_000_000)
+            .unwrap();
         let expected = DateTime::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
         assert_eq!(expected, DateTime::from_chrono_utc(chrono));
 
-        let chrono =
-            FixedOffset::west(2 * 3600)
-                .ymd(2039, 7, 8)
-                .and_hms_nano(9, 3, 11, 123_000_000);
+        let chrono = FixedOffset::west_opt(2 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2039, 7, 8, 9, 3, 11)
+            .unwrap()
+            .with_nanosecond(123_000_000)
+            .unwrap();
         let expected = DateTime::from_str("2039-07-08T11:03:11.123Z", Format::DateTime).unwrap();
         assert_eq!(expected, DateTime::from_chrono_fixed(chrono));
     }
@@ -186,11 +197,19 @@ mod test {
         use chrono::{TimeZone, Utc};
 
         let date_time = DateTime::from_str("2039-07-08T09:03:11.123Z", Format::DateTime).unwrap();
-        let expected = Utc.ymd(2039, 7, 8).and_hms_nano(9, 3, 11, 123_000_000);
+        let expected = Utc
+            .with_ymd_and_hms(2039, 7, 8, 9, 3, 11)
+            .unwrap()
+            .with_nanosecond(123_000_000)
+            .unwrap();
         assert_eq!(expected, date_time.to_chrono_utc().unwrap());
 
         let date_time = DateTime::from_str("1000-07-08T09:03:11.456Z", Format::DateTime).unwrap();
-        let expected = Utc.ymd(1000, 7, 8).and_hms_nano(9, 3, 11, 456_000_000);
+        let expected = Utc
+            .with_ymd_and_hms(1000, 7, 8, 9, 3, 11)
+            .unwrap()
+            .with_nanosecond(456_000_000)
+            .unwrap();
         assert_eq!(expected, date_time.to_chrono_utc().unwrap());
     }
 
