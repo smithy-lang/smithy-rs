@@ -56,7 +56,9 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
         listOf(
             PubUseType(RuntimeType.Blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.DateTime(runtimeConfig), ::hasDateTimes),
-        ) + CargoDependency.SmithyHttp(runtimeConfig).asType().let { http ->
+        ) + CargoDependency.SmithyTypes(runtimeConfig).asType().let { types ->
+            listOf(PubUseType(types.member("error::display::DisplayErrorContext")) { true })
+        } + CargoDependency.SmithyHttp(runtimeConfig).asType().let { http ->
             listOf(
                 PubUseType(http.member("result::SdkError")) { true },
                 PubUseType(http.member("byte_stream::ByteStream"), ::hasStreamingOperations),
