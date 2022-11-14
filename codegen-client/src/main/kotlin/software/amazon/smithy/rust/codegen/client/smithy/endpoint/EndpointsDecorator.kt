@@ -141,7 +141,7 @@ class CreateEndpointParams(
             if (param.type == ShapeType.BOOLEAN) {
                 rust(".$setterName(${section.config}.$paramName)")
             } else {
-                rust(".$setterName(${section.config}.$paramName.as_ref())")
+                rust(".$setterName(${section.config}.$paramName.clone())")
             }
         }
 
@@ -150,7 +150,7 @@ class CreateEndpointParams(
             val value = writable {
                 when (val v = param.value) {
                     is BooleanNode -> rust("Some(${v.value})")
-                    is StringNode -> rust("Some(${v.value.dq()})")
+                    is StringNode -> rust("Some(${v.value.dq()}.to_string())")
                     else -> TODO("Unexpected static value type: $v")
                 }
             }
@@ -159,12 +159,9 @@ class CreateEndpointParams(
 
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) ->
+            val memberName = ctx.symbolProvider.toMemberName(memberShape)
             rust(
-                ".${EndpointParamsGenerator.setterName(param.name)}(${section.input}.${
-                ctx.symbolProvider.toMemberName(
-                    memberShape,
-                )
-                }.as_ref())",
+                ".${EndpointParamsGenerator.setterName(param.name)}(${section.input}.$memberName.clone())",
             )
         }
     }

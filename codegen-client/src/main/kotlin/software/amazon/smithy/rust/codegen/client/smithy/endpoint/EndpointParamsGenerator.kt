@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.rulesengine.language.eval.Value
+import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -35,16 +36,30 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1927): When endpoint resolution is implemented, remove doc-hidden
+/**
+ * The module containing all endpoint resolution machinery. Module layout:
+ * ```
+ * crate::endpoints::
+ *  struct Params // Endpoint parameter struct
+ *  struct ParamsBuilder // Builder for Params
+ *  enum InvalidParams
+ *  DefaultResolver // struct implementing the endpoint resolver based on the provided rules for the service
+ *  internal // private module containing the endpoints library functions, the private version of the default resolver
+ *      endpoints_lib::{endpoints_fn*, ...}
+ *      fn default_resolver(params: &Params, partition_metadata: &PartitionMetadata, error_collector: &mut ErrorCollector)
+ * ```
+ */
 val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functionality")
     .copy(rustMetadata = RustMetadata(additionalAttributes = listOf(Attribute.DocHidden), visibility = Visibility.PUBLIC))
 
 /** Endpoint Parameters generator.
  *
- * This class generates the `Params` struct for an [EndpointRuleset]. The struct will have `pub(crate)` fields, a `Builder`,
- * and an error type that is created to handle when construction fails.
+ * This class generates the `Params` struct for an [EndpointRuleset]. The struct has `pub(crate)` fields, a `Builder`,
+ * and an error type, `InvalidParams` that is created to handle when construction fails.
  *
- * The builder of this struct generates a fallible `build()` method because endpoint params MAY have required fields. However,
- * the external parts of this struct (the public accessors) will _always_ be optional to ensure a public interface is maintained.
+ * The builder of this struct generates a fallible `build()` method because endpoint params MAY have required fields.
+ * However, the external parts of this struct (the public accessors) will _always_ be optional to ensure a public
+ * interface is maintained.
  *
  * The following snippet contains an example of what is generated (eliding the error):
  *  ```rust
@@ -56,8 +71,8 @@ val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functio
  *  }
  *  impl Params {
  *      /// Create a builder for [`Params`]
- *      pub fn builder() -> crate::endpoint_resolver::Builder {
- *          crate::endpoint_resolver::Builder::default()
+ *      pub fn builder() -> crate::endpoint::ParamsBuilder {
+ *          crate::endpoint::Builder::default()
  *      }
  *      /// Gets the value for region
  *      pub fn region(&self) -> std::option::Option<&str> {
@@ -67,15 +82,15 @@ val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functio
  *
  *  /// Builder for [`Params`]
  *  #[derive(std::default::Default, std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
- *  pub struct Builder {
+ *  pub struct ParamsBuilder {
  *      region: std::option::Option<std::string::String>,
  *  }
- *  impl Builder {
+ *  impl ParamsBuilder {
  *      /// Consume this builder, creating [`Params`].
  *      pub fn build(
  *          self,
- *      ) -> Result<crate::endpoint_resolver::Params, crate::endpoint_resolver::Error> {
- *          Ok(crate::endpoint_resolver::Params {
+ *      ) -> Result<crate::endpoint::Params, crate::endpoint::Error> {
+ *          Ok(crate::endpoint::Params {
  *                  region: self.region,
  *          })
  *      }
@@ -98,7 +113,7 @@ val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functio
 class EndpointParamsGenerator(private val parameters: Parameters) {
 
     companion object {
-        fun memberName(parameterName: String) = parameterName.stringToRustName()
+        fun memberName(parameterName: String) = Identifier.of(parameterName).rustName()
         fun setterName(parameterName: String) = "set_${memberName(parameterName)}"
     }
 
@@ -106,7 +121,7 @@ class EndpointParamsGenerator(private val parameters: Parameters) {
         generateEndpointsStruct(this)
     }
 
-    private fun endpointsBuilder(): RuntimeType = RuntimeType.forInlineFun("Builder", EndpointsModule) {
+    private fun endpointsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", EndpointsModule) {
         generateEndpointParamsBuilder(this)
     }
 
@@ -128,7 +143,7 @@ class EndpointParamsGenerator(private val parameters: Parameters) {
 
             impl std::fmt::Display for InvalidParams {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "A required field was missing: `{}`", self.field)
+                    write!(f, "a required field was missing: `{}`", self.field)
                 }
             }
 
@@ -176,7 +191,7 @@ class EndpointParamsGenerator(private val parameters: Parameters) {
                 val name = parameter.memberName()
                 val type = parameter.symbol()
 
-                (parameter.documentation.orNull() ?: "Gets the value for $name").also { docs(it) }
+                (parameter.documentation.orNull() ?: "Gets the value for `$name`").also { docs(it) }
                 rustTemplate(
                     """
                     pub fn ${parameter.memberName()}(&self) -> #{paramType} {
@@ -209,7 +224,7 @@ class EndpointParamsGenerator(private val parameters: Parameters) {
     private fun generateEndpointParamsBuilder(rustWriter: RustWriter) {
         rustWriter.docs("Builder for [`Params`]")
         Attribute.Derives(setOf(Debug, Default, PartialEq, Clone)).render(rustWriter)
-        rustWriter.rustBlock("pub struct Builder") {
+        rustWriter.rustBlock("pub struct ParamsBuilder") {
             parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
                 val type = parameter.symbol().makeOptional()
@@ -217,7 +232,7 @@ class EndpointParamsGenerator(private val parameters: Parameters) {
             }
         }
 
-        rustWriter.rustBlock("impl Builder") {
+        rustWriter.rustBlock("impl ParamsBuilder") {
             docs("Consume this builder, creating [`Params`].")
             rustBlockTemplate(
                 "pub fn build(self) -> Result<#{Params}, #{ParamsError}>",
@@ -249,14 +264,14 @@ class EndpointParamsGenerator(private val parameters: Parameters) {
                 rustTemplate(
                     """
                     /// Sets the value for $name #{extraDocs:W}
-                    pub fn $name(mut self, value: #{type}) -> Self {
-                        self.$name = Some(value);
+                    pub fn $name(mut self, value: impl Into<#{type}>) -> Self {
+                        self.$name = Some(value.into());
                         self
                     }
 
                     /// Sets the value for $name #{extraDocs:W}
-                    pub fn set_$name(mut self, param: Option<impl Into<#{nonOptionalType}>>) -> Self {
-                        self.$name = param.map(|t|t.into());
+                    pub fn set_$name(mut self, param: Option<#{nonOptionalType}>) -> Self {
+                        self.$name = param;
                         self
                     }
                     """,

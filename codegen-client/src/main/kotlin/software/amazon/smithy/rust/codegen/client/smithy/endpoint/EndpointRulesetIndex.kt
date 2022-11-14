@@ -11,10 +11,11 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import java.util.concurrent.ConcurrentHashMap
 
 class EndpointRulesetIndex(model: Model) : KnowledgeIndex {
 
-    private val rulesets: HashMap<ServiceShape, EndpointRuleSet?> = HashMap()
+    private val rulesets: ConcurrentHashMap<ServiceShape, EndpointRuleSet?> = ConcurrentHashMap()
 
     fun endpointRulesForService(serviceShape: ServiceShape) = rulesets.computeIfAbsent(
         serviceShape,

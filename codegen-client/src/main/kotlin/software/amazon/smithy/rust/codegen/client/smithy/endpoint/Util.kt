@@ -24,7 +24,7 @@ fun Identifier.rustName(): String {
     return this.toString().stringToRustName()
 }
 
-fun String.stringToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
+private fun String.stringToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
 
 /**
  * Returns the memberName() for a given [Parameter]
