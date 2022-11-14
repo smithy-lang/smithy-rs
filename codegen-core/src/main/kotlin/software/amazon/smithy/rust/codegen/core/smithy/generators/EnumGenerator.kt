@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.ifClient
 import software.amazon.smithy.rust.codegen.core.util.doubleQuote
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -157,7 +158,7 @@ open class EnumGenerator(
     }
 
     private fun renderEnum() {
-        if (target.renderUnknownVariant()) {
+        target.ifClient {
             writer.renderForwardCompatibilityNote(enumName, sortedMembers, UnknownVariant, UnknownVariantValue)
         }
 
@@ -175,7 +176,7 @@ open class EnumGenerator(
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
-            if (target.renderUnknownVariant()) {
+            target.ifClient {
                 docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
                 rust("$UnknownVariant(#T)", unknownVariantValue())
             }
@@ -190,7 +191,8 @@ open class EnumGenerator(
                     sortedMembers.forEach { member ->
                         rust("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
-                    if (target.renderUnknownVariant()) {
+
+                    target.ifClient {
                         rust("$enumName::$UnknownVariant(value) => value.as_str()")
                     }
                 }

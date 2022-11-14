@@ -11,3 +11,21 @@ package software.amazon.smithy.rust.codegen.core.smithy
 enum class CodegenTarget {
     CLIENT, SERVER
 }
+
+/**
+ * Convenience extension to execute thunk if the target is for CodegenTarget.CLIENT
+ */
+fun <B> CodegenTarget.ifClient(thunk: () -> B): B? = if (this == CodegenTarget.CLIENT) {
+    thunk()
+} else {
+    null
+}
+
+/**
+ * Convenience extension to execute thunk if the target is for CodegenTarget.SERVER
+ */
+fun <B> CodegenTarget.ifServer(thunk: () -> B): B? = if (this == CodegenTarget.SERVER) {
+    thunk()
+} else {
+    null
+}
