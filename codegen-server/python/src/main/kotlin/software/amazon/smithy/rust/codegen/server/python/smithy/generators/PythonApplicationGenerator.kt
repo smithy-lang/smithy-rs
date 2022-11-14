@@ -179,8 +179,8 @@ class PythonApplicationGenerator(
                 """
                 fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
                     #{tower}::util::BoxCloneService<
-                        #{http}::Request<#{SmithyServer}::body::Body>, 
-                        #{http}::Response<#{SmithyServer}::body::BoxBody>, 
+                        #{http}::Request<#{SmithyServer}::body::Body>,
+                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
                         std::convert::Infallible
                     >
                 >

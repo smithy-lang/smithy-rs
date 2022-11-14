@@ -49,9 +49,9 @@ tasks.test {
 // Configure jacoco (code coverage) to generate an HTML report
 tasks.jacocoTestReport {
     reports {
-        xml.isEnabled = false
-        csv.isEnabled = false
-        html.destination = file("$buildDir/reports/jacoco")
+        xml.required.set(false)
+        csv.required.set(false)
+        html.outputLocation.set(file("$buildDir/reports/jacoco"))
     }
 }
 

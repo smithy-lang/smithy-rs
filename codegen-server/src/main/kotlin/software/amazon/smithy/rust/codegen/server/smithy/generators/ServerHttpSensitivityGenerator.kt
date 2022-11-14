@@ -192,7 +192,6 @@ sealed class HeaderSensitivity(
                 {
                     |name: &#{Http}::header::HeaderName| {
                         let name_match = #{NameMatch:W};
-
                         #{SuffixAndValue:W}
                         #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { key_suffix, value }
                     }
