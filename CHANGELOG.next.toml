@@ -116,3 +116,28 @@ references = ["smithy-rs#1926", "smithy-rs#1819"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = """
+[RestJson1](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html#operation-error-serialization) server SDKs now serialize the [full shape ID](https://smithy.io/2.0/spec/model.html#shape-id) (including namespace) in operation error responses.
+
+Example server error response before:
+
+```
+HTTP/1.1 400 Bad Request
+content-type: application/json
+x-amzn-errortype: InvalidRequestException
+...
+```
+
+Example server error response now:
+
+```
+HTTP/1.1 400 Bad Request
+content-type: application/json
+x-amzn-errortype: com.example.service#InvalidRequestException
+...
+```
+"""
+references = ["smithy-rs#1982"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "david-perez"
