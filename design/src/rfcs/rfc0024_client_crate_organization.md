@@ -167,19 +167,29 @@ generically, but less sense for SDKs since the SDK clients are hardcoded to use 
 
 Thus, the Smithy client `Builder` should not be re-exported for SDKs.
 
-Model Module
+Primitives Module
+-----------------
+
+Previously, `crate::types` held re-exported types from `aws-smithy-types` that are used
+by code generated structs/enums.
+
+This module will be renamed to `crate::primitives` so that the name `types` can be
+repurposed in the next section.
+
+Types Module
 ------------
 
-The name `model` is meaningless outside the context of code generation, but there is precedent for AWS SDKs
-using the term (both the Java V2 and Kotlin SDKs use the term). Previously, this module held all the generated
+The name `model` is meaningless outside the context of code generation (although there is precedent
+since both the Java V2 and Kotlin SDKs use the term). Previously, this module held all the generated
 structs/enums that are referenced by inputs, outputs, and errors.
 
-This RFC proposes that the generated input, output, and error structs (and their associated builders)
-be moved into the `model` module as submodules, so that it looks like the following:
+This RFC proposes that this module be renamed to `types`, and that the generated input, output,
+and error structs (and their associated builders) be moved into submodules within it,
+so that it looks like the following:
 
 ```text
 .
-└── model
+└── types
     ├── error
     |   ├── builders
     |   |   └── <One struct per error named `${error}Builder`>
@@ -322,13 +332,6 @@ After these changes, the `operation` module looks as follows:
         └── <One struct per operation>
 ```
 
-Types Module
-------------
-
-As a rule, the `crate::types` module re-exports types from `aws-smithy-types` that are
-referenced by code generated structs/enums, and should only re-export the types
-that are actually referenced.
-
 Empty Modules
 -------------
 
@@ -378,7 +381,26 @@ All combined, the following is the new publicly visible organization:
 |   └── PKG_VERSION
 ├── middleware
 |   └── DefaultMiddleware
-├── model
+├── operation
+|   ├── customize
+|   |   ├── ClassifyRetry (*)
+|   |   ├── CustomizableOperation
+|   |   ├── Operation (*)
+|   |   └── RetryKind (*)
+|   └── paginator
+|       ├── <One struct per paginated operation named `${operation}Paginator`>
+|       └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
+├── presigning
+|   ├── PresigningConfigBuilder
+|   ├── PresigningConfigError
+|   ├── PresigningConfig
+|   └── PresignedRequest
+├── primitives
+|   ├── AggregatedBytes (*)
+|   ├── Blob (*)
+|   ├── ByteStream (*)
+|   └── DateTime (*)
+├── types
 |   ├── error
 |   |   ├── builders
 |   |   |   └── <One struct per error named `${error}Builder`>
@@ -395,25 +417,6 @@ All combined, the following is the new publicly visible organization:
 |   ├── builders
 |   |   └── <One struct per shape named `${shape}Builder`>
 |   └── <One struct per shape>
-├── operation
-|   ├── customize
-|   |   ├── ClassifyRetry (*)
-|   |   ├── CustomizableOperation
-|   |   ├── Operation (*)
-|   |   └── RetryKind (*)
-|   └── paginator
-|       ├── <One struct per paginated operation named `${operation}Paginator`>
-|       └── <Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`>
-├── presigning
-|   ├── PresigningConfigBuilder
-|   ├── PresigningConfigError
-|   ├── PresigningConfig
-|   └── PresignedRequest
-├── types
-|   ├── AggregatedBytes (*)
-|   ├── Blob (*)
-|   ├── ByteStream (*)
-|   └── DateTime (*)
 ├── Client
 ├── Config
 └── Error
@@ -428,7 +431,9 @@ Changes Checklist
 - [ ] Move `crate::PKG_VERSION` into a new `crate::meta` module
 - [ ] Reorganize the builders
 - [ ] Only re-export `aws_smithy_client::client::Builder` for non-SDK clients (remove from SDK clients)
-- [ ] Move `crate::input`, `crate::output`, and `crate::error` into `crate::model`
+- [ ] Rename `crate::types` to `crate::primitives`
+- [ ] Rename `crate::model` to `crate::types`
+- [ ] Move `crate::input`, `crate::output`, and `crate::error` into `crate::types`
 - [ ] Combine `Error` and `ErrorKind` for operation errors
 - [ ] Move `crate::ErrorExt` into `crate::error`
 - [ ] Re-export `aws_smithy_types::error::display::DisplayErrorContext` and `aws_smithy_http::result::SdkError` in `crate::error`
