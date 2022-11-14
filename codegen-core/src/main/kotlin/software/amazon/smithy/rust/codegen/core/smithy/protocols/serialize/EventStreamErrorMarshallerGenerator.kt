@@ -124,7 +124,7 @@ class EventStreamErrorMarshallerGenerator(
                             rustTemplate(
                                 """
                                 $errorName::Unhandled(_inner) => return Err(
-                                    #{Error}::Marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
+                                    #{Error}::marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                                 ),
                                 """,
                                 *codegenScope,
