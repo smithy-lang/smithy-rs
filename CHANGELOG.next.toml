@@ -75,6 +75,12 @@ meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all"}
 author = "Velfi"
 
 [[smithy-rs]]
+message = "aws_smithy_types_convert::date_time::DateTimeExt::to_chrono_utc returns a Result<>"
+references = ["smithy-rs#1980"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "82marbag"
+
+[[smithy-rs]]
 message = "Fix cargo audit issue on chrono."
 references = ["smithy-rs#1907"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
@@ -103,3 +109,15 @@ message = "Upgrade to Smithy 1.26.2"
 references = ["smithy-rs#1972"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Several breaking changes have been made to errors. See [the upgrade guide](https://github.com/awslabs/smithy-rs/issues/1950) for more information."
+references = ["smithy-rs#1926", "smithy-rs#1819"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Several breaking changes have been made to errors. See [the upgrade guide](https://github.com/awslabs/aws-sdk-rust/issues/657) for more information."
+references = ["smithy-rs#1926", "smithy-rs#1819"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
