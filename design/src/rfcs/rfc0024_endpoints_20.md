@@ -13,23 +13,25 @@ This RFC defines how the Rust SDK will integrate with the next generation of end
 Endpoints 2.0 defines a rules language for resolving endpoints. The Rust SDK will code-generate Rust code from this
 intermediate language and use this to create service-specific endpoint resolvers.
 
-Endpoints 2.0 will be a native Smithy feature and be available for vanilla SDKs as well as the AWS SDK.
+Endpoints 2.0 will be a Smithy-native feature available for both vanilla SDKs and the AWS SDK.
 
 <!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
 Terminology
 -----------
 
 - **Smithy-native**: In reference to features/code that is _not_ AWS specific and is supported for all Smithy clients.
-- **Rules language**: A JSON-based rules language used to resolve endpoints
+- **Rules language**: A JSON-based rules language used to resolve endpoints.
 - [**Smithy Endpoint**](#the-endpoint-struct): An endpoint, as returned from the rules-language. This contains a URI,
   headers, and configuration map of `String -> Document`. This must
   undergo [another level of transformation](#converting-a-smithy-endpoint-to-an-aws-endpoint) before it
-  can be used as an `AwsEndpoint`.
-- **AWS Endpoint**: An endpoint with explicit signing configuration applied. AWS Endpoints need to contain region &
-  service metadata to control signing.
+  can be used send a request.
+- **AWS Endpoint**: A deprecated/removed struct the combines an endpoint with signing information. In Endpoints 2.0, a
+  single middleware stage adds metadata from a [Smithy endpoint](#the-endpoint-struct) into the property bag.
 - **Middleware**: A transformation applied to a request, prior to request dispatch
 - **Endpoint Parameters**: A code-generated structure for each service which contains service-specific (and general)
   endpoint parameters.
+- **Client context parameters**: Endpoint rules can define additional parameters that should be added onto the client to
+  control endpoint selection.
 
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 The user experience if this RFC is implemented
@@ -39,13 +41,8 @@ The user experience if this RFC is implemented
 
 SDKs will generate a new, public, `endpoint` module. The module will contain a [`Params`](#endpoint-params) structure
 and
-a [`DefaultResolver`](#the-default-endpoint-resolver). Supporting these modules, a private `endpoints_impl` module will
+a [`DefaultResolver`](#the-default-endpoint-resolver). Within this module, a private `impl` module will
 be generated.
-> **Why generate two modules**?
->
-> Generating two separate modules, `endpoint` and `endpoint_impl` ensures that we don't have namespace collisions
-> between hand-written and generated
-> code.
 
 SDK middleware will be updated to use the new [`smithy_types::Endpoint`](#the-endpoint-struct). During request
 construction in `make_operation`, a [smithy endpoint](#the-endpoint-struct) will be inserted into the property bag. The
@@ -91,39 +88,35 @@ flowchart TD
 
 ### Overriding Endpoints
 
-In the general case, users will not be impacted by Endpoints 2.0 with one exception: today, users can provide a
-global endpoint provider that can override different services. There is a single `ResolveAwsEndpoint` trait that
-is shared across all services. However, this isn't the case for `Endpoints 2.0` where the trait actually has a generic
+Most users will see only one impact from endpoints 2.0: today, users can provide a global endpoint provider that can
+override different services. There is a single `ResolveAwsEndpoint` trait that is shared across all services. However,
+this isn't the case for `Endpoints 2.0` where the trait actually has a generic
 parameter:
 
 ```rust
-pub trait ResolveAwsEndpoint<T>: Send + Sync {
-    fn resolve_endpoint(&self, params: &T) -> Result<AwsEndpoint, BoxError>;
+pub type Result = std::result::Result<aws_smithy_types::endpoint::Endpoint, Error>;
+
+pub trait ResolveEndpoint<Params>: Send + Sync {
+    fn resolve_endpoint(&self, params: &Params) -> Result;
 }
 ```
 
-The trait itself would then be parameterized by service-specific endpoint parameter, eg:
+The trait is parameterized by a service-specific endpoint parameter, eg:
 `aws_sdk_s3::endpoint::Params`. The endpoint parameters we would use for S3 (e.g. including `Bucket`) are different
-from the endpoint parameters we might use for a service like DynamoDB which, today, doesn't have any custom endpoint
+from the endpoint parameters we might use for a service like DynamoDB which, today, lacks custom endpoint behavior.
 behavior.
 
-We will provide two different avenues for customers to customize endpoints:
+Customers will be able to customize endpoints in 2 ways:
 
-1. Configuration driven URL override. This mechanism hasn't been specified, but suppose that the Rust SDK supported
-   an `SDK_ENDPOINT` environment variable. This variable would be an input to the existing endpoint resolver.
-   machinery and would be backwards compatible with other SDKs (e.g. by prefixing the bucket as a host label for S3).
-2. Wholesale endpoint resolver override. In this case, customers would gain access to all endpoint parameters and be
-   able to write their own resolver.
-
-This RFC proposes making the following changes:
-
-1. For the current _global_ ability to override an endpoint, instead of accepting an `AwsEndpoint`, accept a URI. This
+1. For the current
+   [_global_ ability to override an endpoint](https://docs.rs/aws-config/latest/aws_config/struct.ConfigLoader.html#method.endpoint_resolver),
+   instead of accepting an `AwsEndpoint`, accept a URI. This
    will simplify the interface for most customers who don't actually need logic-driven endpoint construction. The
    Endpoint that can be set will be passed in as the `SDK::Endpoint` built-in. This will be renamed to `endpoint_uri`
    for clarity. **All** AWS services **MUST** accept the `SDK::Endpoint` built-in.
 2. For complex, service-specific behavior, customers will be able to provide a service specific endpoint resolver at
-   client construction time. This resolver will be parameterized with the service-specific parameters type, (
-   eg. `aws_sdk_s3::endpoint::Params`). Finally, customers will be able to access the `DefaultResolver` for S3
+   client construction time. This resolver will be parameterized with the service-specific parameters type,
+   (e.g. `aws_sdk_s3::endpoint::Params`). Finally, customers will be able to access the `DefaultResolver` for S3
    directly. This will enable them to utilize the default S3 endpoint resolver in their resolver implementation.
 
 **Example: overriding the endpoint URI globally**
@@ -140,7 +133,9 @@ async fn main() {
 
 ```rust
 /// Resolve to Localhost when an environment variable is set
-struct CustomDdbResolver { base_resolver: aws_sdk_dynamodb::endpoint::DefaultResolver }
+struct CustomDdbResolver {
+    base_resolver: aws_sdk_dynamodb::endpoint::DefaultResolver
+}
 
 impl ResolveEndpoint<aws_sdk_dynamodb::endpoint::Params> for CustomDdbResolver {
     fn resolve_endpoint(&self, params: &Params) -> Result<Endpoint, EndpointResolutionError> {
@@ -184,9 +179,10 @@ An example of the `Endpoint` struct is below. This struct will be in `aws-smithy
 gated with documentation warning about stability.
 
 #### The Endpoint Struct
+
 ```rust
 // module: `aws_smithy_types::endpoint`
-{{#include ../../../rust-runtime/aws-smithy-types/src/endpoint.rs:endpoint}}
+{{#include../../../rust-runtime/aws-smithy-types/src/endpoint.rs:endpoint}}
 ```
 
 > **What's an Endpoint property?**
@@ -195,7 +191,7 @@ gated with documentation warning about stability.
 > SDKs. Other Smithy implementors may choose a different pattern. For AWS SDKs, the `authSchemes` key is an ordered list
 > of authentication/signing schemes supported by the Endpoint that the SDK should use.
 
-All Smithy services that have the `@endpointRules` trait applied to the service shape will code generate a default
+All Smithy services that have the `@endpointRuleSet` trait applied to the service shape will code generate a default
 endpoint resolver implementation. The default endpoint resolver **MUST** be public, so that customers can delegate to it
 if they wish to override the endpoint resolver.
 
@@ -263,14 +259,13 @@ pub struct DefaultEndpointResolver {
 impl ResolveEndpoint<crate::endpoint::Params> for DefaultEndpointResolver {
     fn resolve_endpoint(&self, params: &Params) -> Result<aws_smithy_types::Endpoint, EndpointResolutionError> {
         // delegate to private impl
-        crate::endpoints_impl::resolve_endpoint(params)
+        crate::endpoints_impl::resolve_endpoint(params, &self.partition_resolver)
     }
 }
 ```
 
 `DefaultEndpointResolver` **MUST** be publicly accessible and offer both a default constructor and the ability to
 configure resolution behavior (e.g. by supporting adding additional partitions.)
-
 
 How to actually implement this RFC
 ----------------------------------
