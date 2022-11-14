@@ -26,7 +26,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.ifClient
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.doubleQuote
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -226,7 +225,7 @@ open class EnumGenerator(
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
                 the crate
 
-                While this is not used by users directly, it is marked as `pub` because it is
+                While this is not intended to be used directly, it is marked as `pub` because it is
                 part of the enums that are public interface.
                 """.trimIndent(),
             )
