@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -425,5 +426,134 @@ class EnumGeneratorTest {
         """.asSmithyModel()
         val variant3AsVariant3 = "SomeEnum::Variant3"
         expectMatchExpressionCompiles(modelV2, "test#SomeEnum", variant3AsVariant3)
+    }
+
+    @Test
+    fun `impl debug for non-sensitive enum should implement the derived debug trait`() {
+        val model = """
+            namespace test
+            @enum([
+                { name: "Foo", value: "Foo" },
+                { name: "Bar", value: "Bar" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
+
+        val shape = model.lookup<StringShape>("test#SomeEnum")
+        val trait = shape.expectTrait<EnumTrait>()
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.withModule(RustModule.Model) {
+            val generator = EnumGenerator(model, provider, this, shape, trait)
+            generator.render()
+            unitTest(
+                "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
+                """
+                assert_eq!(format!("{:?}", SomeEnum::Foo), "Foo");
+                assert_eq!(format!("{:?}", SomeEnum::Bar), "Bar");
+                assert_eq!(
+                    format!("{:?}", SomeEnum::from("Baz")),
+                    "Unknown(UnknownVariantValue(\"Baz\"))");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `impl debug for sensitive enum should redact text`() {
+        val model = """
+            namespace test
+            @sensitive
+            @enum([
+                { name: "Foo", value: "Foo" },
+                { name: "Bar", value: "Bar" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
+
+        val shape = model.lookup<StringShape>("test#SomeEnum")
+        val trait = shape.expectTrait<EnumTrait>()
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.withModule(RustModule.Model) {
+            val generator = EnumGenerator(model, provider, this, shape, trait)
+            generator.render()
+            unitTest(
+                "impl_debug_for_sensitive_enum_should_redact_text",
+                """
+                assert_eq!(format!("{:?}", SomeEnum::Foo), $REDACTION);
+                assert_eq!(format!("{:?}", SomeEnum::Bar), $REDACTION);
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `impl debug for non-sensitive unnamed enum should implement the derived debug trait`() {
+        val model = """
+            namespace test
+            @enum([
+                { value: "Foo" },
+                { value: "Bar" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
+
+        val shape = model.lookup<StringShape>("test#SomeEnum")
+        val trait = shape.expectTrait<EnumTrait>()
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.withModule(RustModule.Model) {
+            val generator = EnumGenerator(model, provider, this, shape, trait)
+            generator.render()
+            unitTest(
+                "impl_debug_for_non_sensitive_unnamed_enum_should_implement_the_derived_debug_trait",
+                """
+                for variant in SomeEnum::values() {
+                    assert_eq!(
+                        format!("{:?}", SomeEnum(variant.to_string())),
+                        format!("SomeEnum(\"{}\")", variant.to_owned())
+                    );
+                }
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `impl debug for sensitive unnamed enum should redact text`() {
+        val model = """
+            namespace test
+            @sensitive
+            @enum([
+                { value: "Foo" },
+                { value: "Bar" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
+
+        val shape = model.lookup<StringShape>("test#SomeEnum")
+        val trait = shape.expectTrait<EnumTrait>()
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.withModule(RustModule.Model) {
+            val generator = EnumGenerator(model, provider, this, shape, trait)
+            generator.render()
+            unitTest(
+                "impl_debug_for_sensitive_unnamed_enum_should_redact_text",
+                """
+                for variant in SomeEnum::values() {
+                    assert_eq!(
+                        format!("{:?}", SomeEnum(variant.to_string())),
+                        $REDACTION
+                    );
+                }
+                """,
+            )
+        }
+        project.compileAndTest()
     }
 }

@@ -27,10 +27,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.ifClient
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.doubleQuote
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
 class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
@@ -92,7 +94,12 @@ open class EnumGenerator(
 ) {
     protected val symbol: Symbol = symbolProvider.toSymbol(shape)
     protected val enumName: String = symbol.name
-    protected val meta = symbol.expectRustMetadata()
+    private val isSensitive = shape.shouldRedact(model)
+    protected val meta = if (isSensitive) {
+        symbol.expectRustMetadata().withoutDerives(RuntimeType.Debug)
+    } else {
+        symbol.expectRustMetadata()
+    }
     protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
     protected open var target: CodegenTarget = CodegenTarget.CLIENT
@@ -127,6 +134,10 @@ open class EnumGenerator(
             }
         } else {
             renderUnnamedEnum()
+        }
+
+        if (isSensitive) {
+            renderDebugImplForSensitiveEnum()
         }
     }
 
@@ -226,6 +237,19 @@ open class EnumGenerator(
                 rustBlock("pub(crate) fn as_str(&self) -> &str") {
                     rust("&self.0")
                 }
+            }
+        }
+    }
+
+    /**
+     * Manually implement the Debug trait for the enum if marked as sensitive
+     *
+     * It prints the redacted text regardless of the variant it is asked to print.
+     */
+    private fun renderDebugImplForSensitiveEnum() {
+        writer.rustBlock("impl #T for $enumName", RuntimeType.Debug) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+                rust("""write!(f, "{}", $REDACTION)""")
             }
         }
     }
