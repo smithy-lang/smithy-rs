@@ -49,6 +49,7 @@ class PythonServerModuleGenerator(
                 renderPyLogging()
                 renderPyMiddlewareTypes()
                 renderPyTlsTypes()
+                renderPyLambdaTypes()
                 renderPyApplicationType()
             }
         }
@@ -174,6 +175,22 @@ class PythonServerModuleGenerator(
                 "import sys; sys.modules['$libName.tls'] = tls"
             );
             m.add_submodule(tls)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.renderPyLambdaTypes() {
+        rustTemplate(
+            """
+            let lambda_ = #{pyo3}::types::PyModule::new(py, "lambda_")?;
+            lambda_.add_class::<#{SmithyPython}::lambda::PyLambdaContext>()?;
+            pyo3::py_run!(
+                py,
+                lambda_,
+                "import sys; sys.modules['$libName.lambda_'] = lambda_"
+            );
+            m.add_submodule(lambda_)?;
             """,
             *codegenScope,
         )
