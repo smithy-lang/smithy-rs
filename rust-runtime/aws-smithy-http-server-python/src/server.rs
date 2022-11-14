@@ -14,7 +14,6 @@ use std::thread;
 use aws_smithy_http_server::{
     body::{Body, BoxBody},
     routing::IntoMakeService,
-    AddExtensionLayer,
 };
 use http::{Request, Response};
 use hyper::server::conn::AddrIncoming;
@@ -27,6 +26,7 @@ use tokio_rustls::TlsAcceptor;
 use tower::{util::BoxCloneService, ServiceBuilder};
 
 use crate::{
+    context::{layer::AddPyContextLayer, PyContext},
     tls::{listener::Listener as TlsListener, PyTlsConfig},
     util::{error::rich_py_err, func_metadata},
     PySocket,
@@ -475,11 +475,10 @@ event_loop.add_signal_handler(signal.SIGINT,
         event_loop: &pyo3::PyAny,
     ) -> pyo3::PyResult<Service> {
         let service = self.build_service(event_loop)?;
-        // Create the `PyState` object from the Python context object.
-        let context = self.context().clone().unwrap_or_else(|| py.None());
+        let context = PyContext::new(self.context().clone().unwrap_or_else(|| py.None()))?;
         let service = ServiceBuilder::new()
             .boxed_clone()
-            .layer(AddExtensionLayer::new(context))
+            .layer(AddPyContextLayer::new(context))
             .service(service);
         Ok(service)
     }

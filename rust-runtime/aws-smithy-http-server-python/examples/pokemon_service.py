@@ -156,7 +156,7 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
         logging.debug("Found valid `application/json` content type")
     else:
         logging.warning(
-            f"Invalid content type {content_type}, dumping headers: {request.headers}"
+            f"Invalid content type {content_type}, dumping headers: {request.headers.items()}"
         )
     return await next(request)
 
