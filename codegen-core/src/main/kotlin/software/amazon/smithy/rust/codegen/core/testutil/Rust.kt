@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import kotlin.io.path.absolutePathString
 
 /**
  * Waiting for Kotlin to stabilize their temp directory functionality
@@ -54,8 +55,14 @@ private fun tempDir(directory: File? = null): File {
  * This workspace significantly improves test performance by sharing dependencies between different tests.
  */
 object TestWorkspace {
-    private val baseDir =
-        System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
+    private val baseDir by lazy {
+        val homeDir = System.getProperty("user.home")
+        if (homeDir != null) {
+            File(Path.of(homeDir, ".smithy-test-workspace").absolutePathString())
+        } else {
+            System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
+        }
+    }
     private val subprojects = mutableListOf<String>()
 
     init {
