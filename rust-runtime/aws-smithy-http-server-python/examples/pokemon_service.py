@@ -202,7 +202,17 @@ def get_pokemon_species(
     input: GetPokemonSpeciesInput, context: Context
 ) -> GetPokemonSpeciesOutput:
     if context.lambda_ctx is not None:
-        logging.debug("Lambda Context: %s", context.lambda_ctx)
+        logging.debug(
+            "Lambda Context: %s",
+            dict(
+                request_id=context.lambda_ctx.request_id,
+                deadline=context.lambda_ctx.deadline,
+                invoked_function_arn=context.lambda_ctx.invoked_function_arn,
+                function_name=context.lambda_ctx.env_config.function_name,
+                memory=context.lambda_ctx.env_config.memory,
+                version=context.lambda_ctx.env_config.version,
+            ),
+        )
     context.increment_calls_count()
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:
