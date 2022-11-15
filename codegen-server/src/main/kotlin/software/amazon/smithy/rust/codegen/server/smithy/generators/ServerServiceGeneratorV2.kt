@@ -149,6 +149,7 @@ class ServerServiceGeneratorV2(
 
     private fun buildMethod(): Writable = writable {
         val missingOperationsVariableName = "missing_operation_names"
+        val expectMessageVariableName = "unexpected_error_msg"
 
         val nullabilityChecks = writable {
             for (operationShape in operations) {
@@ -169,7 +170,7 @@ class ServerServiceGeneratorV2(
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
                 rust(
                     """
-                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect("this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues")),
+                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
                     """,
                 )
             }
@@ -190,6 +191,7 @@ class ServerServiceGeneratorV2(
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
+                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
                 Ok($serviceName {
