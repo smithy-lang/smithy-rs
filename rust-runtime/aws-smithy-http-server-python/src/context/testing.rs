@@ -17,6 +17,7 @@ use super::{PyContext, PyLambdaContext};
 pub fn get_context(code: &str) -> PyContext {
     let inner = Python::with_gil(|py| {
         let globals = PyModule::import(py, "__main__")?.dict();
+        globals.set_item("typing", py.import("typing")?)?;
         globals.set_item("LambdaContext", py.get_type::<PyLambdaContext>())?;
         let locals = PyDict::new(py);
         py.run(code, Some(globals), Some(locals))?;

@@ -92,7 +92,7 @@ mod tests {
             r#"
 class Context:
     counter: int = 42
-    lambda_ctx: LambdaContext = None
+    lambda_ctx: typing.Optional[LambdaContext] = None
 
 ctx = Context()
 "#,
