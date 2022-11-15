@@ -34,7 +34,8 @@ once_cell = "1.13"
 regex = "1.5.5"
 serde_urlencoded = "0.7"
 strum_macros = "0.24"
-thiserror = "1"
+# TODO Investigate.
+thiserror = "<=1.0.36"
 tracing = "0.1.35"
 tokio = { version = "1.8.4", features = ["full"] }
 tower = { version = "0.4.11", features = ["util", "make"], default-features = false }

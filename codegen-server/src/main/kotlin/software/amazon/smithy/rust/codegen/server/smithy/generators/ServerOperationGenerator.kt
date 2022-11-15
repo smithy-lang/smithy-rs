@@ -38,7 +38,8 @@ class ServerOperationGenerator(
         if (operation.errors.isEmpty()) {
             rust("std::convert::Infallible")
         } else {
-            rust("crate::error::${operationName}Error")
+            // Name comes from [ServerCombinedErrorGenerator].
+            rust("crate::error::${symbolProvider.toSymbol(operation).name}Error")
         }
     }
 

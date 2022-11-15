@@ -5,6 +5,7 @@ namespace com.amazonaws.simple
 use aws.protocols#restJson1
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 @restJson1
 @title("SimpleService")
@@ -74,7 +75,7 @@ resource Service {
 operation RegisterService {
     input: RegisterServiceInputRequest,
     output: RegisterServiceOutputResponse,
-    errors: [ResourceAlreadyExists]
+    errors: [ResourceAlreadyExists, ValidationException]
 }
 
 @documentation("Service register input structure")
@@ -116,6 +117,7 @@ structure HealthcheckOutputResponse {
 operation StoreServiceBlob {
     input: StoreServiceBlobInput,
     output: StoreServiceBlobOutput
+    errors: [ValidationException]
 }
 
 @documentation("Store a blob for a service id input structure")
