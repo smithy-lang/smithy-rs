@@ -108,12 +108,18 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// ```
 pub struct PluginPipeline<P>(P);
 
+impl Default for PluginPipeline<IdentityPlugin> {
+    fn default() -> Self {
+        Self(IdentityPlugin)
+    }
+}
+
 impl PluginPipeline<IdentityPlugin> {
     /// Create an empty [`PluginPipeline`].
     ///
     /// You can use [`PluginPipeline::push`] to add plugins to it.
     pub fn new() -> Self {
-        Self(IdentityPlugin)
+        Self::default()
     }
 }
 
