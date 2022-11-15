@@ -242,7 +242,7 @@ open class EnumGenerator(
     }
 
     /**
-     * Manually implement the Debug trait for the enum if marked as sensitive
+     * Manually implement the `Debug` trait for the enum if marked as sensitive.
      *
      * It prints the redacted text regardless of the variant it is asked to print.
      */
