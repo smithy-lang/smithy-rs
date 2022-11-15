@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Error types for [`ImdsClient`](crate::imds::client::ImdsClient)
+//! Error types for [`ImdsClient`](crate::imds::client::Client)
 
 use crate::profile::credentials::ProfileFileError;
 use aws_smithy_client::SdkError;
@@ -61,7 +61,7 @@ pub enum ImdsError {
     /// An IMDSv2 Token could not be loaded
     ///
     /// Requests to IMDS must be accompanied by a token obtained via a `PUT` request. This is handled
-    /// transparently by the [`Client`].
+    /// transparently by the [`Client`](crate::imds::client::Client).
     FailedToLoadToken(FailedToLoadToken),
 
     /// An error response was returned from IMDS
