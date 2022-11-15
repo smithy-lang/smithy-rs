@@ -109,12 +109,27 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 pub struct PluginPipeline<P>(P);
 
 impl PluginPipeline<IdentityPlugin> {
+    /// Create an empty [`PluginPipeline`].
+    ///
+    /// You can use [`PluginPipeline::push`] to add plugins to it.
     pub fn new() -> Self {
         Self(IdentityPlugin)
     }
 }
 
 impl<P> PluginPipeline<P> {
+    /// Apply a new plugin after the ones that have already been registered.
+    ///
+    /// ```rust
+    /// use aws_smithy_http_server::plugin::PluginPipeline;
+    /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+    /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
+    ///
+    /// let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
+    /// ```
+    ///
+    /// Plugins are applied in the order they are registered.
+    /// In our example above, `LoggingPlugin` is applied first, while `MetricsPlugin` is applied last.
     pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<P, NewPlugin>> {
         PluginPipeline(PluginStack::new(self.0, new_plugin))
     }
