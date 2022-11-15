@@ -59,7 +59,8 @@ async fn main() {
         .capture_pokemon(capture_pokemon)
         .do_nothing(do_nothing)
         .check_health(check_health)
-        .build();
+        .build()
+        .expect("failed to build an instance of PokemonService");
 
     // Start the [`hyper::Server`].
     let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
