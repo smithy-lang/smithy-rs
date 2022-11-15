@@ -55,6 +55,7 @@ class ServerOperationGenerator(
 
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
                 const NAME: &'static str = "${operationId.toString().replace("#", "##")}";
+                const UNIFORM_NAME: &'static str = "${operationId.toString().replace("#", ".")}";
 
                 type Input = crate::input::${operationName}Input;
                 type Output = crate::output::${operationName}Output;

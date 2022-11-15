@@ -8,9 +8,11 @@ use super::{Handler, IntoService, Normalize, Operation, OperationService};
 /// Models the [Smithy Operation shape].
 ///
 /// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
-pub trait OperationShape {
+pub trait OperationShape: Sealed {
     /// The name of the operation.
     const NAME: &'static str;
+    /// The name of the operation, with `#` replaced by `.`.
+    const UNIFORM_NAME: &'static str;
 
     /// The operation input.
     type Input;
@@ -43,3 +45,6 @@ pub trait OperationShapeExt: OperationShape {
 }
 
 impl<S> OperationShapeExt for S where S: OperationShape {}
+
+#[doc(hidden)]
+pub trait Sealed {}
