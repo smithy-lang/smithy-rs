@@ -100,7 +100,7 @@ class ServerAwsJsonProtocol(
         fun builderSymbol(shape: StructureShape): Symbol =
             shape.serverBuilderSymbol(serverCodegenContext)
         fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
-            if (shape.canReachConstrainedShape(codegenContext.model, symbolProvider)) {
+            if (shape.canReachConstrainedShape(codegenContext.model, serverCodegenContext.symbolProvider)) {
                 ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
             } else {
                 ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
