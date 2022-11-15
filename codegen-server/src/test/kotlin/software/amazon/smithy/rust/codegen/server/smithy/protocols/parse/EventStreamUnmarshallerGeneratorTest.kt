@@ -276,7 +276,9 @@ class EventStreamUnmarshallerGeneratorTest {
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     match expect_error(result.unwrap())$kindSuffix {
                         TestStreamErrorKind::Unhandled(err) => {
-                            assert!(format!("{}", err).contains("message: \"unmodeled error\""));
+                            let message = format!("{}", aws_smithy_types::error::display::DisplayErrorContext(&err));
+                            let expected = "message: \"unmodeled error\"";
+                            assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");
                         }
                         kind => panic!("expected generic error, but got {:?}", kind),
                     }

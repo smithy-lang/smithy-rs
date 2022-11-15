@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 class InstantiatorTest {
     private val model = """
         namespace com.test
-        
+
         @documentation("this documents the shape")
         structure MyStruct {
            foo: String,
@@ -137,8 +137,8 @@ class InstantiatorTest {
                 }
                 rust(
                     """
-                   assert_eq!(result.bar, 10); 
-                   assert_eq!(result.foo.unwrap(), "hello");
+                    assert_eq!(result.bar, 10);
+                    assert_eq!(result.foo.unwrap(), "hello");
                     """,
                 )
             }

@@ -107,7 +107,7 @@ class PythonApplicationGenerator(
             ##[derive(Debug)]
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
-                middlewares: #{SmithyPython}::PyMiddlewares,
+                middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
@@ -141,7 +141,7 @@ class PythonApplicationGenerator(
                 fn default() -> Self {
                     Self {
                         handlers: Default::default(),
-                        middlewares: #{SmithyPython}::PyMiddlewares::new::<#{Protocol}>(vec![]),
+                        middlewares: vec![],
                         context: None,
                         workers: #{parking_lot}::Mutex::new(vec![]),
                     }
@@ -171,9 +171,6 @@ class PythonApplicationGenerator(
                 fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
                     &mut self.handlers
                 }
-                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
-                    &mut self.middlewares
-                }
                 """,
                 *codegenScope,
             )
@@ -182,8 +179,8 @@ class PythonApplicationGenerator(
                 """
                 fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
                     #{tower}::util::BoxCloneService<
-                        #{http}::Request<#{SmithyServer}::body::Body>, 
-                        #{http}::Response<#{SmithyServer}::body::BoxBody>, 
+                        #{http}::Request<#{SmithyServer}::body::Body>,
+                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
                         std::convert::Infallible
                     >
                 >
@@ -212,13 +209,22 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let middleware_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                    let service = #{tower}::ServiceBuilder::new()
-                        .boxed_clone()
-                        .layer(
-                            #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(self.middlewares.clone(), middleware_locals),
-                        )
-                        .service(builder.build());
+                    let mut service = #{tower}::util::BoxCloneService::new(builder.build());
+
+                    {
+                        use #{tower}::Layer;
+                        #{tracing}::trace!("adding middlewares to rust python router");
+                        let mut middlewares = self.middlewares.clone();
+                        // Reverse the middlewares, so they run with same order as they defined
+                        middlewares.reverse();
+                        for handler in middlewares {
+                            #{tracing}::trace!(name = &handler.name, "adding python middleware");
+                            let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                            let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
+                            service = #{tower}::util::BoxCloneService::new(layer.layer(service));
+                        }
+                    }
+
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
@@ -248,11 +254,17 @@ class PythonApplicationGenerator(
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
                    self.context = Some(context);
                 }
-                /// Register a request middleware function that will be run inside a Tower layer, without cloning the body.
+                /// Register a Python function to be executed inside a Tower middleware layer.
                 ##[pyo3(text_signature = "(${'$'}self, func)")]
-                pub fn request_middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                    use #{SmithyPython}::PyApp;
-                    self.register_middleware(py, func, #{SmithyPython}::PyMiddlewareType::Request)
+                pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    let handler = #{SmithyPython}::PyMiddlewareHandler::new(py, func)?;
+                    #{tracing}::trace!(
+                        name = &handler.name,
+                        is_coroutine = handler.is_coroutine,
+                        "registering middleware function",
+                    );
+                    self.middlewares.push(handler);
+                    Ok(())
                 }
                 /// Main entrypoint: start the server on multiple workers.
                 ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]

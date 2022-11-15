@@ -34,7 +34,7 @@ impl PySocket {
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
         let (domain, ip_version) = PySocket::socket_domain(address);
-        tracing::info!("Shared socket listening on {address}, IP version: {ip_version}");
+        tracing::trace!(address = %address, ip_version, "shared socket listening");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         // Set value for the `SO_REUSEPORT` and `SO_REUSEADDR` options on this socket.
         // This indicates that further calls to `bind` may allow reuse of local

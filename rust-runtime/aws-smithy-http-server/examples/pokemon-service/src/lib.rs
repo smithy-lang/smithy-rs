@@ -176,7 +176,7 @@ pub async fn get_pokemon_species(
     }
 }
 
-/// Retrieves the users storage.
+/// Retrieves the user's storage.
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,

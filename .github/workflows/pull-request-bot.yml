@@ -28,7 +28,7 @@ concurrency:
 
 env:
   java_version: 11
-  rust_version: 1.62.0
+  rust_version: 1.62.1
   rust_toolchain_components: clippy,rustfmt
   apt_dependencies: libssl-dev gnuplot jq
 
@@ -46,7 +46,7 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         path: smithy-rs
     - name: Generate diff
@@ -54,7 +54,7 @@ jobs:
       with:
         action: generate-codegen-diff
         action-arguments: ${{ inputs.base_revision }}
-    - uses: aws-actions/configure-aws-credentials@v1
+    - uses: aws-actions/configure-aws-credentials@v1-node16
       name: Acquire credentials for uploading to S3
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
@@ -80,8 +80,8 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-preview.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/cache@v2
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
       name: Gradle Cache
       with:
         path: |
@@ -92,13 +92,14 @@ jobs:
           ${{ runner.os }}-gradle-
       # JDK is needed to generate code
     - name: Set up JDK
-      uses: actions/setup-java@v1
+      uses: actions/setup-java@v3
       with:
+        distribution: corretto
+        java-package: jdk
         java-version: ${{ env.java_version }}
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
-        default: true
     - name: Generate doc preview
       id: generate-preview
       # Only generate three of the smallest services since the doc build can be very large. STS and SSO must be
@@ -122,8 +123,8 @@ jobs:
         popd
         ./tools/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
-        echo '::set-output name=bot-message::A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.'
-    - uses: aws-actions/configure-aws-credentials@v1
+        echo 'bot-message=A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.' >> "${GITHUB_OUTPUT}"
+    - uses: aws-actions/configure-aws-credentials@v1-node16
       name: Acquire credentials for uploading to S3
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
@@ -153,9 +154,9 @@ jobs:
       id: bot-messages
       run: |
         set -eux
-        echo ::set-output name=codegen-diff::"$(cat ./bot-message-codegen-diff)"
+        echo "codegen-diff=$(cat ./bot-message-codegen-diff)" >> "${GITHUB_OUTPUT}"
     - name: Post bot comment
-      uses: actions/github-script@v5
+      uses: actions/github-script@v6
       with:
         script: |
           await github.rest.issues.createComment({
