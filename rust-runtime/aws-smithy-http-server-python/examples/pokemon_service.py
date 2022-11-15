@@ -3,43 +3,52 @@
 #  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #  SPDX-License-Identifier: Apache-2.0
 
-import itertools
 import logging
 import random
 from threading import Lock
 from dataclasses import dataclass
-from typing import List, Optional
-
-import aiohttp
+from typing import List, Optional, Callable, Awaitable
 
 from libpokemon_service_server_sdk import App
-from libpokemon_service_server_sdk.error import ResourceNotFoundException
-from libpokemon_service_server_sdk.input import (
-    DoNothingInput, GetPokemonSpeciesInput, GetServerStatisticsInput,
-    CheckHealthInput, StreamPokemonRadioInput)
-from libpokemon_service_server_sdk.logging import TracingHandler
-from libpokemon_service_server_sdk.middleware import (MiddlewareException,
-                                                      Request)
-from libpokemon_service_server_sdk.model import FlavorText, Language
-from libpokemon_service_server_sdk.output import (
-    DoNothingOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput,
-    CheckHealthOutput, StreamPokemonRadioOutput)
-from libpokemon_service_server_sdk.types import ByteStream
+from libpokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
+from libpokemon_service_server_sdk.input import (  # type: ignore
+    DoNothingInput,
+    GetPokemonSpeciesInput,
+    GetServerStatisticsInput,
+    CheckHealthInput,
+    StreamPokemonRadioInput,
+)
+from libpokemon_service_server_sdk.logging import TracingHandler  # type: ignore
+from libpokemon_service_server_sdk.middleware import (  # type: ignore
+    MiddlewareException,
+    Response,
+    Request,
+)
+from libpokemon_service_server_sdk.model import FlavorText, Language  # type: ignore
+from libpokemon_service_server_sdk.output import (  # type: ignore
+    DoNothingOutput,
+    GetPokemonSpeciesOutput,
+    GetServerStatisticsOutput,
+    CheckHealthOutput,
+    StreamPokemonRadioOutput,
+)
+from libpokemon_service_server_sdk.types import ByteStream  # type: ignore
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.
 logging.basicConfig(handlers=[TracingHandler(level=logging.DEBUG).handler()])
 
+
 class SafeCounter:
-    def __init__(self):
+    def __init__(self) -> None:
         self._val = 0
         self._lock = Lock()
 
-    def increment(self):
+    def increment(self) -> None:
         with self._lock:
             self._val += 1
 
-    def value(self):
+    def value(self) -> int:
         with self._lock:
             return self._val
 
@@ -63,9 +72,9 @@ class SafeCounter:
 #
 # Synchronization:
 #   Instance of `Context` class will be cloned for every worker and all state kept in `Context`
-#   will be specific to that process. There is no protection provided by default, 
-#   it is up to you to have synchronization between processes. 
-#   If you really want to share state between different processes you need to use `multiprocessing` primitives: 
+#   will be specific to that process. There is no protection provided by default,
+#   it is up to you to have synchronization between processes.
+#   If you really want to share state between different processes you need to use `multiprocessing` primitives:
 #   https://docs.python.org/3/library/multiprocessing.html#sharing-state-between-processes
 @dataclass
 class Context:
@@ -124,49 +133,51 @@ app.context(Context())
 # Middleware
 ############################################################
 # Middlewares are sync or async function decorated by `@app.middleware`.
-# They are executed in order and take as input the HTTP request object.
-# A middleware can return multiple values, following these rules:
-# * Middleware not returning will let the execution continue without
-#   changing the original request.
-# * Middleware returning a modified Request will update the original
-#   request before continuing the execution.
-# * Middleware returning a Response will immediately terminate the request
-#   handling and return the response constructed from Python.
-# * Middleware raising MiddlewareException will immediately terminate the
-#   request handling and return a protocol specific error, with the option of
-#   setting the HTTP return code.
-# * Middleware raising any other exception will immediately terminate the
-#   request handling and return a protocol specific error, with HTTP status
-#   code 500.
-@app.request_middleware
-def check_content_type_header(request: Request):
-    content_type = request.get_header("content-type")
+# They are executed in order and take as input the HTTP request object and
+# the handler or the next middleware in the stack.
+# A middleware should return a `Response`, either by calling `next` with `Request`
+# to get `Response` from the handler or by constructing `Response` by itself.
+# It can also modify the `Request` before calling `next` or it can also modify
+# the `Response` returned by the handler.
+# It can also raise an `MiddlewareException` with custom error message and HTTP status code,
+# any other raised exceptions will cause an internal server error response to be returned.
+
+# Next is either the next middleware in the stack or the handler.
+Next = Callable[[Request], Awaitable[Response]]
+
+# This middleware checks the `Content-Type` from the request header,
+# logs some information depending on that and then calls `next`.
+@app.middleware
+async def check_content_type_header(request: Request, next: Next) -> Response:
+    content_type = request.headers.get("content-type")
     if content_type == "application/json":
         logging.debug("Found valid `application/json` content type")
     else:
         logging.warning(
-            f"Invalid content type {content_type}, dumping headers: {request.headers()}"
+            f"Invalid content type {content_type}, dumping headers: {request.headers}"
         )
+    return await next(request)
 
 
 # This middleware adds a new header called `x-amzn-answer` to the
 # request. We expect to see this header to be populated in the next
 # middleware.
-@app.request_middleware
-def add_x_amzn_answer_header(request: Request):
-    request.set_header("x-amzn-answer", "42")
+@app.middleware
+async def add_x_amzn_answer_header(request: Request, next: Next) -> Response:
+    request.headers["x-amzn-answer"] = "42"
     logging.debug("Setting `x-amzn-answer` header to 42")
-    return request
+    return await next(request)
 
 
 # This middleware checks if the header `x-amzn-answer` is correctly set
 # to 42, otherwise it returns an exception with a set status code.
-@app.request_middleware
-async def check_x_amzn_answer_header(request: Request):
+@app.middleware
+async def check_x_amzn_answer_header(request: Request, next: Next) -> Response:
     # Check that `x-amzn-answer` is 42.
-    if request.get_header("x-amzn-answer") != "42":
+    if request.headers.get("x-amzn-answer") != "42":
         # Return an HTTP 401 Unauthorized if the content type is not JSON.
         raise MiddlewareException("Invalid answer", 401)
+    return await next(request)
 
 
 ###########################################################
@@ -216,7 +227,11 @@ def check_health(_: CheckHealthInput) -> CheckHealthOutput:
 
 # Stream a random Pokémon song.
 @app.stream_pokemon_radio
-async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context):
+async def stream_pokemon_radio(
+    _: StreamPokemonRadioInput, context: Context
+) -> StreamPokemonRadioOutput:
+    import aiohttp
+
     radio_url = context.get_random_radio_stream()
     logging.info("Random radio URL for this stream is %s", radio_url)
     async with aiohttp.ClientSession() as session:
@@ -229,7 +244,9 @@ async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context):
 ###########################################################
 # Run the server.
 ###########################################################
-def main():
+def main() -> None:
     app.run(workers=1)
 
-main()
+
+if __name__ == "__main__":
+    main()

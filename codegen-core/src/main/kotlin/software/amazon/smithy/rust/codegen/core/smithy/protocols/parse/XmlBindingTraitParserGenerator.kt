@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -41,9 +42,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -71,6 +71,7 @@ data class OperationWrapperContext(
 class XmlBindingTraitParserGenerator(
     codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
+    private val builderSymbol: (shape: StructureShape) -> Symbol,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
 
@@ -187,7 +188,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                outputShape.builderSymbol(symbolProvider),
+                builderSymbol(outputShape),
                 xmlError,
             ) {
                 rustTemplate(
@@ -220,7 +221,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                errorShape.builderSymbol(symbolProvider),
+                builderSymbol(errorShape),
                 xmlError,
             ) {
                 val members = errorShape.errorXmlMembers()
@@ -254,7 +255,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                inputShape.builderSymbol(symbolProvider),
+                builderSymbol(inputShape),
                 xmlError,
             ) {
                 rustTemplate(
@@ -476,7 +477,7 @@ class XmlBindingTraitParserGenerator(
                     rust("let _ = decoder;")
                 }
                 withBlock("Ok(builder.build()", ")") {
-                    if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+                    if (BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
                         // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
                         // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
                         // (because they're inputs, only outputs will be parsed!)

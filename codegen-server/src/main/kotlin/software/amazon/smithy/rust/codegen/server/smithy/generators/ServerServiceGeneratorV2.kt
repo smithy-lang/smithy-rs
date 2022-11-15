@@ -45,7 +45,6 @@ class ServerServiceGeneratorV2(
     private val builderName = "${serviceName}Builder"
     private val builderPluginGenericTypeName = "Plugin"
     private val builderBodyGenericTypeName = "Body"
-    private val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
@@ -69,9 +68,8 @@ class ServerServiceGeneratorV2(
     private val requestSpecsModuleName = "request_specs"
 
     /** Associate each operation with a function that returns its request spec. */
-    private val requestSpecMap: HashMap<OperationShape, Pair<String, Writable>> by lazy {
-        val map = HashMap<OperationShape, Pair<String, Writable>>()
-        for (operationShape in operations) {
+    private val requestSpecMap: Map<OperationShape, Pair<String, Writable>> =
+        operations.associateWith { operationShape ->
             val operationName = symbolProvider.toSymbol(operationShape).name
             val spec = protocol.serverRouterRequestSpec(
                 operationShape,
@@ -91,10 +89,8 @@ class ServerServiceGeneratorV2(
                     "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.member("routing::request_spec")),
                 )
             }
-            map[operationShape] = Pair(functionName, functionBody)
+            Pair(functionName, functionBody)
         }
-        map
-    }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
@@ -153,18 +149,18 @@ class ServerServiceGeneratorV2(
 
     private fun buildMethod(): Writable = writable {
         val missingOperationsVariableName = "missing_operation_names"
+        val expectMessageVariableName = "unexpected_error_msg"
 
         val nullabilityChecks = writable {
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
                 val operationZstTypeName = operationStructNames[operationShape]!!
-                rustTemplate(
+                rust(
                     """
                     if self.$fieldName.is_none() {
                         $missingOperationsVariableName.insert(crate::operation_shape::$operationZstTypeName::NAME, ".$fieldName()");
                     }
                     """,
-                    "SmithyHttpServer" to smithyHttpServer,
                 )
             }
         }
@@ -172,9 +168,9 @@ class ServerServiceGeneratorV2(
             for (operationShape in operations) {
                 val fieldName = builderFieldNames[operationShape]!!
                 val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                rustTemplate(
+                rust(
                     """
-                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.unwrap()),
+                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
                     """,
                 )
             }
@@ -195,6 +191,7 @@ class ServerServiceGeneratorV2(
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
+                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
                 Ok($serviceName {
@@ -356,6 +353,11 @@ class ServerServiceGeneratorV2(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
+                /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::routing::into_make_service_with_connect_info::ConnectInfo).
+                pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
+                    #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
+                }
+
                 /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                 pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
                 where
@@ -409,7 +411,7 @@ class ServerServiceGeneratorV2(
     }
 
     private fun missingOperationsError(): Writable = writable {
-        rustTemplate(
+        rust(
             """
             ##[derive(Debug)]
             pub struct MissingOperationsError {

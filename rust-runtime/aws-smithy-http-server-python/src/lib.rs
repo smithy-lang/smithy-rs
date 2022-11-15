@@ -17,19 +17,20 @@ pub mod middleware;
 mod server;
 mod socket;
 pub mod types;
+mod util;
 
 #[doc(inline)]
 pub use error::{PyError, PyMiddlewareException};
 #[doc(inline)]
 pub use logging::{py_tracing_event, PyTracingHandler};
 #[doc(inline)]
-pub use middleware::{
-    PyHttpVersion, PyMiddlewareLayer, PyMiddlewareType, PyMiddlewares, PyRequest, PyResponse,
-};
+pub use middleware::{PyMiddlewareHandler, PyMiddlewareLayer, PyRequest, PyResponse};
 #[doc(inline)]
 pub use server::{PyApp, PyHandler};
 #[doc(inline)]
 pub use socket::PySocket;
+#[doc(inline)]
+pub use util::error::{rich_py_err, RichPyErr};
 
 #[cfg(test)]
 mod tests {
