@@ -1251,7 +1251,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::error::DeserializeError")
             }
             RestXmlTrait.ID -> {
-                CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlError")
+                CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlDecodeError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")
