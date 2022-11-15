@@ -20,14 +20,18 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 ///
-/// let pipeline = PluginPipeline::empty().push(LoggingPlugin).push(MetricsPlugin);
+/// let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
 /// ```
 ///
 /// ## Wrapping the current plugin pipeline
 ///
 /// From time to time, you might have a need to transform the entire pipeline that has been built
-/// so far - e.g. you only want to apply those plugins for a specified operation.
-/// You can use the [`map`](PluginPipeline::map) method to grab the current pipeline and transform it:
+/// so far - e.g. you only want to apply those plugins for a specific operation.
+///
+/// `PluginPipeline` is itself a [`Plugin`]: you can apply any transformation that expects a
+/// [`Plugin`] to an entire pipeline. In this case, we want to use
+/// [`filter_by_operation_name`](crate::plugin::filter_by_operation_name) to limit the scope of
+/// the logging and metrics plugins to the `CheckHealth` operation:
 ///
 /// ```rust
 /// use aws_smithy_http_server::plugin::{filter_by_operation_name, PluginPipeline};
@@ -37,12 +41,15 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # struct CheckHealth;
 /// # impl CheckHealth { const NAME: &'static str = "MyName"; }
 ///
-/// let pipeline = PluginPipeline::new(LoggingPlugin)
-///     .push(MetricsPlugin)
-///     .map(|current_pipeline| {
-///         // The logging and metrics plugins will not be applied to the `CheckHealth` operation.
-///         filter_by_operation_name(current_pipeline, |name| name != CheckHealth::NAME)
-///     })
+/// // The logging and metrics plugins will only be applied to the `CheckHealth` operation.
+/// let operation_specific_pipeline = filter_by_operation_name(
+///     PluginPipeline::new()
+///         .push(LoggingPlugin)
+///         .push(MetricsPlugin),
+///     |name| name == CheckHealth::NAME
+/// );
+/// let pipeline = PluginPipeline::new()
+///     .push(operation_specific_pipeline)
 ///     // The auth plugin will be applied to all operations
 ///     .push(AuthPlugin);
 /// ```
@@ -52,21 +59,22 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// `PluginPipeline` is a good way to bundle together multiple plugins, ensuring they are all
 /// registered in the correct order.
 ///
-/// You can use the [`concat`](PluginPipeline::concat) to append, at once, all the plugins
-/// in another pipeline to the current pipeline:
+/// Since `PluginPipeline` is itself a [`Plugin`], you can use the [`push`](PluginPipeline::push) to
+/// append, at once, all the plugins in another pipeline to the current pipeline:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+/// use aws_smithy_http_server::plugin::{IdentityPlugin, PluginPipeline, PluginStack};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 ///
-/// pub fn get_bundled_pipeline() -> PluginPipeline<PluginStack<LoggingPlugin, MetricsPlugin>> {
-///     PluginPipeline::new(LoggingPlugin).push(MetricsPlugin)
+/// pub fn get_bundled_pipeline() -> PluginPipeline<PluginStack<PluginStack<IdentityPlugin, LoggingPlugin>, MetricsPlugin>> {
+///     PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin)
 /// }
 ///
-/// let pipeline = PluginPipeline::new(AuthPlugin)
-///     .append(get_bundled_pipeline());
+/// let pipeline = PluginPipeline::new()
+///     .push(AuthPlugin)
+///     .push(get_bundled_pipeline());
 /// ```
 ///
 /// ## Providing custom methods on `PluginPipeline`
@@ -90,43 +98,22 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 ///     }
 /// }
 ///
-/// let pipeline = PluginPipeline::new(LoggingPlugin)
+/// let pipeline = PluginPipeline::new()
+///     .push(LoggingPlugin)
 ///     // Our custom method!
 ///     .with_auth();
 /// ```
 pub struct PluginPipeline<P>(P);
 
 impl PluginPipeline<IdentityPlugin> {
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         Self(IdentityPlugin)
     }
 }
 
 impl<P> PluginPipeline<P> {
-    pub fn new(new_plugin: P) -> Self {
-        Self(new_plugin)
-    }
-
     pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<P, NewPlugin>> {
         PluginPipeline(PluginStack::new(self.0, new_plugin))
-    }
-
-    pub fn append<OtherPlugin>(
-        self,
-        other_pipeline: PluginPipeline<OtherPlugin>,
-    ) -> PluginPipeline<PluginStack<P, OtherPlugin>> {
-        PluginPipeline(PluginStack::new(self.0, other_pipeline.0))
-    }
-
-    pub fn map<NewPlugin, F>(self, f: F) -> PluginPipeline<NewPlugin>
-    where
-        F: FnOnce(P) -> NewPlugin,
-    {
-        PluginPipeline(f(self.0))
-    }
-
-    pub fn into_inner(self) -> P {
-        self.0
     }
 }
 
