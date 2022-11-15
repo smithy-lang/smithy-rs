@@ -242,7 +242,8 @@ impl Error for EcsConfigurationError {
         match &self {
             EcsConfigurationError::InvalidRelativeUri { err, .. } => Some(err),
             EcsConfigurationError::InvalidFullUri { err, .. } => Some(err),
-            _ => None,
+            EcsConfigurationError::InvalidAuthToken { err, .. } => Some(err),
+            EcsConfigurationError::NotConfigured => None,
         }
     }
 }
