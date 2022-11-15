@@ -24,6 +24,14 @@ pub struct Error {
     kind: ErrorKind,
 }
 
+impl Error {
+    fn out_of_range(source: impl Into<Box<dyn StdError + Send + Sync + 'static>>) -> Self {
+        Self {
+            kind: ErrorKind::OutOfRange(source.into()),
+        }
+    }
+}
+
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match &self.kind {
@@ -109,7 +117,7 @@ pub trait DateTimeExt {
 
     /// Converts a [`DateTime`] to a [`time::OffsetDateTime`].
     ///
-    /// Returns an [`Error::OutOfRange`] if the time is after
+    /// Returns an [`Error`] if the time is after
     /// `9999-12-31T23:59:59.999Z` or before `-9999-01-01T00:00:00.000Z`.
     #[cfg(feature = "convert-time")]
     fn to_time(&self) -> Result<time::OffsetDateTime, Error>;
@@ -123,17 +131,11 @@ impl DateTimeExt for DateTime {
     #[cfg(feature = "convert-chrono")]
     fn to_chrono_utc(&self) -> Result<chrono::DateTime<chrono::Utc>, Error> {
         match chrono::NaiveDateTime::from_timestamp_opt(self.secs(), self.subsec_nanos()) {
-            None => {
-                let err: Box<dyn StdError + Send + Sync + 'static> = format!(
-                    "out-of-range seconds {} or invalid nanoseconds {}",
-                    self.secs(),
-                    self.subsec_nanos()
-                )
-                .into();
-                Err(Error {
-                    kind: ErrorKind::OutOfRange(err),
-                })
-            }
+            None => Err(Error::out_of_range(format!(
+                "out-of-range seconds {} or invalid nanoseconds {}",
+                self.secs(),
+                self.subsec_nanos()
+            ))),
             Some(dt) => Ok(chrono::DateTime::<chrono::Utc>::from_utc(dt, chrono::Utc)),
         }
     }
