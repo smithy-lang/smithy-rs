@@ -532,9 +532,11 @@ class ServerProtocolTestGenerator(
                 // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
                 // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
                 // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
-                "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(${
-                body.replace("\u000c", "\\u{000c}").dq()
-                }.as_bytes()))"
+                //
+                // We also escape to avoid interactions with templating in the case where the body contains `#`.
+                val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
+
+                "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
             } else {
                 "#{SmithyHttpServer}::body::Body::empty()"
             }
