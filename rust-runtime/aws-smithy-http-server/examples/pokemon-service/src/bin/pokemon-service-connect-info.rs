@@ -52,7 +52,7 @@ pub async fn get_storage_with_local_approved(
 async fn main() {
     let args = Args::parse();
     setup_tracing();
-    let app = pokemon_service_server_sdk::service::PokemonService::builder()
+    let app = pokemon_service_server_sdk::service::PokemonService::builder_without_plugins()
         .get_pokemon_species(get_pokemon_species)
         .get_storage(get_storage_with_local_approved)
         .get_server_statistics(get_server_statistics)
