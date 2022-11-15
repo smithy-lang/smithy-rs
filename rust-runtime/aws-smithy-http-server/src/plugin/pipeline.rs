@@ -23,6 +23,9 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
 /// ```
 ///
+/// Plugins are applied in the order they are registered.
+/// In our example above, `LoggingPlugin` is applied first, while `MetricsPlugin` is applied last.
+///
 /// ## Wrapping the current plugin pipeline
 ///
 /// From time to time, you might have a need to transform the entire pipeline that has been built
