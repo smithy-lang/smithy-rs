@@ -492,10 +492,10 @@ class HttpBindingGenerator(
                         """
                         let header_value = $safeName;
                         let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
-                            #{build_error}::InvalidField { 
-                                field: "$memberName", 
+                            #{build_error}::InvalidField {
+                                field: "$memberName",
                                 details: format!(
-                                    "`{}` cannot be used as a header value: {}", 
+                                    "`{}` cannot be used as a header value: {}",
                                     &${memberShape.redactIfNecessary(model, "header_value")},
                                     err,
                                 )
@@ -531,7 +531,7 @@ class HttpBindingGenerator(
                         #{build_error}::InvalidField {
                             field: "$memberName",
                             details: format!(
-                                "`{}` cannot be used as a header value: {}", 
+                                "`{}` cannot be used as a header value: {}",
                                 ${memberShape.redactIfNecessary(model, "v")},
                                 err,
                             )
