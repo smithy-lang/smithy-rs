@@ -97,9 +97,13 @@ impl Display for SigningStageError {
 
 impl Error for SigningStageError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
+        use SigningStageErrorKind as ErrorKind;
         match &self.kind {
-            SigningStageErrorKind::SigningFailure(err) => Some(err),
-            _ => None,
+            ErrorKind::SigningFailure(err) => Some(err),
+            ErrorKind::MissingCredentials
+            | ErrorKind::MissingSigningRegion
+            | ErrorKind::MissingSigningService
+            | ErrorKind::MissingSigningConfig => None,
         }
     }
 }
