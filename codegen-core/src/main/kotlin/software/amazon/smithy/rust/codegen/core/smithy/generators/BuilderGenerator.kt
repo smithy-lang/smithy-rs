@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -28,13 +29,23 @@ import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
+//  Move this entire file, and its tests, to `codegen-client`.
+
+fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
+    structureShape.builderSymbol(symbolProvider)
+}
 
 fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
     val structureSymbol = symbolProvider.toSymbol(this)
@@ -65,6 +76,23 @@ class BuilderGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
 ) {
+    companion object {
+        /**
+         * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
+         * fallible builder to be constructed.
+         */
+        fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
+            // All operation inputs should have fallible builders in case a new required field is added in the future.
+            structureShape.hasTrait<SyntheticInputTrait>() ||
+                structureShape
+                    .members()
+                    .map { symbolProvider.toSymbol(it) }.any {
+                        // If any members are not optional && we can't use a default, we need to
+                        // generate a fallible builder.
+                        !it.isOptional() && !it.canUseDefault()
+                    }
+    }
+
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
@@ -79,7 +107,7 @@ class BuilderGenerator(
     }
 
     private fun renderBuildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
+        val fallibleBuilder = hasFallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
         val returnType = when (fallibleBuilder) {
             true -> "Result<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
