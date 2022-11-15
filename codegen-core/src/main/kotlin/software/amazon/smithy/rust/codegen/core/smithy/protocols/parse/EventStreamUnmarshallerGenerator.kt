@@ -273,7 +273,7 @@ class EventStreamUnmarshallerGenerator(
                         rustTemplate(
                             """
                             std::str::from_utf8(message.payload())
-                                .map_err(|_| #{Error}::Unmarshalling("message payload is not valid UTF-8".into()))?
+                                .map_err(|_| #{Error}::unmarshalling("message payload is not valid UTF-8"))?
                                 .to_owned()
                             """,
                             *codegenScope,
