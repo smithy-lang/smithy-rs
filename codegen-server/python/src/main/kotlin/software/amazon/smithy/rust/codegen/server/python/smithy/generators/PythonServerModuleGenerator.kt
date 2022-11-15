@@ -183,14 +183,14 @@ class PythonServerModuleGenerator(
     private fun RustWriter.renderPyLambdaTypes() {
         rustTemplate(
             """
-            let lambda_ = #{pyo3}::types::PyModule::new(py, "lambda_")?;
-            lambda_.add_class::<#{SmithyPython}::lambda::PyLambdaContext>()?;
+            let aws_lambda = #{pyo3}::types::PyModule::new(py, "aws_lambda")?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyLambdaContext>()?;
             pyo3::py_run!(
                 py,
-                lambda_,
-                "import sys; sys.modules['$libName.lambda_'] = lambda_"
+                aws_lambda,
+                "import sys; sys.modules['$libName.aws_lambda'] = aws_lambda"
             );
-            m.add_submodule(lambda_)?;
+            m.add_submodule(aws_lambda)?;
             """,
             *codegenScope,
         )

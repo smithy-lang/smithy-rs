@@ -12,7 +12,7 @@ from typing import List, Optional, Callable, Awaitable
 
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.tls import TlsConfig  # type: ignore
-from libpokemon_service_server_sdk.lambda_ import LambdaContext  # type: ignore
+from libpokemon_service_server_sdk.aws_lambda import LambdaContext  # type: ignore
 from libpokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
 from libpokemon_service_server_sdk.input import (  # type: ignore
     DoNothingInput,
