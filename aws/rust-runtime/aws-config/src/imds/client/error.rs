@@ -8,7 +8,7 @@
 use crate::profile::credentials::ProfileFileError;
 use aws_smithy_client::SdkError;
 use aws_smithy_http::body::SdkBody;
-use http::uri::InvalidUri;
+use aws_smithy_http::endpoint::error::InvalidEndpointError;
 use std::error::Error;
 use std::fmt;
 
@@ -182,7 +182,7 @@ pub(super) enum BuildErrorKind {
     InvalidProfile(ProfileFileError),
 
     /// The specified endpoint was not a valid URI
-    InvalidEndpointUri(InvalidUri),
+    InvalidEndpointUri(Box<dyn Error + Send + Sync + 'static>),
 }
 
 /// Error constructing IMDSv2 Client
@@ -209,7 +209,7 @@ impl Error for BuildError {
         match &self.kind {
             InvalidEndpointMode(e) => Some(e),
             InvalidProfile(e) => Some(e),
-            InvalidEndpointUri(e) => Some(e),
+            InvalidEndpointUri(e) => Some(e.as_ref()),
         }
     }
 }
@@ -217,6 +217,14 @@ impl Error for BuildError {
 impl From<BuildErrorKind> for BuildError {
     fn from(kind: BuildErrorKind) -> Self {
         Self { kind }
+    }
+}
+
+impl From<InvalidEndpointError> for BuildError {
+    fn from(err: InvalidEndpointError) -> Self {
+        Self {
+            kind: BuildErrorKind::InvalidEndpointUri(err.into()),
+        }
     }
 }
 

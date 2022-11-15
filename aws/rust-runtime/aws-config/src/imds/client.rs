@@ -237,7 +237,10 @@ impl Client {
         let mut base_uri: Uri = path.parse().map_err(|_| {
             ImdsError::unexpected("IMDS path was not a valid URI. Hint: does it begin with `/`?")
         })?;
-        self.inner.endpoint.set_endpoint(&mut base_uri, None);
+        self.inner
+            .endpoint
+            .set_endpoint(&mut base_uri, None)
+            .map_err(ImdsError::unexpected)?;
         let request = http::Request::builder()
             .uri(base_uri)
             .body(SdkBody::empty())
@@ -433,7 +436,7 @@ impl Builder {
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
         let endpoint = endpoint_source.endpoint(self.mode_override).await?;
-        let endpoint = Endpoint::immutable(endpoint);
+        let endpoint = Endpoint::immutable_uri(endpoint)?;
         let retry_config = retry::Config::default()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
         let token_loader = token::TokenMiddleware::new(
@@ -503,9 +506,8 @@ impl EndpointSource {
                     profile.get(profile_keys::ENDPOINT).map(Cow::Borrowed)
                 };
                 if let Some(uri) = uri_override {
-                    return Ok(
-                        Uri::try_from(uri.as_ref()).map_err(BuildErrorKind::InvalidEndpointUri)?
-                    );
+                    return Ok(Uri::try_from(uri.as_ref())
+                        .map_err(|err| BuildErrorKind::InvalidEndpointUri(err.into()))?);
                 }
 
                 // if not, load a endpoint mode from the environment
