@@ -54,6 +54,7 @@ object AwsRuntimeType {
             CargoDependency.SmithyHttpTower(this),
             CargoDependency.SmithyClient(this),
             CargoDependency.Tower,
+            sigAuth(),
             awsHttp(),
             awsEndpoint(),
         ),

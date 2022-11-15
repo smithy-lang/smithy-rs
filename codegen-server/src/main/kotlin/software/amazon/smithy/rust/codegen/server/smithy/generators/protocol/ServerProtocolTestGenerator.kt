@@ -897,17 +897,12 @@ class ServerProtocolTestGenerator(
         // These could be configured via runtime configuration, but since this won't be long-lasting,
         // it makes sense to do the simplest thing for now.
         // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
-        private val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
-        private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
-        private val RestJson = "aws.protocoltests.restjson#RestJson"
-        private val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
-        private val RestXml = "aws.protocoltests.restxml#RestXml"
-        private val AwsQuery = "aws.protocoltests.query#AwsQuery"
-        private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
-        private val ExpectFail = setOf<FailingTest>(
+        private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
+        private const val RestJson = "aws.protocoltests.restjson#RestJson"
+        private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
+        private val ExpectFail: Set<FailingTest> = setOf(
             // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
             FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedMapNullKey", TestType.MalformedRequest),
 
             // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy/issues/1068.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
@@ -921,15 +916,6 @@ class ServerProtocolTestGenerator(
             // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
-
-            // Work in progress PR, see https://github.com/awslabs/smithy-rs/pull/1294.
-            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),
-            FailingTest(
-                RestJson,
-                "RestJsonHeaderMalformedStringInvalidBase64MediaType_case1",
-                TestType.MalformedRequest,
-            ),
 
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
@@ -1073,6 +1059,7 @@ class ServerProtocolTestGenerator(
 
         private fun fixRestJsonSupportsNaNFloatQueryValues(
             testCase: HttpRequestTestCase,
+            @Suppress("UNUSED_PARAMETER")
             operationShape: OperationShape,
         ): HttpRequestTestCase {
             val params = Node.parse(
@@ -1093,6 +1080,7 @@ class ServerProtocolTestGenerator(
 
         private fun fixRestJsonSupportsInfinityFloatQueryValues(
             testCase: HttpRequestTestCase,
+            @Suppress("UNUSED_PARAMETER")
             operationShape: OperationShape,
         ): HttpRequestTestCase =
             testCase.toBuilder().params(
@@ -1112,6 +1100,7 @@ class ServerProtocolTestGenerator(
 
         private fun fixRestJsonSupportsNegativeInfinityFloatQueryValues(
             testCase: HttpRequestTestCase,
+            @Suppress("UNUSED_PARAMETER")
             operationShape: OperationShape,
         ): HttpRequestTestCase =
             testCase.toBuilder().params(
@@ -1131,6 +1120,7 @@ class ServerProtocolTestGenerator(
 
         private fun fixRestJsonAllQueryStringTypes(
             testCase: HttpRequestTestCase,
+            @Suppress("UNUSED_PARAMETER")
             operationShape: OperationShape,
         ): HttpRequestTestCase =
             testCase.toBuilder().params(
@@ -1182,6 +1172,7 @@ class ServerProtocolTestGenerator(
 
         private fun fixRestJsonQueryStringEscaping(
             testCase: HttpRequestTestCase,
+            @Suppress("UNUSED_PARAMETER")
             operationShape: OperationShape,
         ): HttpRequestTestCase =
             testCase.toBuilder().params(

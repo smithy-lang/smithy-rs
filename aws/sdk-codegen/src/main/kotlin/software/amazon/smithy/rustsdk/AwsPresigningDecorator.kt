@@ -262,19 +262,19 @@ class AwsPresignedFluentBuilderMethod(
                 documentPresignedMethod(hasConfigArg = false)
                 rustBlockTemplate(
                     """
-                pub async fn presigned(
-                    self,
-                    presigning_config: #{PresigningConfig},
-                ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
-                """,
+                    pub async fn presigned(
+                        self,
+                        presigning_config: #{PresigningConfig},
+                    ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
+                    """,
                     *codegenScope,
                     "OpError" to section.operationErrorType,
                 ) {
                     rustTemplate(
                         """
-                    let input = self.inner.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?;
-                    input.presigned(&self.handle.conf, presigning_config).await
-                    """,
+                        let input = self.inner.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?;
+                        input.presigned(&self.handle.conf, presigning_config).await
+                        """,
                         *codegenScope,
                     )
                 }
