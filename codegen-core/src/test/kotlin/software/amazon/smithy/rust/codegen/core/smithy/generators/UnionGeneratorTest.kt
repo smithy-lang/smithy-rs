@@ -124,6 +124,17 @@ class UnionGeneratorTest {
         writer.compileAndTest()
     }
 
+    @Test
+    fun `unit types should not appear in generated enum`() {
+        val writer = generateUnion("union MyUnion { a: Unit, b: String }", unknownVariant = true)
+        writer.compileAndTest(
+            """
+            let a = MyUnion::A;
+            assert!(a.as_a() == Ok(()));
+            """,
+        )
+    }
+
     private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion", unknownVariant: Boolean = true): RustWriter {
         val model = "namespace test\n$modelSmithy".asSmithyModel()
         val provider: SymbolProvider = testSymbolProvider(model)
