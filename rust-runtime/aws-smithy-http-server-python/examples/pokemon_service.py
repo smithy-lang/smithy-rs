@@ -82,7 +82,7 @@ class SafeCounter:
 @dataclass
 class Context:
     # Inject Lambda context if service is running on Lambda
-    lambda_ctx: LambdaContext = None
+    lambda_ctx: Optional[LambdaContext] = None
 
     # In our case it simulates an in-memory database containing the description of Pikachu in multiple
     # languages.
