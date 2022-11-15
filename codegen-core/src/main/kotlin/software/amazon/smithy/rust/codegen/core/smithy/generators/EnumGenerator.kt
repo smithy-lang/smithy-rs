@@ -247,12 +247,17 @@ open class EnumGenerator(
      * It prints the redacted text regardless of the variant it is asked to print.
      */
     private fun renderDebugImplForSensitiveEnum() {
-        writer.rustBlock("impl #T for $enumName", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
-                rust("""write!(f, "{}", $REDACTION)""")
+        writer.rustTemplate(
+            """
+            impl #{Debug} for $enumName {
+                fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
+                    write!(f, $REDACTION)
+                }
             }
-        }
-    }
+            """,
+            "Debug" to RuntimeType.Debug,
+            "StdFmt" to RuntimeType.stdfmt,
+        )
 
     protected open fun renderFromForStr() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
