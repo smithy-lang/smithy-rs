@@ -59,4 +59,5 @@ hyper-rustls = { version = "0.23.0", features = ["http2"] }
 # Local paths
 aws-smithy-client = { path = "../../../aws-smithy-client/", features = ["rustls"] }
 aws-smithy-http = { path = "../../../aws-smithy-http/" }
+aws-smithy-types = { path = "../../../aws-smithy-types/" }
 pokemon-service-client = { path = "../pokemon-service-client/" }

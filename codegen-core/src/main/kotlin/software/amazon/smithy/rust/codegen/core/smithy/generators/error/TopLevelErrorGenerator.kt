@@ -107,7 +107,7 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
                 ) {
                     rustBlock("match err") {
                         val operationErrors = errors.map { model.expectShape(it) }
-                        rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
+                        rustBlock("#T::ServiceError(context) => match context.into_err().kind", sdkError) {
                             operationErrors.forEach { errorShape ->
                                 val errSymbol = symbolProvider.toSymbol(errorShape)
                                 rust(

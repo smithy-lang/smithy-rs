@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
@@ -253,17 +254,14 @@ class RequestBindingGenerator(
     private fun RustWriter.serializeLabel(member: MemberShape, label: SmithyPattern.Segment, outputVar: String) {
         val target = model.expectShape(member.target)
         val symbol = symbolProvider.toSymbol(member)
-        val buildError = {
-            OperationBuildError(runtimeConfig).missingField(
-                this,
-                symbolProvider.toMemberName(member),
-                "cannot be empty or unset",
-            )
-        }
+        val buildError = OperationBuildError(runtimeConfig).missingField(
+            symbolProvider.toMemberName(member),
+            "cannot be empty or unset",
+        )
         val input = safeName("input")
         rust("let $input = &_input.${symbolProvider.toMemberName(member)};")
         if (symbol.isOptional()) {
-            rust("let $input = $input.as_ref().ok_or(${buildError()})?;")
+            rustTemplate("let $input = $input.as_ref().ok_or_else(|| #{buildError:W})?;", "buildError" to buildError)
         }
         when {
             target.isStringShape -> {
@@ -289,12 +287,13 @@ class RequestBindingGenerator(
                 )
             }
         }
-        rust(
+        rustTemplate(
             """
             if $outputVar.is_empty() {
-                return Err(${buildError()})
+                return Err(#{buildError:W})
             }
             """,
+            "buildError" to buildError,
         )
     }
     /** End URI generation **/

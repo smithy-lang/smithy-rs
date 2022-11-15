@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -380,8 +381,8 @@ class HttpBindingGenerator(
                     """
                     let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
                         .iter().map(|s|
-                            #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new_with_message("failed to decode base64"))
-                            .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new_with_message("base64 encoded data was not valid utf-8")))
+                            #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new("failed to decode base64"))
+                            .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new("base64 encoded data was not valid utf-8")))
                         ).collect();
                     """,
                     "base_64_decode" to RuntimeType.Base64Decode(runtimeConfig),
@@ -431,7 +432,7 @@ class HttpBindingGenerator(
                     rustTemplate(
                         """
                         if $parsedValue.len() > 1 {
-                            Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
+                            Err(#{header_util}::ParseError::new(format!("expected one item but found {}", $parsedValue.len())))
                         } else {
                             let mut $parsedValue = $parsedValue;
                             Ok($parsedValue.pop())
@@ -540,18 +541,21 @@ class HttpBindingGenerator(
                         """
                         let header_value = $safeName;
                         let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
-                            #{build_error}::InvalidField {
-                                field: "$memberName",
-                                details: format!(
-                                    "`{}` cannot be used as a header value: {}",
-                                    &${memberShape.redactIfNecessary(model, "header_value")},
-                                    err,
-                                )
-                            }
+                            #{invalid_field_error:W}
                         })?;
                         builder = builder.header("${httpBinding.locationName}", header_value);
                         """,
-                        "build_error" to runtimeConfig.operationBuildError(),
+                        "invalid_field_error" to OperationBuildError(runtimeConfig).invalidField(memberName) {
+                            rust(
+                                """
+                                format!(
+                                    "`{}` cannot be used as a header value: {}",
+                                    &${memberShape.redactIfNecessary(model, "header_value")},
+                                    err
+                                )
+                                """,
+                            )
+                        },
                     )
                 }
             }
@@ -577,24 +581,30 @@ class HttpBindingGenerator(
                 for (k, v) in $field {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
-                        #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
+                        #{invalid_header_name:W}
                     })?;
                     let header_value = ${headerFmtFun(this, valueTargetShape, memberShape, "v", isListHeader = false)};
                     let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
-                        #{build_error}::InvalidField {
-                            field: "$memberName",
-                            details: format!(
-                                "`{}` cannot be used as a header value: {}",
-                                ${memberShape.redactIfNecessary(model, "v")},
-                                err,
-                            )
-                        }
+                        #{invalid_header_value:W}
                     })?;
                     builder = builder.header(header_name, header_value);
                 }
 
                 """,
-                "build_error" to runtimeConfig.operationBuildError(),
+                "invalid_header_name" to OperationBuildError(runtimeConfig).invalidField(memberName) {
+                    rust("""format!("`{k}` cannot be used as a header name: {err}")""")
+                },
+                "invalid_header_value" to OperationBuildError(runtimeConfig).invalidField(memberName) {
+                    rust(
+                        """
+                        format!(
+                            "`{}` cannot be used as a header value: {}",
+                            ${memberShape.redactIfNecessary(model, "v")},
+                            err
+                        )
+                        """,
+                    )
+                },
             )
         }
     }
