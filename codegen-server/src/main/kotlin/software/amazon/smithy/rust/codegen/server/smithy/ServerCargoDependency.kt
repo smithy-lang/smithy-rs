@@ -42,7 +42,7 @@ object ServerCargoDependency {
  */
 object ServerInlineDependency {
     fun serverOperationHandler(runtimeConfig: RuntimeConfig): InlineDependency =
-        InlineDependency.forRustFile(
+        InlineDependency.forInlineableRustFile(
             "server_operation_handler_trait",
             ServerCargoDependency.SmithyHttpServer(runtimeConfig),
             CargoDependency.Http,

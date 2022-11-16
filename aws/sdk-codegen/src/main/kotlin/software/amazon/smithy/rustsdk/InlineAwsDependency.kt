@@ -11,5 +11,5 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 
 object InlineAwsDependency {
     fun forRustFile(file: String, visibility: Visibility = Visibility.PRIVATE, vararg additionalDependency: RustDependency): InlineDependency =
-        InlineDependency.Companion.forRustFile(file, "aws-inlineable", visibility, *additionalDependency)
+        InlineDependency.Companion.forInlineableRustFile(file, "aws-inlineable", visibility, *additionalDependency)
 }

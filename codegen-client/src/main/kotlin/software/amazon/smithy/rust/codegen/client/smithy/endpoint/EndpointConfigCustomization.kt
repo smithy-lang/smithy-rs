@@ -22,7 +22,7 @@ class EndpointConfigCustomization(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val endpointsIndex = EndpointRulesetIndex.of(codegenContext.model)
     private val smithyEndpointResolver =
-        CargoDependency.SmithyHttp(runtimeConfig).asType().member("endpoint::ResolveEndpoint")
+        CargoDependency.smithyHttp(runtimeConfig).asType().member("endpoint::ResolveEndpoint")
     private val moduleUseName = codegenContext.moduleUseName()
     private val ruleset = endpointsIndex.endpointRulesForService(codegenContext.serviceShape)!!
 

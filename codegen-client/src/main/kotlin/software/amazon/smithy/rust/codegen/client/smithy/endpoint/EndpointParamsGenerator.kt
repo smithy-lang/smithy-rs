@@ -52,6 +52,12 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functionality")
     .copy(rustMetadata = RustMetadata(additionalAttributes = listOf(Attribute.DocHidden), visibility = Visibility.PUBLIC))
 
+// internals contains the actual resolver function
+val EndpointsImpl = RustModule.private("internals", "Endpoints internals", parent = EndpointsModule)
+
+// stdlib is isolated because it contains code generated names of stdlib functions–we want to ensure we avoid clashing
+val EndpointsLib = RustModule.pubcrate("stdlib", "Endpoints standard library functions", parent = EndpointsModule)
+
 /** Endpoint Parameters generator.
  *
  * This class generates the `Params` struct for an [EndpointRuleset]. The struct has `pub(crate)` fields, a `Builder`,

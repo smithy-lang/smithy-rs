@@ -23,6 +23,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -90,6 +91,11 @@ private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
     trim: Boolean = true,
     f: T.(String) -> U,
 ): U {
+    scope.forEach { (k, v) ->
+        when (v) {
+            is Unit -> PANIC("provided `kotlin.Unit` for $k. This is a bug.")
+        }
+    }
     val contents = transformTemplate(template, scope, trim)
     pushState()
     this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
@@ -569,6 +575,15 @@ class RustWriter private constructor(
 
                 is RustType -> {
                     t.render(fullyQualified = true)
+                }
+
+                is Function<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val func = t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
+                    val innerWriter = RustWriter(filename, namespace, printWarning = false)
+                    func(innerWriter)
+                    innerWriter.dependencies.forEach { addDependency(it) }
+                    return innerWriter.toString().trimEnd()
                 }
 
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")

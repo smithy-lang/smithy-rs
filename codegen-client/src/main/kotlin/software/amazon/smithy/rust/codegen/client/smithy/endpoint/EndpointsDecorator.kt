@@ -33,8 +33,9 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
  *
  * If this resolver does not recognize the value, it MUST return `null`.
  */
-interface RulesEngineBuiltInResolver {
-    fun defaultFor(parameter: Parameter, configRef: String): Writable?
+interface EndpointCustomization {
+    fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable?
+    fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction>
 }
 
 class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
@@ -52,7 +53,7 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         return baseCustomizations + CreateEndpointParams(
             codegenContext,
             operation,
-            codegenContext.rootDecorator.builtInResolvers(codegenContext),
+            codegenContext.rootDecorator.endpointCustomizations(codegenContext),
         )
     }
 
@@ -60,7 +61,10 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + ClientContextDecorator(codegenContext)
+        return baseCustomizations + ClientContextDecorator(codegenContext) + EndpointConfigCustomization(
+            codegenContext,
+            codegenContext.rootDecorator.endpointCustomizations(codegenContext),
+        )
     }
 }
 
@@ -80,7 +84,7 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
 class CreateEndpointParams(
     private val ctx: ClientCodegenContext,
     private val operationShape: OperationShape,
-    private val rulesEngineBuiltInResolvers: List<RulesEngineBuiltInResolver>,
+    private val endpointCustomizations: List<EndpointCustomization>,
 ) :
     OperationCustomization() {
 
@@ -102,7 +106,9 @@ class CreateEndpointParams(
             is OperationSection.MutateInput -> writable {
                 rustTemplate(
                     """
-                    let endpoint_params = #{Params}::builder()#{builderFields:W}.build();
+                    let endpoint_params = #{Params}::builder()#{builderFields:W}.build()
+                        .map_err(|err|#{BuildError}::other(err))?;
+                    let endpoint_result = ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params);
                     """,
                     "builderFields" to builderFields(params, section),
                     *codegenScope,
@@ -115,6 +121,7 @@ class CreateEndpointParams(
                 // this is temporary—in the long term, we will insert the endpoint into the bag directly, but this makes
                 // it testable
                 rustTemplate("${section.request}.properties_mut().insert(endpoint_params);")
+                rustTemplate("${section.request}.properties_mut().insert(endpoint_result);")
             }
 
             else -> emptySection
@@ -126,7 +133,7 @@ class CreateEndpointParams(
         val builtInParams = params.toList().filter { it.isBuiltIn }
         // first load builtins and their defaults
         builtInParams.forEach { param ->
-            val defaultProviders = rulesEngineBuiltInResolvers.mapNotNull { it.defaultFor(param, section.config) }
+            val defaultProviders = endpointCustomizations.mapNotNull { it.builtInDefaultValue(param, section.config) }
             if (defaultProviders.size > 1) {
                 error("Multiple providers provided a value for the builtin $param")
             }

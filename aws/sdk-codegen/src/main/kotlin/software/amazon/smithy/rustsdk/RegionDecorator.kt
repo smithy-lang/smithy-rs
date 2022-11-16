@@ -100,7 +100,7 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
 
-    override fun builtInResolvers(codegenContext: ClientCodegenContext): List<RulesEngineBuiltInResolver> {
+    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<RulesEngineBuiltInResolver> {
         return listOf(
             object : RulesEngineBuiltInResolver {
                 override fun defaultFor(

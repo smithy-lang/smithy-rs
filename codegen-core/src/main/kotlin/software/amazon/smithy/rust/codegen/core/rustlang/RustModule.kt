@@ -25,7 +25,7 @@ sealed class RustModule {
             newModule(name, visibility = Visibility.PUBLIC, documentation = documentation, parent = parent)
 
         /** Creates a new private module */
-        fun private(name: String, documentation: String? = null): LeafModule =
+        fun private(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
             newModule(name, visibility = Visibility.PRIVATE, documentation = documentation)
 
         /* Common modules used across client, server and tests */

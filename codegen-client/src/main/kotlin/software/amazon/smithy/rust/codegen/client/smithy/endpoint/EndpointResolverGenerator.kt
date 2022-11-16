@@ -87,8 +87,8 @@ class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val
     // first, make a custom RustWriter and generate the interior of the resolver into it.
     // next, since we've now captured what runtime functions are required, generate the container
 
-    private val smithyHttpEndpoint = CargoDependency.SmithyHttp(runtimeConfig).asType().member("endpoint")
-    private val smithyTypesEndpoint = CargoDependency.SmithyTypes(runtimeConfig).asType().member("endpoint")
+    private val smithyHttpEndpoint = CargoDependency.smithyHttp(runtimeConfig).asType().member("endpoint")
+    private val smithyTypesEndpoint = CargoDependency.smithyTypes(runtimeConfig).asType().member("endpoint")
     private val codegenScope = arrayOf(
         "endpoint" to smithyHttpEndpoint,
         "SmithyEndpoint" to smithyTypesEndpoint.member("Endpoint"),

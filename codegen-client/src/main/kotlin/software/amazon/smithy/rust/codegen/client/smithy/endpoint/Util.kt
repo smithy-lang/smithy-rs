@@ -10,6 +10,8 @@ import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -23,6 +25,14 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 fun Identifier.rustName(): String {
     return this.toString().stringToRustName()
 }
+
+internal fun endpointsLib(name: String) = InlineDependency.forRustFile(
+    RustModule.pubcrate(
+        name,
+        parent = EndpointsLib,
+    ),
+    "/inlineable/src/endpoint_lib/$name.rs",
+)
 
 private fun String.stringToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
 

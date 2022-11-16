@@ -70,53 +70,44 @@ class InlineDependency(
     fun key() = "${module.fullyQualifiedPath()}::$name"
 
     companion object {
-        private fun forRustFile(
-            name: String,
-            baseDir: String,
-            vararg additionalDependencies: RustDependency,
-        ): InlineDependency = forRustFile(name, baseDir, visibility = Visibility.PRIVATE, *additionalDependencies)
-
         fun forRustFile(
-            name: String,
-            baseDir: String,
-            visibility: Visibility,
+            module: RustModule.LeafModule,
+            resourcePath: String,
             vararg additionalDependencies: RustDependency,
         ): InlineDependency {
-            val module = RustModule.newModule(name, visibility)
-            val filename = if (name.endsWith(".rs")) { name } else { "$name.rs" }
             // The inline crate is loaded as a dependency on the runtime classpath
-            val rustFile = this::class.java.getResource("/$baseDir/src/$filename")
-            check(rustFile != null) { "Rust file /$baseDir/src/$filename was missing from the resource bundle!" }
-            return InlineDependency(name, module, additionalDependencies.toList()) {
+            val rustFile = this::class.java.getResource(resourcePath)
+            check(rustFile != null) { "Rust file $resourcePath was missing from the resource bundle!" }
+            return InlineDependency(module.name, module, additionalDependencies.toList()) {
                 raw(rustFile.readText())
             }
         }
 
-        fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
-            forRustFile(name, "inlineable", *additionalDependencies)
-
-        fun eventStream(runtimeConfig: RuntimeConfig) =
-            forRustFile("event_stream", CargoDependency.smithyEventStream(runtimeConfig))
+        fun forInlineableRustFile(name: String, vararg additionalDependencies: RustDependency) =
+            forRustFile(RustModule.private(name), "/inlineable/src/$name.rs", *additionalDependencies)
 
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
-            forRustFile("json_errors", CargoDependency.Http, CargoDependency.smithyTypes(runtimeConfig))
+            forInlineableRustFile("event_stream", CargoDependency.smithyEventStream(runtimeConfig))
 
         fun idempotencyToken() =
-            forRustFile("idempotency_token", CargoDependency.FastRand)
+            forInlineableRustFile("idempotency_token", CargoDependency.FastRand)
 
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig): InlineDependency =
-            forRustFile("ec2_query_errors", CargoDependency.smithyXml(runtimeConfig))
+            forInlineableRustFile("ec2_query_errors", CargoDependency.smithyXml(runtimeConfig))
 
         fun wrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
-            forRustFile("rest_xml_wrapped_errors", CargoDependency.smithyXml(runtimeConfig))
+            forInlineableRustFile("rest_xml_wrapped_errors", CargoDependency.smithyXml(runtimeConfig))
 
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
-            forRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
+            forInlineableRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
 
         fun constrained(): InlineDependency =
-            forRustFile("constrained")
+            forInlineableRustFile("constrained")
     }
 }
+
+fun CargoDependency.asType() = RuntimeType(null, dependency = this, namespace = rustName)
+fun InlineDependency.asType() = RuntimeType(name = null, dependency = this, namespace = module.fullyQualifiedPath())
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
