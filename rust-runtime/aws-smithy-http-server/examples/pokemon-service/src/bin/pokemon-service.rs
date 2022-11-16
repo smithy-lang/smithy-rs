@@ -29,6 +29,7 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
+    // Apply the `PrintPlugin` defined in `plugin.rs`
     let plugins = PluginPipeline::new().print();
     let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
