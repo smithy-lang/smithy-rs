@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -175,9 +176,9 @@ class CombinedErrorGenerator(
                 val errorVariantSymbol = symbolProvider.toSymbol(errorVariant)
                 write("${errorVariantSymbol.name}(#T),", errorVariantSymbol)
             }
+            docs(UNHANDLED_ERROR_DOCS)
             rust(
                 """
-                /// An unexpected error, e.g. invalid JSON returned by the service or an unknown error code
                 Unhandled(#T),
                 """,
                 unhandledError(),
