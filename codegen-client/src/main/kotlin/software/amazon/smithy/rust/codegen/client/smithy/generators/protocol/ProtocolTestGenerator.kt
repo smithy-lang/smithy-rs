@@ -138,12 +138,12 @@ class ProtocolTestGenerator(
         testModuleWriter: RustWriter,
         block: Writable,
     ) {
-        testModuleWriter.setNewlinePrefix("/// ")
+        testModuleWriter.newlinePrefix = "/// "
         testCase.documentation.map {
             testModuleWriter.writeWithNoFormatting(it)
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
-        testModuleWriter.setNewlinePrefix("")
+        testModuleWriter.newlinePrefix = ""
         TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
