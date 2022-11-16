@@ -125,7 +125,6 @@ fun unknownVariantError(union: String) =
 
 private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: MemberShape, memberSymbol: Symbol) {
     if (member.target == ShapeId.from("smithy.api#Unit")) {
-        // if (member.target.name == "Unit") {
         write("${symbolProvider.toMemberName(member)},")
     } else {
         write("${symbolProvider.toMemberName(member)}(#T),", memberSymbol)
@@ -140,7 +139,6 @@ private fun RustWriter.renderAsVariant(
     memberSymbol: Symbol,
 ) {
     if (member.target == ShapeId.from("smithy.api#Unit")) {
-        // if (member.target.name == "Unit") {
         rust(
             "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
         )
