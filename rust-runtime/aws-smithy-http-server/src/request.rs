@@ -46,6 +46,10 @@ use http::{request::Parts, Extensions, HeaderMap, Request, Uri};
 use crate::{rejection::EitherRejection, response::IntoResponse};
 
 #[doc(hidden)]
+#[deprecated(
+    since = "0.52.0",
+    note = "This is no used by the new service builder. We use the http::Parts struct directly."
+)]
 #[derive(Debug)]
 pub struct RequestParts<B> {
     uri: Uri,
@@ -54,6 +58,7 @@ pub struct RequestParts<B> {
     body: Option<B>,
 }
 
+#[allow(deprecated)]
 impl<B> RequestParts<B> {
     /// Create a new `RequestParts`.
     ///
@@ -153,6 +158,9 @@ where
     }
 }
 
+// This is `doc(hidden)` while `FromParts` is not because there's an expectation that third-parties will implement
+// `FromParts` whereas implementations of `FromRequest` violate the Smithy contract.
+#[doc(hidden)]
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
 /// [`Request`], in contrast to [`FromParts`].
 pub trait FromRequest<Protocol, B>: Sized {

@@ -53,6 +53,7 @@ use std::ops::Deref;
 use http::StatusCode;
 use thiserror::Error;
 
+#[allow(deprecated)]
 use crate::{
     body::{empty, BoxBody},
     request::{FromParts, RequestParts},
@@ -203,6 +204,11 @@ where
 /// This is essentially the implementation of `FromRequest` for `Extension`, but with a
 /// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
 /// this function and converts the rejection type into a [`crate::runtime_error::RuntimeError`].
+#[deprecated(
+    since = "0.52.0",
+    note = "This was used for extraction under the older service builder. The `FromParts::from_parts` method is now used instead."
+)]
+#[allow(deprecated)]
 pub async fn extract_extension<T, B>(
     req: &mut RequestParts<B>,
 ) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
