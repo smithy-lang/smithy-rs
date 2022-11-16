@@ -1,3 +1,7 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http_server::operation::Operation;
 use aws_smithy_http_server::plugin::{Plugin, PluginPipeline};
