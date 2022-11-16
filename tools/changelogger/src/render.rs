@@ -188,9 +188,13 @@ fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
         .map(|t| t.to_string())
         .chain(entry.references.iter().map(to_md_link))
         .collect::<Vec<_>>();
-    if !is_maintainer(&entry.author) {
-        references.push(format!("@{}", entry.author));
-    };
+    let non_maintainers = entry
+        .author
+        .iter()
+        .filter(|author| !is_maintainer(&author))
+        .map(|author| format!("@{author}"));
+    references.extend(non_maintainers);
+
     if !references.is_empty() {
         write!(meta, "({}) ", references.join(", ")).unwrap();
     }
@@ -353,6 +357,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
     let mut external_contribs = entries
         .iter()
         .filter_map(|entry| entry.hand_authored().map(|e| &e.author))
+        .flat_map(|author| author.iter())
         .filter(|author| !is_maintainer(author))
         .collect::<Vec<_>>();
     external_contribs.sort();
@@ -366,7 +371,11 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
                 .filter(|entry| {
                     entry
                         .hand_authored()
-                        .map(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
+                        .map(|e| {
+                            e.author.iter().any(|author| {
+                                author.eq_ignore_ascii_case(contributor_handle.as_str())
+                            })
+                        })
                         .unwrap_or(false)
                 })
                 .flat_map(|entry| {
@@ -411,16 +420,16 @@ mod test {
     fn end_to_end_changelog() {
         let changelog_toml = r#"
 [[smithy-rs]]
-author = "rcoh"
+author = ["rcoh", "crisidev"]
 message = "I made a major change to update the code generator"
 meta = { breaking = true, tada = false, bug = false }
 references = ["smithy-rs#445"]
 
 [[smithy-rs]]
-author = "external-contrib"
+author = ["external-contrib", "other-external-dev"]
 message = "I made a change to update the code generator"
 meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446"]
+references = ["smithy-rs#446", "smithy-rs#447"]
 
 [[smithy-rs]]
 author = "another-contrib"
@@ -483,7 +492,7 @@ v0.3.0 (January 4th, 2022)
 - ⚠ (all, [smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the code generator
 
 **New this release:**
-- 🎉 (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- 🎉 (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), [smithy-rs#447](https://github.com/awslabs/smithy-rs/issues/447), @external-contrib, @other-external-dev) I made a change to update the code generator
 - 🎉 (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
     **Update guide:**
@@ -493,7 +502,8 @@ v0.3.0 (January 4th, 2022)
 **Contributors**
 Thank you for your contributions! ❤
 - @another-contrib ([smithy-rs#200](https://github.com/awslabs/smithy-rs/issues/200))
-- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), [smithy-rs#447](https://github.com/awslabs/smithy-rs/issues/447))
+- @other-external-dev ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), [smithy-rs#447](https://github.com/awslabs/smithy-rs/issues/447))
 "#
         .trim_start();
         pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
