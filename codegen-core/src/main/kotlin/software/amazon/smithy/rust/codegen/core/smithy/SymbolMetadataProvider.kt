@@ -57,6 +57,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
             is StringShape -> if (shape.hasTrait<EnumTrait>()) {
                 enumMeta(shape)
             } else null
+
             else -> null
         }
         return baseSymbol.toBuilder().meta(meta).build()
@@ -100,11 +101,13 @@ class BaseSymbolMetadataProvider(
                     )
                 }
             }
+
             container.isUnionShape ||
                 container.isListShape ||
                 container.isSetShape ||
                 container.isMapShape
             -> RustMetadata(visibility = Visibility.PUBLIC)
+
             else -> TODO("Unrecognized container type: $container")
         }
     }
@@ -120,9 +123,10 @@ class BaseSymbolMetadataProvider(
     override fun enumMeta(stringShape: StringShape): RustMetadata {
         return containerDefault.withDerives(
             RuntimeType.std.member("hash::Hash"),
-        ).withDerives( // enums can be eq because they can only contain strings
+        ).withDerives(
+            // enums can be eq because they can only contain ints and strings
             RuntimeType.std.member("cmp::Eq"),
-            // enums can be Ord because they can only contain strings
+            // enums can be Ord because they can only contain ints and strings
             RuntimeType.std.member("cmp::PartialOrd"),
             RuntimeType.std.member("cmp::Ord"),
         )
