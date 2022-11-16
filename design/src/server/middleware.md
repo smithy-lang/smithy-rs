@@ -307,44 +307,36 @@ impl<Op, S, L> Plugin<AwsRestXml, Op, S, L> for PrintPlugin
 }
 ```
 
-A `Plugin` can then be applied to all operations using the `Pluggable::apply` method
+You can provide a custom method to your plugin to a `PluginPipeline` via an extension trait:
 
 ```rust
-pub trait Pluggable<NewPlugin> {
-    type Output;
-
-    /// Applies a [`Plugin`] to the service builder.
-    fn apply(self, plugin: NewPlugin) -> Self::Output;
-}
-```
-
-which is implemented on every service builder.
-
-The plugin system is designed to hide the details of the `Plugin` and `Pluggable` trait from the average consumer. Such customers should instead interact with utility methods on the service builder which are vended by extension traits and enjoy self contained documentation.
-
-```rust
-/// An extension trait of [`Pluggable`].
-///
-/// This provides a [`print`](PrintExt::print) method to all service builders.
-pub trait PrintExt: Pluggable<PrintPlugin> {
+/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
+pub trait PrintExt<ExistingPlugins> {
     /// Causes all operations to print the operation name when called.
     ///
     /// This works by applying the [`PrintPlugin`].
-    fn print(self) -> Self::Output
-    where
-        Self: Sized,
-    {
-        self.apply(PrintPlugin)
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>>;
+}
+
+impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugins> {
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>> {
+        self.push(PrintPlugin)
     }
 }
 ```
 
-which allows for
+This allows for:
 
 ```rust
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder()
+let plugin_pipeline = PluginPipeline::new()
+    // [..other plugins..]
+    // The custom method!
+    .print();
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(plugin_pipeline)
     .get_pokemon_species_operation(layered_handler)
     /* ... */
-    .print()
     .build();
 ```
+
+The custom `print` method hides the details of the `Plugin` trait from the average consumer.
+They interact with the utility methods on `PluginPipeline` and enjoy the self-contained documentation.
