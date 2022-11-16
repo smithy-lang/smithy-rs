@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::middleware::DefaultMiddleware;
 use aws_sdk_s3::operation::AbortMultipartUpload;
 use aws_sdk_s3::Region;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::operation::BuildError;
+use aws_smithy_http::operation::error::BuildError;
 
 #[tokio::test]
 async fn test_error_when_required_query_param_is_unset() {
@@ -24,13 +22,10 @@ async fn test_error_when_required_query_param_is_unset() {
         .await
         .unwrap_err();
 
-    assert!(matches!(
-        BuildError::MissingField {
-            field: "upload_id",
-            details: "cannot be empty or unset",
-        },
-        err
-    ))
+    assert_eq!(
+        BuildError::missing_field("upload_id", "cannot be empty or unset").to_string(),
+        err.to_string(),
+    )
 }
 
 #[tokio::test]
@@ -48,11 +43,8 @@ async fn test_error_when_required_query_param_is_set_but_empty() {
         .await
         .unwrap_err();
 
-    assert!(matches!(
-        BuildError::MissingField {
-            field: "upload_id",
-            details: "cannot be empty or unset",
-        },
-        err
-    ))
+    assert_eq!(
+        BuildError::missing_field("upload_id", "cannot be empty or unset").to_string(),
+        err.to_string(),
+    )
 }

@@ -55,7 +55,7 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
  * Generates methods to serialize and deserialize requests based on the HTTP trait. Specifically:
  * 1. `fn update_http_request(builder: http::request::Builder) -> Builder`
  *
- * This method takes a builder (perhaps pre configured with some headers) from the caller and sets the HTTP
+ * This method takes a builder (perhaps pre-configured with some headers) from the caller and sets the HTTP
  * headers & URL based on the HTTP trait implementation.
  */
 class RequestBindingGenerator(
@@ -72,7 +72,7 @@ class RequestBindingGenerator(
     private val httpBindingGenerator =
         HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape, ::builderSymbol)
     private val index = HttpBindingIndex.of(model)
-    private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
+    private val encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -211,20 +211,21 @@ class RequestBindingGenerator(
                 val target = model.expectShape(memberShape.target)
 
                 if (memberShape.isRequired) {
-                    val buildError = OperationBuildError(runtimeConfig).missingField(
-                        this,
-                        memberName,
-                        "cannot be empty or unset",
+                    val codegenScope = arrayOf(
+                        "BuildError" to OperationBuildError(runtimeConfig).missingField(
+                            memberName,
+                            "cannot be empty or unset",
+                        ),
                     )
                     val derefName = safeName("inner")
                     rust("let $derefName = &_input.$memberName;")
                     if (memberSymbol.isOptional()) {
-                        rust("let $derefName = $derefName.as_ref().ok_or($buildError)?;")
+                        rustTemplate("let $derefName = $derefName.as_ref().ok_or(#{BuildError:W})?;", *codegenScope)
                     }
 
                     when {
                         target.isStringShape -> {
-                            rust("if $derefName.is_empty() { return Err($buildError); }")
+                            rustTemplate("if $derefName.is_empty() { return Err(#{BuildError:W}); }", *codegenScope)
                         }
                     }
 
@@ -250,11 +251,8 @@ class RequestBindingGenerator(
     ) {
         listForEach(outerTarget, field) { innerField, targetId ->
             val target = model.expectShape(targetId)
-            rust(
-                "query.push_kv(${param.locationName.dq()}, ${
-                paramFmtFun(writer, target, memberShape, innerField)
-                });",
-            )
+            val value = paramFmtFun(writer, target, memberShape, innerField)
+            rust("""query.push_kv("${param.locationName}", $value);""")
         }
     }
 
@@ -281,7 +279,7 @@ class RequestBindingGenerator(
             }
 
             else -> {
-                "${writer.format(Encoder)}::from(${autoDeref(targetName)}).encode()"
+                "${writer.format(encoder)}::from(${autoDeref(targetName)}).encode()"
             }
         }
     }
@@ -320,7 +318,7 @@ class RequestBindingGenerator(
             else -> {
                 rust(
                     "let mut ${outputVar}_encoder = #T::from(${autoDeref(input)}); let $outputVar = ${outputVar}_encoder.encode();",
-                    Encoder,
+                    encoder,
                 )
             }
         }
