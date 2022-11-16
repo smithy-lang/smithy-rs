@@ -58,7 +58,6 @@ class EndpointTraitBindings(
                 "EndpointPrefix" to endpointPrefix,
             )
         } else {
-            val operationBuildError = OperationBuildError(runtimeConfig)
             writer.rustBlock("") {
                 // build a list of args: `labelname = "field"`
                 // these eventually end up in the format! macro invocation:
@@ -66,23 +65,22 @@ class EndpointTraitBindings(
                 val args = endpointTrait.hostPrefix.labels.map { label ->
                     val memberShape = inputShape.getMember(label.content).get()
                     val field = symbolProvider.toMemberName(memberShape)
-                    val invalidFieldError = operationBuildError.invalidField(
-                        writer,
-                        field,
-                        "$field was unset or empty but must be set as part of the endpoint prefix",
-                    )
                     if (symbolProvider.toSymbol(memberShape).isOptional()) {
                         rust("let $field = $input.$field.as_deref().unwrap_or_default();")
                     } else {
                         // NOTE: this is dead code until we start respecting @required
                         rust("let $field = &$input.$field;")
                     }
-                    rust(
+                    rustTemplate(
                         """
                         if $field.is_empty() {
-                            return Err($invalidFieldError)
+                            return Err(#{invalidFieldError:W})
                         }
                         """,
+                        "invalidFieldError" to OperationBuildError(runtimeConfig).invalidField(
+                            field,
+                            "$field was unset or empty but must be set as part of the endpoint prefix",
+                        ),
                     )
                     "${label.content} = $field"
                 }

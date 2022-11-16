@@ -50,7 +50,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
+        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlDecodeError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")
 
@@ -70,7 +70,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_generic_error(response.body().as_ref())", awsQueryErrors)
@@ -80,7 +80,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
+                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_generic_error(payload.as_ref())", awsQueryErrors)

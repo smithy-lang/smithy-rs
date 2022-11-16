@@ -39,10 +39,10 @@ class Ec2QueryParserGenerator(
             rustTemplate(
                 """
                 if !(${XmlBindingTraitParserGenerator.XmlName(responseWrapperName).matchExpression("start_el")}) {
-                    return Err(#{XmlError}::custom(format!("invalid root, expected $responseWrapperName got {:?}", start_el)))
+                    return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $responseWrapperName got {:?}", start_el)))
                 }
                 """,
-                "XmlError" to context.xmlErrorType,
+                "XmlDecodeError" to context.xmlDecodeErrorType,
             )
             inner("decoder")
         },
