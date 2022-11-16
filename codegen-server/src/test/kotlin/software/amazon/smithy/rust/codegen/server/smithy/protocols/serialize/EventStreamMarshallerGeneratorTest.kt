@@ -72,8 +72,8 @@ class EventStreamMarshallerGeneratorTest {
                     HeaderValue::String(value.into())
                 }
                 """,
-                "validate_body" to protocolTestHelpers.rustName("validate_body"),
-                "MediaType" to protocolTestHelpers.rustName("MediaType"),
+                "validate_body" to protocolTestHelpers.toType().member("validate_body"),
+                "MediaType" to protocolTestHelpers.toType().member("MediaType"),
             )
 
             unitTest(
