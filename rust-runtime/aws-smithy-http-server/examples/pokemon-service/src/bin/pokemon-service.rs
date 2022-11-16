@@ -6,7 +6,7 @@
 // This program is exported as a binary named `pokemon-service`.
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::AddExtensionLayer;
+use aws_smithy_http_server::{plugin::PluginPipeline, AddExtensionLayer};
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, get_storage,
@@ -29,7 +29,8 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
-    let app = PokemonService::builder()
+    let plugins = PluginPipeline::new().print();
+    let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -40,8 +41,8 @@ pub async fn main() {
         .do_nothing(do_nothing)
         .check_health(check_health)
         // Apply the `PrintPlugin` defined in `plugin.rs`
-        .print()
         .build()
+        .expect("failed to build an instance of PokemonService")
         // Setup shared state and middlewares.
         .layer(&AddExtensionLayer::new(Arc::new(State::default())));
 

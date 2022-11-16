@@ -28,7 +28,7 @@ use std::io::BufReader;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use aws_smithy_http_server::AddExtensionLayer;
+use aws_smithy_http_server::{plugin::PluginPipeline, AddExtensionLayer};
 use clap::Parser;
 use futures_util::stream::StreamExt;
 use pokemon_service::{
@@ -62,7 +62,9 @@ struct Args {
 pub async fn main() {
     let args = Args::parse();
     setup_tracing();
-    let app = PokemonService::builder()
+    // Apply the `PrintPlugin` defined in `plugin.rs`
+    let plugins = PluginPipeline::new().print();
+    let app = PokemonService::builder_with_plugins(plugins)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -72,9 +74,8 @@ pub async fn main() {
         .capture_pokemon(capture_pokemon)
         .do_nothing(do_nothing)
         .check_health(check_health)
-        // Apply the `PrintPlugin` defined in `plugin.rs`
-        .print()
         .build()
+        .expect("failed to build an instance of PokemonService")
         // Setup shared state and middlewares.
         .layer(&AddExtensionLayer::new(Arc::new(State::default())));
 

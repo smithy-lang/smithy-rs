@@ -3,9 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::net::{IpAddr, SocketAddr};
+
+use aws_smithy_http_server::{routing::ConnectInfo, Extension};
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, setup_tracing,
+};
+use pokemon_service_server_sdk::{
+    error::{GetStorageError, NotAuthorized},
+    input::GetStorageInput,
+    output::GetStorageOutput,
+    service::PokemonService,
 };
 
 #[derive(Parser, Debug)]
@@ -21,20 +30,20 @@ struct Args {
 
 /// Retrieves the user's storage. No authentication required for locals.
 pub async fn get_storage_with_local_approved(
-    input: pokemon_service_server_sdk::input::GetStorageInput,
-    connect_info: aws_smithy_http_server::Extension<aws_smithy_http_server::routing::ConnectInfo<std::net::SocketAddr>>,
-) -> Result<pokemon_service_server_sdk::output::GetStorageOutput, pokemon_service_server_sdk::error::GetStorageError> {
+    input: GetStorageInput,
+    connect_info: Extension<ConnectInfo<SocketAddr>>,
+) -> Result<GetStorageOutput, GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
-    let local = connect_info.0 .0.ip() == "127.0.0.1".parse::<std::net::IpAddr>().unwrap();
+    let local = connect_info.0 .0.ip() == "127.0.0.1".parse::<IpAddr>().unwrap();
 
     // We currently support Ash: he has nothing stored
     if input.user == "ash" && input.passcode == "pikachu123" {
-        return Ok(pokemon_service_server_sdk::output::GetStorageOutput { collection: vec![] });
+        return Ok(GetStorageOutput { collection: vec![] });
     }
     // We support trainers in our gym
     if local {
         tracing::info!("welcome back");
-        return Ok(pokemon_service_server_sdk::output::GetStorageOutput {
+        return Ok(GetStorageOutput {
             collection: vec![
                 String::from("bulbasaur"),
                 String::from("charmander"),
@@ -43,16 +52,14 @@ pub async fn get_storage_with_local_approved(
         });
     }
     tracing::debug!("authentication failed");
-    Err(pokemon_service_server_sdk::error::GetStorageError::NotAuthorized(
-        pokemon_service_server_sdk::error::NotAuthorized {},
-    ))
+    Err(GetStorageError::NotAuthorized(NotAuthorized {}))
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
     setup_tracing();
-    let app = pokemon_service_server_sdk::service::PokemonService::builder_without_plugins()
+    let app = PokemonService::builder_without_plugins()
         .get_pokemon_species(get_pokemon_species)
         .get_storage(get_storage_with_local_approved)
         .get_server_statistics(get_server_statistics)
@@ -63,10 +70,10 @@ async fn main() {
         .expect("failed to build an instance of PokemonService");
 
     // Start the [`hyper::Server`].
-    let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
+    let bind: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()
         .expect("unable to parse the server bind address and port");
-    let server = hyper::Server::bind(&bind).serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>());
+    let server = hyper::Server::bind(&bind).serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
     // Run forever-ish...
     if let Err(err) = server.await {
