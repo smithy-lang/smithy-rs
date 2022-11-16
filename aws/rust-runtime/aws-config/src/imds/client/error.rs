@@ -174,7 +174,7 @@ impl Error for InvalidEndpointMode {}
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
-pub(super) enum BuildErrorKind {
+enum BuildErrorKind {
     /// The endpoint mode was invalid
     InvalidEndpointMode(InvalidEndpointMode),
 
@@ -189,6 +189,28 @@ pub(super) enum BuildErrorKind {
 #[derive(Debug)]
 pub struct BuildError {
     kind: BuildErrorKind,
+}
+
+impl BuildError {
+    pub(super) fn invalid_endpoint_mode(source: InvalidEndpointMode) -> Self {
+        Self {
+            kind: BuildErrorKind::InvalidEndpointMode(source),
+        }
+    }
+
+    pub(super) fn invalid_profile(source: ProfileFileError) -> Self {
+        Self {
+            kind: BuildErrorKind::InvalidProfile(source),
+        }
+    }
+
+    pub(super) fn invalid_endpoint_uri(
+        source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
+    ) -> Self {
+        Self {
+            kind: BuildErrorKind::InvalidEndpointUri(source.into()),
+        }
+    }
 }
 
 impl fmt::Display for BuildError {
@@ -211,12 +233,6 @@ impl Error for BuildError {
             InvalidProfile(e) => Some(e),
             InvalidEndpointUri(e) => Some(e.as_ref()),
         }
-    }
-}
-
-impl From<BuildErrorKind> for BuildError {
-    fn from(kind: BuildErrorKind) -> Self {
-        Self { kind }
     }
 }
 

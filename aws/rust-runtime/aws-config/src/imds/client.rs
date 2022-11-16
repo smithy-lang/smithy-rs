@@ -8,9 +8,7 @@
 //! Client for direct access to IMDSv2.
 
 use crate::connector::expect_connector;
-use crate::imds::client::error::{
-    BuildError, BuildErrorKind, ImdsError, InnerImdsError, InvalidEndpointMode,
-};
+use crate::imds::client::error::{BuildError, ImdsError, InnerImdsError, InvalidEndpointMode};
 use crate::imds::client::token::TokenMiddleware;
 use crate::provider_config::ProviderConfig;
 use crate::{profile, PKG_VERSION};
@@ -499,15 +497,14 @@ impl EndpointSource {
                 // load an endpoint override from the environment
                 let profile = profile::load(fs, env, &Default::default())
                     .await
-                    .map_err(BuildErrorKind::InvalidProfile)?;
+                    .map_err(BuildError::invalid_profile)?;
                 let uri_override = if let Ok(uri) = env.get(env::ENDPOINT) {
                     Some(Cow::Owned(uri))
                 } else {
                     profile.get(profile_keys::ENDPOINT).map(Cow::Borrowed)
                 };
                 if let Some(uri) = uri_override {
-                    return Ok(Uri::try_from(uri.as_ref())
-                        .map_err(|err| BuildErrorKind::InvalidEndpointUri(err.into()))?);
+                    return Uri::try_from(uri.as_ref()).map_err(BuildError::invalid_endpoint_uri);
                 }
 
                 // if not, load a endpoint mode from the environment
@@ -515,10 +512,10 @@ impl EndpointSource {
                     mode
                 } else if let Ok(mode) = env.get(env::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
-                        .map_err(BuildErrorKind::InvalidEndpointMode)?
+                        .map_err(BuildError::invalid_endpoint_mode)?
                 } else if let Some(mode) = profile.get(profile_keys::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
-                        .map_err(BuildErrorKind::InvalidEndpointMode)?
+                        .map_err(BuildError::invalid_endpoint_mode)?
                 } else {
                     EndpointMode::IpV4
                 };
