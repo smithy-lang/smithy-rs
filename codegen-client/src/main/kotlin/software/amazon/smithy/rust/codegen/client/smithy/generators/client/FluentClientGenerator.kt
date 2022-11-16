@@ -220,7 +220,7 @@ class FluentClientGenerator(
                 )
             }
         }
-        writer.withModule(RustModule.public("fluent_builders")) {
+        writer.withInlineModule(RustModule.public("fluent_builders")) {
             docs(
                 """
                 Utilities to ergonomically construct a request to the service.

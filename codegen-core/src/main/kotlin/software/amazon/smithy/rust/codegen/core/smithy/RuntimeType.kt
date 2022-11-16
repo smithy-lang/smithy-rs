@@ -313,7 +313,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
             name = name,
             dependency = InlineDependency(name, module, listOf(), func),
-            namespace = "crate::${module.name}",
+            namespace = module.fullyQualifiedPath(),
         )
 
         fun parseResponse(runtimeConfig: RuntimeConfig) = RuntimeType(

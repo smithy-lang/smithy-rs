@@ -442,8 +442,8 @@ class RustWriter private constructor(
      *
      * The returned writer will inject any local imports into the module as needed.
      */
-    fun withModule(
-        module: RustModule,
+    fun withInlineModule(
+        module: RustModule.LeafModule,
         moduleWriter: Writable,
     ): RustWriter {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.

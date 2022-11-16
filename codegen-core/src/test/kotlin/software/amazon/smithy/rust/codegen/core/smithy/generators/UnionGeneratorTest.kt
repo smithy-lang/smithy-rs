@@ -115,7 +115,7 @@ class UnionGeneratorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.rust("##![allow(deprecated)]")
-        writer.withModule(RustModule.public("model")) {
+        writer.withInlineModule(RustModule.public("model")) {
             UnionGenerator(model, provider, this, model.lookup("test#Nested")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Foo")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Bar")).render()

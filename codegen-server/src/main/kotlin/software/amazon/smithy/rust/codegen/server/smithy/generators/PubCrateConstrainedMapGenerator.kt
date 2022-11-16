@@ -8,10 +8,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -72,7 +70,7 @@ class PubCrateConstrainedMapGenerator(
             "From" to RuntimeType.From,
         )
 
-        writer.withModule(RustModule(moduleName, RustMetadata(visibility = Visibility.PUBCRATE))) {
+        writer.withInlineModule(RustModule.pubcrate(moduleName)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]

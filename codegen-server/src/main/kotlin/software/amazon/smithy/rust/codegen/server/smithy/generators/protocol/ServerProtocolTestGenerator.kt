@@ -176,7 +176,7 @@ class ServerProtocolTestGenerator(
             }
         }
 
-        val module = RustModule(
+        val module = RustModule.LeafModule(
             PROTOCOL_TEST_HELPER_MODULE_NAME,
             RustMetadata(
                 additionalAttributes = listOf(
@@ -187,7 +187,7 @@ class ServerProtocolTestGenerator(
             ),
         )
 
-        writer.withModule(module) {
+        writer.withInlineModule(module) {
             rustTemplate(
                 """
                 use #{Tower}::Service as _;
@@ -253,7 +253,7 @@ class ServerProtocolTestGenerator(
 
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
-            val module = RustModule(
+            val module = RustModule.LeafModule(
                 "server_${operationName.toSnakeCase()}_test",
                 RustMetadata(
                     additionalAttributes = listOf(
@@ -263,7 +263,7 @@ class ServerProtocolTestGenerator(
                     visibility = Visibility.PRIVATE,
                 ),
             )
-            writer.withModule(module) {
+            writer.withInlineModule(module) {
                 renderAllTestCases(operationShape, allTests)
             }
         }

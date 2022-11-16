@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -77,7 +76,7 @@ class UnconstrainedUnionGenerator(
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
-        unconstrainedModuleWriter.withModule(RustModule(moduleName, RustMetadata(visibility = Visibility.PUBCRATE))) {
+        unconstrainedModuleWriter.withInlineModule(RustModule.newModule(moduleName, Visibility.PUBCRATE)) {
             rustBlock(
                 """
                 ##[allow(clippy::enum_variant_names)]
@@ -97,7 +96,7 @@ class UnconstrainedUnionGenerator(
                 """
                 impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
-                
+
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
                         #{body:W}
                     }
@@ -115,7 +114,7 @@ class UnconstrainedUnionGenerator(
             impl #{ConstrainedTrait} for #{ConstrainedSymbol}  {
                 type Unconstrained = #{UnconstrainedSymbol};
             }
-            
+
             impl From<#{UnconstrainedSymbol}> for #{MaybeConstrained} {
                 fn from(value: #{UnconstrainedSymbol}) -> Self {
                     Self::Unconstrained(value)
@@ -133,10 +132,10 @@ class UnconstrainedUnionGenerator(
         } else {
             Visibility.PUBCRATE
         }
-        modelsModuleWriter.withModule(
-            RustModule(
+        modelsModuleWriter.withInlineModule(
+            RustModule.newModule(
                 constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-                RustMetadata(visibility = constraintViolationVisibility),
+                constraintViolationVisibility,
             ),
         ) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(this)

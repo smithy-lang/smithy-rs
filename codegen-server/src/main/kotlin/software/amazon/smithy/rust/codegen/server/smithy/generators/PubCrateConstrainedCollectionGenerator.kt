@@ -7,10 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -71,7 +69,7 @@ class PubCrateConstrainedCollectionGenerator(
             "From" to RuntimeType.From,
         )
 
-        writer.withModule(RustModule(moduleName, RustMetadata(visibility = Visibility.PUBCRATE))) {
+        writer.withInlineModule(RustModule.pubcrate(moduleName)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
@@ -105,38 +103,45 @@ class PubCrateConstrainedCollectionGenerator(
                     """
                     impl #{From}<#{Symbol}> for $name {
                         fn from(v: #{Symbol}) -> Self {
-                            ${ if (innerNeedsConstraining) {
+                            ${
+                    if (innerNeedsConstraining) {
                         "Self(v.into_iter().map(|item| item.into()).collect())"
                     } else {
                         "Self(v)"
-                    } }
+                    }
+                    }
                         }
                     }
 
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
-                            ${ if (innerNeedsConstraining) {
+                            ${
+                    if (innerNeedsConstraining) {
                         "v.0.into_iter().map(|item| item.into()).collect()"
                     } else {
                         "v.0"
-                    } }
+                    }
+                    }
                         }
                     }
                     """,
                     *codegenScope,
                 )
             } else {
-                val innerNeedsConversion = innerShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+                val innerNeedsConversion =
+                    innerShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
 
                 rustTemplate(
                     """
                     impl #{From}<$name> for #{Symbol} {
                         fn from(v: $name) -> Self {
-                            ${ if (innerNeedsConversion) {
+                            ${
+                    if (innerNeedsConversion) {
                         "v.0.into_iter().map(|item| item.into()).collect()"
                     } else {
                         "v.0"
-                    } }
+                    }
+                    }
                         }
                     }
                     """,

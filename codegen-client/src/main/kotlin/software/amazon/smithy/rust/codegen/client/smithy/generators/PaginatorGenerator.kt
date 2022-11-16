@@ -13,10 +13,8 @@ import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -78,11 +76,7 @@ class PaginatorGenerator private constructor(
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo =
         idx.getPaginationInfo(service, operation).orNull() ?: PANIC("failed to load pagination info")
-    private val module = RustModule(
-        "paginator",
-        RustMetadata(visibility = Visibility.PUBLIC),
-        documentation = "Paginators for the service",
-    )
+    private val module = RustModule.public("paginator", documentation = "Paginators for the service")
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
@@ -99,7 +93,12 @@ class PaginatorGenerator private constructor(
         "generics" to generics.decl,
         "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
-        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryClassifier),
+        "send_bounds" to generics.sendBounds(
+            symbolProvider.toSymbol(operation),
+            outputType,
+            errorType,
+            retryClassifier,
+        ),
 
         // Operation Types
         "operation" to symbolProvider.toSymbol(operation),
@@ -288,7 +287,8 @@ class PaginatorGenerator private constructor(
     private fun pageSizeSetter() = writable {
         paginationInfo.pageSizeMember.orNull()?.also {
             val memberName = symbolProvider.toMemberName(it)
-            val pageSizeT = symbolProvider.toSymbol(it).rustType().stripOuter<RustType.Option>().render(true)
+            val pageSizeT =
+                symbolProvider.toSymbol(it).rustType().stripOuter<RustType.Option>().render(true)
             rust(
                 """
                 /// Set the page size

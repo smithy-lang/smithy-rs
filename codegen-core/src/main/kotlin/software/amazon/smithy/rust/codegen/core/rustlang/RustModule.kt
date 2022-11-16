@@ -5,23 +5,28 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
-data class RustModule(val name: String, val rustMetadata: RustMetadata, val documentation: String? = null) {
-    fun render(writer: RustWriter) {
-        documentation?.let { docs -> writer.docs(docs) }
-        rustMetadata.render(writer)
-        writer.write("mod $name;")
-    }
-
+sealed class RustModule {
     companion object {
-        fun default(name: String, visibility: Visibility, documentation: String? = null): RustModule {
-            return RustModule(name, RustMetadata(visibility = visibility), documentation)
+        /** Creates a new module with the specified visibility */
+        fun newModule(
+            name: String,
+            visibility: Visibility,
+            documentation: String? = null,
+            parent: RustModule = LibRs,
+        ): LeafModule {
+            return LeafModule(name, RustMetadata(visibility = visibility), documentation, parent = parent)
         }
 
-        fun public(name: String, documentation: String? = null): RustModule =
-            default(name, visibility = Visibility.PUBLIC, documentation = documentation)
+        fun pubcrate(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
+            newModule(name, visibility = Visibility.PUBCRATE, documentation, parent)
 
-        fun private(name: String, documentation: String? = null): RustModule =
-            default(name, visibility = Visibility.PRIVATE, documentation = documentation)
+        /** Creates a new public module */
+        fun public(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
+            newModule(name, visibility = Visibility.PUBLIC, documentation = documentation, parent = parent)
+
+        /** Creates a new private module */
+        fun private(name: String, documentation: String? = null): LeafModule =
+            newModule(name, visibility = Visibility.PRIVATE, documentation = documentation)
 
         /* Common modules used across client, server and tests */
         val Config = public("config", documentation = "Configuration for the service.")
@@ -36,6 +41,65 @@ data class RustModule(val name: String, val rustMetadata: RustMetadata, val docu
          * Its visibility depends on the generation context (client or server).
          */
         fun operation(visibility: Visibility): RustModule =
-            default("operation", visibility = visibility, documentation = "All operations that this crate can perform.")
+            newModule(
+                "operation",
+                visibility = visibility,
+                documentation = "All operations that this crate can perform.",
+            )
+    }
+
+    fun fullyQualifiedPath(): String = when (this) {
+        is LibRs -> "crate"
+        is LeafModule -> parent.fullyQualifiedPath() + "::" + name
+    }
+
+    fun definitionFile(): String = when (this) {
+        is LibRs -> "src/lib.rs"
+        is LeafModule -> {
+            val path = fullyQualifiedPath().split("::").drop(1).joinToString("/")
+            "src/$path.rs"
+        }
+    }
+
+    /**
+     * Renders the usage statement, approximately:
+     * ```rust
+     * /// My docs
+     * pub mod my_module_name
+     * ```
+     */
+    fun renderModStatement(writer: RustWriter) {
+        when (this) {
+            is LeafModule -> {
+                documentation?.let { docs -> writer.docs(docs) }
+                rustMetadata.render(writer)
+                writer.write("mod $name;")
+            }
+
+            else -> {}
+        }
+    }
+
+    object LibRs : RustModule()
+
+    /**
+     * LeafModule
+     *
+     * A LeafModule is _all_ modules that are not `lib.rs`. To create a nested leaf module, set `parent` to a module
+     * _other_ than `LibRs`.
+     *
+     * To avoid infinite loops, avoid setting parent to itself ;-)
+     */
+    data class LeafModule(
+        val name: String,
+        val rustMetadata: RustMetadata,
+        val documentation: String? = null,
+        val parent: RustModule = LibRs,
+    ) : RustModule() {
+        init {
+            check(!name.contains("::")) {
+                "Modules CANNOT contain `::`—modules must be nested with parent"
+            }
+        }
     }
 }

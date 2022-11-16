@@ -20,10 +20,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.Unconstrained
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
@@ -84,13 +84,13 @@ class UnconstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
         val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape, serviceShape)
-        val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
+        val namespace = "${UnconstrainedModule.fullyQualifiedPath()}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
         val rustType = RustType.Opaque(name, namespace)
         return Symbol.builder()
             .rustType(rustType)
             .name(rustType.name)
             .namespace(rustType.namespace, "::")
-            .definitionFile(Unconstrained.filename)
+            .locatedIn(UnconstrainedModule)
             .build()
     }
 
