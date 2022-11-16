@@ -589,12 +589,9 @@ The central trait is [`Plugin`](https://github.com/awslabs/smithy-rs/blob/4c5cbc
 
 ```rust
 /// A mapping from one [`Operation`] to another. Used to modify the behavior of
-/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder,
+/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder.
 ///
 /// The generics `Protocol` and `Op` allow the behavior to be parameterized.
-///
-/// Every service builder enjoys [`Pluggable`] and therefore can be provided with a [`Plugin`] using
-/// [`Pluggable::apply`].
 pub trait Plugin<Protocol, Op, S, L> {
     type Service;
     type Layer;
@@ -611,7 +608,7 @@ The `Upgradable::upgrade` method on `Operation<S, L>`, previously presented in [
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self, plugin: &Pl) -> Self::Service {
+    fn upgrade(self, plugin: &Pl) -> Route<B> {
         let mapped = plugin.map(self);
         let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
         Route::new(layer.layer(mapped.inner))
@@ -656,132 +653,43 @@ An example `Plugin` implementation can be found in [aws-smithy-http-server/examp
 The service builder API requires plugins to be specified upfront - they must be passed as an argument to `builder_with_plugins` and cannot be modified afterwards.
 This constraint is in place to ensure that all handlers are upgraded using the same set of plugins.
 
-[//]: # (The section below is no longer accurate, it'll have to be updated once we add the `PluginBuilder`)
+You might find yourself wanting to apply _multiple_ plugins to your service.
+This can be accommodated via [`PluginPipeline`].
 
-[//]: # (The service builder implements the [`Pluggable`]&#40;https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L8-L29&#41; trait, which allows them to apply plugins to service builders:)
+```rust
+use aws_smithy_http_server::plugin::PluginPipeline;
+# use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+# use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 
-[//]: # ()
-[//]: # (```rust)
+let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
+```
 
-[//]: # (/// Provides a standard interface for applying [`Plugin`]s to a service builder. This is implemented automatically for)
+The plugins' runtime logic is executed in registration order.
+In the example above, `LoggingPlugin` would run first, while `MetricsPlugin` is executed last.
 
-[//]: # (/// all builders.)
+If you are vending a plugin, you can leverage `PluginPipeline` as an extension point: you can add custom methods to it using an extension trait.
+For example:
 
-[//]: # (///)
+```rust
+use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+# use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+# use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 
-[//]: # (/// As [`Plugin`]s modify the way in which [`Operation`]s are [`upgraded`]&#40;crate::operation::Upgradable&#41; we can use)
+pub trait AuthPluginExt<CurrentPlugins> {
+    fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>>;
+}
 
-[//]: # (/// [`Pluggable`] as a foundation to write extension traits which are implemented for all service builders.)
+impl<CurrentPlugins> AuthPluginExt<CurrentPlugins> for PluginPipeline<CurrentPlugins> {
+    fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>> {
+        self.push(AuthPlugin)
+    }
+}
 
-[//]: # (///)
-
-[//]: # (/// # Example)
-
-[//]: # (///)
-
-[//]: # (/// ```)
-
-[//]: # (/// # struct PrintPlugin;)
-
-[//]: # (/// # use aws_smithy_http_server::plugin::Pluggable;)
-
-[//]: # (/// trait PrintExt: Pluggable<PrintPlugin> {)
-
-[//]: # (///     fn print&#40;self&#41; -> Self::Output where Self: Sized {)
-
-[//]: # (///         self.apply&#40;PrintPlugin&#41;)
-
-[//]: # (///     })
-
-[//]: # (/// })
-
-[//]: # (///)
-
-[//]: # (/// impl<Builder> PrintExt for Builder where Builder: Pluggable<PrintPlugin> {})
-
-[//]: # (/// ```)
-
-[//]: # (pub trait Pluggable<NewPlugin> {)
-
-[//]: # (    type Output;)
-
-[//]: # ()
-[//]: # (    /// Applies a [`Plugin`] to the service builder.)
-
-[//]: # (    fn apply&#40;self, plugin: NewPlugin&#41; -> Self::Output;)
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (As seen in the `Pluggable` documentation, third-parties can use extension traits over `Pluggable` to extend the API of builders. In addition to all the `Op{N}` the service builder also holds a `Pl`:)
-
-[//]: # ()
-[//]: # (```rust)
-
-[//]: # (/// The service builder for [`PokemonService`].)
-
-[//]: # (///)
-
-[//]: # (/// Constructed via [`PokemonService::builder`].)
-
-[//]: # (pub struct PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Pl> {)
-
-[//]: # (    capture_pokemon_operation: Op1,)
-
-[//]: # (    empty_operation: Op2,)
-
-[//]: # (    get_pokemon_species: Op3,)
-
-[//]: # (    get_server_statistics: Op4,)
-
-[//]: # (    get_storage: Op5,)
-
-[//]: # (    health_check_operation: Op6,)
-
-[//]: # ()
-[//]: # (    plugin: Pl)
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (which allows the following `Pluggable` implementation to be generated:)
-
-[//]: # ()
-[//]: # (```rust)
-
-[//]: # (impl<Op1, Op2, /* ... */, Pl, NewPl> Pluggable<NewPl> for PokemonServiceBuilder<Op1, Op2, /* ... */, Pl>)
-
-[//]: # ({)
-
-[//]: # (    type Output = PokemonServiceBuilder<Op1, Exts1, PluginStack<Pl, NewPl>>;)
-
-[//]: # (    fn apply&#40;self, plugin: NewPl&#41; -> Self::Output {)
-
-[//]: # (        PokemonServiceBuilder {)
-
-[//]: # (            capture_pokemon_operation: self.capture_pokemon_operation,)
-
-[//]: # (            empty_operation: self.empty_operation,)
-
-[//]: # (            /* ... */,)
-
-[//]: # ()
-[//]: # (            plugin: PluginStack::new&#40;self.plugin, plugin&#41;,)
-
-[//]: # (        })
-
-[//]: # (    })
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (Here `PluginStack` works in a similar way to [`tower::layer::util::Stack`]&#40;https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html&#41; - allowing users to stack a new plugin rather than replacing the currently set one.)
+let pipeline = PluginPipeline::new()
+    .push(LoggingPlugin)
+    // Our custom method!
+    .with_auth();
+```
 
 ## Accessing Unmodelled Data
 
