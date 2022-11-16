@@ -103,17 +103,17 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.rust("##![allow(deprecated)]")
-        writer.withModule(RustModule.public("model")) {
+        writer.withInlineModule(RustModule.public("model")) {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
             innerGenerator.render()
         }
-        writer.withModule(RustModule.public("structs")) {
+        writer.withInlineModule(RustModule.public("structs")) {
             val generator = StructureGenerator(model, provider, this, struct)
             generator.render()
         }
         // By putting the test in another module, it can't access the struct
         // fields if they are private
-        writer.withModule(RustModule.public("inline")) {
+        writer.withInlineModule(RustModule.public("inline")) {
             raw("#[test]")
             rustBlock("fn test_public_fields()") {
                 write(
@@ -182,7 +182,7 @@ class StructureGeneratorTest {
         val writer = RustWriter.root()
         writer.docs("module docs")
         Attribute.Custom("deny(missing_docs)").render(writer)
-        writer.withModule(RustModule.public("model")) {
+        writer.withInlineModule(RustModule.public("model")) {
             StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
             StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
         }
@@ -226,7 +226,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.rust("##![allow(deprecated)]")
-        writer.withModule(RustModule.public("model")) {
+        writer.withInlineModule(RustModule.public("model")) {
             StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Baz")).render()
@@ -259,7 +259,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
         writer.rust("##![allow(deprecated)]")
-        writer.withModule(RustModule.public("model")) {
+        writer.withInlineModule(RustModule.public("model")) {
             StructureGenerator(model, provider, this, model.lookup("test#Nested")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()

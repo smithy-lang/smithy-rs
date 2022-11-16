@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -63,10 +62,10 @@ class MapConstraintViolationGenerator(
         } else {
             Visibility.PUBCRATE
         }
-        modelsModuleWriter.withModule(
-            RustModule(
+        modelsModuleWriter.withInlineModule(
+            RustModule.newModule(
                 constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-                RustMetadata(visibility = constraintViolationVisibility),
+                constraintViolationVisibility,
             ),
         ) {
             // TODO(https://github.com/awslabs/smithy-rs/issues/1401) We should really have two `ConstraintViolation`

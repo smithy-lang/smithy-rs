@@ -42,7 +42,7 @@ open class ServerEnumGenerator(
     )
 
     override fun renderFromForStr() {
-        writer.withModule(
+        writer.withInlineModule(
             RustModule.public(constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()),
         ) {
             rustTemplate(

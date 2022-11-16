@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -135,7 +134,7 @@ class ServerBuilderGenerator(
 
     fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
-        writer.withModule(RustModule(moduleName, RustMetadata(visibility = visibility))) {
+        writer.withInlineModule(RustModule.newModule(moduleName, visibility)) {
             renderBuilder(this)
         }
     }
@@ -396,7 +395,7 @@ class ServerBuilderGenerator(
             """
             impl #{TryFrom}<Builder> for #{Structure} {
                 type Error = ConstraintViolation;
-                
+
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
                     builder.build()
                 }
@@ -487,7 +486,7 @@ class ServerBuilderGenerator(
                                     #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
                                     #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                                 })
-                                .map(|res| 
+                                .map(|res|
                                     res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
                                        .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
                                 )
@@ -502,7 +501,7 @@ class ServerBuilderGenerator(
                                     #{MaybeConstrained}::Constrained(x) => Ok(x),
                                     #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                                 })
-                                .map(|res| 
+                                .map(|res|
                                     res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
                                        .map_err(ConstraintViolation::${constraintViolation.name()})
                                 )

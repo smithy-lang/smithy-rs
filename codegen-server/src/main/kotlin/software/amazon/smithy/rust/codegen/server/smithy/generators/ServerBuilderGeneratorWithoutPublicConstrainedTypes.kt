@@ -83,7 +83,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
-        writer.withModule(RustModule.public(moduleName)) {
+        writer.withInlineModule(RustModule.public(moduleName)) {
             renderBuilder(this)
         }
     }
@@ -208,7 +208,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
             """
             impl #{TryFrom}<Builder> for #{Structure} {
                 type Error = ConstraintViolation;
-                
+
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
                     builder.build()
                 }

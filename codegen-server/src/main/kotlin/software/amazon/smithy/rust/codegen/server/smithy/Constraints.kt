@@ -22,9 +22,15 @@ import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+
+val UnconstrainedModule =
+    RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
+val ConstrainedModule =
+    RustModule.private("constrained", "Constrained types for constrained shapes.")
 
 /**
  * This file contains utilities to work with constrained shapes.

@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -62,21 +61,21 @@ class UnconstrainedCollectionGenerator(
         val constraintViolationName = constraintViolationSymbol.name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        unconstrainedModuleWriter.withModule(RustModule(module, RustMetadata(visibility = Visibility.PUBCRATE))) {
+        unconstrainedModuleWriter.withInlineModule(RustModule.pubcrate(module)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerUnconstrainedSymbol}>);
-                
+
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
                         Self::Unconstrained(value)
                     }
                 }
-                
+
                 impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
-                
+
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
                         let res: Result<_, (usize, #{InnerConstraintViolationSymbol})> = value
                             .0
@@ -84,7 +83,7 @@ class UnconstrainedCollectionGenerator(
                             .enumerate()
                             .map(|(idx, inner)| inner.try_into().map_err(|inner_violation| (idx, inner_violation)))
                             .collect();
-                        res.map(Self)   
+                        res.map(Self)
                            .map_err(|(idx, inner_violation)| #{ConstraintViolationSymbol}(idx, inner_violation))
                     }
                 }
@@ -103,10 +102,10 @@ class UnconstrainedCollectionGenerator(
         } else {
             Visibility.PUBCRATE
         }
-        modelsModuleWriter.withModule(
-            RustModule(
+        modelsModuleWriter.withInlineModule(
+            RustModule.newModule(
                 constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-                RustMetadata(visibility = constraintViolationVisibility),
+                constraintViolationVisibility,
             ),
         ) {
             // The first component of the tuple struct is the index in the collection where the first constraint

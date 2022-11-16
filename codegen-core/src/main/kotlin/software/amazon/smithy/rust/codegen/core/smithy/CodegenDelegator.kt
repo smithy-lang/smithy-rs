@@ -41,23 +41,17 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustom
  */
 open class RustCrate(
     fileManifest: FileManifest,
-    symbolProvider: SymbolProvider,
-    /**
-     * For core modules like `input`, `output`, and `error`, we need to specify whether these modules should be public or
-     * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
-     */
-    baseModules: Map<String, RustModule>,
+    private val symbolProvider: SymbolProvider,
     coreCodegenConfig: CoreCodegenConfig,
 ) {
     private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
-    private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
 
     /**
      * Write into the module that this shape is [locatedIn]
      */
     fun useShapeWriter(shape: Shape, f: Writable) {
-        inner.useShapeWriter(shape, f)
+        withModule(symbolProvider.toSymbol(shape).module(), f)
     }
 
     /**
@@ -94,14 +88,11 @@ open class RustCrate(
         requireDocs: Boolean = true,
     ) {
         injectInlineDependencies()
-        val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
-            .mapNotNull { modules[it] }
         inner.finalize(
             settings,
             model,
             manifestCustomizations,
             libRsCustomizations,
-            modules,
             this.features.toList(),
             requireDocs,
         )
@@ -133,31 +124,21 @@ open class RustCrate(
         module: RustModule,
         moduleWriter: Writable,
     ): RustCrate {
-        val moduleName = module.name
-        modules[moduleName] = module
-        inner.useFileWriter("src/$moduleName.rs", "crate::$moduleName", moduleWriter)
-        return this
-    }
-
-    /**
-     * Create a new non-root module directly. For example, if given the namespace `crate::foo::bar`,
-     * this will create `src/foo/bar.rs` with the contents from the given `moduleWriter`.
-     * Multiple calls to this with the same namespace are additive, so new code can be added
-     * by various customizations.
-     *
-     * Caution: this does not automatically add the required Rust `mod` statements to make this
-     * file an official part of the generated crate. This step needs to be done manually.
-     */
-    fun withNonRootModule(
-        namespace: String,
-        moduleWriter: Writable,
-    ): RustCrate {
-        val parts = namespace.split("::")
-        require(parts.size > 2) { "Cannot create root modules using withNonRootModule" }
-        require(parts[0] == "crate") { "Namespace must start with crate::" }
-
-        val fileName = "src/" + parts.filterIndexed { index, _ -> index > 0 }.joinToString("/") + ".rs"
-        inner.useFileWriter(fileName, namespace, moduleWriter)
+        when (module) {
+            is RustModule.LibRs -> lib { moduleWriter(this) }
+            is RustModule.LeafModule -> {
+                // Create a dependency which adds the mod statement for this module. This will be added to the writer
+                // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
+                val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
+                    module.renderModStatement(this)
+                }
+                val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
+                inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
+                    moduleWriter(writer)
+                    writer.addDependency(modStatement.dependency)
+                }
+            }
+        }
         return this
     }
 
@@ -176,19 +157,6 @@ val OperationsModule = RustModule.public("operation", documentation = "All opera
 val ModelsModule = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs.")
 val InputsModule = RustModule.public("input", documentation = "Input structures for operations.")
 val OutputsModule = RustModule.public("output", documentation = "Output structures for operations.")
-val ConfigModule = RustModule.public("config", documentation = "Client configuration.")
-
-/**
- * Allowlist of modules that will be exposed publicly in generated crates
- */
-val DefaultPublicModules = setOf(
-    ErrorsModule,
-    OperationsModule,
-    ModelsModule,
-    InputsModule,
-    OutputsModule,
-    ConfigModule,
-).associateBy { it.name }
 
 /**
  * Finalize all the writers by:
@@ -200,12 +168,11 @@ fun WriterDelegator<RustWriter>.finalize(
     model: Model,
     manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,
-    modules: List<RustModule>,
     features: List<Feature>,
     requireDocs: Boolean,
 ) {
     this.useFileWriter("src/lib.rs", "crate::lib") {
-        LibRsGenerator(settings, model, modules, libRsCustomizations, requireDocs).render(it)
+        LibRsGenerator(settings, model, libRsCustomizations, requireDocs).render(it)
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }

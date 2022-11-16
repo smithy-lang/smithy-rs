@@ -67,10 +67,10 @@ class InlineDependency(
         return extraDependencies
     }
 
-    fun key() = "${module.name}::$name"
+    fun key() = "${module.fullyQualifiedPath()}::$name"
 
     companion object {
-        fun forRustFile(
+        private fun forRustFile(
             name: String,
             baseDir: String,
             vararg additionalDependencies: RustDependency,
@@ -82,7 +82,7 @@ class InlineDependency(
             visibility: Visibility,
             vararg additionalDependencies: RustDependency,
         ): InlineDependency {
-            val module = RustModule.default(name, visibility)
+            val module = RustModule.newModule(name, visibility)
             val filename = if (name.endsWith(".rs")) { name } else { "$name.rs" }
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")

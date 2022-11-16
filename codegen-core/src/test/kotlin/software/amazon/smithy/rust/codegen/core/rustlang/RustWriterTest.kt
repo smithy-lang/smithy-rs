@@ -27,7 +27,7 @@ class RustWriterTest {
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
-        sut.withModule(RustModule.public("inner")) {
+        sut.withInlineModule(RustModule.public("inner")) {
             rustBlock("fn build(builder: #T)", requestBuilder) {
             }
         }

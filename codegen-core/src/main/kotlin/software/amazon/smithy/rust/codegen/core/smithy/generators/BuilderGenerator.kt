@@ -112,7 +112,7 @@ class BuilderGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
-        writer.withModule(RustModule.public(segments.last())) {
+        writer.withInlineModule(RustModule.public(segments.last())) {
             renderBuilder(this)
         }
     }

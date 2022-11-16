@@ -16,10 +16,11 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.smithy.Models
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
@@ -70,7 +71,7 @@ class ConstraintViolationSymbolProvider(
 
         val symbol = base.toSymbol(shape)
         val constraintViolationNamespace =
-            "${symbol.namespace.let { it.ifEmpty { "crate::${Models.namespace}" } }}::${
+            "${symbol.namespace.let { it.ifEmpty { ModelsModule.fullyQualifiedPath() } }}::${
             RustReservedWords.escapeIfNeeded(
                 shape.contextName(serviceShape).toSnakeCase(),
             )
@@ -104,7 +105,7 @@ class ConstraintViolationSymbolProvider(
                     .build()
             }
             is StringShape -> {
-                val namespace = "crate::${Models.namespace}::${
+                val namespace = "${ModelsModule.fullyQualifiedPath()}::${
                 RustReservedWords.escapeIfNeeded(
                     shape.contextName(serviceShape).toSnakeCase(),
                 )
@@ -114,7 +115,7 @@ class ConstraintViolationSymbolProvider(
                     .rustType(rustType)
                     .name(rustType.name)
                     .namespace(rustType.namespace, "::")
-                    .definitionFile(Models.filename)
+                    .locatedIn(ModelsModule)
                     .build()
             }
             else -> TODO("Constraint traits on other shapes not implemented yet: $shape")

@@ -92,37 +92,37 @@ class ConstrainedStringGenerator(
                 pub fn as_str(&self) -> &str {
                     &self.0
                 }
-                
+
                 /// ${rustDocsInnerMethod(inner)}
                 pub fn inner(&self) -> &$inner {
                     &self.0
                 }
-                
+
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
             }
-            
+
             impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = $inner;
             }
-            
+
             impl #{From}<$inner> for #{MaybeConstrained} {
                 fn from(value: $inner) -> Self {
                     Self::Unconstrained(value)
                 }
             }
-            
+
             impl #{Display} for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                    ${shape.redactIfNecessary(model, "self.0")}.fmt(f)
                 }
             }
-            
+
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
-                
+
                 /// ${rustDocsTryFromMethod(name, inner)}
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
                     let length = value.chars().count();
@@ -133,7 +133,7 @@ class ConstrainedStringGenerator(
                     }
                 }
             }
-            
+
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
                     value.into_inner()
@@ -149,7 +149,7 @@ class ConstrainedStringGenerator(
         )
 
         val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
-        writer.withModule(RustModule(constraintViolationModuleName, RustMetadata(visibility = constrainedTypeVisibility))) {
+        writer.withInlineModule(RustModule.newModule(constraintViolationModuleName, constrainedTypeVisibility)) {
             rust(
                 """
                 ##[derive(Debug, PartialEq)]
