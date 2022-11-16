@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -50,6 +51,26 @@ class ConstrainedStringGenerator(
             }
         }
 
+    fun renderLengthValidation(lengthTrait: LengthTrait, constraintViolation: Symbol) {
+        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
+            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
+        } else if (lengthTrait.min.isPresent) {
+            "${lengthTrait.min.get()} <= length"
+        } else {
+            "length <= ${lengthTrait.max.get()}"
+        }
+        writer.rust("""
+            fn check_length(string: &str) -> Result<(), $constraintViolation> {
+                let length = string.chars().count();
+
+                if $condition {
+                    Ok(())
+                } else {
+                    Err($constraintViolation::Length(length))
+                }
+            }
+        """.trimIndent())
+    }
     fun render() {
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
@@ -58,13 +79,6 @@ class ConstrainedStringGenerator(
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
-            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
-        } else if (lengthTrait.min.isPresent) {
-            "${lengthTrait.min.get()} <= length"
-        } else {
-            "length <= ${lengthTrait.max.get()}"
-        }
 
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
@@ -85,55 +99,57 @@ class ConstrainedStringGenerator(
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
-        writer.rustTemplate(
-            """
-            impl $name {
+        writer.rustBlockTemplate("impl $name") {
+            renderLengthValidation(lengthTrait, constraintViolation)
+
+            rust("""
                 /// Extracts a string slice containing the entire underlying `String`.
                 pub fn as_str(&self) -> &str {
                     &self.0
                 }
-                
+
                 /// ${rustDocsInnerMethod(inner)}
                 pub fn inner(&self) -> &$inner {
                     &self.0
                 }
-                
+
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-            }
-            
+            """.trimIndent())
+        }
+
+
+        writer.rustTemplate(
+            """
             impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = $inner;
             }
-            
+
             impl #{From}<$inner> for #{MaybeConstrained} {
                 fn from(value: $inner) -> Self {
                     Self::Unconstrained(value)
                 }
             }
-            
+
             impl #{Display} for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                    ${shape.redactIfNecessary(model, "self.0")}.fmt(f)
                 }
             }
-            
+
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
-                
+
                 /// ${rustDocsTryFromMethod(name, inner)}
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                    let length = value.chars().count();
-                    if $condition {
-                        Ok(Self(value))
-                    } else {
-                        Err(#{ConstraintViolation}::Length(length))
-                    }
+                    Self::check_length(&value)?;
+
+                    Ok(Self(value))
                 }
             }
-            
+
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
                     value.into_inner()
