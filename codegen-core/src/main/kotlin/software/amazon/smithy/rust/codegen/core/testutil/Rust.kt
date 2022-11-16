@@ -57,9 +57,13 @@ private fun tempDir(directory: File? = null): File {
  */
 object TestWorkspace {
     private val baseDir by lazy {
-        val homeDir = System.getProperty("user.home")
+        val homeDir = System.getProperty("APPDATA")
+            ?: System.getenv("XDG_DATA_HOME")
+            ?: System.getProperty("user.home")
+                ?.let { Path.of(it, "Library/Application Support").absolutePathString() }
+                ?.takeIf { File(it).exists() }
         if (homeDir != null) {
-            File(Path.of(homeDir, ".smithy-test-workspace").absolutePathString())
+            File(Path.of(homeDir, "smithy-test-workspace").absolutePathString())
         } else {
             System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
         }
