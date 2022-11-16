@@ -32,20 +32,14 @@ pub async fn main() {
     // Apply the `PrintPlugin` defined in `plugin.rs`
     let plugins = PluginPipeline::new().print();
     let app = PokemonService::builder_with_plugins(plugins)
-        // Build a registry containing implementations to all the operations in the service. These
-        // are async functions or async closures that take as input the operation's input and
-        // return the operation's output.
         .get_pokemon_species(get_pokemon_species)
         .get_storage(get_storage)
         .get_server_statistics(get_server_statistics)
         .capture_pokemon(capture_pokemon)
         .do_nothing(do_nothing)
         .check_health(check_health)
-        // Apply the `PrintPlugin` defined in `plugin.rs`
         .build()
-        .expect("failed to build an instance of PokemonService")
-        // Setup shared state and middlewares.
-        .layer(&AddExtensionLayer::new(Arc::new(State::default())));
+        .expect("failed to build an instance of PokemonService");
 
     // Start the [`hyper::Server`].
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)
