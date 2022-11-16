@@ -29,6 +29,7 @@ use tower_http::map_response_body::MapResponseBodyLayer;
 
 mod future;
 mod into_make_service;
+mod into_make_service_with_connect_info;
 mod lambda_handler;
 
 #[doc(hidden)]
@@ -39,7 +40,10 @@ mod route;
 pub(crate) mod tiny_map;
 
 pub use self::lambda_handler::LambdaHandler;
-pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
+pub use self::{
+    future::RouterFuture, into_make_service::IntoMakeService, into_make_service_with_connect_info::ConnectInfo,
+    into_make_service_with_connect_info::IntoMakeServiceWithConnectInfo, route::Route,
+};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.
@@ -114,6 +118,18 @@ where
     /// [`MakeService`]: tower::make::MakeService
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
+    }
+
+    /// Convert this router into a [`MakeService`], that is a [`Service`] whose
+    /// response is another service, and provides a [`ConnectInfo`] object to service handlers.
+    ///
+    /// This is useful when running your application with hyper's
+    /// [`Server`].
+    ///
+    /// [`Server`]: hyper::server::Server
+    /// [`MakeService`]: tower::make::MakeService
+    pub fn into_make_service_with_connect_info<C>(self) -> IntoMakeServiceWithConnectInfo<Self, C> {
+        IntoMakeServiceWithConnectInfo::new(self)
     }
 
     /// Apply a [`tower::Layer`] to the router.

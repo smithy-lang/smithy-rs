@@ -13,11 +13,13 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -124,6 +126,7 @@ class CombinedErrorGenerator(
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
+    private val createUnhandledError = CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::CreateUnhandledError")
 
     fun render(writer: RustWriter) {
         val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
@@ -154,6 +157,15 @@ class CombinedErrorGenerator(
                 RuntimeType.GenericError(runtimeConfig),
             )
         }
+        writer.rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {
+            rustBlock("fn create_unhandled_error(source: Box<dyn std::error::Error + Send + Sync + 'static>) -> Self") {
+                rustBlock("Self") {
+                    rust("kind: ${errorSymbol.name}Kind::Unhandled(#T::new(source)),", unhandledError())
+                    rust("meta: Default::default()")
+                }
+            }
+        }
+
         writer.rust("/// Types of errors that can occur for the `${operationSymbol.name}` operation.")
         meta.render(writer)
         writer.rustBlock("enum ${errorSymbol.name}Kind") {

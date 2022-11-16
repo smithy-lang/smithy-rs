@@ -95,8 +95,8 @@ pub enum ResponseRejection {
 
 impl std::error::Error for ResponseRejection {}
 
-convert_to_response_rejection!(aws_smithy_http::operation::BuildError, Build);
-convert_to_response_rejection!(aws_smithy_http::operation::SerializationError, Serialization);
+convert_to_response_rejection!(aws_smithy_http::operation::error::BuildError, Build);
+convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationError, Serialization);
 convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
@@ -179,15 +179,12 @@ pub enum RequestRejection {
     FloatParse(crate::Error),
     BoolParse(crate::Error),
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1243): In theory, we could get rid of this
-    // error, but it would be a lot of effort for comparatively low benefit.
-    /// Used when consuming the input struct builder.
-    Build(crate::Error),
-
-    /// Used by the server when the enum variant sent by a client is not known.
-    /// Unlike the rejections above, the inner type is code generated,
-    /// with each enum having its own generated error type.
-    EnumVariantNotFound(Box<dyn std::error::Error + Send + Sync>),
+    /// Used when consuming the input struct builder, and constraint violations occur.
+    // Unlike the rejections above, this does not take in `crate::Error`, since it is constructed
+    // directly in the code-generated SDK instead of in this crate.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1703): this will hold a type that can be
+    // rendered into a protocol-specific response later on.
+    ConstraintViolation(String),
 }
 
 #[derive(Debug, Display)]
@@ -235,9 +232,8 @@ impl From<MissingContentTypeReason> for RequestRejection {
 // type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
 // bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
 
-convert_to_request_rejection!(aws_smithy_json::deserialize::Error, JsonDeserialize);
-convert_to_request_rejection!(aws_smithy_xml::decode::XmlError, XmlDeserialize);
-convert_to_request_rejection!(aws_smithy_http::operation::BuildError, Build);
+convert_to_request_rejection!(aws_smithy_json::deserialize::error::DeserializeError, JsonDeserialize);
+convert_to_request_rejection!(aws_smithy_xml::decode::XmlDecodeError, XmlDeserialize);
 convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
 convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
 convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);

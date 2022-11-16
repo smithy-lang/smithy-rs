@@ -313,7 +313,11 @@ object EventStreamTestModels {
                 </Response>
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
-    ).flatMap { listOf(it, it.copy(target = CodegenTarget.SERVER)) }
+    )
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1442) Server tests
+    //  should be run from the server subproject using the
+    //  `serverTestSymbolProvider()`.
+    // .flatMap { listOf(it, it.copy(target = CodegenTarget.SERVER)) }
 
     class UnmarshallTestCasesProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
