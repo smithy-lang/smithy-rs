@@ -390,7 +390,7 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
     }
-
+    // attributes
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {
         override fun render(writer: RustWriter) {
             if (derives.isEmpty()) {

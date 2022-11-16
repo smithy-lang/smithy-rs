@@ -155,6 +155,7 @@ class BuilderGenerator(
         }
     }
 
+    // This function creates fluent builder
     private fun renderBuilder(writer: RustWriter) {
         val builderName = "Builder"
 
@@ -162,8 +163,14 @@ class BuilderGenerator(
         // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
         val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
+
+        // add serde
+        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", derive(#T))]\n", RuntimeType.SerdeSerialize)
+        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", derive(#T))]\n", RuntimeType.SerdeDeserialize)
+
         baseDerives.copy(derives = derives).render(writer)
         writer.rustBlock("pub struct $builderName") {
+            // writes struct fields
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
