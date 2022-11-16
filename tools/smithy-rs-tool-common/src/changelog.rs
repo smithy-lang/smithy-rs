@@ -125,11 +125,59 @@ impl FromStr for Reference {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Author {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl Default for Author {
+    fn default() -> Self {
+        Self::Single(String::new())
+    }
+}
+
+impl Author {
+    pub fn iter(&self) -> impl Iterator<Item = &String> {
+        match self {
+            Author::Single(author) => {
+                Box::new(std::iter::once(author)) as Box<dyn Iterator<Item = &String>>
+            }
+            Author::Multiple(authors) => {
+                Box::new(authors.iter()) as Box<dyn Iterator<Item = &String>>
+            }
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            Author::Single(author) => author.is_empty(),
+            Author::Multiple(authors) => {
+                authors.is_empty() || authors.iter().fold(false, |acc, x| x.is_empty() | acc)
+            }
+        }
+    }
+
+    fn validate_usernames(&self) -> Result<()> {
+        fn validate_username(author: &str) -> Result<()> {
+            if !author.chars().all(|c| c.is_alphanumeric() || c == '-') {
+                bail!("Author, \"{author}\", is not a valid GitHub username: [a-zA-Z0-9\\-]")
+            }
+            Ok(())
+        }
+        for author in self.iter() {
+            validate_username(author)?
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HandAuthoredEntry {
     pub message: String,
     pub meta: Meta,
-    pub author: String,
+    pub author: Author,
     #[serde(default)]
     pub references: Vec<Reference>,
     /// Optional commit hash to indicate "since when" these changes were made
@@ -148,9 +196,7 @@ impl HandAuthoredEntry {
         if self.author.is_empty() {
             bail!("Author must be set (was empty)");
         }
-        if !self.author.chars().all(|c| c.is_alphanumeric() || c == '-') {
-            bail!("Author must be valid GitHub username: [a-zA-Z0-9\\-]")
-        }
+        self.author.validate_usernames()?;
         if self.references.is_empty() {
             bail!("Changelog entry must refer to at least one pull request or issue");
         }
@@ -277,7 +323,7 @@ impl Changelog {
 
 #[cfg(test)]
 mod tests {
-    use super::{Changelog, HandAuthoredEntry, SdkAffected};
+    use super::{Author, Changelog, HandAuthoredEntry, SdkAffected};
     use anyhow::Context;
 
     #[test]
@@ -505,6 +551,35 @@ mod tests {
                 .context("String should have parsed as it has none meta.sdk")
                 .unwrap();
             assert_eq!(value.meta.target, None);
+        }
+        // single author
+        let value = r#"
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "rcoh"
+        "#;
+        {
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed with multiple authors")
+                .unwrap();
+            assert_eq!(value.author, Author::Single("rcoh".to_string()));
+        }
+        // multiple authors
+        let value = r#"
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = ["rcoh", "crisidev"]
+        "#;
+        {
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed with multiple authors")
+                .unwrap();
+            assert_eq!(
+                value.author,
+                Author::Multiple(vec!["rcoh".to_string(), "crisidev".to_string()])
+            );
         }
     }
 }
