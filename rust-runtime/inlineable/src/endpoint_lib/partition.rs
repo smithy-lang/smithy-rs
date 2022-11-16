@@ -10,7 +10,7 @@
 //! If, at a future point, this interface stabilizes it is a good candidate for extraction into a
 //! shared crate.
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
-use aws_smithy_json::deserialize::Error;
+use aws_smithy_json::deserialize::error::DeserializeError;
 use regex::Regex;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -212,12 +212,14 @@ mod deser {
     use aws_smithy_json::deserialize::token::{
         expect_bool_or_null, expect_start_object, expect_string_or_null, skip_value,
     };
-    use aws_smithy_json::deserialize::{json_token_iter, Error, Token};
+    use aws_smithy_json::deserialize::{error::DeserializeError, json_token_iter, Token};
     use regex::Regex;
     use std::borrow::Cow;
     use std::collections::HashMap;
 
-    pub(crate) fn deserialize_partitions(value: &[u8]) -> Result<PartitionResolver, Error> {
+    pub(crate) fn deserialize_partitions(
+        value: &[u8],
+    ) -> Result<PartitionResolver, DeserializeError> {
         let mut tokens_owned = json_token_iter(value).peekable();
         let tokens = &mut tokens_owned;
         expect_start_object(tokens.next())?;
@@ -234,7 +236,7 @@ mod deser {
                     _ => skip_value(tokens)?,
                 },
                 other => {
-                    return Err(Error::custom(format!(
+                    return Err(DeserializeError::custom(format!(
                         "expected object key or end object, found: {:?}",
                         other
                     )))
@@ -242,18 +244,18 @@ mod deser {
             }
         }
         if tokens.next().is_some() {
-            return Err(Error::custom(
+            return Err(DeserializeError::custom(
                 "found more JSON tokens after completing parsing",
             ));
         }
-        resolver.ok_or_else(|| Error::custom("did not find partitions array"))
+        resolver.ok_or_else(|| DeserializeError::custom("did not find partitions array"))
     }
 
     fn deser_partitions<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<Vec<PartitionMetadata>, Error>
+    ) -> Result<Vec<PartitionMetadata>, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartArray { .. }) => {
@@ -271,15 +273,15 @@ mod deser {
                 }
                 Ok(items)
             }
-            _ => Err(Error::custom("expected start array")),
+            _ => Err(DeserializeError::custom("expected start array")),
         }
     }
 
     pub(crate) fn deser_partition<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<PartitionMetadata, Error>
+    ) -> Result<PartitionMetadata, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartObject { .. }) => {
@@ -295,7 +297,7 @@ mod deser {
                                 builder.region_regex = token_to_str(tokens.next())?
                                     .map(|region_regex| Regex::new(&region_regex))
                                     .transpose()
-                                    .map_err(|e| Error::custom("invalid regex"))?;
+                                    .map_err(|e| DeserializeError::custom("invalid regex"))?;
                             }
                             "regions" => {
                                 builder.regions = deser_explicit_regions(tokens)?;
@@ -306,7 +308,7 @@ mod deser {
                             _ => skip_value(tokens)?,
                         },
                         other => {
-                            return Err(Error::custom(format!(
+                            return Err(DeserializeError::custom(format!(
                                 "expected object key or end object, found: {:?}",
                                 other
                             )))
@@ -315,16 +317,16 @@ mod deser {
                 }
                 Ok(builder.build())
             }
-            _ => Err(Error::custom("expected start object")),
+            _ => Err(DeserializeError::custom("expected start object")),
         }
     }
 
     #[allow(clippy::type_complexity, non_snake_case)]
     pub(crate) fn deser_explicit_regions<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<HashMap<super::Str, PartitionOutputOverride>, Error>
+    ) -> Result<HashMap<super::Str, PartitionOutputOverride>, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartObject { .. }) => {
@@ -340,7 +342,7 @@ mod deser {
                             }
                         }
                         other => {
-                            return Err(Error::custom(format!(
+                            return Err(DeserializeError::custom(format!(
                                 "expected object key or end object, found: {:?}",
                                 other
                             )))
@@ -349,12 +351,14 @@ mod deser {
                 }
                 Ok(map)
             }
-            _ => Err(Error::custom("expected start object")),
+            _ => Err(DeserializeError::custom("expected start object")),
         }
     }
 
     /// Convert a token to `Str` (a potentially static String)
-    fn token_to_str(token: Option<Result<Token, Error>>) -> Result<Option<super::Str>, Error> {
+    fn token_to_str(
+        token: Option<Result<Token, DeserializeError>>,
+    ) -> Result<Option<super::Str>, DeserializeError> {
         Ok(expect_string_or_null(token)?
             .map(|s| s.to_unescaped().map(|u| u.into_owned()))
             .transpose()?
@@ -363,9 +367,9 @@ mod deser {
 
     fn deser_outputs<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<Option<PartitionOutputOverride>, Error>
+    ) -> Result<Option<PartitionOutputOverride>, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartObject { .. }) => {
@@ -393,7 +397,7 @@ mod deser {
                             _ => skip_value(tokens)?,
                         },
                         other => {
-                            return Err(Error::custom(format!(
+                            return Err(DeserializeError::custom(format!(
                                 "expected object key or end object, found: {:?}",
                                 other
                             )))
@@ -402,7 +406,7 @@ mod deser {
                 }
                 Ok(Some(builder))
             }
-            _ => Err(Error::custom("expected start object")),
+            _ => Err(DeserializeError::custom("expected start object")),
         }
     }
 }

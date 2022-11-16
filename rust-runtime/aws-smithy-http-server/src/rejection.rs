@@ -95,8 +95,8 @@ pub enum ResponseRejection {
 
 impl std::error::Error for ResponseRejection {}
 
-convert_to_response_rejection!(aws_smithy_http::operation::BuildError, Build);
-convert_to_response_rejection!(aws_smithy_http::operation::SerializationError, Serialization);
+convert_to_response_rejection!(aws_smithy_http::operation::error::BuildError, Build);
+convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationError, Serialization);
 convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
@@ -232,8 +232,8 @@ impl From<MissingContentTypeReason> for RequestRejection {
 // type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
 // bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
 
-convert_to_request_rejection!(aws_smithy_json::deserialize::Error, JsonDeserialize);
-convert_to_request_rejection!(aws_smithy_xml::decode::XmlError, XmlDeserialize);
+convert_to_request_rejection!(aws_smithy_json::deserialize::error::DeserializeError, JsonDeserialize);
+convert_to_request_rejection!(aws_smithy_xml::decode::XmlDecodeError, XmlDeserialize);
 convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
 convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
 convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);

@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -23,8 +24,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -59,13 +62,21 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
         .build()
 }
 
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("SerializationError")
+fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("error::BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("error::SerializationError")
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
-    fun missingField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::MissingField { field: ${field.dq()}, details: ${details.dq()} }"
-    fun invalidField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::InvalidField { field: ${field.dq()}, details: ${details.dq()}.to_string() }"
-    fun serializationError(w: RustWriter, error: String) = "${w.format(runtimeConfig.operationBuildError())}::SerializationError($error.into())"
+    fun missingField(field: String, details: String) = writable {
+        rust("#T::missing_field(${field.dq()}, ${details.dq()})", runtimeConfig.operationBuildError())
+    }
+    fun invalidField(field: String, details: String) = invalidField(field) { rust(details.dq()) }
+    fun invalidField(field: String, details: Writable) = writable {
+        rustTemplate(
+            "#{error}::invalid_field(${field.dq()}, #{details:W})",
+            "error" to runtimeConfig.operationBuildError(),
+            "details" to details,
+        )
+    }
 }
 
 // Setter names will never hit a reserved word and therefore never need escaping.
@@ -124,10 +135,7 @@ class BuilderGenerator(
 
     private fun RustWriter.missingRequiredField(field: String) {
         val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
-        rust(
-            """#T::MissingField { field: "$field", details: "$detailedMessage" } """,
-            runtimeConfig.operationBuildError(),
-        )
+        OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
     }
 
     fun renderConvenienceMethod(implBlock: RustWriter) {
@@ -288,7 +296,7 @@ class BuilderGenerator(
                     when {
                         !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
                         !memberSymbol.isOptional() -> withBlock(
-                            ".ok_or(",
+                            ".ok_or_else(||",
                             ")?",
                         ) { missingRequiredField(memberName) }
                     }

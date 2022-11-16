@@ -25,6 +25,7 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
@@ -100,8 +101,7 @@ class JsonParserGenerator(
     private val jsonDeserModule = RustModule.private("json_deser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
-        "Error" to smithyJson.member("deserialize::Error"),
-        "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
+        "Error" to smithyJson.member("deserialize::error::DeserializeError"),
         "expect_blob_or_null" to smithyJson.member("deserialize::token::expect_blob_or_null"),
         "expect_bool_or_null" to smithyJson.member("deserialize::token::expect_bool_or_null"),
         "expect_document" to smithyJson.member("deserialize::token::expect_document"),
@@ -422,7 +422,7 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startObjectOrNull {
-                    rust("let mut map = #T::new();", software.amazon.smithy.rust.codegen.core.rustlang.RustType.HashMap.RuntimeType)
+                    rust("let mut map = #T::new();", RustType.HashMap.RuntimeType)
                     objectKeyLoop(hasMembers = true) {
                         withBlock("let key =", "?;") {
                             deserializeStringInner(keyTarget, "key")
