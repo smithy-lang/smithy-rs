@@ -24,6 +24,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -241,8 +242,10 @@ open class Instantiator(
         val member = shape.expectMember(memberName)
         writer.rust("#T::${symbolProvider.toMemberName(member)}", unionSymbol)
         // Unions should specify exactly one member.
-        writer.withBlock("(", ")") {
-            renderMember(this, member, variant.second, ctx)
+        if (member.target != ShapeId.from("smithy.api#Unit")) {
+            writer.withBlock("(", ")") {
+                renderMember(this, member, variant.second, ctx)
+            }
         }
     }
 

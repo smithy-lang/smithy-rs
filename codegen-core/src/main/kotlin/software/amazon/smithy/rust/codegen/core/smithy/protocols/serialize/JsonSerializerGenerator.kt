@@ -393,8 +393,17 @@ class JsonSerializerGenerator(
             is MapShape -> jsonObjectWriter(context) { objectName ->
                 serializeMap(Context(objectName, value, target))
             }
-            is StructureShape -> jsonObjectWriter(context) { objectName ->
-                serializeStructure(StructContext(objectName, value.asRef(), target))
+            is StructureShape -> {
+                if (context.shape.target == ShapeId.from("smithy.api#Unit")) {
+                    safeName("object").also { objectName ->
+                        rust("let $objectName = ${context.writerExpression}.start_object();")
+                        rust("$objectName.finish();")
+                    }
+                } else {
+                    jsonObjectWriter(context) { objectName ->
+                        serializeStructure(StructContext(objectName, value.asRef(), target))
+                    }
+                }
             }
             is UnionShape -> jsonObjectWriter(context) { objectName ->
                 serializeUnion(Context(objectName, value, target))
@@ -452,8 +461,15 @@ class JsonSerializerGenerator(
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
-                            serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
+
+                        if (member.target == ShapeId.from("smithy.api#Unit")) {
+                            withBlock("#T::$variantName => {", "},", unionSymbol) {
+                                serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
+                            }
+                        } else {
+                            withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
+                                serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
+                            }
                         }
                     }
                     if (target.renderUnknownVariant()) {

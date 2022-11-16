@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -263,12 +264,14 @@ class JsonParserGenerator(
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
                 }
+
                 else -> rust("u.into_owned()")
             }
         }
     }
 
-    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
+    private fun convertsToEnumInServer(shape: StringShape) =
+        target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun RustWriter.deserializeString(target: StringShape) {
         // Additional `.transpose()?` because we can't use `?` inside the closures that parsed the string.
@@ -370,7 +373,10 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startObjectOrNull {
-                    rust("let mut map = #T::new();", software.amazon.smithy.rust.codegen.core.rustlang.RustType.HashMap.RuntimeType)
+                    rust(
+                        "let mut map = #T::new();",
+                        software.amazon.smithy.rust.codegen.core.rustlang.RustType.HashMap.RuntimeType,
+                    )
                     objectKeyLoop(hasMembers = true) {
                         withBlock("let key =", "?;") {
                             deserializeStringInner(keyTarget, "key")
@@ -462,9 +468,19 @@ class JsonParserGenerator(
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
-                                        withBlock("Some(#T::$variantName(", "))", symbol) {
-                                            deserializeMember(member)
-                                            unwrapOrDefaultOrError(member)
+                                        if (member.target == ShapeId.from("smithy.api#Unit")) {
+                                            rustTemplate(
+                                                """
+                                                #{skip_value}(tokens)?;
+                                                Some(#{Union}::$variantName)
+                                                """,
+                                                "Union" to symbol, *codegenScope,
+                                            )
+                                        } else {
+                                            withBlock("Some(#T::$variantName(", "))", symbol) {
+                                                deserializeMember(member)
+                                                unwrapOrDefaultOrError(member)
+                                            }
                                         }
                                     }
                                 }

@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -123,7 +124,8 @@ fun unknownVariantError(union: String) =
         "It occurs when an outdated client is used after a new enum variant was added on the server side."
 
 private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: MemberShape, memberSymbol: Symbol) {
-    if (member.target.name == "Unit") {
+    if (member.target == ShapeId.from("smithy.api#Unit")) {
+        // if (member.target.name == "Unit") {
         write("${symbolProvider.toMemberName(member)},")
     } else {
         write("${symbolProvider.toMemberName(member)}(#T),", memberSymbol)
@@ -137,7 +139,8 @@ private fun RustWriter.renderAsVariant(
     unionSymbol: Symbol,
     memberSymbol: Symbol,
 ) {
-    if (member.target.name == "Unit") {
+    if (member.target == ShapeId.from("smithy.api#Unit")) {
+        // if (member.target.name == "Unit") {
         rust(
             "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
         )
