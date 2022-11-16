@@ -10,8 +10,7 @@ extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.test"
 tasks["jar"].enabled = false
 
 plugins {
-    val smithyGradlePluginVersion: String by project
-    id("software.amazon.smithy").version(smithyGradlePluginVersion)
+    id("software.amazon.smithy")
 }
 
 val smithyVersion: String by project
@@ -39,28 +38,46 @@ dependencies {
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
         CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
-        CodegenTest("naming_obs_structs#NamingObstacleCourseStructs", "naming_test_structs", imports = listOf("$commonModels/naming-obstacle-course-structs.smithy")),
+        CodegenTest(
+            "naming_obs_structs#NamingObstacleCourseStructs",
+            "naming_test_structs",
+            imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
+        ),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService", "constraints_without_public_constrained_types",
             imports = listOf("$commonModels/constraints.smithy"),
             extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
         ),
-        CodegenTest("com.amazonaws.constraints#ConstraintsService", "constraints", imports = listOf("$commonModels/constraints.smithy")),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints",
+            imports = listOf("$commonModels/constraints.smithy"),
+        ),
         CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
-        CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras", imports = listOf("$commonModels/rest-json-extras.smithy")),
-        CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation",
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJsonExtras",
+            "rest_json_extras",
+            imports = listOf("$commonModels/rest-json-extras.smithy"),
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation",
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
         CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
         CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
         CodegenTest("aws.protocoltests.misc#MiscService", "misc", imports = listOf("$commonModels/misc.smithy")),
-        CodegenTest("com.amazonaws.ebs#Ebs", "ebs",
+        CodegenTest(
+            "com.amazonaws.ebs#Ebs", "ebs",
             imports = listOf("$commonModels/ebs.json"),
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
         CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
-        CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-server-sdk", imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy")),
+        CodegenTest(
+            "com.aws.example.rust#PokemonService",
+            "pokemon-service-server-sdk",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+        ),
     )
 }
 
