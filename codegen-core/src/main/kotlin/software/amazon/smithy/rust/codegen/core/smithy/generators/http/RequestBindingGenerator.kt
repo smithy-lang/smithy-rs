@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -23,7 +24,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
@@ -33,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 fun HttpTrait.uriFormatString(): String {
@@ -220,12 +224,22 @@ class RequestBindingGenerator(
                     val derefName = safeName("inner")
                     rust("let $derefName = &_input.$memberName;")
                     if (memberSymbol.isOptional()) {
-                        rustTemplate("let $derefName = $derefName.as_ref().ok_or(#{BuildError:W})?;", *codegenScope)
+                        rustTemplate(
+                            "let $derefName = $derefName.as_ref().ok_or_else(|| #{BuildError:W})?;",
+                            *codegenScope,
+                        )
                     }
 
                     when {
                         target.isStringShape -> {
-                            rustTemplate("if $derefName.is_empty() { return Err(#{BuildError:W}); }", *codegenScope)
+                            val asStr = writable {
+                                if (target.hasTrait<EnumTrait>()) {
+                                    rustInlineTemplate(".as_str()")
+                                }
+                            }
+                            rustBlock("if $derefName#W.is_empty()", asStr) {
+                                rustTemplate("return Err(#{BuildError:W});", *codegenScope)
+                            }
                         }
                     }
 
