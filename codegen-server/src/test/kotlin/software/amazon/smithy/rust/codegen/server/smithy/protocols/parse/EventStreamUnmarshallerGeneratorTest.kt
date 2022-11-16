@@ -7,12 +7,14 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.parse
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
-import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
@@ -34,14 +36,13 @@ class EventStreamUnmarshallerGeneratorTest {
             target = testCase.target,
         )
         val protocol = testCase.protocolBuilder(codegenContext)
+        fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(codegenContext.symbolProvider)
         val generator = EventStreamUnmarshallerGenerator(
             protocol,
-            test.model,
-            TestRuntimeConfig,
-            test.symbolProvider,
+            codegenContext,
             test.operationShape,
             test.streamShape,
-            target = testCase.target,
+            ::builderSymbol,
         )
 
         test.project.lib {
@@ -275,7 +276,9 @@ class EventStreamUnmarshallerGeneratorTest {
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     match expect_error(result.unwrap())$kindSuffix {
                         TestStreamErrorKind::Unhandled(err) => {
-                            assert!(format!("{}", err).contains("message: \"unmodeled error\""));
+                            let message = format!("{}", aws_smithy_types::error::display::DisplayErrorContext(&err));
+                            let expected = "message: \"unmodeled error\"";
+                            assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");
                         }
                         kind => panic!("expected generic error, but got {:?}", kind),
                     }

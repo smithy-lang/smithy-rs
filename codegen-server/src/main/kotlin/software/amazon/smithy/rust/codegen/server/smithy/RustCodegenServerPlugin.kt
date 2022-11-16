@@ -24,10 +24,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import java.util.logging.Level
 import java.util.logging.Logger
 
-/** Rust Codegen Plugin
- *  This is the entrypoint for code generation, triggered by the smithy-build plugin.
- *  `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
- *  enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
+/**
+ * Rust Codegen Plugin
+ *
+ * This is the entrypoint for code generation, triggered by the smithy-build plugin.
+ * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
+ * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
  */
 class RustCodegenServerPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
@@ -51,8 +53,8 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
     }
 
     companion object {
-        /** SymbolProvider
-         * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
+        /**
+         * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider.
          *
          * The Symbol provider is composed of a base [SymbolVisitor] which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
@@ -61,12 +63,13 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
             model: Model,
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
+            constrainedTypes: Boolean = true,
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+                // Generate public constrained types for directly constrained shapes.
+                .let { if (constrainedTypes) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let {
-                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER)
-                }
+                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER) }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes

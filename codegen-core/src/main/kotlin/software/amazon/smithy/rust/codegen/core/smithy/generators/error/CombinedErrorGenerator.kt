@@ -13,11 +13,13 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -124,6 +126,7 @@ class CombinedErrorGenerator(
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
+    private val createUnhandledError = CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::CreateUnhandledError")
 
     fun render(writer: RustWriter) {
         val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
@@ -154,6 +157,15 @@ class CombinedErrorGenerator(
                 RuntimeType.GenericError(runtimeConfig),
             )
         }
+        writer.rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {
+            rustBlock("fn create_unhandled_error(source: Box<dyn std::error::Error + Send + Sync + 'static>) -> Self") {
+                rustBlock("Self") {
+                    rust("kind: ${errorSymbol.name}Kind::Unhandled(#T::new(source)),", unhandledError())
+                    rust("meta: Default::default()")
+                }
+            }
+        }
+
         writer.rust("/// Types of errors that can occur for the `${operationSymbol.name}` operation.")
         meta.render(writer)
         writer.rustBlock("enum ${errorSymbol.name}Kind") {
@@ -166,9 +178,9 @@ class CombinedErrorGenerator(
             rust(
                 """
                 /// An unexpected error, e.g. invalid JSON returned by the service or an unknown error code
-                Unhandled(Box<dyn #T + Send + Sync + 'static>),
+                Unhandled(#T),
                 """,
-                RuntimeType.StdError,
+                unhandledError(),
             )
         }
         writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
@@ -215,7 +227,7 @@ class CombinedErrorGenerator(
                 /// Creates the `${errorSymbol.name}::Unhandled` variant from any error type.
                 pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
                     Self {
-                        kind: ${errorSymbol.name}Kind::Unhandled(err.into()),
+                        kind: ${errorSymbol.name}Kind::Unhandled(#{Unhandled}::new(err.into())),
                         meta: Default::default()
                     }
                 }
@@ -224,7 +236,7 @@ class CombinedErrorGenerator(
                 pub fn generic(err: #{generic_error}) -> Self {
                     Self {
                         meta: err.clone(),
-                        kind: ${errorSymbol.name}Kind::Unhandled(err.into()),
+                        kind: ${errorSymbol.name}Kind::Unhandled(#{Unhandled}::new(err.into())),
                     }
                 }
 
@@ -249,7 +261,9 @@ class CombinedErrorGenerator(
                     self.meta.code()
                 }
                 """,
-                "generic_error" to genericError, "std_error" to RuntimeType.StdError,
+                "generic_error" to genericError,
+                "std_error" to RuntimeType.StdError,
+                "Unhandled" to unhandledError(),
             )
             errors.forEach { error ->
                 val errorVariantSymbol = symbolProvider.toSymbol(error)
@@ -265,10 +279,7 @@ class CombinedErrorGenerator(
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 delegateToVariants(errors, errorSymbol) {
                     writable {
-                        when (it) {
-                            is VariantMatch.Unhandled -> rust("Some(_inner.as_ref())")
-                            is VariantMatch.Modeled -> rust("Some(_inner)")
-                        }
+                        rust("Some(_inner)")
                     }
                 }
             }

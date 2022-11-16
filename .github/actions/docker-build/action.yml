@@ -15,7 +15,7 @@ inputs:
 runs:
   using: composite
   steps:
-  - uses: actions/cache@v2
+  - uses: actions/cache@v3
     name: Gradle Cache
     with:
       path: |
@@ -24,11 +24,12 @@ runs:
       key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
       restore-keys: |
         ${{ runner.os }}-gradle-
-      # Pinned to the commit hash of v1.3.0
-  - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+    # Pinned to the commit hash of v2.1.0
+  - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
     with:
-      sharedKey: ${{ runner.os }}-${{ github.job }}
-      target-dir: ./smithy-rs-target
+      shared-key: ${{ runner.os }}-${{ github.job }}
+      workspaces: |
+        . smithy-rs-target
   - name: Download all artifacts
     uses: ./smithy-rs/.github/actions/download-all-artifacts
   - name: Prepare build image

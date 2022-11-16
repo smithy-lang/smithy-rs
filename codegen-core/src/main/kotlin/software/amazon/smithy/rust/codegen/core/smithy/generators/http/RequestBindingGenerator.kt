@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators.http
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.pattern.SmithyPattern
@@ -12,6 +13,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -21,9 +23,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -45,6 +49,8 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
     return base.dq()
 }
 
+// TODO(https://github.com/awslabs/smithy-rs/issues/1901) Move to `codegen-client` and update docs.
+//  `MakeOperationGenerator` needs to be moved to `codegen-client` first, which is not easy.
 /**
  * Generates methods to serialize and deserialize requests based on the HTTP trait. Specifically:
  * 1. `fn update_http_request(builder: http::request::Builder) -> Builder`
@@ -62,7 +68,9 @@ class RequestBindingGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
-    private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
+    private fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(symbolProvider)
+    private val httpBindingGenerator =
+        HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape, ::builderSymbol)
     private val index = HttpBindingIndex.of(model)
     private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 
@@ -99,7 +107,7 @@ class RequestBindingGenerator(
                 rust(
                     """
                     let builder = #{T}(input, builder)?;
-                    """.trimIndent(),
+                    """,
                     addHeadersFn,
                 )
             }
@@ -246,17 +254,14 @@ class RequestBindingGenerator(
     private fun RustWriter.serializeLabel(member: MemberShape, label: SmithyPattern.Segment, outputVar: String) {
         val target = model.expectShape(member.target)
         val symbol = symbolProvider.toSymbol(member)
-        val buildError = {
-            OperationBuildError(runtimeConfig).missingField(
-                this,
-                symbolProvider.toMemberName(member),
-                "cannot be empty or unset",
-            )
-        }
+        val buildError = OperationBuildError(runtimeConfig).missingField(
+            symbolProvider.toMemberName(member),
+            "cannot be empty or unset",
+        )
         val input = safeName("input")
         rust("let $input = &_input.${symbolProvider.toMemberName(member)};")
         if (symbol.isOptional()) {
-            rust("let $input = $input.as_ref().ok_or(${buildError()})?;")
+            rustTemplate("let $input = $input.as_ref().ok_or_else(|| #{buildError:W})?;", "buildError" to buildError)
         }
         when {
             target.isStringShape -> {
@@ -282,12 +287,13 @@ class RequestBindingGenerator(
                 )
             }
         }
-        rust(
+        rustTemplate(
             """
             if $outputVar.is_empty() {
-                return Err(${buildError()})
+                return Err(#{buildError:W})
             }
             """,
+            "buildError" to buildError,
         )
     }
     /** End URI generation **/

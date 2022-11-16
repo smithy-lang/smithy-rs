@@ -35,6 +35,7 @@ val DECORATORS = listOf(
     ServiceConfigDecorator(),
     AwsPresigningDecorator(),
     AwsReadmeDecorator(),
+    HttpConnectorDecorator(),
 
     // Service specific decorators
     ApiGatewayDecorator(),
