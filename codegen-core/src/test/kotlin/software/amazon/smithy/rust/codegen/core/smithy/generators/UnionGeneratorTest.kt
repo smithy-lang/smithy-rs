@@ -130,7 +130,7 @@ class UnionGeneratorTest {
         writer.compileAndTest(
             """
             let a = MyUnion::A;
-            assert!(a.as_a() == Ok(()));
+            assert_eq!(Ok(()), a.as_a());
             """,
         )
     }
