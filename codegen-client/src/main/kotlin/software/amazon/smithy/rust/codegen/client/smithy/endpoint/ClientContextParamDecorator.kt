@@ -28,9 +28,10 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 /**
  * This decorator adds `ClientContextParams` to the service config.
  *
- * This handles injecting parameters like `s3::Accelerate` or `s3::ForcePathStyle`
+ * This handles injecting parameters like `s3::Accelerate` or `s3::ForcePathStyle`. The resulting parameters become
+ * setters on the config builder object.
  */
-class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization() {
+internal class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization() {
     private val contextParams = ctx.serviceShape.getTrait<ClientContextParamsTrait>()?.parameters.orEmpty().toList()
         .map { (key, value) -> ContextParam.fromClientParam(key, value, ctx.symbolProvider) }
 

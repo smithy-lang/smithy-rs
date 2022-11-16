@@ -14,6 +14,9 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTests
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -21,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -33,10 +37,19 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
  *
  * If this resolver does not recognize the value, it MUST return `null`.
  */
-interface RulesEngineBuiltInResolver {
-    fun defaultFor(parameter: Parameter, configRef: String): Writable?
+interface EndpointCustomization {
+    fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? = null
+    fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> = listOf()
 }
 
+/**
+ * Decorator that injects endpoints 2.0 resolvers throughout the entire client.
+ *
+ * This _does not_ inject any standard library functions. For the standard library, ensure that
+ * [NativeSmithyEndpointsStdLib] is included as a decorator on the classpath.
+ *
+ * If the service _does not_ provide custom endpoint rules, this decorator is a no-op.
+ */
 class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "Endpoints"
     override val order: Byte = 0
@@ -49,120 +62,128 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + CreateEndpointParams(
-            codegenContext,
-            operation,
-            codegenContext.rootDecorator.builtInResolvers(codegenContext),
-        )
+        return listOfNotNull(
+            EndpointTypesGenerator.fromContext(codegenContext)?.let { endpointTypes ->
+                InjectEndpointInMakeOperation(
+                    codegenContext,
+                    endpointTypes,
+                    operation,
+                )
+            },
+        ) + baseCustomizations
     }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + ClientContextDecorator(codegenContext)
-    }
-}
-
-/**
- * Creates an `<crate>::endpoint_resolver::Params` structure in make operation generator. This combines state from the
- * client, the operation, and the model to create parameters.
- *
- * Example generated code:
- * ```rust
- * let _endpoint_params = crate::endpoint_resolver::Params::builder()
- *     .set_region(Some("test-region"))
- *     .set_disable_everything(Some(true))
- *     .set_bucket(input.bucket.as_ref())
- *     .build();
- * ```
- */
-class CreateEndpointParams(
-    private val ctx: ClientCodegenContext,
-    private val operationShape: OperationShape,
-    private val rulesEngineBuiltInResolvers: List<RulesEngineBuiltInResolver>,
-) :
-    OperationCustomization() {
-
-    private val runtimeConfig = ctx.runtimeConfig
-    private val params =
-        EndpointRulesetIndex.of(ctx.model).endpointRulesForService(ctx.serviceShape)?.parameters
-    private val idx = ContextIndex.of(ctx.model)
-
-    override fun section(section: OperationSection): Writable {
-        // if we don't have any parameters, then we have no rules, don't bother
-        if (params == null) {
-            return emptySection
-        }
-        val codegenScope = arrayOf(
-            "Params" to EndpointParamsGenerator(params).paramsStruct(),
-            "BuildError" to runtimeConfig.operationBuildError(),
+        return baseCustomizations + ClientContextDecorator(codegenContext) + listOfNotNull(
+            EndpointTypesGenerator.fromContext(
+                codegenContext,
+            )?.let { EndpointConfigCustomization(codegenContext, it) },
         )
-        return when (section) {
-            is OperationSection.MutateInput -> writable {
-                rustTemplate(
-                    """
-                    let endpoint_params = #{Params}::builder()#{builderFields:W}.build();
-                    """,
-                    "builderFields" to builderFields(params, section),
-                    *codegenScope,
-                )
-            }
-
-            is OperationSection.MutateRequest -> writable {
-                // insert the endpoint resolution _result_ into the bag (note that this won't bail if endpoint
-                // resolution failed)
-                // this is temporary—in the long term, we will insert the endpoint into the bag directly, but this makes
-                // it testable
-                rustTemplate("${section.request}.properties_mut().insert(endpoint_params);")
-            }
-
-            else -> emptySection
-        }
     }
 
-    private fun builderFields(params: Parameters, section: OperationSection.MutateInput) = writable {
-        val memberParams = idx.getContextParams(operationShape)
-        val builtInParams = params.toList().filter { it.isBuiltIn }
-        // first load builtins and their defaults
-        builtInParams.forEach { param ->
-            val defaultProviders = rulesEngineBuiltInResolvers.mapNotNull { it.defaultFor(param, section.config) }
-            if (defaultProviders.size > 1) {
-                error("Multiple providers provided a value for the builtin $param")
-            }
-            defaultProviders.firstOrNull()?.also { defaultValue ->
-                rust(".set_${param.name.rustName()}(#W)", defaultValue)
-            }
-        }
-
-        idx.getClientContextParams(ctx.serviceShape).orNull()?.parameters?.forEach { (name, param) ->
-            val paramName = EndpointParamsGenerator.memberName(name)
-            val setterName = EndpointParamsGenerator.setterName(name)
-            if (param.type == ShapeType.BOOLEAN) {
-                rust(".$setterName(${section.config}.$paramName)")
-            } else {
-                rust(".$setterName(${section.config}.$paramName.clone())")
-            }
-        }
-
-        idx.getStaticContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
-            val setterName = EndpointParamsGenerator.setterName(name)
-            val value = writable {
-                when (val v = param.value) {
-                    is BooleanNode -> rust("Some(${v.value})")
-                    is StringNode -> rust("Some(${v.value.dq()}.to_string())")
-                    else -> TODO("Unexpected static value type: $v")
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        EndpointTypesGenerator.fromContext(codegenContext)?.also { generator ->
+            rustCrate.withModule(EndpointsModule) {
+                withInlineModule(EndpointTests) {
+                    generator.testGenerator()(this)
                 }
             }
-            rust(".$setterName(#W)", value)
+        }
+    }
+
+    /**
+     * Creates an `<crate>::endpoint_resolver::Params` structure in make operation generator. This combines state from the
+     * client, the operation, and the model to create parameters.
+     *
+     * Example generated code:
+     * ```rust
+     * let _endpoint_params = crate::endpoint_resolver::Params::builder()
+     *     .set_region(Some("test-region"))
+     *     .set_disable_everything(Some(true))
+     *     .set_bucket(input.bucket.as_ref())
+     *     .build();
+     * ```
+     */
+    class InjectEndpointInMakeOperation(
+        private val ctx: ClientCodegenContext,
+        private val typesGenerator: EndpointTypesGenerator,
+        private val operationShape: OperationShape,
+    ) :
+        OperationCustomization() {
+
+        private val idx = ContextIndex.of(ctx.model)
+
+        override fun section(section: OperationSection): Writable {
+            val codegenScope = arrayOf(
+                "Params" to typesGenerator.paramsStruct(),
+                "BuildError" to ctx.runtimeConfig.operationBuildError(),
+            )
+            return when (section) {
+                is OperationSection.MutateInput -> writable {
+                    rustTemplate(
+                        """
+                        let endpoint_params = #{Params}::builder()#{builderFields:W}.build()
+                            .map_err(#{BuildError}::other)?;
+                        let endpoint_result = ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params);
+                        """,
+                        "builderFields" to builderFields(typesGenerator.params, section),
+                        *codegenScope,
+                    )
+                }
+
+                is OperationSection.MutateRequest -> writable {
+                    // insert the endpoint resolution _result_ into the bag (note that this won't bail if endpoint
+                    // resolution failed)
+                    rustTemplate("${section.request}.properties_mut().insert(endpoint_params);")
+                    rustTemplate("${section.request}.properties_mut().insert(endpoint_result);")
+                }
+
+                else -> emptySection
+            }
         }
 
-        // lastly, allow these to be overridden by members
-        memberParams.forEach { (memberShape, param) ->
-            val memberName = ctx.symbolProvider.toMemberName(memberShape)
-            rust(
-                ".${EndpointParamsGenerator.setterName(param.name)}(${section.input}.$memberName.clone())",
-            )
+        private fun builderFields(params: Parameters, section: OperationSection.MutateInput) = writable {
+            val memberParams = idx.getContextParams(operationShape)
+            val builtInParams = params.toList().filter { it.isBuiltIn }
+            // first load builtins and their defaults
+            builtInParams.forEach { param ->
+                typesGenerator.builtInFor(param, section.config)?.also { defaultValue ->
+                    rust(".set_${param.name.rustName()}(#W)", defaultValue)
+                }
+            }
+
+            idx.getClientContextParams(ctx.serviceShape).orNull()?.parameters?.forEach { (name, param) ->
+                val paramName = EndpointParamsGenerator.memberName(name)
+                val setterName = EndpointParamsGenerator.setterName(name)
+                if (param.type == ShapeType.BOOLEAN) {
+                    rust(".$setterName(${section.config}.$paramName)")
+                } else {
+                    rust(".$setterName(${section.config}.$paramName.clone())")
+                }
+            }
+
+            idx.getStaticContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
+                val setterName = EndpointParamsGenerator.setterName(name)
+                val value = writable {
+                    when (val v = param.value) {
+                        is BooleanNode -> rust("Some(${v.value})")
+                        is StringNode -> rust("Some(${v.value.dq()}.to_string())")
+                        else -> TODO("Unexpected static value type: $v")
+                    }
+                }
+                rust(".$setterName(#W)", value)
+            }
+
+            // lastly, allow these to be overridden by members
+            memberParams.forEach { (memberShape, param) ->
+                val memberName = ctx.symbolProvider.toMemberName(memberShape)
+                rust(
+                    ".${EndpointParamsGenerator.setterName(param.name)}(${section.input}.$memberName.clone())",
+                )
+            }
         }
     }
 }

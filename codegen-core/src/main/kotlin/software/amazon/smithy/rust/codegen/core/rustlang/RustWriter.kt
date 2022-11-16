@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -93,6 +94,11 @@ private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
     trim: Boolean = true,
     f: T.(String) -> U,
 ): U {
+    scope.forEach { (k, v) ->
+        when (v) {
+            is Unit -> PANIC("provided `kotlin.Unit` for $k. This is a bug.")
+        }
+    }
     val contents = transformTemplate(template, scope, trim)
     pushState()
     this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
@@ -290,6 +296,15 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
     write(cleaned, *args)
     popState()
     return this
+}
+
+/**
+ * Writes a comment into the code
+ *
+ * Equivalent to [docs] but lines are preceded with `// ` instead of `///`
+ */
+fun <T : AbstractCodeWriter<T>> T.comment(text: String, vararg args: Any): T {
+    return docs(text, *args, newlinePrefix = "// ")
 }
 
 /**
@@ -627,6 +642,15 @@ class RustWriter private constructor(
 
                 is RustType -> {
                     t.render(fullyQualified = true)
+                }
+
+                is Function<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val func = t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
+                    val innerWriter = RustWriter(filename, namespace, printWarning = false)
+                    func(innerWriter)
+                    innerWriter.dependencies.forEach { addDependency(it) }
+                    return innerWriter.toString().trimEnd()
                 }
 
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")

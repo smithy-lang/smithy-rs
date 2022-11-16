@@ -15,11 +15,13 @@ pub(crate) struct DiagnosticCollector {
 }
 
 impl DiagnosticCollector {
+    #[allow(unused)]
     /// Report an error to the collector
     pub(crate) fn report_error(&mut self, err: impl Into<Box<dyn Error + Send + Sync>>) {
         self.last_error = Some(err.into());
     }
 
+    #[allow(unused)]
     /// Capture a result, returning Some(t) when the input was `Ok` and `None` otherwise
     pub(crate) fn capture<T, E: Into<Box<dyn Error + Send + Sync>>>(
         &mut self,
