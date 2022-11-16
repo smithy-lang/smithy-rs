@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -30,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 fun HttpTrait.uriFormatString(): String {
@@ -202,20 +200,32 @@ class RequestBindingGenerator(
                 val memberShape = param.member
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
-                val outerTarget = model.expectShape(memberShape.target)
+                val target = model.expectShape(memberShape.target)
 
-                ifSet(outerTarget, memberSymbol, "&_input.$memberName") { field ->
-                    // if `param` is a list, generate another level of iteration
-                    paramList(outerTarget, field, param, writer, memberShape)
-                }
-                if (memberShape.hasTrait<RequiredTrait>()) {
-                    rust(
-                        """
-                        else {
-                            query.push_kv(${param.locationName.dq()}, "");
-                        }
-                        """,
+                if (memberShape.isRequired) {
+                    val buildError = OperationBuildError(runtimeConfig).missingField(
+                        this,
+                        memberName,
+                        "cannot be empty or unset",
                     )
+                    val derefName = safeName("inner")
+                    rust("let $derefName = &_input.$memberName;")
+                    if (memberSymbol.isOptional()) {
+                        rust("let $derefName = $derefName.as_ref().ok_or($buildError)?;")
+                    }
+
+                    when {
+                        target.isStringShape -> {
+                            rust("if $derefName.is_empty() { return Err($buildError); }")
+                        }
+                    }
+
+                    paramList(target, derefName, param, writer, memberShape)
+                } else {
+                    ifSet(target, memberSymbol, "&_input.$memberName") { field ->
+                        // if `param` is a list, generate another level of iteration
+                        paramList(target, field, param, writer, memberShape)
+                    }
                 }
             }
             writer.rust("Ok(())")
