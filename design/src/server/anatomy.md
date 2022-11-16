@@ -323,9 +323,9 @@ The procedure of taking a struct and transforming it into a HTTP service is form
 
 ```rust
 /// An interface to convert a representation of a Smithy operation into a [`Route`].
-pub trait Upgradable<Protocol, Operation, ...> {
+pub trait Upgradable<Protocol, Operation> {
     /// Upgrade the representation of a Smithy operation to a [`Route`].
-    fn upgrade(self, plugin: &Plugin) -> Route<B>;
+    fn upgrade(self, plugin: &Plugin) -> Route<Body>;
 }
 ```
 
@@ -339,7 +339,7 @@ Below we give an example of a ZST which can be provided to the builder, which al
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
 pub struct FailOnMissingOperation;
 
-impl<Protocol, Operation, Exts, Body, Plugin> Upgradable<Protocol, Operation, Exts, Body, Plugin> for FailOnMissingOperation
+impl<Protocol, Operation> Upgradable<Protocol, Operation> for FailOnMissingOperation
 where
     InternalFailureException: IntoResponse<Protocol>,
     Protocol: 'static,
