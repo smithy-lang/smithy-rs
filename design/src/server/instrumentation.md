@@ -58,10 +58,10 @@ This is enabled via the `instrument` method provided by the `aws_smithy_http_ser
 ```rust
 use aws_smithy_http_server::instrumentation::InstrumentExt;
 
-let app = PokemonService::builder()
+let plugins = PluginPipeline::new().instrument();
+let app = PokemonService::builder_with_plugins(plugins)
   .get_pokemon_species(/* handler */)
   /* ... */
-  .instrument()
   .build();
 ```
 
