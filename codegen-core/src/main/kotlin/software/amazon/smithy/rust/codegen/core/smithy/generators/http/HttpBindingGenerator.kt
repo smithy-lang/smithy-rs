@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -119,7 +118,7 @@ class HttpBindingGenerator(
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
-    private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
+    private val headerUtil = CargoDependency.smithyHttp(runtimeConfig).toType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val dateTime = RuntimeType.DateTime(runtimeConfig).toSymbol().rustType()
     private val httpSerdeModule = RustModule.private("http_serde")
@@ -524,7 +523,7 @@ class HttpBindingGenerator(
             listForEach(targetShape, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
                 if (innerMemberType.isPrimitive()) {
-                    val encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
+                    val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
                     rust("let mut encoder = #T::from(${autoDeref(innerField)});", encoder)
                 }
                 val formatted = headerFmtFun(

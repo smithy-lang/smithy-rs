@@ -17,7 +17,6 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -69,7 +68,8 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::error::DeserializeError"),
+        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
+            .member("deserialize::error::DeserializeError"),
         "Response" to RuntimeType.http.member("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )

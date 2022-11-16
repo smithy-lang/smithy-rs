@@ -31,7 +31,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -128,21 +127,21 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
 
     private val codegenScope = arrayOf(
-        "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
+        "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
         "Cow" to ServerRuntimeType.Cow,
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
-        "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.asType(),
-        "HttpBody" to CargoDependency.HttpBody.asType(),
-        "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
-        "Hyper" to CargoDependency.Hyper.asType(),
-        "LazyStatic" to CargoDependency.LazyStatic.asType(),
-        "Mime" to ServerCargoDependency.Mime.asType(),
-        "Nom" to ServerCargoDependency.Nom.asType(),
-        "OnceCell" to ServerCargoDependency.OnceCell.asType(),
-        "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
-        "Regex" to CargoDependency.Regex.asType(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
+        "HttpBody" to CargoDependency.HttpBody.toType(),
+        "header_util" to CargoDependency.smithyHttp(runtimeConfig).toType().member("header"),
+        "Hyper" to CargoDependency.Hyper.toType(),
+        "LazyStatic" to CargoDependency.LazyStatic.toType(),
+        "Mime" to ServerCargoDependency.Mime.toType(),
+        "Nom" to ServerCargoDependency.Nom.toType(),
+        "OnceCell" to ServerCargoDependency.OnceCell.toType(),
+        "PercentEncoding" to CargoDependency.PercentEncoding.toType(),
+        "Regex" to CargoDependency.Regex.toType(),
+        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
@@ -1050,7 +1049,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                     """
                                     let v = <_ as #T>::parse_smithy_primitive(&v)?;
                                     """.trimIndent(),
-                                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
+                                    CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Parse"),
                                 )
                             }
                         }
@@ -1248,10 +1247,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
         return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::error::DeserializeError")
+                CargoDependency.smithyJson(runtimeConfig).toType().member("deserialize::error::DeserializeError")
             }
             RestXmlTrait.ID -> {
-                CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlDecodeError")
+                CargoDependency.smithyXml(runtimeConfig).toType().member("decode").member("XmlDecodeError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")
