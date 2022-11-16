@@ -332,6 +332,9 @@ class ServerServiceGeneratorV2(
                 /// You must specify what plugins should be applied to the operations in this service.
                 ///
                 /// Use [`$serviceName::builder_without_plugins`] if you don't need to apply plugins.
+                ///
+                /// Check out [`PluginPipeline`](#{SmithyHttpServer}::plugin::PluginPipeline) if you need to apply
+                /// multiple plugins.
                 pub fn builder_with_plugins<Body, Plugin>(plugin: Plugin) -> $builderName<Body, Plugin> {
                     $builderName {
                         #{NotSetFields:W},

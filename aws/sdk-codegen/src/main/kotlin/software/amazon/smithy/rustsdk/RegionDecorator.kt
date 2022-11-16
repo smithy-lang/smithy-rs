@@ -6,8 +6,11 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.RulesEngineBuiltInResolver
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
@@ -97,6 +100,22 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
 
+    override fun builtInResolvers(codegenContext: ClientCodegenContext): List<RulesEngineBuiltInResolver> {
+        return listOf(
+            object : RulesEngineBuiltInResolver {
+                override fun defaultFor(
+                    parameter: Parameter,
+                    configRef: String,
+                ): Writable? {
+                    return when (parameter) {
+                        Builtins.REGION -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref())") }
+                        else -> null
+                    }
+                }
+            },
+        )
+    }
+
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
@@ -117,8 +136,10 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                 """,
                 *codegenScope,
             )
+
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("region: Option<#{Region}>,", *codegenScope)
+
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
@@ -162,6 +183,7 @@ class RegionConfigPlugin : OperationCustomization() {
                     """,
                 )
             }
+
             else -> emptySection
         }
     }
@@ -176,6 +198,7 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
                     region(runtimeConfig),
                 )
             }
+
             else -> emptySection
         }
     }
