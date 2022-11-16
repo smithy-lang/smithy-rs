@@ -99,7 +99,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             let checksum_algorithm = match checksum_algorithm {
                 Some(algo) => Some(
                     algo.parse::<#{ChecksumAlgorithm}>()
-                    .map_err(|err| #{BuildError}::Other(Box::new(err)))?
+                    .map_err(#{BuildError}::other)?
                 ),
                 None => None,
             };

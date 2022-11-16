@@ -60,7 +60,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  *   of `App` called `register_service()` that can be used to decorate the Python implementation
  *   of this operation.
  *
- * This class also renders the implementation of the `aws_smity_http_server_python::PyServer` trait,
+ * This class also renders the implementation of the `aws_smithy_http_server_python::PyServer` trait,
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
@@ -179,8 +179,8 @@ class PythonApplicationGenerator(
                 """
                 fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
                     #{tower}::util::BoxCloneService<
-                        #{http}::Request<#{SmithyServer}::body::Body>, 
-                        #{http}::Response<#{SmithyServer}::body::BoxBody>, 
+                        #{http}::Request<#{SmithyServer}::body::Body>,
+                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
                         std::convert::Infallible
                     >
                 >
@@ -189,7 +189,7 @@ class PythonApplicationGenerator(
             ) {
                 rustTemplate(
                     """
-                    let builder = crate::service::$serviceName::builder();
+                    let builder = crate::service::$serviceName::builder_without_plugins();
                     """,
                     *codegenScope,
                 )
@@ -209,7 +209,7 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let mut service = #{tower}::util::BoxCloneService::new(builder.build());
+                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
 
                     {
                         use #{tower}::Layer;
@@ -224,7 +224,6 @@ class PythonApplicationGenerator(
                             service = #{tower}::util::BoxCloneService::new(layer.layer(service));
                         }
                     }
-
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),

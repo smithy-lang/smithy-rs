@@ -63,7 +63,7 @@ class XmlBindingTraitSerializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
     private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
-    private val target = codegenContext.target
+    private val codegenTarget = codegenContext.target
     private val codegenScope =
         arrayOf(
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
@@ -291,7 +291,14 @@ class XmlBindingTraitSerializerGenerator(
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
         when (model.expectShape(member.target)) {
             is StringShape -> {
-                rust("$input.as_str()")
+                // The `input` expression always evaluates to a reference type at this point, but if it does so because
+                // it's preceded by the `&` operator, calling `as_str()` on it will upset Clippy.
+                val dereferenced = if (input.startsWith("&")) {
+                    autoDeref(input)
+                } else {
+                    input
+                }
+                rust("$dereferenced.as_str()")
             }
             is BooleanShape, is NumberShape -> {
                 rust(
@@ -399,7 +406,7 @@ class XmlBindingTraitSerializerGenerator(
                         }
                     }
 
-                    if (target.renderUnknownVariant()) {
+                    if (codegenTarget.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,

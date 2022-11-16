@@ -24,9 +24,6 @@ object ServerRuntimeType {
     fun Router(runtimeConfig: RuntimeConfig) =
         RuntimeType("Router", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
 
-    fun RequestSpecModule(runtimeConfig: RuntimeConfig) =
-        RuntimeType("request_spec", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
-
     fun OperationHandler(runtimeConfig: RuntimeConfig) =
         forInlineDependency(ServerInlineDependency.serverOperationHandler(runtimeConfig))
 

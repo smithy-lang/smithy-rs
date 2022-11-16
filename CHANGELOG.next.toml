@@ -93,6 +93,99 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[aws-sdk-rust]]
+message = """
+<details>
+<summary>The HTTP connector used when making requests is now configurable through `SdkConfig`.</summary>
+
+```rust
+use std::time::Duration;
+use aws_smithy_client::{Client, hyper_ext};
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::http_connector::ConnectorSettings;
+use aws_types::SdkConfig;
+
+let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+    .with_webpki_roots()
+    .https_only()
+    .enable_http1()
+    .enable_http2()
+    .build();
+
+let smithy_connector = hyper_ext::Adapter::builder()
+    // Optionally set things like timeouts as well
+    .connector_settings(
+        ConnectorSettings::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .build()
+    )
+    .build(https_connector);
+
+let sdk_config = aws_config::from_env()
+    .http_connector(smithy_connector)
+    .load()
+    .await;
+
+let client = Client::new(&sdk_config);
+
+// When sent, this operation will go through the custom smithy connector instead of
+// the default HTTP connector.
+let op = client
+    .get_object()
+    .bucket("some-test-bucket")
+    .key("test.txt")
+    .send()
+    .await
+    .unwrap();
+```
+
+</details>
+"""
+references = ["smithy-rs#1225", "smithy-rs#1918"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+`<service>::Client::from_conf_conn` has been removed since it's now possible to configure the connection from the
+shared and service configs. To update your code, pass connections to the `http_connector` method during config creation.
+
+<details>
+<summary>Example</summary>
+
+before:
+
+```rust
+    let conf = aws_sdk_sts::Config::builder()
+        // The builder has no defaults but setting other fields is omitted for brevity...
+        .build();
+    let (server, request) = capture_request(None);
+    let client = aws_sdk_sts::Client::from_conf_conn(conf, server);
+```
+
+after:
+
+```rust
+    let (server, request) = capture_request(None);
+    let conf = aws_sdk_sts::Config::builder()
+        // The builder has no defaults but setting other fields is omitted for brevity...
+        .http_connector(server)
+        .build();
+    let client = aws_sdk_sts::Client::from_conf(conf);
+```
+
+</details>
+"""
+references = ["smithy-rs#1225", "smithy-rs#1918"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Add `to_vec` method to `aws_smithy_http::byte_stream::AggregatedBytes`."
+references = ["smithy-rs#1918"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = "Ability to add an inline policy or a list of policy ARNs to the `AssumeRoleProvider` builder."
 references = ["aws-sdk-rust#641", "smithy-rs#1892"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
@@ -121,3 +214,128 @@ message = "Several breaking changes have been made to errors. See [the upgrade g
 references = ["smithy-rs#1926", "smithy-rs#1819"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+[Constraint traits](https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html) in server SDKs are beginning to be supported. The following are now supported:
+
+* The `length` trait on `string` shapes.
+* The `length` trait on `map` shapes.
+
+Upon receiving a request that violates the modeled constraints, the server SDK will reject it with a message indicating why.
+
+Unsupported (constraint trait, target shape) combinations will now fail at code generation time, whereas previously they were just ignored. This is a breaking change to raise awareness in service owners of their server SDKs behaving differently than what was modeled. To continue generating a server SDK with unsupported constraint traits, set `codegenConfig.ignoreUnsupportedConstraints` to `true` in your `smithy-build.json`.
+"""
+references = ["smithy-rs#1199", "smithy-rs#1342", "smithy-rs#1401"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "server" }
+author = "david-perez"
+
+[[smithy-rs]]
+message = """
+Server SDKs now generate "constrained types" for constrained shapes. Constrained types are [newtypes](https://rust-unofficial.github.io/patterns/patterns/behavioural/newtype.html) that encapsulate the modeled constraints. They constitute a [widespread pattern to guarantee domain invariants](https://www.lpalmieri.com/posts/2020-12-11-zero-to-production-6-domain-modelling/) and promote correctness in your business logic. So, for example, the model:
+
+```smithy
+@length(min: 1, max: 69)
+string NiceString
+```
+
+will now render a `struct NiceString(String)`. Instantiating a `NiceString` is a fallible operation:
+
+```rust
+let data: String = ... ;
+let nice_string = NiceString::try_from(data).expect("data is not nice");
+```
+
+A failed attempt to instantiate a constrained type will yield a `ConstraintViolation` error type you may want to handle. This type's API is subject to change.
+
+Constrained types _guarantee_, by virtue of the type system, that your service's operation outputs adhere to the modeled constraints. To learn more about the motivation for constrained types and how they work, see [the RFC](https://github.com/awslabs/smithy-rs/pull/1199).
+
+If you'd like to opt-out of generating constrained types, you can set `codegenConfig.publicConstrainedTypes` to `false`. Note that if you do, the generated server SDK will still honor your operation input's modeled constraints upon receiving a request, but will not help you in writing business logic code that adheres to the constraints, and _will not prevent you from returning responses containing operation outputs that violate said constraints_.
+"""
+references = ["smithy-rs#1342", "smithy-rs#1119"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "server" }
+author = "david-perez"
+
+[[smithy-rs]]
+message = """
+Structure builders in server SDKs have undergone significant changes.
+
+The API surface has been reduced. It is now simpler and closely follows what you would get when using the [`derive_builder`](https://docs.rs/derive_builder/latest/derive_builder/) crate:
+
+1. Builders no longer have `set_*` methods taking in `Option<T>`. You must use the unprefixed method, named exactly after the structure's field name, and taking in a value _whose type matches exactly that of the structure's field_.
+2. Builders no longer have convenience methods to pass in an element for a field whose type is a vector or a map. You must pass in the entire contents of the collection up front.
+3. Builders no longer implement [`PartialEq`](https://doc.rust-lang.org/std/cmp/trait.PartialEq.html).
+
+Bug fixes:
+
+4. Builders now always fail to build if a value for a `required` member is not provided. Previously, builders were falling back to a default value (e.g. `""` for `String`s) for some shapes. This was a bug.
+
+Additions:
+
+5. A structure `Structure` with builder `Builder` now implements `TryFrom<Builder> for Structure` or `From<Builder> for Structure`, depending on whether the structure [is constrained](https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html) or not, respectively.
+
+To illustrate how to migrate to the new API, consider the example model below.
+
+```smithy
+structure Pokemon {
+    @required
+    name: String,
+    @required
+    description: String,
+    @required
+    evolvesTo: PokemonList
+}
+
+list PokemonList {
+    member: Pokemon
+}
+```
+
+In the Rust code below, note the references calling out the changes described in the numbered list above.
+
+Before:
+
+```rust
+let eevee_builder = Pokemon::builder()
+    // (1) `set_description` takes in `Some<String>`.
+    .set_description(Some("Su código genético es muy inestable. Puede evolucionar en diversas razas de Pokémon.".to_owned()))
+    // (2) Convenience method to add one element to the `evolvesTo` list.
+    .evolves_to(vaporeon)
+    .evolves_to(jolteon)
+    .evolves_to(flareon);
+
+// (3) Builder types can be compared.
+assert_ne!(eevee_builder, Pokemon::builder());
+
+// (4) Builds fine even though we didn't provide a value for `name`, which is `required`!
+let _eevee = eevee_builder.build();
+```
+
+After:
+
+```rust
+let eevee_builder = Pokemon::builder()
+    // (1) `set_description` no longer exists. Use `description`, which directly takes in `String`.
+    .description("Su código genético es muy inestable. Puede evolucionar en diversas razas de Pokémon.".to_owned())
+    // (2) Convenience methods removed; provide the entire collection up front.
+    .evolves_to(vec![vaporeon, jolteon, flareon]);
+
+// (3) Binary operation `==` cannot be applied to `pokemon::Builder`.
+// assert_ne!(eevee_builder, Pokemon::builder());
+
+// (4) `required` member `name` was not set.
+// (5) Builder type can be fallibly converted to the structure using `TryFrom` or `TryInto`.
+let _error = Pokemon::try_from(eevee_builder).expect_err("name was not provided");
+```
+"""
+references = ["smithy-rs#1714", "smithy-rs#1342"]
+meta = { "breaking" = true, "tada" = true, "bug" = true, "target" = "server" }
+author = "david-perez"
+
+[[smithy-rs]]
+message = """
+Server SDKs now correctly reject operation inputs that don't set values for `required` structure members. Previously, in some scenarios, server SDKs would accept the request and set a default value for the member (e.g. `""` for a `String`), even when the member shape did not have [Smithy IDL v2's `default` trait](https://awslabs.github.io/smithy/2.0/spec/type-refinement-traits.html#smithy-api-default-trait) attached. The `default` trait is [still unsupported](https://github.com/awslabs/smithy-rs/issues/1860).
+"""
+references = ["smithy-rs#1714", "smithy-rs#1342", "smithy-rs#1860"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
+author = "david-perez"

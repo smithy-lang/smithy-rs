@@ -176,7 +176,7 @@ pub async fn get_pokemon_species(
     }
 }
 
-/// Retrieves the users storage.
+/// Retrieves the user's storage.
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
@@ -214,7 +214,7 @@ pub async fn capture_pokemon(
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     if input.region != "Kanto" {
         return Err(error::CapturePokemonError::UnsupportedRegionError(
-            error::UnsupportedRegionError::builder().build(),
+            error::UnsupportedRegionError { region: input.region },
         ));
     }
     let output_stream = stream! {
@@ -230,7 +230,9 @@ pub async fn capture_pokemon(
                             if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
                                 yield Err(
                                     crate::error::CapturePokemonEventsError::InvalidPokeballError(
-                                        crate::error::InvalidPokeballError::builder().pokeball(pokeball).build()
+                                        crate::error::InvalidPokeballError {
+                                            pokeball: pokeball.to_owned()
+                                        }
                                     )
                                 );
                             } else {
@@ -253,11 +255,12 @@ pub async fn capture_pokemon(
                                         .to_string();
                                     let pokedex: Vec<u8> = (0..255).collect();
                                     yield Ok(crate::model::CapturePokemonEvents::Event(
-                                        crate::model::CaptureEvent::builder()
-                                        .name(pokemon)
-                                        .shiny(shiny)
-                                        .pokedex_update(Blob::new(pokedex))
-                                        .build(),
+                                        crate::model::CaptureEvent {
+                                            name: Some(pokemon),
+                                            shiny: Some(shiny),
+                                            pokedex_update: Some(Blob::new(pokedex)),
+                                            captured: Some(true),
+                                        }
                                     ));
                                 }
                             }
