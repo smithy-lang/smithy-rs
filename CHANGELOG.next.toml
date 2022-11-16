@@ -339,3 +339,21 @@ Server SDKs now correctly reject operation inputs that don't set values for `req
 references = ["smithy-rs#1714", "smithy-rs#1342", "smithy-rs#1860"]
 meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = "Functions on `aws_smithy_http::endpoint::Endpoint` now return a `Result` instead of panicking."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`Endpoint::mutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::mutable_uri`."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`Endpoint::immutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::immutable_uri`."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
