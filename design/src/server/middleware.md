@@ -135,7 +135,7 @@ The output of the Smithy service builder provides the user with a `Service<http:
 
 ```rust
 // This is a HTTP `Service`.
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder()
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
     .get_pokemon_species(/* handler */)
     /* ... */
     .build();
@@ -155,7 +155,7 @@ A _single_ layer can be applied to _all_ routes inside the `Router`. This exists
 // Construct `TraceLayer`.
 let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
 
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder()
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
     .get_pokemon_species(/* handler */)
     /* ... */
     .build()
@@ -176,7 +176,7 @@ let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
 // Apply HTTP logging to only the `GetPokemonSpecies` operation.
 let layered_handler = GetPokemonSpecies::from_handler(/* handler */).layer(trace_layer);
 
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder()
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
     .get_pokemon_species_operation(layered_handler)
     /* ... */
     .build();
@@ -200,7 +200,7 @@ let handler_svc = buffer_layer.layer(handler_svc);
 
 let layered_handler = GetPokemonSpecies::from_service(handler_svc);
 
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder()
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
     .get_pokemon_species_operation(layered_handler)
     /* ... */
     .build();
