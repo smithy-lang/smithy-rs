@@ -66,7 +66,7 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val renameExceptions: Boolean,
-    val nullabilityCheckMode: NullableIndex.CheckMode,
+    val nullabilityCheckMode: CheckMode,
 )
 
 /**
