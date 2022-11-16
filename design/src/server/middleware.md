@@ -307,7 +307,7 @@ impl<Op, S, L> Plugin<AwsRestXml, Op, S, L> for PrintPlugin
 }
 ```
 
-You can provide a custom method to your plugin to a `PluginPipeline` via an extension trait:
+You can provide a custom method to add your plugin to a `PluginPipeline` via an extension trait:
 
 ```rust
 /// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
