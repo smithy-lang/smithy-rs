@@ -10,7 +10,7 @@ For a summarized list of proposed changes, see the [Changes Checklist](#changes-
 Terminology
 -----------
 
-- **RequestID**: a service-wide unique identifier
+- **RequestID**: a service-wide request's unique identifier
 - **UUID**: a universally unique identifier
 
 RequestID is an element that uniquely identifies a client request. RequestID is used by services to map all logs, events and
@@ -19,22 +19,20 @@ specific data to a single operation. This RFC discusses whether and how smithy-r
 Services use a RequestID to collect logs related to the same request and see its flow through the various operations,
 help clients debug requests by sharing this value and, in some cases, use this value to perform their business logic. RequestID is unique across a service at least within a certain timeframe.
 
-This value for the purposes above must be set by the service. Clients could send any value not conforming to the valid, chosen format,
-avoid sending one altogether or exploit how some service is using that value
-(like in [1](https://en.wikipedia.org/wiki/Shellshock_(software_bug)) and
-[2](https://cwiki.apache.org/confluence/display/WW/S2-045)).
+This value for the purposes above must be set by the service.
 
-Having the client send the value bring the following challenges:
+Having the client send the value brings the following challenges:
 * The client could repeatedly send the same RequestID
 * The client could send no RequestID
-* The client could send a malformed or malicious RequestID
+* The client could send a malformed or malicious RequestID (like in [1](https://en.wikipedia.org/wiki/Shellshock_(software_bug)) and
+[2](https://cwiki.apache.org/confluence/display/WW/S2-045)).
 
 To minimise the attack surface and provide a uniform experience to customers, servers should generate the value.
 However, services should be free to read the ID sent by clients in HTTP headers: it is common for services to
 read the request ID a client sends, record it and send it back upon success. A client may want to send the same value to multiple services.
 Services should still decide to have their own unique request ID per actual call.
 
-RequestIDs are not to be used by multiple services, but only within a service.
+RequestIDs are not to be used by multiple services, but only within a single service.
 
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 The user experience if this RFC is implemented
@@ -48,14 +46,20 @@ To aid customers already relying on clients' request IDs, there will be two type
 ```rust
 pub async fn handler(
     input: input::Input,
-    request_id: Extension<RequestId>,
+    request_id: Extension<ServerRequestId>,
+) -> ...
+```
+```rust
+pub async fn handler(
+    input: input::Input,
+    request_id: Extension<ClientRequestId>,
 ) -> ...
 ```
 
-`RequestId` will be injected into the extensions by a layer.
+`ServerRequestId` and `ClientRequestId` will be injected into the extensions by a layer.
 This layer can also be used to open a span that will log the request ID: subsequent logs will be in the scope of that span.
 
-2. RequestId format:
+2. ServerRequestId format:
 
 Common formats for RequestIDs are:
 
@@ -67,7 +71,7 @@ For privacy reasons, any format that provides service details should be avoided.
 The proposed format is to use UUID, version 4.
 
 AWS Lambda sends a RequestID in the request context; there is no need to modify it.
-Services will apply their `Service` if they need to extract the "AWS request ID" from the context given by the Lambda invocation.
+Services will apply their `Layer` if they need to extract the "AWS request ID" from the context given by the Lambda invocation.
 
 A `Service` that inserts a RequestId in the extensions will be implemented as follows:
 ```rust
