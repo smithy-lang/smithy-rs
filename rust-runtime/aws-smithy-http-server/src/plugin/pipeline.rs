@@ -23,8 +23,8 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
 /// ```
 ///
-/// Plugins are applied in the order they are registered.
-/// In our example above, `LoggingPlugin` is applied first, while `MetricsPlugin` is applied last.
+/// The plugins' runtime logic is executed in registration order.
+/// In our example above, `LoggingPlugin` would run first, while `MetricsPlugin` is executed last.
 ///
 /// ## Wrapping the current plugin pipeline
 ///
@@ -71,7 +71,7 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 ///
-/// pub fn get_bundled_pipeline() -> PluginPipeline<PluginStack<PluginStack<IdentityPlugin, LoggingPlugin>, MetricsPlugin>> {
+/// pub fn get_bundled_pipeline() -> PluginPipeline<PluginStack<MetricsPlugin, PluginStack<LoggingPlugin, IdentityPlugin>>> {
 ///     PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin)
 /// }
 ///
@@ -92,11 +92,11 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 /// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 ///
 /// pub trait AuthPluginExt<CurrentPlugins> {
-///     fn with_auth(self) -> PluginPipeline<PluginStack<CurrentPlugins, AuthPlugin>>;
+///     fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>>;
 /// }
 ///
 /// impl<CurrentPlugins> AuthPluginExt<CurrentPlugins> for PluginPipeline<CurrentPlugins> {
-///     fn with_auth(self) -> PluginPipeline<PluginStack<CurrentPlugins, AuthPlugin>> {
+///     fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>> {
 ///         self.push(AuthPlugin)
 ///     }
 /// }
@@ -134,10 +134,39 @@ impl<P> PluginPipeline<P> {
     /// let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
     /// ```
     ///
-    /// Plugins are applied in the order they are registered.
-    /// In our example above, `LoggingPlugin` is applied first, while `MetricsPlugin` is applied last.
-    pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<P, NewPlugin>> {
-        PluginPipeline(PluginStack::new(self.0, new_plugin))
+    /// The plugins' runtime logic is executed in registration order.
+    /// In our example above, `LoggingPlugin` would run first, while `MetricsPlugin` is executed last.
+    ///
+    /// ## Implementation notes
+    ///
+    /// Plugins are applied to the underlying [`Operation`] in opposite order compared
+    /// to their registration order.
+    /// But most [`Plugin::map`] implementations desugar to appending a layer to [`Operation`],
+    /// usually via [`Operation::layer`].
+    /// As an example:
+    ///
+    /// ```rust,compile_fail
+    /// #[derive(Debug)]
+    /// pub struct PrintPlugin;
+    ///
+    /// impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+    /// // [...]
+    /// {
+    ///     // [...]
+    ///     fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+    ///         input.layer(PrintLayer { name: Op::NAME })
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// The layer that is registered **last** via [`Operation::layer`] is the one that gets executed
+    /// **first** at runtime when a new request comes in, since it _wraps_ the underlying service.
+    ///
+    /// This is why plugins in [`PluginPipeline`] are applied in opposite order compared to their
+    /// registration order: this ensures that, _at runtime_, their logic is executed
+    /// in registration order.
+    pub fn push<NewPlugin>(self, new_plugin: NewPlugin) -> PluginPipeline<PluginStack<NewPlugin, P>> {
+        PluginPipeline(PluginStack::new(new_plugin, self.0))
     }
 }
 

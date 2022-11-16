@@ -73,11 +73,11 @@ pub trait PrintExt<ExistingPlugins> {
     /// Causes all operations to print the operation name when called.
     ///
     /// This works by applying the [`PrintPlugin`].
-    fn print(self) -> PluginPipeline<PluginStack<ExistingPlugins, PrintPlugin>>;
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>>;
 }
 
 impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugins> {
-    fn print(self) -> PluginPipeline<PluginStack<ExistingPlugins, PrintPlugin>> {
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>> {
         self.push(PrintPlugin)
     }
 }

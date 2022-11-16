@@ -39,11 +39,11 @@ pub trait InstrumentExt<CurrentPlugins> {
     /// output models. See [`InstrumentOperation`](super::InstrumentOperation) for more information.
     ///
     /// [@sensitive]: https://awslabs.github.io/smithy/2.0/spec/documentation-traits.html#sensitive-trait
-    fn instrument(self) -> PluginPipeline<PluginStack<CurrentPlugins, InstrumentPlugin>>;
+    fn instrument(self) -> PluginPipeline<PluginStack<InstrumentPlugin, CurrentPlugins>>;
 }
 
 impl<CurrentPlugins> InstrumentExt<CurrentPlugins> for PluginPipeline<CurrentPlugins> {
-    fn instrument(self) -> PluginPipeline<PluginStack<CurrentPlugins, InstrumentPlugin>> {
+    fn instrument(self) -> PluginPipeline<PluginStack<InstrumentPlugin, CurrentPlugins>> {
         self.push(InstrumentPlugin)
     }
 }
