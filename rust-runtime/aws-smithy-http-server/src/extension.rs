@@ -66,6 +66,10 @@ use crate::{
 ///
 /// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
+#[deprecated(
+    since = "0.52.0",
+    note = "This is no longer inserted by the new service builder. Layers should be constructed per operation using the plugin system."
+)]
 pub struct OperationExtension {
     absolute: &'static str,
 
@@ -81,6 +85,7 @@ pub enum ParseError {
     MissingNamespace,
 }
 
+#[allow(deprecated)]
 impl OperationExtension {
     /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
