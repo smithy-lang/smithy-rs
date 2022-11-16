@@ -233,7 +233,7 @@ impl From<MissingContentTypeReason> for RequestRejection {
 // bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
 
 convert_to_request_rejection!(aws_smithy_json::deserialize::error::DeserializeError, JsonDeserialize);
-convert_to_request_rejection!(aws_smithy_xml::decode::XmlError, XmlDeserialize);
+convert_to_request_rejection!(aws_smithy_xml::decode::XmlDecodeError, XmlDeserialize);
 convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
 convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
 convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
