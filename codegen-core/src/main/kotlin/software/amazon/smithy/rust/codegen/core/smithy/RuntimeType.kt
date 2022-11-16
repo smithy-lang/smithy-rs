@@ -196,7 +196,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val Debug = stdfmt.member("Debug")
         val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
         val Display = stdfmt.member("Display")
+        val Eq = std.member("cmp::Eq")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
+        val Hash = std.member("hash::Hash")
         val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
         val PartialEq = std.member("cmp::PartialEq")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
@@ -255,6 +257,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             RuntimeType(
                 func, CargoDependency.SmithyProtocolTestHelpers(runtimeConfig), "aws_smithy_protocol_test",
             )
+
+        fun ConstrainedTrait() = RuntimeType("Constrained", InlineDependency.constrained(), namespace = "crate::constrained")
+        fun MaybeConstrained() = RuntimeType("MaybeConstrained", InlineDependency.constrained(), namespace = "crate::constrained")
 
         val http = CargoDependency.Http.asType()
         fun Http(path: String): RuntimeType =
