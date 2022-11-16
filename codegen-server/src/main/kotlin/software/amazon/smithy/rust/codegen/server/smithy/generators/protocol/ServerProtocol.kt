@@ -11,9 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -54,12 +52,6 @@ interface ServerProtocol : Protocol {
     fun routerType(): RuntimeType
 
     /**
-     * Returns the construction of the `routerType` given a `ServiceShape`, a collection of operation values
-     * (`self.operation_name`, ...), and the `Model`.
-     */
-    fun routerConstruction(operationValues: Iterable<Writable>): Writable
-
-    /**
      * Returns the name of the constructor to be used on the `Router` type, to instantiate a `Router` using this
      * protocol.
      */
@@ -74,6 +66,11 @@ interface ServerProtocol : Protocol {
         serviceName: String,
         requestSpecModule: RuntimeType,
     ): Writable
+
+    /**
+     * Returns the Rust type of the `RequestSpec` for an operation.
+     */
+    fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType
 
     /**
      * In some protocols, such as restJson1,
@@ -98,17 +95,12 @@ class ServerAwsJsonProtocol(
     awsJsonVersion: AwsJsonVersion,
 ) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-    )
-    private val symbolProvider = codegenContext.symbolProvider
-    private val service = codegenContext.serviceShape
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         fun builderSymbol(shape: StructureShape): Symbol =
             shape.serverBuilderSymbol(serverCodegenContext)
         fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
-            if (shape.canReachConstrainedShape(codegenContext.model, symbolProvider)) {
+            if (shape.canReachConstrainedShape(codegenContext.model, serverCodegenContext.symbolProvider)) {
                 ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
             } else {
                 ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
@@ -146,37 +138,6 @@ class ServerAwsJsonProtocol(
 
     override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
 
-    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = writable {
-        val allOperationShapes = allOperations(codegenContext)
-
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol
-        // visitor should not be invoked in service shapes"
-        // val serviceName = symbolProvider.toSymbol(service).name
-        val serviceName = service.id.name
-        val pairs = writable {
-            for ((operation, operationValue) in allOperationShapes.zip(operationValues)) {
-                val operationName = symbolProvider.toSymbol(operation).name
-                rustTemplate(
-                    """
-                    (
-                        String::from("$serviceName.$operationName"),
-                        #{OperationValue:W}
-                    ),
-                    """,
-                    "OperationValue" to operationValue,
-                    *codegenScope,
-                )
-            }
-        }
-        rustTemplate(
-            """
-            #{Router}::from_iter([#{Pairs:W}])
-            """,
-            "Router" to routerType(),
-            "Pairs" to pairs,
-        )
-    }
-
     /**
      * Returns the operation name as required by the awsJson1.x protocols.
      */
@@ -189,6 +150,11 @@ class ServerAwsJsonProtocol(
         rust("""String::from("$serviceName.$operationName")""")
     }
 
+    override fun serverRouterRequestSpecType(
+        requestSpecModule: RuntimeType,
+    ): RuntimeType =
+        RuntimeType("String", null, "std::string")
+
     override fun serverRouterRuntimeConstructor() = when (version) {
         AwsJsonVersion.Json10 -> "new_aws_json_10_router"
         AwsJsonVersion.Json11 -> "new_aws_json_11_router"
@@ -196,48 +162,6 @@ class ServerAwsJsonProtocol(
 }
 
 private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::rest::router")
-
-private fun restRouterConstruction(
-    protocol: ServerProtocol,
-    operationValues: Iterable<Writable>,
-    codegenContext: CodegenContext,
-): Writable = writable {
-    val operations = allOperations(codegenContext)
-
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1724#issue-1367509999): This causes a panic: "symbol visitor
-    //  should not be invoked in service shapes"
-    //  val serviceName = symbolProvider.toSymbol(service).name
-    val serviceName = codegenContext.serviceShape.id.name
-    val pairs = writable {
-        for ((operationShape, operationValue) in operations.zip(operationValues)) {
-            val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
-            val key = protocol.serverRouterRequestSpec(
-                operationShape,
-                operationName,
-                serviceName,
-                ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType().member("routing::request_spec"),
-            )
-            rustTemplate(
-                """
-                (
-                    #{Key:W},
-                    #{OperationValue:W}
-                ),
-                """,
-                "Key" to key,
-                "OperationValue" to operationValue,
-                "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
-            )
-        }
-    }
-    rustTemplate(
-        """
-        #{Router}::from_iter([#{Pairs:W}])
-        """,
-        "Router" to protocol.routerType(),
-        "Pairs" to pairs,
-    )
-}
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
@@ -278,14 +202,15 @@ class ServerRestJsonProtocol(
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, codegenContext)
-
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
+        requestSpecModule.member("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 
@@ -307,14 +232,15 @@ class ServerRestXmlProtocol(
 
     override fun routerType() = restRouterType(runtimeConfig)
 
-    override fun routerConstruction(operationValues: Iterable<Writable>): Writable = restRouterConstruction(this, operationValues, codegenContext)
-
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
+        requestSpecModule.member("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 

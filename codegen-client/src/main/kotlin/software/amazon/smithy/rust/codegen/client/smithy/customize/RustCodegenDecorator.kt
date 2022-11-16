@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.RulesEngineBuiltInResolver
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -68,6 +69,8 @@ interface RustCodegenDecorator<T, C : CodegenContext> {
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap<T, C>): ProtocolMap<T, C> = currentProtocols
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
+
+    fun builtInResolvers(codegenContext: C): List<RulesEngineBuiltInResolver> = listOf()
 
     fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean
 }
@@ -139,6 +142,10 @@ open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<Rust
         return orderedDecorators.foldRight(model) { decorator, otherModel ->
             decorator.transformModel(service, otherModel)
         }
+    }
+
+    override fun builtInResolvers(codegenContext: C): List<RulesEngineBuiltInResolver> {
+        return orderedDecorators.flatMap { it.builtInResolvers(codegenContext) }
     }
 
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =

@@ -627,7 +627,7 @@ class ServerProtocolTestGenerator(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
-            let service = crate::service::$serviceName::unchecked_builder()
+            let service = crate::service::$serviceName::builder_without_plugins::<#{Hyper}::body::Body>()
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {
@@ -636,7 +636,7 @@ class ServerProtocolTestGenerator(
                         result
                     }
                 })
-                .build::<#{Hyper}::body::Body>();
+                .build_unchecked();
             let http_response = #{Tower}::ServiceExt::oneshot(service, http_request)
                 .await
                 .expect("unable to make an HTTP request");

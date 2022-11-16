@@ -116,7 +116,7 @@ structure HealthcheckOutputResponse {
 @documentation("Stores a blob for a service id")
 operation StoreServiceBlob {
     input: StoreServiceBlobInput,
-    output: StoreServiceBlobOutput
+    output: StoreServiceBlobOutput,
     errors: [ValidationException]
 }
 

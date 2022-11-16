@@ -217,10 +217,9 @@ where
     }
 }
 
-/// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
-/// canonical associated types.
+/// An interface to convert a representation of a Smithy operation into a [`Route`].
 pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
-    /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
+    /// Upgrade the representation of a Smithy operation to a [`Route`].
     fn upgrade(self, plugin: &Plugin) -> Route<B>;
 }
 
