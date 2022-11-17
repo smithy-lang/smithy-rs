@@ -78,16 +78,6 @@ interface ServerProtocol : Protocol {
      * Returns a boolean indicating whether to perform this check.
      */
     fun serverContentTypeCheckNoModeledInput(): Boolean = false
-
-    companion object {
-        /** Upgrades the core protocol to a `ServerProtocol`. */
-        fun fromCoreProtocol(protocol: Protocol): ServerProtocol = when (protocol) {
-            is AwsJson -> ServerAwsJsonProtocol.fromCoreProtocol(protocol)
-            is RestJson -> ServerRestJsonProtocol.fromCoreProtocol(protocol)
-            is RestXml -> ServerRestXmlProtocol.fromCoreProtocol(protocol)
-            else -> throw IllegalStateException("unsupported protocol")
-        }
-    }
 }
 
 class ServerAwsJsonProtocol(
@@ -119,11 +109,6 @@ class ServerAwsJsonProtocol(
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
-
-    companion object {
-        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol =
-            ServerAwsJsonProtocol(awsJson.codegenContext as ServerCodegenContext, awsJson.version)
-    }
 
     override fun markerStruct(): RuntimeType {
         return when (version) {
@@ -194,10 +179,6 @@ class ServerRestJsonProtocol(
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
 
-    companion object {
-        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext as ServerCodegenContext)
-    }
-
     override fun markerStruct() = ServerRuntimeType.Protocol("RestJson1", "rest_json_1", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
@@ -221,12 +202,6 @@ class ServerRestXmlProtocol(
     codegenContext: CodegenContext,
 ) : RestXml(codegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
-
-    companion object {
-        fun fromCoreProtocol(restXml: RestXml): ServerRestXmlProtocol {
-            return ServerRestXmlProtocol(restXml.codegenContext)
-        }
-    }
 
     override fun markerStruct() = ServerRuntimeType.Protocol("RestXml", "rest_xml", runtimeConfig)
 
