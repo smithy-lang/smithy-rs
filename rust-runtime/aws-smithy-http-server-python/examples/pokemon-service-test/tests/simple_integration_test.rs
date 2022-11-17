@@ -7,6 +7,7 @@
 // These tests only have access to your crate's public API.
 // See: https://doc.rust-lang.org/book/ch11-03-test-organization.html#integration-tests
 
+use aws_smithy_types::error::display::DisplayErrorContext;
 use serial_test::serial;
 
 use crate::helpers::{client, http2_client, PokemonClient, PokemonService};
