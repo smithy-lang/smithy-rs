@@ -33,6 +33,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -636,7 +638,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     builder = #{header_util}::set_response_header_if_absent(
                         builder,
                         http::header::HeaderName::from_static("$headerName"),
-                        "$headerValue"
+                        "${escape(headerValue)}"
                     );
                     """,
                     *codegenScope,

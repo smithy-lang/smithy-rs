@@ -83,9 +83,15 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     /**
      * RestJson1 implementations can denote errors in responses in several ways.
      * New server-side protocol implementations MUST use a header field named `X-Amzn-Errortype`.
+     *
+     * Note that the spec says that implementations SHOULD strip the error shape ID's namespace.
+     * However, our server implementation renders the full shape ID (including namespace), since some
+     * existing clients rely on it to deserialize the error shape and fail if only the shape name is present.
+     * This is compliant with the spec, see https://github.com/awslabs/smithy/pull/1493.
+     * See https://github.com/awslabs/smithy/issues/1494 too.
      */
     override fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> =
-        listOf("x-amzn-errortype" to errorShape.id.name)
+        listOf("x-amzn-errortype" to errorShape.id.toString())
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         fun builderSymbol(shape: StructureShape): Symbol =
