@@ -62,12 +62,14 @@ open class Instantiator(
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
     private val runtimeConfig: RuntimeConfig,
+    /** Behavior of the builder type used for structure shapes. */
+    private val builderKindBehavior: BuilderKindBehavior,
     /**
      * A function that given a symbol for an enum shape and a string, returns a writable to instantiate the enum with
      * the string value.
      **/
     private val enumFromStringFn: (Symbol, String) -> Writable,
-    /** Fill out required fields with a default value **/
+    /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
 ) {
     data class Ctx(
@@ -75,6 +77,20 @@ open class Instantiator(
         // contain headers with uppercase keys.
         val lowercaseMapKeys: Boolean = false,
     )
+
+    /**
+     * Client and server structures have different builder types. `Instantiator` needs to know how the builder
+     * type behaves to generate code for it.
+     */
+    interface BuilderKindBehavior {
+        fun hasFallibleBuilder(shape: StructureShape): Boolean
+
+        // Client structure builders have two kinds of setters: one that always takes in `Option<T>`, and one that takes
+        // in the structure field's type. The latter's method name is the field's name, whereas the former is prefixed
+        // with `set_`. Client instantiators call the `set_*` builder setters.
+        fun setterName(memberShape: MemberShape): String
+        fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
+    }
 
     fun render(writer: RustWriter, shape: Shape, data: Node, ctx: Ctx = Ctx()) {
         when (shape) {
@@ -165,7 +181,9 @@ open class Instantiator(
             writer.conditionalBlock(
                 "Some(",
                 ")",
-                conditional = model.expectShape(memberShape.container) is StructureShape || symbol.isOptional(),
+                // The conditions are not commutative: note client builders always take in `Option<T>`.
+                conditional = symbol.isOptional() ||
+                    (model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(memberShape)),
             ) {
                 writer.conditionalBlock(
                     "Box::new(",
@@ -277,7 +295,8 @@ open class Instantiator(
      */
     private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, ctx: Ctx) {
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
-            writer.withBlock(".${memberShape.setterName()}(", ")") {
+            val setterName = builderKindBehavior.setterName(memberShape)
+            writer.withBlock(".$setterName(", ")") {
                 renderMember(this, memberShape, value, ctx)
             }
         }
@@ -297,8 +316,9 @@ open class Instantiator(
             val memberShape = shape.expectMember(key.value)
             renderMemberHelper(memberShape, value)
         }
+
         writer.rust(".build()")
-        if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+        if (builderKindBehavior.hasFallibleBuilder(shape)) {
             writer.rust(".unwrap()")
         }
     }

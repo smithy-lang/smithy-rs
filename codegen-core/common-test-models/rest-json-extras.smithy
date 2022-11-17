@@ -6,6 +6,7 @@ use aws.protocols#restJson1
 use aws.api#service
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 apply QueryPrecedence @httpRequestTests([
     {
@@ -124,6 +125,7 @@ structure StringPayloadInput {
     documentation: "Primitive ints should not be serialized when they are unset",
     uri: "/primitive-document",
     method: "POST",
+    appliesTo: "client",
     body: "{}",
     headers: { "Content-Type": "application/json" },
     params: {},
@@ -156,7 +158,8 @@ structure PrimitiveIntDocument {
 ])
 @http(uri: "/primitive", method: "POST")
 operation PrimitiveIntHeader {
-    output: PrimitiveIntHeaderInput
+    output: PrimitiveIntHeaderInput,
+    errors: [ValidationException],
 }
 
 integer PrimitiveInt
@@ -178,7 +181,8 @@ structure PrimitiveIntHeaderInput {
     }
 ])
 operation EnumQuery {
-    input: EnumQueryInput
+    input: EnumQueryInput,
+    errors: [ValidationException],
 }
 
 structure EnumQueryInput {
@@ -230,6 +234,7 @@ structure MapWithEnumKeyInputOutput {
 operation MapWithEnumKeyOp {
     input: MapWithEnumKeyInputOutput,
     output: MapWithEnumKeyInputOutput,
+    errors: [ValidationException],
 }
 
 
@@ -269,6 +274,7 @@ structure EscapedStringValuesInputOutput {
 operation EscapedStringValues {
     input: EscapedStringValuesInputOutput,
     output: EscapedStringValuesInputOutput,
+    errors: [ValidationException],
 }
 
 list NonSparseList {

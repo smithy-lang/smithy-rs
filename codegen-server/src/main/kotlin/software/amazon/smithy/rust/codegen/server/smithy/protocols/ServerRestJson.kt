@@ -6,9 +6,14 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapJsonCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 
 /**
@@ -36,3 +41,15 @@ class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGe
         )
     }
 }
+
+class ServerRestJsonSerializerGenerator(
+    private val codegenContext: ServerCodegenContext,
+    private val httpBindingResolver: HttpBindingResolver,
+    private val jsonSerializerGenerator: JsonSerializerGenerator =
+        JsonSerializerGenerator(
+            codegenContext,
+            httpBindingResolver,
+            ::restJsonFieldName,
+            customizations = listOf(BeforeIteratingOverMapJsonCustomization(codegenContext)),
+        ),
+) : StructuredDataSerializerGenerator by jsonSerializerGenerator

@@ -79,11 +79,11 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                 if (symbolProvider.toSymbol(head).isOptional()) {
                     rust(
                         """
-                    let input = match ${ref}input.${symbolProvider.toMemberName(head)} {
-                        None => return None,
-                        Some(t) => t
-                    };
-                    """,
+                        let input = match ${ref}input.${symbolProvider.toMemberName(head)} {
+                            None => return None,
+                            Some(t) => t
+                        };
+                        """,
                     )
                 } else {
                     rust("let input = input.${symbolProvider.toMemberName(head)};")

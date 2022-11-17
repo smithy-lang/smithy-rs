@@ -9,8 +9,7 @@ extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 tasks["jar"].enabled = false
 
 plugins {
-    val smithyGradlePluginVersion: String by project
-    id("software.amazon.smithy").version(smithyGradlePluginVersion)
+    id("software.amazon.smithy")
 }
 
 val smithyVersion: String by project
@@ -88,6 +87,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             """.trimIndent(),
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
+        CodegenTest("aws.protocoltests.json#TestService", "endpoint-rules"),
         CodegenTest("com.aws.example.rust#PokemonService", "pokemon-service-client", imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy")),
     )
 }

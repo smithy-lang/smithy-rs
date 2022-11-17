@@ -29,6 +29,7 @@ data class RustModule(val name: String, val rustMetadata: RustMetadata, val docu
         val Model = public("model", documentation = "Data structures used by operation inputs/outputs.")
         val Input = public("input", documentation = "Input structures for operations.")
         val Output = public("output", documentation = "Output structures for operations.")
+        val Types = public("types", documentation = "Data primitives referenced by other data types.")
 
         /**
          * Helper method to generate the `operation` Rust module.

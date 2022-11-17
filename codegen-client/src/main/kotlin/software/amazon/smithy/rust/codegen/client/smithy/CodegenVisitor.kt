@@ -80,7 +80,7 @@ class CodegenVisitor(
         model = codegenDecorator.transformModel(service, baseModel)
         symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
-        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
+        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
 
         val clientPublicModules = setOf(
             RustModule.Error,
@@ -88,6 +88,7 @@ class CodegenVisitor(
             RustModule.Input,
             RustModule.Output,
             RustModule.Config,
+            RustModule.Types,
             RustModule.operation(Visibility.PUBLIC),
         ).associateBy { it.name }
         rustCrate = RustCrate(

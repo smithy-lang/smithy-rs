@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -95,6 +96,7 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
 
     private fun RustWriter.renderImplFrom(errorSymbol: RuntimeType, errors: List<ShapeId>) {
         if (errors.isNotEmpty() || CodegenTarget.CLIENT == codegenContext.target) {
+            val operationErrors = errors.map { model.expectShape(it) }
             rustBlock(
                 "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
                 sdkError,
@@ -106,22 +108,27 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
                     "OpError" to errorSymbol,
                 ) {
                     rustBlock("match err") {
-                        val operationErrors = errors.map { model.expectShape(it) }
-                        rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
-                            operationErrors.forEach { errorShape ->
-                                val errSymbol = symbolProvider.toSymbol(errorShape)
-                                rust(
-                                    "#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
-                                    errorSymbol,
-                                )
-                            }
-                            rustTemplate(
-                                "#{errorSymbol}Kind::Unhandled(inner) => Error::Unhandled(#{unhandled}::new(inner.into())),",
-                                "errorSymbol" to errorSymbol,
-                                "unhandled" to unhandledError(),
+                        rust("#T::ServiceError(context) => Self::from(context.into_err()),", sdkError)
+                        rust("_ => Error::Unhandled(#T::new(err.into())),", unhandledError())
+                    }
+                }
+            }
+
+            rustBlock("impl From<#T> for Error", errorSymbol) {
+                rustBlock("fn from(err: #T) -> Self", errorSymbol) {
+                    rustBlock("match err.kind") {
+                        operationErrors.forEach { errorShape ->
+                            val errSymbol = symbolProvider.toSymbol(errorShape)
+                            rust(
+                                "#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
+                                errorSymbol,
                             )
                         }
-                        rust("_ => Error::Unhandled(#T::new(err.into())),", unhandledError())
+                        rustTemplate(
+                            "#{errorSymbol}Kind::Unhandled(inner) => Error::Unhandled(#{unhandled}::new(inner.into())),",
+                            "errorSymbol" to errorSymbol,
+                            "unhandled" to unhandledError(),
+                        )
                     }
                 }
             }
@@ -141,7 +148,7 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
                 val sym = symbolProvider.toSymbol(error)
                 rust("${sym.name}(#T),", sym)
             }
-            rust("/// An unhandled error occurred.")
+            docs(UNHANDLED_ERROR_DOCS)
             rust("Unhandled(#T)", unhandledError())
         }
     }
