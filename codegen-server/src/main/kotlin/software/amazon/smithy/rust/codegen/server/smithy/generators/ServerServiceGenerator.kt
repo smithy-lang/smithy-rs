@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -68,15 +66,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule(
-                "operation_shape",
-                RustMetadata(
-                    visibility = Visibility.PUBLIC,
-                    additionalAttributes = listOf(
-                        Attribute.DocHidden,
-                    ),
-                ),
-            ),
+            RustModule.public("operation_shape"),
         ) {
             for (operation in operations) {
                 ServerOperationGenerator(codegenContext, operation).render(this)
@@ -85,7 +75,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
+            RustModule.public("service"),
         ) {
             ServerServiceGeneratorV2(
                 codegenContext,
