@@ -462,7 +462,7 @@ class JsonSerializerGenerator(
 
                         if (member.ofTypeUnit()) {
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
-                                serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
+                                serializeMember(MemberContext.unionMember(context, "", member, jsonName))
                             }
                         } else {
                             withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {

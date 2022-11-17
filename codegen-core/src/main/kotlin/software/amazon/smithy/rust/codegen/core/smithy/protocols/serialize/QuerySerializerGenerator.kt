@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ofTypeUnit
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -313,14 +314,20 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
-                            serializeMember(
-                                MemberContext.unionMember(
-                                    context.copy(writerExpression = "writer"),
-                                    "inner",
-                                    member,
-                                ),
-                            )
+                        if (member.ofTypeUnit()) {
+                            withBlock("#T::$variantName => {", "},", unionSymbol) {
+                                serializeMember(MemberContext.unionMember(context.copy(writerExpression = "writer"), "", member))
+                            }
+                        } else {
+                            withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
+                                serializeMember(
+                                    MemberContext.unionMember(
+                                        context.copy(writerExpression = "writer"),
+                                        "inner",
+                                        member,
+                                    ),
+                                )
+                            }
                         }
                     }
                     if (target.renderUnknownVariant()) {
