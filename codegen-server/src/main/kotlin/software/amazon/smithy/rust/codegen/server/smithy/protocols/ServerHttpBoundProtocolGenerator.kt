@@ -125,7 +125,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
-    private val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
@@ -252,7 +251,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
-            "Marker" to serverProtocol.markerStruct(),
+            "Marker" to protocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
             "verifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
@@ -315,7 +314,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
-                "Marker" to serverProtocol.markerStruct(),
+                "Marker" to protocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
                 "serialize_error" to serverSerializeError(operationShape),
             )
@@ -348,7 +347,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
-                "Marker" to serverProtocol.markerStruct(),
+                "Marker" to protocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
             )
         }
