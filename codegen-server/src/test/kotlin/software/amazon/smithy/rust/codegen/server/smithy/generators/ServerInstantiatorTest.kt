@@ -13,18 +13,17 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class ServerInstantiatorTest {
@@ -140,9 +139,9 @@ class ServerInstantiatorTest {
 
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.Model) {
-            structure.renderWithModelBuilder(model, symbolProvider, this, CodegenTarget.SERVER)
-            inner.renderWithModelBuilder(model, symbolProvider, this, CodegenTarget.SERVER)
-            nestedStruct.renderWithModelBuilder(model, symbolProvider, this, CodegenTarget.SERVER)
+            structure.serverRenderWithModelBuilder(model, symbolProvider, this)
+            inner.serverRenderWithModelBuilder(model, symbolProvider, this)
+            nestedStruct.serverRenderWithModelBuilder(model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, union).render()
 
             unitTest("server_instantiator_test") {

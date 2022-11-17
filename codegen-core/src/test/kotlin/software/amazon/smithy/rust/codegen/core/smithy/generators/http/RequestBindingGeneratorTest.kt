@@ -245,7 +245,7 @@ class RequestBindingGeneratorTest {
                         .prefix("😹".to_string(), "😹".to_string())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
-                    assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
+                    assert_eq!(format!("{}", err), "invalid field in input: prefix (details: `😹` cannot be used as a header name: invalid HTTP header name)");
                 """,
             )
 
@@ -260,7 +260,7 @@ class RequestBindingGeneratorTest {
                         .prefix("valid-key".to_string(), "\n can't put a newline in a header value".to_string())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
-                    assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
+                    assert_eq!(format!("{}", err), "invalid field in input: prefix (details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
                 """,
             )
 
@@ -275,7 +275,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     // make sure we obey the sensitive trait
-                    assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
+                    assert_eq!(format!("{}", err), "invalid field in input: string_header (details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
                 """,
             )
 
@@ -289,7 +289,9 @@ class RequestBindingGeneratorTest {
                         .key(ts.clone())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    let message = err.to_string();
+                    let expected = "bucket_name was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
                 """,
             )
 
@@ -303,7 +305,9 @@ class RequestBindingGeneratorTest {
                         // .key(ts.clone())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    let message = format!("{err}");
+                    let expected = "key was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
                 """,
             )
 
@@ -316,7 +320,9 @@ class RequestBindingGeneratorTest {
                         .key(ts.clone())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    let message = format!("{err}");
+                    let expected = "bucket_name was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
                 """,
             )
         }

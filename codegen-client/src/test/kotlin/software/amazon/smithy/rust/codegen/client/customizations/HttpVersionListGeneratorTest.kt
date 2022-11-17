@@ -207,7 +207,6 @@ class FakeSigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        println(baseCustomizations)
         return baseCustomizations.filterNot { it is EventStreamSigningConfig } + FakeSigningConfig(codegenContext.runtimeConfig)
     }
 }

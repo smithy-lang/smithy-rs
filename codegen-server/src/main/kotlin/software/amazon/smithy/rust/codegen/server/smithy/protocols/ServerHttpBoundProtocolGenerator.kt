@@ -14,6 +14,7 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -32,32 +33,29 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.extractSymbolFromOption
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.toOptional
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.smithy.wrapOptional
@@ -74,16 +72,19 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import java.util.logging.Logger
 
 /**
  * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
- * See `ServerRestJsonFactory.kt` for more info.
+ * See `ServerRestJson.kt` for more info.
  */
 class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
@@ -117,6 +118,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
+    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
@@ -592,7 +594,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
      * case it will generate response headers for the given error shape.
      *
      * It sets three groups of headers in order. Headers from one group take precedence over headers in a later group.
-     *     1. Headers bound by the `httpHeader` and `httpPrefixHeader` traits.
+     *     1. Headers bound by the `httpHeader` and `httpPrefixHeader` traits. = null
      *     2. The protocol-specific `Content-Type` header for the operation.
      *     3. Additional protocol-specific headers for errors, if [errorShape] is non-null.
      */
@@ -712,7 +714,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
-        rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
+        rust(
+            "let mut input = #T::default();",
+            inputShape.serverBuilderSymbol(codegenContext),
+        )
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
         if (parser != null) {
@@ -732,9 +737,21 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             val member = binding.member
             val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
             if (parsedValue != null) {
-                withBlock("input = input.${member.setterName()}(", ");") {
-                    parsedValue(this)
-                }
+                rust("if let Some(value) = ")
+                parsedValue(this)
+                rust(
+                    """
+                    {
+                        input = input.${member.setterName()}(${
+                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                        "Some(value)"
+                    } else {
+                        "value"
+                    }
+                    });
+                    }
+                    """,
+                )
             }
         }
         serverRenderUriPathParser(this, operationShape)
@@ -750,7 +767,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
-        val err = if (StructureGenerator.hasFallibleBuilder(inputShape, symbolProvider)) {
+        val err = if (ServerBuilderGenerator.hasFallibleBuilder(
+                inputShape,
+                model,
+                symbolProvider,
+                takeInUnconstrainedTypes = true,
+            )
+        ) {
             "?"
         } else ""
         rustTemplate("input.build()$err", *codegenScope)
@@ -884,13 +907,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 .forEachIndexed { index, segment ->
                     val binding = pathBindings.find { it.memberName == segment.content }
                     if (binding != null && segment.isLabel) {
-                        val deserializer = generateParseFn(binding, true)
+                        val deserializer = generateParseStrFn(binding, true)
                         rustTemplate(
                             """
                             input = input.${binding.member.setterName()}(
-                                ${symbolProvider.toOptional(binding.member, "#{deserializer}(m$index)?")}
+                                #{deserializer}(m$index)?
                             );
-                            """.trimIndent(),
+                            """,
                             *codegenScope,
                             "deserializer" to deserializer,
                         )
@@ -905,13 +928,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     //     * a map of set of string.
     enum class QueryParamsTargetMapValueType {
         STRING, LIST, SET;
-
-        fun asRustType(): RustType =
-            when (this) {
-                STRING -> RustType.String
-                LIST -> RustType.Vec(RustType.String)
-                SET -> RustType.HashSet(RustType.String)
-            }
     }
 
     private fun queryParamsTargetMapValueType(targetMapValue: Shape): QueryParamsTargetMapValueType =
@@ -924,8 +940,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         } else {
             throw ExpectationNotMetException(
                 """
-                @httpQueryParams trait applied to non-supported target
-                $targetMapValue of type ${targetMapValue.type}
+                @httpQueryParams trait applied to non-supported target $targetMapValue of type ${targetMapValue.type}
                 """.trimIndent(),
                 targetMapValue.sourceLocation,
             )
@@ -947,9 +962,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
         fun HttpBindingDescriptor.queryParamsBindingTargetMapValueType(): QueryParamsTargetMapValueType {
             check(this.location == HttpLocation.QUERY_PARAMS)
-            val queryParamsTarget = model.expectShape(this.member.target)
-            val mapTarget = queryParamsTarget.asMapShape().get()
-            return queryParamsTargetMapValueType(model.expectShape(mapTarget.value.target))
+            val queryParamsTarget = model.expectShape(this.member.target, MapShape::class.java)
+            return queryParamsTargetMapValueType(model.expectShape(queryParamsTarget.value.target))
         }
 
         with(writer) {
@@ -962,11 +976,16 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             )
 
             if (queryParamsBinding != null) {
-                rustTemplate(
-                    "let mut query_params: #{HashMap}<String, " +
-                        "${queryParamsBinding.queryParamsBindingTargetMapValueType().asRustType().render()}> = #{HashMap}::new();",
-                    "HashMap" to software.amazon.smithy.rust.codegen.core.rustlang.RustType.HashMap.RuntimeType,
-                )
+                val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
+                val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                //  constraint traits on member shapes are not implemented yet.
+                val targetSymbol = unconstrainedShapeSymbolProvider.toSymbol(target)
+                withBlock("let mut query_params: #T = ", ";", targetSymbol) {
+                    conditionalBlock("#T(", ")", conditional = hasConstrainedTarget, targetSymbol) {
+                        rust("#T::new()", RustType.HashMap.RuntimeType)
+                    }
+                }
             }
             val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
                 queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
@@ -979,13 +998,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
             rustBlock("for (k, v) in pairs") {
                 queryBindingsTargettingSimple.forEach {
-                    val deserializer = generateParseFn(it, false)
+                    val deserializer = generateParseStrFn(it, false)
                     val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
-                                ${symbolProvider.toOptional(it.member, "#{deserializer}(&v)?")}
+                                #{deserializer}(&v)?
                             );
                             seen_$memberName = true;
                         }
@@ -993,22 +1012,20 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         "deserializer" to deserializer,
                     )
                 }
-                queryBindingsTargettingCollection.forEach {
-                    rustBlock("if k == ${it.locationName.dq()}") {
+                queryBindingsTargettingCollection.forEachIndexed { idx, it ->
+                    rustBlock("${if (idx > 0) "else " else ""}if k == ${it.locationName.dq()}") {
                         val targetCollectionShape = model.expectShape(it.member.target, CollectionShape::class.java)
                         val memberShape = model.expectShape(targetCollectionShape.member.target)
 
                         when {
                             memberShape.isStringShape -> {
-                                // NOTE: This path is traversed with or without @enum applied. The `try_from` is used
-                                // as a common conversion.
-                                rustTemplate(
-                                    """
-                                    let v = <#{memberShape}>::try_from(v.as_ref())?;
-                                    """,
-                                    *codegenScope,
-                                    "memberShape" to symbolProvider.toSymbol(memberShape),
-                                )
+                                if (queryParamsBinding != null) {
+                                    // If there's an `@httpQueryParams` binding, it will want to consume the parsed data
+                                    // too further down, so we need to clone it.
+                                    rust("let v = v.clone().into_owned();")
+                                } else {
+                                    rust("let v = v.into_owned();")
+                                }
                             }
                             memberShape.isTimestampShape -> {
                                 val index = HttpBindingIndex.of(model)
@@ -1042,47 +1059,79 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
 
                 if (queryParamsBinding != null) {
+                    val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                    //  constraint traits on member shapes are not implemented yet.
+                    val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
                         QueryParamsTargetMapValueType.STRING -> {
-                            rust("query_params.entry(String::from(k)).or_insert_with(|| String::from(v));")
-                        } else -> {
-                            rustTemplate(
-                                """
-                                let entry = query_params.entry(String::from(k)).or_default();
-                                entry.push(String::from(v));
-                                """.trimIndent(),
-                            )
+                            rust("query_params.${if (hasConstrainedTarget) "0." else ""}entry(String::from(k)).or_insert_with(|| String::from(v));")
+                        }
+                        QueryParamsTargetMapValueType.LIST, QueryParamsTargetMapValueType.SET -> {
+                            if (hasConstrainedTarget) {
+                                val collectionShape = model.expectShape(target.value.target, CollectionShape::class.java)
+                                val collectionSymbol = unconstrainedShapeSymbolProvider.toSymbol(collectionShape)
+                                rust(
+                                    // `or_insert_with` instead of `or_insert` to avoid the allocation when the entry is
+                                    // not empty.
+                                    """
+                                    let entry = query_params.0.entry(String::from(k)).or_insert_with(|| #T(std::vec::Vec::new()));
+                                    entry.0.push(String::from(v));
+                                    """,
+                                    collectionSymbol,
+                                )
+                            } else {
+                                rust(
+                                    """
+                                    let entry = query_params.entry(String::from(k)).or_default();
+                                    entry.push(String::from(v));
+                                    """,
+                                )
+                            }
                         }
                     }
                 }
             }
             if (queryParamsBinding != null) {
-                rust("input = input.${queryParamsBinding.member.setterName()}(Some(query_params));")
+                val isOptional = unconstrainedShapeSymbolProvider.toSymbol(queryParamsBinding.member).isOptional()
+                withBlock("input = input.${queryParamsBinding.member.setterName()}(", ");") {
+                    conditionalBlock("Some(", ")", conditional = isOptional) {
+                        write("query_params")
+                    }
+                }
             }
-            queryBindingsTargettingCollection.forEach {
-                val memberName = symbolProvider.toMemberName(it.member)
-                rustTemplate(
-                    """
-                    input = input.${it.member.setterName()}(
-                        if $memberName.is_empty() {
-                            None
-                        } else {
-                            Some($memberName)
+            queryBindingsTargettingCollection.forEach { binding ->
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                //  implemented yet.
+                val hasConstrainedTarget =
+                    model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
+                val memberName = unconstrainedShapeSymbolProvider.toMemberName(binding.member)
+                val isOptional = unconstrainedShapeSymbolProvider.toSymbol(binding.member).isOptional()
+                rustBlock("if !$memberName.is_empty()") {
+                    withBlock(
+                        "input = input.${
+                        binding.member.setterName()
+                        }(",
+                        ");",
+                    ) {
+                        conditionalBlock("Some(", ")", conditional = isOptional) {
+                            conditionalBlock(
+                                "#T(",
+                                ")",
+                                conditional = hasConstrainedTarget,
+                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() },
+                            ) {
+                                write(memberName)
+                            }
                         }
-                    );
-                    """.trimIndent(),
-                )
+                    }
+                }
             }
         }
     }
 
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
-        val httpBindingGenerator =
-            ServerRequestBindingGenerator(
-                protocol,
-                codegenContext,
-                operationShape,
-            )
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
@@ -1096,12 +1145,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun serverRenderPrefixHeadersParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
         check(binding.location == HttpLocation.PREFIX_HEADERS)
 
-        val httpBindingGenerator =
-            ServerRequestBindingGenerator(
-                protocol,
-                codegenContext,
-                operationShape,
-            )
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
@@ -1112,10 +1156,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    private fun generateParseFn(binding: HttpBindingDescriptor, percentDecoding: Boolean): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member)
+    private fun generateParseStrFn(binding: HttpBindingDescriptor, percentDecoding: Boolean): RuntimeType {
+        val output = unconstrainedShapeSymbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
-        val symbol = output.extractSymbolFromOption()
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
@@ -1126,24 +1169,15 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                 when {
                     target.isStringShape -> {
-                        // NOTE: This path is traversed with or without @enum applied. The `try_from` is used as a
-                        // common conversion.
                         if (percentDecoding) {
                             rustTemplate(
                                 """
-                                let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
-                                let value = #{T}::try_from(value.as_ref())?;
+                                let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?.into_owned();
                                 """,
                                 *codegenScope,
-                                "T" to symbol,
                             )
                         } else {
-                            rustTemplate(
-                                """
-                                let value = #{T}::try_from(value)?;
-                                """,
-                                "T" to symbol,
-                            )
+                            rust("let value = value.to_owned();")
                         }
                     }
                     target.isTimestampShape -> {
@@ -1187,7 +1221,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         )
                     }
                 }
-
                 rust(
                     """
                     Ok(${symbolProvider.wrapOptional(binding.member, "value")})
@@ -1213,12 +1246,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         if (model.expectShape(binding.member.target) is StringShape) {
             return ServerRuntimeType.RequestRejection(runtimeConfig)
         }
-        when (codegenContext.protocol) {
+        return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                return CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
+                CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::error::DeserializeError")
             }
             RestXmlTrait.ID -> {
-                return CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlError")
+                CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlDecodeError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

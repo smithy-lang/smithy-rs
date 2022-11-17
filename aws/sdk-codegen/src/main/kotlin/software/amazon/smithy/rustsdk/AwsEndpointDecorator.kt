@@ -138,14 +138,16 @@ class EndpointConfigCustomization(
                     ///
                     /// ## Examples
                     /// ```no_run
+                    /// ## fn wrapper() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
                     /// use #{aws_types}::region::Region;
                     /// use $moduleUseName::config::{Builder, Config};
                     /// use $moduleUseName::Endpoint;
                     ///
                     /// let config = $moduleUseName::Config::builder()
-                    ///     .endpoint_resolver(
-                    ///         Endpoint::immutable("http://localhost:8080".parse().expect("valid URI"))
-                    ///     ).build();
+                    ///     .endpoint_resolver(Endpoint::immutable("http://localhost:8080")?)
+                    ///     .build();
+                    /// ## Ok(())
+                    /// ## }
                     /// ```
                     pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{ResolveAwsEndpoint} + 'static) -> Self {
                         self.endpoint_resolver = Some(std::sync::Arc::new(#{EndpointShim}::from_resolver(endpoint_resolver)) as _);
