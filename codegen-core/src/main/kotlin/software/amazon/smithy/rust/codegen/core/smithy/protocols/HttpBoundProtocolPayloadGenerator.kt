@@ -192,7 +192,7 @@ class HttpBoundProtocolPayloadGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            contentType ?: throw CodegenException("event streams must set a content type"),
+            contentType,
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the

@@ -64,7 +64,7 @@ class PythonServerModuleGenerator(
             """,
             *codegenScope,
         )
-        serviceShapes.forEach() { shape ->
+        serviceShapes.forEach { shape ->
             val moduleType = moduleType(shape)
             if (moduleType != null) {
                 rustTemplate(
