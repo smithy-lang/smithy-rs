@@ -431,3 +431,15 @@ message = "`Endpoint::immutable` now takes `impl AsRef<str>` instead of `Uri`. F
 references = ["smithy-rs#1984", "smithy-rs#1496"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The Unit type for a Union member is no longer rendered."
+references = ["smithy-rs#1989"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The Unit type for a Union member is no longer rendered."
+references = ["smithy-rs#1989"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
