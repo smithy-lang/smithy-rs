@@ -83,7 +83,8 @@ class ConstrainedStringGenerator(
         writer.rustTemplate(
             """
             fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
-                let regex = #{Regex}::Regex::new("$pattern").unwrap();
+                static REGEX : #{OnceCell}::sync::OnceCell<#{Regex}::Regex> = #{OnceCell}::sync::OnceCell::new();
+                let regex = REGEX.get_or_init(|| #{Regex}::Regex::new("$pattern").unwrap());
 
                 if regex.is_match(string) {
                     Ok(())
@@ -93,6 +94,7 @@ class ConstrainedStringGenerator(
             }
             """.trimIndent(),
             "Regex" to ServerCargoDependency.Regex.asType(),
+            "OnceCell" to ServerCargoDependency.OnceCell.asType(),
         )
     }
     private fun renderTryFrom(inner: String, name: String, shape: StringShape, constraintViolation: Symbol) {
