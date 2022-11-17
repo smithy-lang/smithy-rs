@@ -44,11 +44,12 @@ class ConstrainedStringGeneratorTest {
                 "👍👍👍", // These three emojis are three Unicode scalar values.
                 "👍👍👍👍",
             ),
+            Triple("@pattern(\"^[a-z]+$\")", "valid", "123 invalid"),
         ).map {
             TestCase(
                 """
                 namespace test
-                
+
                 ${it.first}
                 string ConstrainedString
                 """.asSmithyModel(),
@@ -116,10 +117,10 @@ class ConstrainedStringGeneratorTest {
     fun `type should not be constructible without using a constructor`() {
         val model = """
             namespace test
-            
+
             @length(min: 1, max: 69)
             string ConstrainedString
-            """.asSmithyModel()
+        """.asSmithyModel()
         val constrainedStringShape = model.lookup<StringShape>("test#ConstrainedString")
 
         val codegenContext = serverTestCodegenContext(model)
@@ -136,14 +137,14 @@ class ConstrainedStringGeneratorTest {
     fun `Display implementation`() {
         val model = """
             namespace test
-            
+
             @length(min: 1, max: 69)
             string ConstrainedString
-            
+
             @sensitive
             @length(min: 1, max: 78)
             string SensitiveConstrainedString
-            """.asSmithyModel()
+        """.asSmithyModel()
         val constrainedStringShape = model.lookup<StringShape>("test#ConstrainedString")
         val sensitiveConstrainedStringShape = model.lookup<StringShape>("test#SensitiveConstrainedString")
 
