@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -47,7 +48,10 @@ private data class TraitInfo(
                 is LengthTrait -> {
                     return TraitInfo(
                         { writer -> writer.rust("Self::check_length(&value)?;") },
-                        { writer -> writer.rust("Length(usize),") },
+                        { writer ->
+                            writer.docs("Error when a string doesn't satisfy its `@length` requirements.")
+                            writer.rust("Length(usize),")
+                        },
                         { writer ->
                             writer.rust(
                                 """
@@ -65,7 +69,10 @@ private data class TraitInfo(
                 is PatternTrait -> {
                     return TraitInfo(
                         { writer -> writer.rust("Self::check_pattern(&value)?;") },
-                        { writer -> writer.rust("Pattern(String),") },
+                        { writer ->
+                            writer.docs("Error when a string doesn't satisfy its `@pattern`.")
+                            writer.rust("Pattern(String),")
+                        },
                         { writer ->
                             writer.rust(
                                 """
