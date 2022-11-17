@@ -238,13 +238,10 @@ event_loop.add_signal_handler(signal.SIGINT,
         worker_number: isize,
         tls: Option<PyTlsConfig>,
     ) -> PyResult<()> {
-        let addr = {
-            // Clone the socket.
-            let borrow = socket.try_borrow_mut()?;
-            let held_socket: &PySocket = &borrow;
-            let raw_socket = held_socket.get_socket()?;
-            self.addr_incoming_from_socket(raw_socket)
-        };
+        // Clone the socket.
+        let borrow = socket.try_borrow_mut()?;
+        let held_socket: &PySocket = &borrow;
+        let raw_socket = held_socket.get_socket()?;
 
         // Register signals on the Python event loop.
         self.register_python_signals(py, event_loop.to_object(py))?;
@@ -259,6 +256,8 @@ event_loop.add_signal_handler(signal.SIGINT,
                 .build()
                 .expect("unable to start a new tokio runtime for this process");
             rt.block_on(async move {
+                let addr = addr_incoming_from_socket(raw_socket);
+
                 if let Some(config) = tls {
                     let acceptor =
                         TlsAcceptor::from(Arc::new(config.build().expect("invalid tls config")));
@@ -495,18 +494,18 @@ event_loop.add_signal_handler(signal.SIGINT,
             .service(service);
         Ok(service)
     }
+}
 
-    fn addr_incoming_from_socket(&self, socket: Socket) -> AddrIncoming {
-        let std_listener: StdTcpListener = socket
-            .try_into()
-            .expect("unable to convert `socket2::Socket` into `std::net::TcpListener`");
-        // StdTcpListener::from_std doesn't set O_NONBLOCK
-        std_listener
-            .set_nonblocking(true)
-            .expect("unable to set `O_NONBLOCK=true` on `std::net::TcpListener`");
-        let listener = TcpListener::from_std(std_listener)
-            .expect("unable to create `tokio::net::TcpListener` from `std::net::TcpListener`");
-        AddrIncoming::from_listener(listener)
-            .expect("unable to create `AddrIncoming` from `TcpListener`")
-    }
+fn addr_incoming_from_socket(socket: Socket) -> AddrIncoming {
+    let std_listener: StdTcpListener = socket
+        .try_into()
+        .expect("unable to convert `socket2::Socket` into `std::net::TcpListener`");
+    // StdTcpListener::from_std doesn't set O_NONBLOCK
+    std_listener
+        .set_nonblocking(true)
+        .expect("unable to set `O_NONBLOCK=true` on `std::net::TcpListener`");
+    let listener = TcpListener::from_std(std_listener)
+        .expect("unable to create `tokio::net::TcpListener` from `std::net::TcpListener`");
+    AddrIncoming::from_listener(listener)
+        .expect("unable to create `AddrIncoming` from `TcpListener`")
 }
