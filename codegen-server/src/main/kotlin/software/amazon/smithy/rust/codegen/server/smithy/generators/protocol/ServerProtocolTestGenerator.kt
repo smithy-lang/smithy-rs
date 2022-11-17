@@ -31,7 +31,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -103,13 +102,13 @@ class ServerProtocolTestGenerator(
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
-        "Hyper" to CargoDependency.Hyper.asType(),
-        "Tokio" to ServerCargoDependency.TokioDev.asType(),
-        "Tower" to CargoDependency.Tower.asType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
+        "SmithyHttp" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType(),
+        "Http" to CargoDependency.Http.toType(),
+        "Hyper" to CargoDependency.Hyper.toType(),
+        "Tokio" to ServerCargoDependency.TokioDev.toType(),
+        "Tower" to CargoDependency.Tower.toType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
+        "AssertEq" to CargoDependency.PrettyAssertions.toType().member("assert_eq!"),
         "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
     )
 

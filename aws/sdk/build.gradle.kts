@@ -396,7 +396,7 @@ tasks["assemble"].apply {
 project.registerCargoCommandsTasks(outputDir, defaultRustDocFlags)
 project.registerGenerateCargoConfigTomlTask(outputDir)
 
-tasks["test"].finalizedBy(Cargo.CLIPPY, Cargo.TEST, Cargo.DOCS)
+tasks["test"].finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 
 tasks.register<Delete>("deleteSdk") {
     delete = setOf(outputDir)

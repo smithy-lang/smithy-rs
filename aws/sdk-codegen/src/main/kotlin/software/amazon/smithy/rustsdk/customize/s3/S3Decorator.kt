@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXml
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -96,7 +95,7 @@ class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlDecodeError"),
+        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).toType().member("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
         "s3_errors" to AwsRuntimeType.S3Errors,
     )

@@ -217,22 +217,22 @@ class FakeSigningConfig(
     private val codegenScope = arrayOf(
         "SharedPropertyBag" to RuntimeType(
             "SharedPropertyBag",
-            CargoDependency.SmithyHttp(runtimeConfig),
+            CargoDependency.smithyHttp(runtimeConfig),
             "aws_smithy_http::property_bag",
         ),
         "SignMessageError" to RuntimeType(
             "SignMessageError",
-            CargoDependency.SmithyEventStream(runtimeConfig),
+            CargoDependency.smithyEventStream(runtimeConfig),
             "aws_smithy_eventstream::frame",
         ),
         "SignMessage" to RuntimeType(
             "SignMessage",
-            CargoDependency.SmithyEventStream(runtimeConfig),
+            CargoDependency.smithyEventStream(runtimeConfig),
             "aws_smithy_eventstream::frame",
         ),
         "Message" to RuntimeType(
             "Message",
-            CargoDependency.SmithyEventStream(runtimeConfig),
+            CargoDependency.smithyEventStream(runtimeConfig),
             "aws_smithy_eventstream::frame",
         ),
     )
