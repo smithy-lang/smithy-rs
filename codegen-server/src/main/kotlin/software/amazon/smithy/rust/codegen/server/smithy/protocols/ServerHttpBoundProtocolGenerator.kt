@@ -114,14 +114,14 @@ class ServerHttpBoundProtocolGenerator(
  */
 private class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: ServerCodegenContext,
-    private val serverProtocol: ServerProtocol,
+    private val protocol: ServerProtocol,
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val httpBindingResolver = serverProtocol.httpBindingResolver
+    private val httpBindingResolver = protocol.httpBindingResolver
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
@@ -251,7 +251,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
-            "Marker" to serverProtocol.markerStruct(),
+            "Marker" to protocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
             "verifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
@@ -314,7 +314,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
-                "Marker" to serverProtocol.markerStruct(),
+                "Marker" to protocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
                 "serialize_error" to serverSerializeError(operationShape),
             )
@@ -347,7 +347,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
-                "Marker" to serverProtocol.markerStruct(),
+                "Marker" to protocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
             )
         }
@@ -490,7 +490,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         errorSymbol: RuntimeType,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val structuredDataSerializer = serverProtocol.structuredDataSerializer(operationShape)
+        val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
         withBlock("match error {", "}") {
             val errors = operationShape.operationErrors(model)
             errors.forEach {
@@ -559,12 +559,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         // Fallback to the default code of `http::response::Builder`, 200.
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
-            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, serverProtocol, httpMessageType = HttpMessageType.RESPONSE)
+            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(", "));", *codegenScope) {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }
         } ?: run {
-            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, serverProtocol, httpMessageType = HttpMessageType.RESPONSE)
+            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
             withBlockTemplate("let payload = ", ";") {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }
@@ -598,7 +598,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
      *     3. Additional protocol-specific headers for errors, if [errorShape] is non-null.
      */
     private fun RustWriter.serverRenderResponseHeaders(operationShape: OperationShape, errorShape: StructureShape? = null) {
-        val bindingGenerator = ServerResponseBindingGenerator(serverProtocol, codegenContext, operationShape)
+        val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
         val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
         if (addHeadersFn != null) {
             // Notice that we need to borrow the output only for output shapes but not for error shapes.
@@ -630,7 +630,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
 
         if (errorShape != null) {
-            for ((headerName, headerValue) in serverProtocol.additionalErrorResponseHeaders(errorShape)) {
+            for ((headerName, headerValue) in protocol.additionalErrorResponseHeaders(errorShape)) {
                 rustTemplate(
                     """
                     builder = #{header_util}::set_response_header_if_absent(
@@ -710,8 +710,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         inputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(serverProtocol, codegenContext, operationShape)
-        val structuredDataParser = serverProtocol.structuredDataParser(operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
+        val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust(
             "let mut input = #T::default();",
@@ -756,7 +756,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         serverRenderUriPathParser(this, operationShape)
         serverRenderQueryStringParser(this, operationShape)
 
-        if (noInputs && serverProtocol.serverContentTypeCheckNoModeledInput()) {
+        if (noInputs && protocol.serverContentTypeCheckNoModeledInput()) {
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
                     """
@@ -1032,7 +1032,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                     index.determineTimestampFormat(
                                         it.member,
                                         it.location,
-                                        serverProtocol.defaultTimestampFormat,
+                                        protocol.defaultTimestampFormat,
                                     )
                                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                                 rustTemplate(
@@ -1130,7 +1130,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(serverProtocol, codegenContext, operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
@@ -1144,7 +1144,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun serverRenderPrefixHeadersParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
         check(binding.location == HttpLocation.PREFIX_HEADERS)
 
-        val httpBindingGenerator = ServerRequestBindingGenerator(serverProtocol, codegenContext, operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
@@ -1185,7 +1185,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             index.determineTimestampFormat(
                                 binding.member,
                                 binding.location,
-                                serverProtocol.defaultTimestampFormat,
+                                protocol.defaultTimestampFormat,
                             )
                         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
 
