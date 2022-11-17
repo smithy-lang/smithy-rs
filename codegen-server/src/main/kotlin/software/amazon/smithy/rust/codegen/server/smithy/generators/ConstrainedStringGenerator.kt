@@ -118,7 +118,9 @@ private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait,
     )
 }
 private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTrait, constraintViolation: Symbol) {
-    val pattern = patternTrait.pattern.toString()
+    // Escape `\`s to not end up with broken rust code in the presence of regexes with slashes.
+    // This turns `Regex::new("^[\S\s]+$")` into `Regex::new("^[\\S\\s]+$")`.
+    val pattern = patternTrait.pattern.toString().replace("\\", "\\\\")
 
     writer.rustTemplate(
         """
