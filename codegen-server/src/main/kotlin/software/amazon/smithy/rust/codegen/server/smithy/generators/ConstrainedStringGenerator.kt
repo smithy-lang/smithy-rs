@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -24,13 +25,103 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
+
+private data class TraitInfo(
+    val tryFromCheck: (writer: RustWriter) -> Unit,
+    val renderConstraintViolationVariant: (writer: RustWriter) -> Unit,
+    val asValidationExceptionField: (writer: RustWriter) -> Unit,
+    val renderValidationFunctionDefinition: (writer: RustWriter) -> Unit,
+)
+private fun handleTrait(trait: AbstractTrait, constraintViolation: Symbol): TraitInfo? {
+    when (trait) {
+        is LengthTrait -> {
+            return TraitInfo(
+                { writer -> writer.rust("Self::check_length(&value)?;") },
+                { writer -> writer.rust("Length(usize),") },
+                { writer ->
+                    writer.rust(
+                        """
+                        Self::Length(length) => crate::model::ValidationExceptionField {
+                            message: format!("${trait.validationErrorMessage()}", length, &path),
+                            path,
+                        },
+                        """.trimIndent(),
+                    )
+                },
+                { writer -> renderLengthValidation(writer, trait, constraintViolation) },
+            )
+        }
+        is PatternTrait -> {
+            return TraitInfo(
+                { writer -> writer.rust("Self::check_pattern(&value)?;") },
+                { writer -> writer.rust("Pattern(String),") },
+                { writer ->
+                    writer.rust(
+                        """
+                        Self::Pattern(pattern) => crate::model::ValidationExceptionField {
+                            message: format!("String at path {} failed to satisfy pattern {}", &path, pattern),
+                            path
+                        },
+                        """.trimIndent(),
+                    )
+                },
+                { writer -> renderPatternValidation(writer, trait, constraintViolation) },
+            )
+        }
+        else -> {
+            return null
+        }
+    }
+}
+
+private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait, constraintViolation: Symbol) {
+    val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
+        "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
+    } else if (lengthTrait.min.isPresent) {
+        "${lengthTrait.min.get()} <= length"
+    } else {
+        "length <= ${lengthTrait.max.get()}"
+    }
+    writer.rust(
+        """
+        fn check_length(string: &str) -> Result<(), $constraintViolation> {
+            let length = string.chars().count();
+
+            if $condition {
+                Ok(())
+            } else {
+                Err($constraintViolation::Length(length))
+            }
+        }
+        """.trimIndent(),
+    )
+}
+private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTrait, constraintViolation: Symbol) {
+    val pattern = patternTrait.pattern.toString()
+
+    writer.rustTemplate(
+        """
+        fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
+            static REGEX : #{OnceCell}::sync::OnceCell<#{Regex}::Regex> = #{OnceCell}::sync::OnceCell::new();
+            let regex = REGEX.get_or_init(|| #{Regex}::Regex::new("$pattern").unwrap());
+
+            if regex.is_match(string) {
+                Ok(())
+            } else {
+                Err($constraintViolation::Pattern("$pattern".to_owned()))
+            }
+        }
+        """.trimIndent(),
+        "Regex" to ServerCargoDependency.Regex.asType(),
+        "OnceCell" to ServerCargoDependency.OnceCell.asType(),
+    )
+}
 
 /**
  * [ConstrainedStringGenerator] generates a wrapper tuple newtype holding a constrained `String`.
@@ -41,6 +132,7 @@ class ConstrainedStringGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: StringShape,
+    val constraints: List<AbstractTrait>,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -54,85 +146,27 @@ class ConstrainedStringGenerator(
             }
         }
 
-    private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait, constraintViolation: Symbol) {
-        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
-            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
-        } else if (lengthTrait.min.isPresent) {
-            "${lengthTrait.min.get()} <= length"
-        } else {
-            "length <= ${lengthTrait.max.get()}"
-        }
-        writer.rust(
-            """
-            fn check_length(string: &str) -> Result<(), $constraintViolation> {
-                let length = string.chars().count();
-
-                if $condition {
-                    Ok(())
-                } else {
-                    Err($constraintViolation::Length(length))
-                }
-            }
-            """.trimIndent(),
-        )
-    }
-
-    private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTrait, constraintViolation: Symbol) {
-        val pattern = patternTrait.pattern.toString()
-
-        writer.rustTemplate(
-            """
-            fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
-                static REGEX : #{OnceCell}::sync::OnceCell<#{Regex}::Regex> = #{OnceCell}::sync::OnceCell::new();
-                let regex = REGEX.get_or_init(|| #{Regex}::Regex::new("$pattern").unwrap());
-
-                if regex.is_match(string) {
-                    Ok(())
-                } else {
-                    Err($constraintViolation::Pattern("$pattern".to_owned()))
-                }
-            }
-            """.trimIndent(),
-            "Regex" to ServerCargoDependency.Regex.asType(),
-            "OnceCell" to ServerCargoDependency.OnceCell.asType(),
-        )
-    }
-    private fun renderTryFrom(inner: String, name: String, shape: StringShape, constraintViolation: Symbol) {
-        val lengthTrait = shape.getTrait<LengthTrait>()
-        val patternTrait = shape.getTrait<PatternTrait>()
-
-        var lengthCheck = ""
-        if (lengthTrait != null) {
-            lengthCheck = "Self::check_length(&value)?;"
-
-            writer.rustBlock("impl $name") {
-                renderLengthValidation(writer, lengthTrait, constraintViolation)
+    private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol, traits: List<TraitInfo>) {
+        writer.rustBlock("impl $name") {
+            for (traitInfo in traits) {
+                traitInfo.renderValidationFunctionDefinition(writer)
             }
         }
 
-        var patternCheck = ""
-        if (patternTrait != null) {
-            patternCheck = "Self::check_pattern(&value)?;"
-            writer.rustBlock("impl $name") {
-                renderPatternValidation(writer, patternTrait, constraintViolation)
-            }
-        }
-        writer.rustTemplate(
-            """
-            impl #{TryFrom}<$inner> for $name {
-                type Error = #{ConstraintViolation};
-
+        writer.rustBlockTemplate("impl #{TryFrom}<$inner> for $name", "TryFrom" to RuntimeType.TryFrom) {
+            rustTemplate("type Error = #{ConstraintViolation};", "ConstraintViolation" to constraintViolation)
+            rustBlock(
+                """
                 /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                    $lengthCheck
-                    $patternCheck
-                    Ok(Self(value))
+                fn try_from(value: $inner) -> Result<Self, Self::Error>
+                """,
+            ) {
+                for (traitInfo in traits) {
+                    traitInfo.tryFromCheck(writer)
                 }
+                rust("Ok(Self(value))")
             }
-            """.trimIndent(),
-            "ConstraintViolation" to constraintViolation,
-            "TryFrom" to RuntimeType.TryFrom,
-        )
+        }
     }
 
     fun render() {
@@ -181,7 +215,9 @@ class ConstrainedStringGenerator(
             )
         }
 
-        renderTryFrom(inner, name, shape, constraintViolation)
+        val traits: List<TraitInfo> = constraints.mapNotNull { handleTrait(it, constraintViolation) }
+
+        renderTryFrom(inner, name, constraintViolation, traits)
 
         writer.rustTemplate(
             """
@@ -217,23 +253,21 @@ class ConstrainedStringGenerator(
 
         val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
         writer.withModule(RustModule(constraintViolationModuleName, RustMetadata(visibility = constrainedTypeVisibility))) {
-            renderConstraintViolationEnum(this, shape, constraintViolation)
+            renderConstraintViolationEnum(this, shape, constraintViolation, traits)
         }
     }
 
-    private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
-        val lengthTrait = shape.getTrait<LengthTrait>()
-        val patternTrait = shape.getTrait<PatternTrait>()
-
-        writer.rust(
+    private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol, constraintTraits: List<TraitInfo>) {
+        writer.rustBlock(
             """
             ##[derive(Debug, PartialEq)]
-            pub enum ${constraintViolation.name} {
-                ${if (lengthTrait != null) "Length(usize)," else ""}
-                ${if (patternTrait != null) "Pattern(String)," else ""}
+            pub enum ${constraintViolation.name}
+            """.trimIndent(),
+        ) {
+            for (traitInfo in constraintTraits) {
+                traitInfo.renderConstraintViolationVariant(this)
             }
-            """,
-        )
+        }
 
         if (shape.isReachableFromOperationInput()) {
             writer.rustBlock("impl ${constraintViolation.name}") {
@@ -242,18 +276,9 @@ class ConstrainedStringGenerator(
                     "String" to RuntimeType.String,
                 ) {
                     rustBlock("match self") {
-                        rust(
-                            """
-                            ${if (lengthTrait != null) """Self::Length(length) => crate::model::ValidationExceptionField {
-                                message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                                path,
-                            },""" else ""}
-                            ${ if (patternTrait != null) """Self::Pattern(pattern) => crate::model::ValidationExceptionField {
-                                message: format!("String at path {} failed to satisfy pattern {}", &path, pattern),
-                                path
-                            },""" else ""}
-                            """,
-                        )
+                        for (traitInfo in constraintTraits) {
+                            traitInfo.asValidationExceptionField(this)
+                        }
                     }
                 }
             }

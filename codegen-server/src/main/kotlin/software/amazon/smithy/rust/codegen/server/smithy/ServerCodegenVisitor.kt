@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -41,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamN
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
@@ -384,9 +386,11 @@ open class ServerCodegenVisitor(
                 """.trimIndent().replace("\n", " "),
             )
         } else if (!shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            // TODO: Tidy up
+            val constraints = listOfNotNull(shape.getTrait<LengthTrait>(), shape.getTrait<PatternTrait>())
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) {
-                ConstrainedStringGenerator(codegenContext, this, shape).render()
+                ConstrainedStringGenerator(codegenContext, this, shape, constraints).render()
             }
         }
     }
