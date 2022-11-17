@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -51,7 +52,7 @@ class ConstrainedStringGenerator(
             }
         }
 
-    fun renderLengthValidation(lengthTrait: LengthTrait, constraintViolation: Symbol) {
+    private fun renderLengthValidation(lengthTrait: LengthTrait, constraintViolation: Symbol) {
         val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
             "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
         } else if (lengthTrait.min.isPresent) {
@@ -71,9 +72,38 @@ class ConstrainedStringGenerator(
             }
         """.trimIndent())
     }
+
+    private fun renderTryFrom(inner: String, name: String, shape: StringShape, constraintViolation: Symbol) {
+        val lengthTrait = shape.getTrait<LengthTrait>()
+
+        var lengthCheck = ""
+        if (lengthTrait != null) {
+            lengthCheck = "Self::check_length(&value);?"
+
+            writer.rustBlock("impl $name") {
+                renderLengthValidation(lengthTrait, constraintViolation)
+            }
+        }
+
+        writer.rustTemplate(
+            """
+            impl #{TryFrom}<$inner> for $name {
+                type Error = #{ConstraintViolation};
+
+                /// ${rustDocsTryFromMethod(name, inner)}
+                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                    $lengthCheck
+                    Ok(Self(value))
+                }
+            }
+            """.trimIndent(),
+            "ConstraintViolation" to constraintViolation,
+            "TryFrom" to RuntimeType.TryFrom,
+        )
+    }
+
     fun render() {
         val lengthTrait = shape.expectTrait<LengthTrait>()
-
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
@@ -100,8 +130,6 @@ class ConstrainedStringGenerator(
             Attribute.AllowUnused.render(writer)
         }
         writer.rustBlockTemplate("impl $name") {
-            renderLengthValidation(lengthTrait, constraintViolation)
-
             rust("""
                 /// Extracts a string slice containing the entire underlying `String`.
                 pub fn as_str(&self) -> &str {
@@ -120,6 +148,7 @@ class ConstrainedStringGenerator(
             """.trimIndent())
         }
 
+        renderTryFrom(inner, name, shape, constraintViolation)
 
         writer.rustTemplate(
             """
@@ -139,16 +168,6 @@ class ConstrainedStringGenerator(
                 }
             }
 
-            impl #{TryFrom}<$inner> for $name {
-                type Error = #{ConstraintViolation};
-
-                /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                    Self::check_length(&value)?;
-
-                    Ok(Self(value))
-                }
-            }
 
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
@@ -161,7 +180,6 @@ class ConstrainedStringGenerator(
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,
             "From" to RuntimeType.From,
-            "TryFrom" to RuntimeType.TryFrom,
         )
 
         val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
