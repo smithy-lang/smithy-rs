@@ -395,3 +395,39 @@ This is forward-compatible because the execution will hit the second last match 
 references = ["smithy-rs#1945"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Functions on `aws_smithy_http::endpoint::Endpoint` now return a `Result` instead of panicking."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Functions on `aws_smithy_http::endpoint::Endpoint` now return a `Result` instead of panicking."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`Endpoint::mutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::mutable_uri`."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`Endpoint::mutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::mutable_uri`."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`Endpoint::immutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::immutable_uri`."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`Endpoint::immutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::immutable_uri`."
+references = ["smithy-rs#1984", "smithy-rs#1496"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
