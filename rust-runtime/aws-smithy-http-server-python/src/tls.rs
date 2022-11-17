@@ -6,7 +6,7 @@
 //! TLS related types for Python.
 //!
 //! [PyTlsConfig] implementation is mostly borrowed from:
-//! https://github.com/seanmonstar/warp/blob/4e9c4fd6ce238197fd1088061bbc07fa2852cb0f/src/tls.rs
+//! <https://github.com/seanmonstar/warp/blob/4e9c4fd6ce238197fd1088061bbc07fa2852cb0f/src/tls.rs>
 
 use std::fs::File;
 use std::io::{self, BufReader, Read};
