@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -145,10 +144,10 @@ class AwsInputPresignedMethod(
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
-        "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").asType(),
-        "sig_auth" to runtimeConfig.sigAuth().asType(),
-        "tower" to CargoDependency.Tower.asType(),
+        "SdkError" to CargoDependency.smithyHttp(runtimeConfig).toType().member("result::SdkError"),
+        "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").toType(),
+        "sig_auth" to runtimeConfig.sigAuth().toType(),
+        "tower" to CargoDependency.Tower.toType(),
         "Middleware" to runtimeConfig.defaultMiddleware(),
     )
 
@@ -253,7 +252,7 @@ class AwsPresignedFluentBuilderMethod(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
+        "SdkError" to CargoDependency.smithyHttp(runtimeConfig).toType().member("result::SdkError"),
     )
 
     override fun section(section: FluentClientSection): Writable =

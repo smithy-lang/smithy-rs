@@ -13,7 +13,6 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -32,7 +31,7 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlDecodeError"),
+        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).toType().member("decode::XmlDecodeError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")
 

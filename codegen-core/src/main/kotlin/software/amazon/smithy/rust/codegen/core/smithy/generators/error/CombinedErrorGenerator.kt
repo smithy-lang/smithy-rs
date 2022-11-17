@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
@@ -127,7 +126,8 @@ class CombinedErrorGenerator(
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
-    private val createUnhandledError = CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::CreateUnhandledError")
+    private val createUnhandledError =
+        CargoDependency.smithyHttp(runtimeConfig).toType().member("result::CreateUnhandledError")
 
     fun render(writer: RustWriter) {
         val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")

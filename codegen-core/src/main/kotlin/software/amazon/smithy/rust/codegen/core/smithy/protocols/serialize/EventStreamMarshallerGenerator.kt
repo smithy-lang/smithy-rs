@@ -53,7 +53,7 @@ open class EventStreamMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
 ) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
         "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),

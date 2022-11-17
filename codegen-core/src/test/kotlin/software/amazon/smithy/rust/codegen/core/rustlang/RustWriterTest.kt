@@ -155,7 +155,7 @@ class RustWriterTest {
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
-            "http" to CargoDependency.Http.asType().member("foo"),
+            "http" to CargoDependency.Http.toType().member("foo"),
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
     }

@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -41,12 +40,12 @@ class PythonServerOperationHandlerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-            "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType(),
+            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "tokio" to PythonServerCargoDependency.Tokio.toType(),
+            "tracing" to PythonServerCargoDependency.Tracing.toType(),
         )
 
     override fun render(writer: RustWriter) {

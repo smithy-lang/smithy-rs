@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -28,14 +27,14 @@ class ServerServiceGeneratorV2(
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyHttpServer = ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType()
+    private val smithyHttpServer = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType()
     private val codegenScope =
         arrayOf(
-            "Bytes" to CargoDependency.Bytes.asType(),
-            "Http" to CargoDependency.Http.asType(),
-            "HttpBody" to CargoDependency.HttpBody.asType(),
+            "Bytes" to CargoDependency.Bytes.toType(),
+            "Http" to CargoDependency.Http.toType(),
+            "HttpBody" to CargoDependency.HttpBody.toType(),
             "SmithyHttpServer" to smithyHttpServer,
-            "Tower" to CargoDependency.Tower.asType(),
+            "Tower" to CargoDependency.Tower.toType(),
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
