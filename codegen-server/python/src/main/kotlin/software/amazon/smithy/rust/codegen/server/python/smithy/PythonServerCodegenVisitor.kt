@@ -161,7 +161,7 @@ class PythonServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(codegenContext)),
+            protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol,
             codegenContext,
         )
             .render()
