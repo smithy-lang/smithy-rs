@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGen
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ofTypeUnit
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -394,7 +395,7 @@ class JsonSerializerGenerator(
                 serializeMap(Context(objectName, value, target))
             }
             is StructureShape -> {
-                if (context.shape.target == ShapeId.from("smithy.api#Unit")) {
+                if (context.shape.ofTypeUnit()) {
                     safeName("object").also { objectName ->
                         rust("let $objectName = ${context.writerExpression}.start_object();")
                         rust("$objectName.finish();")
@@ -462,7 +463,7 @@ class JsonSerializerGenerator(
                     for (member in context.shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
 
-                        if (member.target == ShapeId.from("smithy.api#Unit")) {
+                        if (member.ofTypeUnit()) {
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
                                 serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
                             }

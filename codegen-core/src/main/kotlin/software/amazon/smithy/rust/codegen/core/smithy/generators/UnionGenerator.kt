@@ -28,6 +28,12 @@ fun CodegenTarget.renderUnknownVariant() = when (this) {
     CodegenTarget.CLIENT -> true
 }
 
+private val unitShapeId = ShapeId.from("smithy.api#Unit")
+
+internal fun MemberShape.ofTypeUnit(): Boolean {
+    return this.target == unitShapeId
+}
+
 /**
  * Generate an `enum` for a Smithy Union Shape
  *
@@ -124,7 +130,7 @@ fun unknownVariantError(union: String) =
         "It occurs when an outdated client is used after a new enum variant was added on the server side."
 
 private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: MemberShape, memberSymbol: Symbol) {
-    if (member.target == ShapeId.from("smithy.api#Unit")) {
+    if (member.ofTypeUnit()) {
         write("${symbolProvider.toMemberName(member)},")
     } else {
         write("${symbolProvider.toMemberName(member)}(#T),", memberSymbol)
@@ -138,7 +144,7 @@ private fun RustWriter.renderAsVariant(
     unionSymbol: Symbol,
     memberSymbol: Symbol,
 ) {
-    if (member.target == ShapeId.from("smithy.api#Unit")) {
+    if (member.ofTypeUnit()) {
         rust(
             "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
         )

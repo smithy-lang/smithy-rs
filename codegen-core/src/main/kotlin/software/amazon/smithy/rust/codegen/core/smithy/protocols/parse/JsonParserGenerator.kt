@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -42,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGener
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ofTypeUnit
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
@@ -468,7 +468,7 @@ class JsonParserGenerator(
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
-                                        if (member.target == ShapeId.from("smithy.api#Unit")) {
+                                        if (member.ofTypeUnit()) {
                                             rustTemplate(
                                                 """
                                                 #{skip_value}(tokens)?;
