@@ -5,11 +5,17 @@
 
 //! This module holds deserializable structs for the hand-authored changelog TOML files used in smithy-rs.
 
+mod authors;
+mod reference;
+
 use anyhow::{bail, Context, Result};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::fmt::{self, Display};
 use std::path::Path;
 use std::str::FromStr;
+
+pub use authors::*;
+pub use reference::*;
 
 #[derive(Copy, Clone, Debug, Serialize, PartialEq, Eq)]
 pub enum SdkAffected {
@@ -71,115 +77,14 @@ pub struct Meta {
     pub target: Option<SdkAffected>,
 }
 
-#[derive(Clone, Debug)]
-pub struct Reference {
-    pub repo: String,
-    pub number: usize,
-}
-
-impl<'de> Deserialize<'de> for Reference {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        FromStr::from_str(&s).map_err(de::Error::custom)
-    }
-}
-
-impl Serialize for Reference {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&format!("{}#{}", self.repo, self.number))
-    }
-}
-
-impl fmt::Display for Reference {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}#{}", self.repo, self.number)
-    }
-}
-
-impl FromStr for Reference {
-    type Err = anyhow::Error;
-
-    fn from_str(reference: &str) -> std::result::Result<Self, Self::Err> {
-        match reference.split_once('#') {
-            None => bail!(
-                "Reference must of the form `repo#number` but found {}",
-                reference
-            ),
-            Some((repo, number)) => {
-                let number = number.parse::<usize>()?;
-                if !matches!(repo, "smithy-rs" | "aws-sdk-rust") {
-                    bail!("unexpected repo: {}", repo);
-                }
-                Ok(Reference {
-                    number,
-                    repo: repo.to_string(),
-                })
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Author {
-    Single(String),
-    Multiple(Vec<String>),
-}
-
-impl Default for Author {
-    fn default() -> Self {
-        Self::Single(String::new())
-    }
-}
-
-impl Author {
-    pub fn iter(&self) -> impl Iterator<Item = &String> {
-        match self {
-            Author::Single(author) => {
-                Box::new(std::iter::once(author)) as Box<dyn Iterator<Item = &String>>
-            }
-            Author::Multiple(authors) => {
-                Box::new(authors.iter()) as Box<dyn Iterator<Item = &String>>
-            }
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        match self {
-            Author::Single(author) => author.is_empty(),
-            Author::Multiple(authors) => {
-                authors.is_empty() || authors.iter().fold(false, |acc, x| x.is_empty() | acc)
-            }
-        }
-    }
-
-    fn validate_usernames(&self) -> Result<()> {
-        fn validate_username(author: &str) -> Result<()> {
-            if !author.chars().all(|c| c.is_alphanumeric() || c == '-') {
-                bail!("Author, \"{author}\", is not a valid GitHub username: [a-zA-Z0-9\\-]")
-            }
-            Ok(())
-        }
-        for author in self.iter() {
-            validate_username(author)?
-        }
-        Ok(())
-    }
-}
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HandAuthoredEntry {
     pub message: String,
     pub meta: Meta,
-    pub author: Author,
+    #[serde(rename = "author")]
+    pub authors: Authors,
     #[serde(default)]
-    pub references: Vec<Reference>,
+    pub references: Vec<ReferenceItem>,
     /// Optional commit hash to indicate "since when" these changes were made
     #[serde(rename = "since-commit")]
     pub since_commit: Option<String>,
@@ -193,10 +98,10 @@ pub struct HandAuthoredEntry {
 impl HandAuthoredEntry {
     /// Validate a changelog entry to ensure it follows standards
     pub fn validate(&self) -> Result<()> {
-        if self.author.is_empty() {
+        if self.authors.is_empty() {
             bail!("Author must be set (was empty)");
         }
-        self.author.validate_usernames()?;
+        self.authors.validate_usernames()?;
         if self.references.is_empty() {
             bail!("Changelog entry must refer to at least one pull request or issue");
         }
@@ -323,7 +228,7 @@ impl Changelog {
 
 #[cfg(test)]
 mod tests {
-    use super::{Author, Changelog, HandAuthoredEntry, SdkAffected};
+    use super::{Authors, Changelog, HandAuthoredEntry, SdkAffected};
     use anyhow::Context;
 
     #[test]
@@ -563,7 +468,7 @@ mod tests {
             let value: HandAuthoredEntry = toml::from_str(value)
                 .context("String should have parsed with multiple authors")
                 .unwrap();
-            assert_eq!(value.author, Author::Single("rcoh".to_string()));
+            assert_eq!(value.authors, Authors(vec!["rcoh".to_string()]));
         }
         // multiple authors
         let value = r#"
@@ -577,8 +482,8 @@ mod tests {
                 .context("String should have parsed with multiple authors")
                 .unwrap();
             assert_eq!(
-                value.author,
-                Author::Multiple(vec!["rcoh".to_string(), "crisidev".to_string()])
+                value.authors,
+                Authors(vec!["rcoh".to_string(), "crisidev".to_string()])
             );
         }
     }

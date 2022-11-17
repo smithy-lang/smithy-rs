@@ -10,7 +10,7 @@ use once_cell::sync::Lazy;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
-    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
+    Changelog, HandAuthoredEntry, ReferenceId, ReferenceItem, SdkModelChangeKind, SdkModelEntry,
 };
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::env;
@@ -155,14 +155,6 @@ fn render_model_entry(entry: &SdkModelEntry, out: &mut String) {
     .unwrap();
 }
 
-fn to_md_link(reference: &Reference) -> String {
-    format!(
-        "[{repo}#{number}](https://github.com/awslabs/{repo}/issues/{number})",
-        repo = reference.repo,
-        number = reference.number
-    )
-}
-
 /// Write a changelog entry to [out]
 ///
 /// Example output:
@@ -186,10 +178,10 @@ fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
         .target
         .iter()
         .map(|t| t.to_string())
-        .chain(entry.references.iter().map(to_md_link))
+        .chain(entry.references.iter().map(|item| item.id.to_md_link()))
         .collect::<Vec<_>>();
     let non_maintainers = entry
-        .author
+        .authors
         .iter()
         .filter(|author| !is_maintainer(&author))
         .map(|author| format!("@{author}"));
@@ -356,7 +348,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
 
     let mut external_contribs = entries
         .iter()
-        .filter_map(|entry| entry.hand_authored().map(|e| &e.author))
+        .filter_map(|entry| entry.hand_authored().map(|e| &e.authors))
         .flat_map(|author| author.iter())
         .filter(|author| !is_maintainer(author))
         .collect::<Vec<_>>();
@@ -372,7 +364,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
                     entry
                         .hand_authored()
                         .map(|e| {
-                            e.author.iter().any(|author| {
+                            e.authors.iter().any(|author| {
                                 author.eq_ignore_ascii_case(contributor_handle.as_str())
                             })
                         })
@@ -384,7 +376,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
                         .unwrap()
                         .references
                         .iter()
-                        .map(to_md_link)
+                        .map(|item| item.id.to_md_link())
                 })
                 .collect::<Vec<_>>();
             contribution_references.sort();
