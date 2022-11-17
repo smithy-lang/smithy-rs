@@ -245,11 +245,11 @@ class ConstrainedStringGenerator(
                             ${if (lengthTrait != null) """Self::Length(length) => crate::model::ValidationExceptionField {
                                 message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
                                 path,
-                            }""" else ""},
+                            },""" else ""}
                             ${ if (patternTrait != null) """Self::Pattern(pattern) => crate::model::ValidationExceptionField {
                                 message: format!("String at path {} failed to satisfy pattern {}", &path, pattern),
                                 path
-                            }""" else ""}
+                            },""" else ""}
                             """,
                         )
                     }
