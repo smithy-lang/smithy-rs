@@ -386,7 +386,6 @@ open class ServerCodegenVisitor(
                 """.trimIndent().replace("\n", " "),
             )
         } else if (!shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
-            // TODO: Tidy up
             val constraints = listOfNotNull(shape.getTrait<LengthTrait>(), shape.getTrait<PatternTrait>())
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) {
