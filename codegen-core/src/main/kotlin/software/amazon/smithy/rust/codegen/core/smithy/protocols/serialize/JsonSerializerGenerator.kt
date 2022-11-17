@@ -396,17 +396,8 @@ class JsonSerializerGenerator(
             is MapShape -> jsonObjectWriter(context) { objectName ->
                 serializeMap(Context(objectName, value, target))
             }
-            is StructureShape -> {
-                if (context.shape.ofTypeUnit()) {
-                    safeName("object").also { objectName ->
-                        rust("let $objectName = ${context.writerExpression}.start_object();")
-                        rust("$objectName.finish();")
-                    }
-                } else {
-                    jsonObjectWriter(context) { objectName ->
-                        serializeStructure(StructContext(objectName, value.asRef(), target))
-                    }
-                }
+            is StructureShape -> jsonObjectWriter(context) { objectName ->
+                serializeStructure(StructContext(objectName, value.asRef(), target))
             }
             is UnionShape -> jsonObjectWriter(context) { objectName ->
                 serializeUnion(Context(objectName, value, target))
@@ -426,9 +417,14 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("object").also { objectName ->
-            rust("let mut $objectName = ${context.writerExpression}.start_object();")
-            inner(objectName)
-            rust("$objectName.finish();")
+            if (context.shape.ofTypeUnit()) {
+                rust("let $objectName = ${context.writerExpression}.start_object();")
+                rust("$objectName.finish();")
+            } else {
+                rust("let mut $objectName = ${context.writerExpression}.start_object();")
+                inner(objectName)
+                rust("$objectName.finish();")
+            }
         }
     }
 
