@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
@@ -78,12 +80,19 @@ class ConstrainedStringGenerator(
     private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTrait, constraintViolation: Symbol) {
         val pattern = patternTrait.pattern.toString()
 
-        writer.rust(
+        writer.rustTemplate(
             """
-            fn check_pattern(_string: &str) -> Result<(), $constraintViolation> {
-                return Err($constraintViolation::Pattern("$pattern".to_owned()));
+            fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
+                let regex = #{Regex}::Regex::new("$pattern").unwrap();
+
+                if regex.is_match(string) {
+                    Ok(())
+                } else {
+                    Err($constraintViolation::Pattern("$pattern".to_owned()))
+                }
             }
             """.trimIndent(),
+            "Regex" to ServerCargoDependency.Regex.asType(),
         )
     }
     private fun renderTryFrom(inner: String, name: String, shape: StringShape, constraintViolation: Symbol) {
