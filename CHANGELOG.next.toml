@@ -198,9 +198,24 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = "Neglecting to include an upload ID when sending an AbortMultipartUpload request will no longer result in accidental deletion of data."
+message = """
+It was possible in some cases to send some S3 requests without a required upload ID, causing a risk of unintended data
+deletion and modification. Now, when an operation has query parameters that are marked as required, the omission of
+those query parameters will cause a BuildError, preventing the invalid operation from being sent.
+"""
 references = ["smithy-rs#1957"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+It was previously possible to send requests without setting query parameters modeled as required. Doing this may cause a
+service to interpret a request incorrectly instead of just sending back a 400 error. Now, when an operation has query
+parameters that are marked as required, the omission of those query parameters will cause a BuildError, preventing the
+invalid operation from being sent.
+"""
+references = ["smithy-rs#1957"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "Velfi"
 
 [[smithy-rs]]

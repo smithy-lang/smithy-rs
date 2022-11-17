@@ -24,9 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
@@ -230,16 +228,10 @@ class RequestBindingGenerator(
                         )
                     }
 
-                    when {
-                        target.isStringShape -> {
-                            val asStr = writable {
-                                if (target.hasTrait<EnumTrait>()) {
-                                    rustInlineTemplate(".as_str()")
-                                }
-                            }
-                            rustBlock("if $derefName#W.is_empty()", asStr) {
-                                rustTemplate("return Err(#{BuildError:W});", *codegenScope)
-                            }
+                    // Strings that aren't enums must be checked to see if they're empty
+                    if (target.isStringShape && !target.hasTrait<EnumTrait>()) {
+                        rustBlock("if $derefName.is_empty()") {
+                            rustTemplate("return Err(#{BuildError:W});", *codegenScope)
                         }
                     }
 
