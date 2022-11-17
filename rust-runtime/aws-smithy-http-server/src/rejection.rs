@@ -264,21 +264,38 @@ convert_to_request_rejection!(hyper::Error, HttpBody);
 // Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
 convert_to_request_rejection!(lambda_http::Error, HttpBody);
 
-/// A sum type rejection, implementing [`IntoResponse`] when both variants do.
-pub enum EitherRejection<Left, Right> {
-    Left(Left),
-    Right(Right),
+macro_rules! any_rejection {
+    ($name:ident, $($var:ident),+) => (
+        pub enum $name<$($var),*> {
+            $($var ($var),)*
+        }
+
+        impl<P, $($var,)*> IntoResponse<P> for $name<$($var),*>
+        where
+            $($var: IntoResponse<P>,)*
+        {
+            #[allow(non_snake_case)]
+            fn into_response(self) -> http::Response<crate::body::BoxBody> {
+                match self {
+                    $($name::$var ($var) => $var.into_response(),)*
+                }
+            }
+        }
+    )
 }
 
-impl<P, L, R> IntoResponse<P> for EitherRejection<L, R>
-where
-    L: IntoResponse<P>,
-    R: IntoResponse<P>,
-{
-    fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        match self {
-            EitherRejection::Left(left) => left.into_response(),
-            EitherRejection::Right(right) => right.into_response(),
-        }
-    }
+pub mod any_rejections {
+    //! This module hosts enums, up to size 8, which implement [`IntoResponse`] when their variants implement
+    //! [`IntoResponse`].
+
+    use super::IntoResponse;
+
+    // any_rejection!(One, A);
+    any_rejection!(Two, A, B);
+    any_rejection!(Three, A, B, C);
+    any_rejection!(Four, A, B, C, D);
+    any_rejection!(Five, A, B, C, D, E);
+    any_rejection!(Six, A, B, C, D, E, F);
+    any_rejection!(Seven, A, B, C, D, E, F, G);
+    any_rejection!(Eight, A, B, C, D, E, F, G, H);
 }
