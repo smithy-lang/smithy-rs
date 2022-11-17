@@ -184,31 +184,37 @@ class ConstrainedStringGenerator(
 
         val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
         writer.withModule(RustModule(constraintViolationModuleName, RustMetadata(visibility = constrainedTypeVisibility))) {
-            rust(
-                """
-                ##[derive(Debug, PartialEq)]
-                pub enum ${constraintViolation.name} {
-                    Length(usize),
-                }
-                """,
-            )
+            renderConstraintViolationEnum(this, shape, constraintViolation)
+        }
+    }
 
-            if (shape.isReachableFromOperationInput()) {
-                rustBlock("impl ${constraintViolation.name}") {
-                    rustBlockTemplate(
-                        "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
-                        "String" to RuntimeType.String,
-                    ) {
-                        rustBlock("match self") {
-                            rust(
-                                """
-                                Self::Length(length) => crate::model::ValidationExceptionField {
-                                    message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                                    path,
-                                },
-                                """,
-                            )
-                        }
+    private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
+        val lengthTrait = shape.expectTrait<LengthTrait>()
+
+        writer.rust(
+            """
+            ##[derive(Debug, PartialEq)]
+            pub enum ${constraintViolation.name} {
+                Length(usize),
+            }
+            """,
+        )
+
+        if (shape.isReachableFromOperationInput()) {
+            writer.rustBlock("impl ${constraintViolation.name}") {
+                rustBlockTemplate(
+                    "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
+                    "String" to RuntimeType.String,
+                ) {
+                    rustBlock("match self") {
+                        rust(
+                            """
+                            Self::Length(length) => crate::model::ValidationExceptionField {
+                                message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                                path,
+                            },
+                            """,
+                        )
                     }
                 }
             }
