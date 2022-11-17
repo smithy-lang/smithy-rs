@@ -32,6 +32,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -124,7 +126,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
     private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
-    private val serverProtocol = ServerProtocol.fromCoreProtocol(protocol)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
@@ -251,7 +252,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
-            "Marker" to serverProtocol.markerStruct(),
+            "Marker" to protocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
             "verifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
@@ -314,7 +315,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
-                "Marker" to serverProtocol.markerStruct(),
+                "Marker" to protocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
                 "serialize_error" to serverSerializeError(operationShape),
             )
@@ -347,7 +348,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
-                "Marker" to serverProtocol.markerStruct(),
+                "Marker" to protocol.markerStruct(),
                 "serialize_response" to serverSerializeResponse(operationShape),
             )
         }
@@ -636,7 +637,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     builder = #{header_util}::set_response_header_if_absent(
                         builder,
                         http::header::HeaderName::from_static("$headerName"),
-                        "$headerValue"
+                        "${escape(headerValue)}"
                     );
                     """,
                     *codegenScope,
