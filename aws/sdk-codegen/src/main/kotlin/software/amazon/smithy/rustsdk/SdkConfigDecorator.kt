@@ -48,7 +48,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                     fn from(input: &#{SdkConfig}) -> Self {
                         let mut builder = Builder::default();
                         builder = builder.region(input.region().cloned());
-                        builder.set_endpoint_resolver(input.endpoint_resolver().clone());
+                        //builder.set_endpoint_resolver(input.endpoint_resolver().clone());
                         builder.set_retry_config(input.retry_config().cloned());
                         builder.set_timeout_config(input.timeout_config().cloned());
                         builder.set_sleep_impl(input.sleep_impl());

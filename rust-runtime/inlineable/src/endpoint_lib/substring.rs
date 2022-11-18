@@ -37,7 +37,7 @@ pub(crate) fn substring<'a, 'b>(
     Some(&input[effective_start..effective_stop])
 }
 
-#[cfg(test)]
+#[cfg(inlineable_test)]
 mod test {
     use super::*;
     use proptest::proptest;

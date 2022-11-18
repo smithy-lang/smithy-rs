@@ -10,7 +10,8 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.RulesEngineBuiltInResolver
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.CustomRuntimeFunction
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
@@ -100,18 +101,18 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
 
-    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<RulesEngineBuiltInResolver> {
+    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
-            object : RulesEngineBuiltInResolver {
-                override fun defaultFor(
-                    parameter: Parameter,
-                    configRef: String,
-                ): Writable? {
+            object : EndpointCustomization {
+                override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter) {
-                        Builtins.REGION -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref())") }
+                        Builtins.REGION -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
                         else -> null
                     }
                 }
+
+                override fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> =
+                    listOf()
             },
         )
     }

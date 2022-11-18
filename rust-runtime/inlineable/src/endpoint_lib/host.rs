@@ -32,7 +32,7 @@ pub(crate) fn is_valid_host_label(
     }
 }
 
-#[cfg(test)]
+#[cfg(inline_test)]
 mod test {
     use proptest::proptest;
 

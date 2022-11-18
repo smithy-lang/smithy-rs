@@ -26,7 +26,7 @@ sealed class RustModule {
 
         /** Creates a new private module */
         fun private(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            newModule(name, visibility = Visibility.PRIVATE, documentation = documentation)
+            newModule(name, visibility = Visibility.PRIVATE, documentation = documentation, parent = parent)
 
         /* Common modules used across client, server and tests */
         val Config = public("config", documentation = "Configuration for the service.")

@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
@@ -113,11 +114,13 @@ object TestWorkspace {
                 PANIC("")
             }
         }
-        return TestWriterDelegator(
+        val writer = TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
             CoreCodegenConfig(debugMode = debugMode),
         )
+        writer.lib { rust("// touch lib.rs") }
+        return writer
     }
 }
 

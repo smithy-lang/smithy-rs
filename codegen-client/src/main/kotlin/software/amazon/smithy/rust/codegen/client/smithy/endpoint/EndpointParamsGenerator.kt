@@ -56,7 +56,7 @@ val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functio
 val EndpointsImpl = RustModule.private("internals", "Endpoints internals", parent = EndpointsModule)
 
 // stdlib is isolated because it contains code generated names of stdlib functions–we want to ensure we avoid clashing
-val EndpointsLib = RustModule.pubcrate("stdlib", "Endpoints standard library functions", parent = EndpointsModule)
+val EndpointsLib = RustModule.pubcrate("endpoint_lib", "Endpoints standard library functions")
 
 /** Endpoint Parameters generator.
  *

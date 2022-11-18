@@ -10,12 +10,14 @@
 //! If, at a future point, this interface stabilizes it is a good candidate for extraction into a
 //! shared crate.
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
+use crate::endpoint_lib::partition::deser::deserialize_partitions;
 use aws_smithy_json::deserialize::error::DeserializeError;
 use regex::Regex;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Determine the AWS partition metadata for a given region
+#[derive(Default)]
 pub(crate) struct PartitionResolver {
     partitions: Vec<PartitionMetadata>,
 }
@@ -30,17 +32,40 @@ impl PartitionResolver {
 pub(crate) struct Partition<'a> {
     name: &'a str,
     dns_suffix: &'a str,
-    dualstack_dns_suffix: &'a str,
+    dual_stack_dns_suffix: &'a str,
     supports_fips: bool,
-    supports_dualstack: bool,
+    supports_dual_stack: bool,
+}
+
+#[allow(unused)]
+impl<'a> Partition<'a> {
+    pub(crate) fn name(&self) -> &str {
+        self.name
+    }
+
+    pub(crate) fn dns_suffix(&self) -> &str {
+        self.dns_suffix
+    }
+
+    pub(crate) fn supports_fips(&self) -> bool {
+        self.supports_fips
+    }
+
+    pub(crate) fn dual_stack_dns_suffix(&self) -> &str {
+        &self.dual_stack_dns_suffix
+    }
+
+    pub(crate) fn supports_dual_stack(&self) -> bool {
+        self.supports_dual_stack
+    }
 }
 
 static DEFAULT_OVERRIDE: &PartitionOutputOverride = &PartitionOutputOverride {
     name: None,
     dns_suffix: None,
-    dualstack_dns_suffix: None,
+    dual_stack_dns_suffix: None,
     supports_fips: None,
-    supports_dualstack: None,
+    supports_dual_stack: None,
 };
 
 /// Merge the base output and the override output, dealing with `Cow`s
@@ -55,11 +80,20 @@ macro_rules! merge {
 }
 
 impl PartitionResolver {
-    pub(crate) fn new() -> PartitionResolver {
+    #[allow(unused)]
+    pub(crate) fn empty() -> PartitionResolver {
         PartitionResolver { partitions: vec![] }
     }
+
+    #[allow(unused)]
     pub(crate) fn add_partition(&mut self, partition: PartitionMetadata) {
         self.partitions.push(partition);
+    }
+
+    pub(crate) fn new_from_json(
+        partition_dot_json: &[u8],
+    ) -> Result<PartitionResolver, DeserializeError> {
+        deserialize_partitions(partition_dot_json)
     }
 
     /// Resolve a partition for a given region
@@ -104,13 +138,13 @@ impl PartitionResolver {
         Some(Partition {
             name: merge!(base, region_override, name),
             dns_suffix: merge!(base, region_override, dns_suffix),
-            dualstack_dns_suffix: merge!(base, region_override, dualstack_dns_suffix),
+            dual_stack_dns_suffix: merge!(base, region_override, dual_stack_dns_suffix),
             supports_fips: region_override
                 .supports_fips
                 .unwrap_or(base.outputs.supports_fips),
-            supports_dualstack: region_override
-                .supports_dualstack
-                .unwrap_or(base.outputs.supports_dualstack),
+            supports_dual_stack: region_override
+                .supports_dual_stack
+                .unwrap_or(base.outputs.supports_dual_stack),
         })
     }
 }
@@ -172,18 +206,18 @@ impl PartitionMetadata {
 pub(crate) struct PartitionOutput {
     name: Str,
     dns_suffix: Str,
-    dualstack_dns_suffix: Str,
+    dual_stack_dns_suffix: Str,
     supports_fips: bool,
-    supports_dualstack: bool,
+    supports_dual_stack: bool,
 }
 
 #[derive(Default)]
 pub(crate) struct PartitionOutputOverride {
     name: Option<Str>,
     dns_suffix: Option<Str>,
-    dualstack_dns_suffix: Option<Str>,
+    dual_stack_dns_suffix: Option<Str>,
     supports_fips: Option<bool>,
-    supports_dualstack: Option<bool>,
+    supports_dual_stack: Option<bool>,
 }
 
 impl PartitionOutputOverride {
@@ -193,11 +227,13 @@ impl PartitionOutputOverride {
         Ok(PartitionOutput {
             name: self.name.ok_or("missing name")?,
             dns_suffix: self.dns_suffix.ok_or("missing dnsSuffix")?,
-            dualstack_dns_suffix: self
-                .dualstack_dns_suffix
-                .ok_or("missing dualstackDnsSuffix")?,
+            dual_stack_dns_suffix: self
+                .dual_stack_dns_suffix
+                .ok_or("missing dual_stackDnsSuffix")?,
             supports_fips: self.supports_fips.ok_or("missing supports fips")?,
-            supports_dualstack: self.supports_dualstack.ok_or("missing supportsDualstack")?,
+            supports_dual_stack: self
+                .supports_dual_stack
+                .ok_or("missing supportsDualstack")?,
         })
     }
 }
@@ -297,7 +333,7 @@ mod deser {
                                 builder.region_regex = token_to_str(tokens.next())?
                                     .map(|region_regex| Regex::new(&region_regex))
                                     .transpose()
-                                    .map_err(|e| DeserializeError::custom("invalid regex"))?;
+                                    .map_err(|_e| DeserializeError::custom("invalid regex"))?;
                             }
                             "regions" => {
                                 builder.regions = deser_explicit_regions(tokens)?;
@@ -386,13 +422,13 @@ mod deser {
                                 builder.dns_suffix = token_to_str(tokens.next())?;
                             }
                             "dualStackDnsSuffix" => {
-                                builder.dualstack_dns_suffix = token_to_str(tokens.next())?;
+                                builder.dual_stack_dns_suffix = token_to_str(tokens.next())?;
                             }
                             "supportsFIPS" => {
                                 builder.supports_fips = expect_bool_or_null(tokens.next())?;
                             }
                             "supportsDualStack" => {
-                                builder.supports_dualstack = expect_bool_or_null(tokens.next())?;
+                                builder.supports_dual_stack = expect_bool_or_null(tokens.next())?;
                             }
                             _ => skip_value(tokens)?,
                         },
@@ -537,7 +573,7 @@ mod test {
 
     #[test]
     fn resolve_partitions() {
-        let mut resolver = PartitionResolver::new();
+        let mut resolver = PartitionResolver::empty();
         let mut new_suffix = PartitionOutputOverride::default();
         new_suffix.dns_suffix = Some("mars.aws".into());
         resolver.add_partition(PartitionMetadata {
@@ -547,9 +583,9 @@ mod test {
             outputs: PartitionOutput {
                 name: "aws".into(),
                 dns_suffix: "amazonaws.com".into(),
-                dualstack_dns_suffix: "api.aws".into(),
+                dual_stack_dns_suffix: "api.aws".into(),
                 supports_fips: true,
-                supports_dualstack: true,
+                supports_dual_stack: true,
             },
         });
         resolver.add_partition(PartitionMetadata {
@@ -559,9 +595,9 @@ mod test {
             outputs: PartitionOutput {
                 name: "other".into(),
                 dns_suffix: "other.amazonaws.com".into(),
-                dualstack_dns_suffix: "other.aws".into(),
+                dual_stack_dns_suffix: "other.aws".into(),
                 supports_fips: false,
-                supports_dualstack: true,
+                supports_dual_stack: true,
             },
         });
         assert_eq!(resolve(&resolver, "us-east-1").name, "aws");

@@ -8,22 +8,23 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.eval.Type
+import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Reference
 import software.amazon.smithy.rulesengine.language.syntax.fn.Function
 import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
+import software.amazon.smithy.rulesengine.language.syntax.rule.TreeRule
 import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Scope
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -65,7 +66,7 @@ class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {
     fun fnFor(id: String): CustomRuntimeFunction? =
         functions.firstOrNull { it.id == id }?.also { usedFunctions.add(it) }
 
-    fun fnsUsed(): List<CustomRuntimeFunction> = usedFunctions.toList()
+    fun fnsUsed(): List<CustomRuntimeFunction> = usedFunctions.toList().sortedBy { it.id }
 }
 
 /**
@@ -79,33 +80,58 @@ class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {
  *   partition: PartitionResolver
  * }
  *
- * fn resolve_endpoint(params: crate::endpoint::Params,
+ * impl aws_smithy_http::endpoint::ResolveEndpoint<crate::endpoint::Params> for DefaultResolver {
+ *     fn resolve_endpoint(&self, params: &Params) -> aws_smithy_http::endpoint::Result {
+ *         let mut diagnostic_collector = crate::endpoint_lib::diagnostic::DiagnosticCollector::new();
+ *         crate::endpoint::internals::resolve_endpoint(params, &self.partition_resolver, &mut diagnostic_collector)
+ *             .map_err(|err| err.with_source(diagnostic_collector.take_last_error()))
+ *     }
+ * }
+ *
+ * mod internals {
+ *   fn resolve_endpoint(params: &crate::endpoint::Params,
+ *      // conditionally inserted, only when used
+ *      partition_resolver: &PartitionResolver, _diagnostics: &mut DiagnosticCollector) -> endpoint::Result {
+ *      // lots of generated code to actually resolve an endpoint
+ *   }
+ * }
+ * ```
  *
  */
+
 class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val runtimeConfig: RuntimeConfig) {
     private val registry: FunctionRegistry = FunctionRegistry(stdlib)
     // first, make a custom RustWriter and generate the interior of the resolver into it.
     // next, since we've now captured what runtime functions are required, generate the container
 
-    private val smithyHttpEndpoint = CargoDependency.smithyHttp(runtimeConfig).asType().member("endpoint")
-    private val smithyTypesEndpoint = CargoDependency.smithyTypes(runtimeConfig).asType().member("endpoint")
+    private val types = Types(runtimeConfig)
     private val codegenScope = arrayOf(
-        "endpoint" to smithyHttpEndpoint,
-        "SmithyEndpoint" to smithyTypesEndpoint.member("Endpoint"),
-        "EndpointError" to smithyHttpEndpoint.member("ResolveEndpointError"),
+        "endpoint" to types.smithyHttpEndpointModule,
+        "SmithyEndpoint" to types.smithyEndpoint,
+        "EndpointError" to types.resolveEndpointError,
         "DiagnosticCollector" to endpointsLib("diagnostic").asType().member("DiagnosticCollector"),
     )
-
-    private val ParamsName = "_params"
+    private val context = Context(registry, runtimeConfig)
 
     companion object {
         const val DiagnosticCollector = "_diagnostic_collector"
+        private const val ParamsName = "_params"
     }
 
+    /**
+     * Generates the endpoint resolver struct
+     *
+     * If the rules require a runtime function that has state (e.g., the partition resolver, the `[CustomRuntimeFunction.structField]`
+     * will insert the required fields into the resolver so that they can be used later.
+     */
     fun generateResolverStruct(endpointRuleSet: EndpointRuleSet): RuntimeType {
         check(endpointRuleSet.rules.isNotEmpty()) { "EndpointRuleset must contain at least one rule." }
-        val innerWriter = RustWriter.root()
-        resolverFnBody(endpointRuleSet, registry)(innerWriter)
+        // Here, we play a little trick: we run the resolver and actually render it into a writer. This allows the
+        // function registry to record what functions we actually need. We need to do this, because the functions we
+        // actually use impacts the function signature that we need to return
+        resolverFnBody(endpointRuleSet)(RustWriter.root())
+
+        // Now that we rendered the rules once (and then threw it away) we can see what functions we actually used!
         val fnsUsed = registry.fnsUsed()
         return RuntimeType.forInlineFun("DefaultResolver", EndpointsModule) {
             rustTemplate(
@@ -117,13 +143,12 @@ class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val
 
                 impl DefaultResolver {
                     /// Create a new endpoint resolver with default settings
-                    pub fn new() -> Self { 
+                    pub fn new() -> Self {
                         Self { #{custom_fields_init:W} }
                     }
                 }
 
                 impl #{endpoint}::ResolveEndpoint<#{Params}> for DefaultResolver {
-
                     fn resolve_endpoint(&self, params: &Params) -> #{endpoint}::Result {
                         let mut diagnostic_collector = #{DiagnosticCollector}::new();
                         #{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
@@ -135,7 +160,7 @@ class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val
                 "custom_fields_init" to fnsUsed.mapNotNull { it.structFieldInit() }.join(","),
                 "Params" to EndpointParamsGenerator(endpointRuleSet.parameters).paramsStruct(),
                 "additional_args" to fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }.join(","),
-                "resolver_fn" to resolverFn(endpointRuleSet, registry, fnsUsed),
+                "resolver_fn" to resolverFn(endpointRuleSet, fnsUsed),
                 *codegenScope,
             )
         }
@@ -143,7 +168,6 @@ class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val
 
     private fun resolverFn(
         endpointRuleSet: EndpointRuleSet,
-        registry: FunctionRegistry,
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
         return RuntimeType.forInlineFun("resolve_endpoint", EndpointsImpl) {
@@ -157,89 +181,113 @@ class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val
                 *codegenScope,
                 "Params" to EndpointParamsGenerator(endpointRuleSet.parameters).paramsStruct(),
                 "additional_args" to fnsUsed.mapNotNull { it.additionalArgsSignature() }.join(","),
-                "body" to resolverFnBody(endpointRuleSet, registry),
+                "body" to resolverFnBody(endpointRuleSet),
             )
         }
     }
 
-    private fun resolverFnBody(endpointRuleSet: EndpointRuleSet, registry: FunctionRegistry) = writable {
-        val scope = Scope.empty()
+    private fun resolverFnBody(endpointRuleSet: EndpointRuleSet) = writable {
         endpointRuleSet.parameters.toList().forEach {
             Attribute.AllowUnused.render(this)
             rust("let ${it.memberName()} = &$ParamsName.${it.memberName()};")
         }
-        generateRulesList(endpointRuleSet.rules, scope)(this)
+        generateRulesList(endpointRuleSet.rules, true)(this)
     }
 
-    private fun generateRulesList(rules: List<Rule>, scope: Scope) = writable {
+    private fun generateRulesList(rules: List<Rule>, suppressExhaustivenessCheck: Boolean = false) = writable {
+        val isExhaustive = isExhaustive(rules.last())
         rules.forEach { rule ->
-            rule.documentation.orNull()?.also { docs(it, newlinePrefix = "//") }
-            generateRule(rule, scope)(this)
+            rule.documentation.orNull()?.also { docs(it, newlinePrefix = "// ") }
+            generateRule(rule)(this)
         }
-        if (rules.last().conditions.isNotEmpty()) {
+        if (!isExhaustive(rules.last()) && !suppressExhaustivenessCheck) {
+            // it's hard to figure out if these are always needed or not
+            Attribute.Custom("allow(unreachable_code)").render(this)
             rustTemplate(
-                """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)))""",
+                """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)));""",
                 *codegenScope,
             )
         }
     }
 
-    private fun generateRule(rule: Rule, scope: Scope): Writable {
-        return generateRuleInternal(rule, rule.conditions, scope)
+    private fun isExhaustive(rule: Rule): Boolean = rule.conditions.isEmpty()
+
+    private fun generateRule(rule: Rule): Writable {
+        return generateRuleInternal(rule, rule.conditions)
     }
 
-    private fun Condition.conditionalFunction(): Expression {
+    /**
+     * deal with the actual target of the condition but flattening through isSet
+     */
+    private fun Condition.targetFunction(): Expression {
         return when (val fn = this.fn) {
             is IsSet -> fn.target
             else -> fn
         }
     }
 
-    private var nameIdx = 0
-    private fun nameFor(expr: Expression): String {
-        nameIdx += 1
-        return "_" + when (expr) {
-            is Reference -> expr.name.rustName()
-            else -> "var_$nameIdx"
-        }
-    }
-
-    private fun contextFor(scope: Scope) = Context(scope, registry, runtimeConfig)
-
-    private fun generateRuleInternal(rule: Rule, conditions: List<Condition>, scope: Scope): Writable {
+    /**
+     * Recursive function is generate a rule and its list of conditions.
+     *
+     * The resulting generated code is a series of nested-if statements, nesting each condition inside the previous.
+     */
+    private fun generateRuleInternal(rule: Rule, conditions: List<Condition>): Writable {
         if (conditions.isEmpty()) {
-            return rule.accept(RuleVisitor(scope))
+            return rule.accept(RuleVisitor())
         } else {
             val condition = conditions.first()
             val rest = conditions.drop(1)
             return {
-                val generator = ExpressionGenerator(Ownership.Borrowed, contextFor(scope))
-                val fn = condition.conditionalFunction()
-                val condName = condition.result.orNull()?.rustName() ?: nameFor(condition.conditionalFunction())
+                val generator = ExpressionGenerator(Ownership.Borrowed, context)
+                val fn = condition.targetFunction()
 
+                // there are three patterns we need to handle:
+                // 1. the RHS returns an option which we need to guard as "Some(...)"
+                // 2. the RHS returns a boolean which we need to gate on
+                // 3. the RHS is infallible (e.g. uriEncode)
+                val resultName =
+                    (condition.result.orNull() ?: (fn as? Reference)?.name ?: Identifier.of("_")).rustName()
+                val target = generator.generate(fn)
+                val next = generateRuleInternal(rule, rest)
                 when {
-                    fn.type() is Type.Option || (fn as Function).name == "substring" -> rustTemplate(
-                        "if let Some($condName) = #{target:W} { #{next:W} }",
-                        "target" to generator.generate(fn),
-                        "next" to generateRuleInternal(rule, rest, scope.withMember(condName, fn)),
-                    )
+                    fn.type() is Type.Option ||
+                        // ReterminusCore bug: substring should return `Option<String>`: https://github.com/awslabs/smithy/pull/1504/files
+                        (fn as Function).name == "substring" -> {
+                        Attribute.AllowUnused.render(this)
+                        rustTemplate(
+                            "if let Some($resultName) = #{target:W} { #{next:W} }",
+                            "target" to target,
+                            "next" to next,
+                        )
+                    }
 
-                    condition.result.isPresent -> {
+                    fn.type() is Type.Bool -> {
                         rustTemplate(
                             """
-                            let $condName = #{target:W};
-                            #{next:W}
+                            if #{target:W} {#{binding}
+                                #{next:W}
+                            }
                             """,
-                            "target" to generator.generate(fn),
-                            "next" to generateRuleInternal(rule, rest, scope.withMember(condName, fn)),
+                            "target" to target,
+                            "next" to next,
+                            // handle the rare but possible case where we bound the name of a variable to a boolean condition
+                            "binding" to writable {
+                                if (resultName != "_") {
+                                    rust("let $resultName = true;")
+                                }
+                            },
                         )
                     }
 
                     else -> {
+                        // the function is infallible: just create a binding
                         rustTemplate(
-                            """if #{target:W} { #{next:W} }""",
+                            """
+                            let $resultName = #{target:W};
+                            #{next:W}
+                            """,
                             "target" to generator.generate(fn),
-                            "next" to generateRuleInternal(rule, rest, scope),
+                            "next" to generateRuleInternal(rule, rest),
                         )
                     }
                 }
@@ -247,27 +295,27 @@ class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val
         }
     }
 
-    inner class RuleVisitor(private val scope: Scope) : RuleValueVisitor<Writable> {
-        override fun visitTreeRule(rules: List<Rule>) = generateRulesList(rules, scope)
+    inner class RuleVisitor : RuleValueVisitor<Writable> {
+        override fun visitTreeRule(rules: List<Rule>) = generateRulesList(rules)
 
         override fun visitErrorRule(error: Expression) = writable {
             rustTemplate(
                 "return Err(#{EndpointError}::message(#{message:W}));",
                 *codegenScope,
-                "message" to ExpressionGenerator(Ownership.Owned, contextFor(scope)).generate(error),
+                "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
             )
         }
 
         override fun visitEndpointRule(endpoint: Endpoint): Writable = writable {
-            rust("return Ok(#W);", generateEndpoint(endpoint, scope))
+            rust("return Ok(#W);", generateEndpoint(endpoint))
         }
     }
 
     /**
      * generate the rust code for `[endpoint]`
      */
-    internal fun generateEndpoint(endpoint: Endpoint, scope: Scope): Writable {
-        val generator = ExpressionGenerator(Ownership.Owned, contextFor(scope))
+    internal fun generateEndpoint(endpoint: Endpoint): Writable {
+        val generator = ExpressionGenerator(Ownership.Owned, context)
         val url = generator.generate(endpoint.url)
         val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
         val properties = endpoint.properties.mapValues { entry -> generator.generate(entry.value) }
