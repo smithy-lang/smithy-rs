@@ -158,7 +158,7 @@ class ConstrainedStringGeneratorTest {
 
         project.withModule(ModelsModule) {
             ConstrainedStringGenerator(codegenContext, this, constrainedStringShape, listOf(constrainedStringShape.expectTrait<LengthTrait>())).render()
-            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape, listOf(constrainedStringShape.expectTrait<LengthTrait>())).render()
+            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape, listOf(sensitiveConstrainedStringShape.expectTrait<LengthTrait>())).render()
 
             unitTest(
                 name = "non_sensitive_string_display_implementation",
