@@ -117,7 +117,7 @@ fun StructureShape.renderWithModelBuilder(
 val TokioWithTestMacros = CargoDependency(
     "tokio",
     CratesIo("1"),
-    features = setOf("macros", "test-util", "rt"),
+    features = setOf("macros", "test-util", "rt", "rt-multi-thread"),
     scope = DependencyScope.Dev,
 )
 
