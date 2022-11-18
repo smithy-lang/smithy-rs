@@ -9,7 +9,7 @@ use crate::operation::Operation;
 
 use super::Plugin;
 
-/// A [`Plugin`] which appends a HTTP [`Layer`](tower::Layer) to the existing `L` in [`Operation<S, L>`](Operation).
+/// A [`Plugin`] which appends a HTTP [`Layer`](tower::Layer) `L` to the existing `Layer` in [`Operation<S, Layer>`](Operation).
 pub struct HttpLayer<L>(pub L);
 
 impl<P, Op, S, ExistingLayer, NewLayer> Plugin<P, Op, S, ExistingLayer> for HttpLayer<NewLayer>
