@@ -30,7 +30,7 @@ class ConstrainedStringGeneratorTest {
     data class TestCase(val model: Model, val validString: String, val invalidString: String)
 
     class ConstrainedStringGeneratorTestProvider : ArgumentsProvider {
-        private val lengthTestCases = listOf(
+        private val testCases = listOf(
             // Min and max.
             Triple("@length(min: 11, max: 12)", "validString", "invalidString"),
             // Min equal to max.
@@ -49,7 +49,7 @@ class ConstrainedStringGeneratorTest {
             Triple(
                 """
                 @length(min: 3, max: 10)
-                @pattern("^a string$)
+                @pattern("^a string$")
                 """.trimIndent(),
                 "a string", "an invalid string",
             ),
@@ -68,7 +68,7 @@ class ConstrainedStringGeneratorTest {
         }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-            lengthTestCases.map { Arguments.of(it) }.stream()
+            testCases.map { Arguments.of(it) }.stream()
     }
 
     @ParameterizedTest
