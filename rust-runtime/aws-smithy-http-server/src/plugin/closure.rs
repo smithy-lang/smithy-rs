@@ -53,6 +53,9 @@ where
 /// // This plugin applies the `PrintService` middleware around every operation.
 /// let plugin = plugin_from_operation_name_fn(f);
 /// ```
-pub fn plugin_from_operation_name_fn<F>(f: F) -> OperationNameFn<F> {
+pub fn plugin_from_operation_name_fn<L, F>(f: F) -> OperationNameFn<F>
+where
+    F: Fn(&'static str) -> L,
+{
     OperationNameFn { f }
 }
