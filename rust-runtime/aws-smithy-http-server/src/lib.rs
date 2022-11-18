@@ -13,6 +13,7 @@ pub(crate) mod macros;
 pub mod body;
 pub(crate) mod error;
 pub mod extension;
+pub mod extract;
 #[doc(hidden)]
 pub mod instrumentation;
 #[doc(hidden)]
