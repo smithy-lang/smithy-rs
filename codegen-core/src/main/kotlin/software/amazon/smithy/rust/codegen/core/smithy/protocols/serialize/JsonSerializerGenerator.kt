@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -29,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -362,6 +364,21 @@ class JsonSerializerGenerator(
         when (target) {
             is StringShape -> rust("$writer.string(${value.name}.as_str());")
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
+            is IntegerShape -> {
+                val rustType = symbolProvider.toSymbol(target).rustType()
+                val conversion = writable {
+                    if (rustType is RustType.Opaque) {
+                        rust("(*${value.asRef()}.as_ref()).into()")
+                    } else {
+                        rust("(${value.asValue()}).into()")
+                    }
+                }
+                rustTemplate(
+                    "$writer.number(##[allow(clippy::useless_conversion)]#{Variant}::NegInt(#{Conversion:W}));",
+                    "Variant" to smithyTypes.member("Number"),
+                    "Conversion" to conversion,
+                )
+            }
             is NumberShape -> {
                 val numberType = when (symbolProvider.toSymbol(target).rustType()) {
                     is RustType.Float -> "Float"

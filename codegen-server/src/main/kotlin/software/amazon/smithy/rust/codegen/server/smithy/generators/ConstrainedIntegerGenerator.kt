@@ -130,6 +130,12 @@ class ConstrainedIntegerGenerator(
                     value.into_inner()
                 }
             }
+
+            impl #{AsRef}<$inner> for $name {
+                fn as_ref(&self) -> &$inner {
+                    self.inner()
+                }
+            }
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "ConstraintViolation" to constraintViolation,
@@ -137,6 +143,7 @@ class ConstrainedIntegerGenerator(
             "Display" to RuntimeType.Display,
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
+            "AsRef" to RuntimeType.AsRef,
         )
 
         val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()

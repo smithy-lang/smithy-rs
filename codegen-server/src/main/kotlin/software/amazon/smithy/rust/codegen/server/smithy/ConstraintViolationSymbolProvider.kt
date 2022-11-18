@@ -120,9 +120,9 @@ class ConstraintViolationSymbolProvider(
             }
             is IntegerShape -> {
                 val namespace = "crate::${Models.namespace}::${
-                    RustReservedWords.escapeIfNeeded(
-                        shape.contextName(serviceShape).toSnakeCase(),
-                    )
+                RustReservedWords.escapeIfNeeded(
+                    shape.contextName(serviceShape).toSnakeCase(),
+                )
                 }"
                 val rustType = RustType.Opaque(constraintViolationName, namespace)
                 Symbol.builder()
