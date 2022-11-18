@@ -8,17 +8,13 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
-import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
-import software.amazon.smithy.model.shapes.IntegerShape
-import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -61,7 +57,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
-import java.lang.IllegalStateException
 
 /**
  * Class describing a JSON parser section that can be used in a customization.
@@ -334,37 +329,15 @@ class JsonParserGenerator(
         } else if (target.isDoubleShape) {
             rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_f64_lossy())", *codegenScope)
         } else {
-            val numberSymbol = symbolProvider.toSymbol(target)
-            if (numberSymbol.rustType() is RustType.Opaque) {
-                val precision = when (target) {
-                    is LongShape -> 64
-                    is IntegerShape -> 32
-                    is ShortShape -> 16
-                    is ByteShape -> 8
-                    else -> {
-                        throw IllegalStateException("unreachable")
-                    }
-                }
-                rustTemplate(
-                    """
-                    #{expect_number_or_null}(tokens.next())?
-                        .map(#{NumberPrimitive}::try_from)
-                        .transpose()?
-                    """,
-                    "NumberPrimitive" to RustType.Integer(precision),
-                    *codegenScope,
-                )
-            } else {
-                rustTemplate(
-                    """
-                    #{expect_number_or_null}(tokens.next())?
-                        .map(#{NumberType}::try_from)
-                        .transpose()?
-                    """,
-                    "NumberType" to numberSymbol.rustType(),
-                    *codegenScope,
-                )
-            }
+            rustTemplate(
+                """
+                #{expect_number_or_null}(tokens.next())?
+                    .map(#{Type}::try_from)
+                    .transpose()?
+                """,
+                "Type" to returnSymbolToParse(target).symbol.rustType(),
+                *codegenScope,
+            )
         }
     }
 
