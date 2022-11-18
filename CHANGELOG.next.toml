@@ -431,3 +431,9 @@ message = "`Endpoint::immutable` now takes `impl AsRef<str>` instead of `Uri`. F
 references = ["smithy-rs#1984", "smithy-rs#1496"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Business logic handlers can have up to 8 extensions in input"
+references = ["smithy-rs#1999"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
+author = "82marbag"
