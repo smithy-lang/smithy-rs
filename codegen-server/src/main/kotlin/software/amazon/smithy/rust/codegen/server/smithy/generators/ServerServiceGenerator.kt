@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -53,8 +55,14 @@ open class ServerServiceGenerator(
             renderOperationHandler(this, operations)
         }
         rustCrate.withModule(
-            RustModule.public(
+            RustModule(
                 "operation_registry",
+                RustMetadata(
+                    visibility = Visibility.PUBLIC,
+                    additionalAttributes = listOf(
+                        Attribute.Deprecated("0.52", "This module exports the deprecated `OperationRegistry`. Use the service builder exported from your root crate."),
+                    ),
+                ),
                 """
                 Contains the [`operation_registry::OperationRegistry`], a place where
                 you can register your service's operation implementations.
@@ -64,7 +72,6 @@ open class ServerServiceGenerator(
             renderOperationRegistry(this, operations)
         }
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
             RustModule.public("operation_shape"),
         ) {
@@ -73,7 +80,6 @@ open class ServerServiceGenerator(
             }
         }
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
             RustModule.public("service"),
         ) {
