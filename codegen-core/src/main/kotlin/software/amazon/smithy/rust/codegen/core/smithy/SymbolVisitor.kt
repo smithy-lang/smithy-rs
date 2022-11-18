@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -36,7 +37,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
@@ -271,14 +271,11 @@ open class SymbolVisitor(
     override fun longShape(shape: LongShape): Symbol = simpleShape(shape)
     override fun floatShape(shape: FloatShape): Symbol = simpleShape(shape)
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
-    override fun stringShape(shape: StringShape): Symbol {
-        return if (shape.hasTrait<EnumTrait>()) {
-            val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-            symbolBuilder(shape, rustType).locatedIn(Models).build()
-        } else {
-            simpleShape(shape)
-        }
+    override fun enumShape(shape: EnumShape): Symbol {
+        val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
+        return symbolBuilder(shape, rustType).locatedIn(Models).build()
     }
+    override fun stringShape(shape: StringShape): Symbol = simpleShape(shape)
 
     override fun listShape(shape: ListShape): Symbol {
         val inner = this.toSymbol(shape.member)

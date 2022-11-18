@@ -354,9 +354,9 @@ open class ServerCodegenVisitor(
     }
 
     /**
-     * Enum Shape Visitor
+     * String Shape Visitor
      *
-     * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
+     * Unnamed @enum shapes are not supported. If they could not be converted to EnumShape, this will fail.
      */
     override fun stringShape(shape: StringShape) {
         if (shape.hasTrait<EnumTrait>()) {
@@ -370,6 +370,9 @@ open class ServerCodegenVisitor(
         }
     }
 
+    /**
+     * Enum Shape Visitor
+     */
     override fun enumShape(shape: EnumShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")
         rustCrate.useShapeWriter(shape) {

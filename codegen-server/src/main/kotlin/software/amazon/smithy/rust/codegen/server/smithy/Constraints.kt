@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
@@ -16,7 +17,6 @@ import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
@@ -36,11 +36,11 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  */
 fun Shape.hasConstraintTrait() =
     hasTrait<LengthTrait>() ||
-        hasTrait<EnumTrait>() ||
         hasTrait<UniqueItemsTrait>() ||
         hasTrait<PatternTrait>() ||
         hasTrait<RangeTrait>() ||
-        hasTrait<RequiredTrait>()
+        hasTrait<RequiredTrait>() ||
+        this is EnumShape
 
 /**
  * We say a shape is _directly_ constrained if:
@@ -66,7 +66,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     is MapShape -> this.hasTrait<LengthTrait>()
-    is StringShape -> this.hasTrait<EnumTrait>() || this.hasTrait<LengthTrait>()
+    is StringShape -> this is EnumShape || this.hasTrait<LengthTrait>()
     else -> false
 }
 
@@ -91,7 +91,7 @@ fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: Sym
 
 fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTypes: Boolean): Boolean = when (this) {
     is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
-    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && this.hasTrait<LengthTrait>())
+    is StringShape -> this !is EnumShape && (publicConstrainedTypes && this.hasTrait<LengthTrait>())
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
     else -> false
 }

@@ -6,14 +6,13 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 /**
  * [ConstrainedTraitForEnumGenerator] generates code that implements the [RuntimeType.ConstrainedTrait] trait on an
@@ -26,7 +25,7 @@ class ConstrainedTraitForEnumGenerator(
     val shape: StringShape,
 ) {
     fun render() {
-        shape.expectTrait<EnumTrait>()
+        check(shape is EnumShape)
 
         val symbol = symbolProvider.toSymbol(shape)
         val name = symbol.name
@@ -37,7 +36,7 @@ class ConstrainedTraitForEnumGenerator(
             impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = $unconstrainedType;
             }
-            
+
             impl From<$unconstrainedType> for #{MaybeConstrained} {
                 fn from(value: $unconstrainedType) -> Self {
                     Self::Unconstrained(value)

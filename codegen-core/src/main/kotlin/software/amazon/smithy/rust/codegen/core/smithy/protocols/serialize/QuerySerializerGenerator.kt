@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -17,7 +18,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -41,7 +41,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serializeFuncti
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
@@ -204,10 +203,8 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
-            is StringShape -> when (target.hasTrait<EnumTrait>()) {
-                true -> rust("$writer.string(${value.name}.as_str());")
-                false -> rust("$writer.string(${value.name});")
-            }
+            is EnumShape -> rust("$writer.string(${value.name}.as_str());")
+            is StringShape -> rust("$writer.string(${value.name});")
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
             is NumberShape -> {
                 val numberType = when (symbolProvider.toSymbol(target).rustType()) {
@@ -285,12 +282,11 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             val valueName = safeName("value")
             rust("let mut $mapName = ${context.writerExpression}.start_map($flat, $entryKeyName, $entryValueName);")
             rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
-                val keyTarget = model.expectShape(context.shape.key.target)
-                val keyExpression = when (keyTarget.hasTrait<EnumTrait>()) {
-                    true -> "$keyName.as_str()"
+                val entryName = safeName("entry")
+                val keyExpression = when (model.expectShape(context.shape.key.target)) {
+                    is EnumShape -> "$keyName.as_str()"
                     else -> keyName
                 }
-                val entryName = safeName("entry")
                 Attribute.AllowUnusedMut.render(this)
                 rust("let mut $entryName = $mapName.entry($keyExpression);")
                 serializeMember(MemberContext(entryName, ValueExpression.Reference(valueName), context.shape.value))

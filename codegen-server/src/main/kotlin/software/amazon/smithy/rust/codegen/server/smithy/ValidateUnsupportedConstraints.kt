@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
@@ -113,7 +112,6 @@ private val allConstraintTraits = setOf(
     PatternTrait::class.java,
     RangeTrait::class.java,
     UniqueItemsTrait::class.java,
-    EnumTrait::class.java,
     RequiredTrait::class.java,
 )
 private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
@@ -141,20 +139,20 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model:
             LogMessage(
                 Level.SEVERE,
                 """
-                Operation ${it.shape.id} takes in input that is constrained 
-                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation 
+                Operation ${it.shape.id} takes in input that is constrained
+                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation
                 exception. You must model this behavior in the operation shape in your model file.
                 """.trimIndent().replace("\n", "") +
                     """
-                        
-                ```smithy
-                use smithy.framework#ValidationException
-                
-                operation ${it.shape.id.name} {
-                    ...
-                    errors: [..., ValidationException] // <-- Add this.
-                }
-                ```
+
+                    ```smithy
+                    use smithy.framework#ValidationException
+
+                    operation ${it.shape.id.name} {
+                        ...
+                        errors: [..., ValidationException] // <-- Add this.
+                    }
+                    ```
                     """.trimIndent(),
             )
         }

@@ -5,10 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -97,7 +97,7 @@ class UnconstrainedUnionGenerator(
                 """
                 impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
-                
+
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
                         #{body:W}
                     }
@@ -115,7 +115,7 @@ class UnconstrainedUnionGenerator(
             impl #{ConstrainedTrait} for #{ConstrainedSymbol}  {
                 type Unconstrained = #{UnconstrainedSymbol};
             }
-            
+
             impl From<#{UnconstrainedSymbol}> for #{MaybeConstrained} {
                 fn from(value: #{UnconstrainedSymbol}) -> Self {
                     Self::Unconstrained(value)
@@ -201,7 +201,7 @@ class UnconstrainedUnionGenerator(
                         } else {
                             val targetShape = model.expectShape(member.target)
                             val resolveToNonPublicConstrainedType =
-                                targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>() &&
+                                targetShape !is StructureShape && targetShape !is UnionShape && targetShape !is EnumShape &&
                                     (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
 
                             val (unconstrainedVar, boxIt) = if (member.hasTrait<RustBoxTrait>()) {

@@ -12,10 +12,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -126,14 +124,8 @@ class PythonServerCodegenVisitor(
     }
 
     /**
-     * String Shape Visitor
-     *
-     * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
+     * Enum Shape Visitor
      */
-    override fun stringShape(shape: StringShape) {
-        super.stringShape(shape)
-    }
-
     override fun enumShape(shape: EnumShape) {
         logger.info("[rust-server-codegen] Generating an enum $shape")
         rustCrate.useShapeWriter(shape) {

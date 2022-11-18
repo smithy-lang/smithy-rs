@@ -209,7 +209,7 @@ class CodegenVisitor(
     /**
      * String Shape Visitor
      *
-     * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
+     * Unnamed @enum shapes are not supported. If they could not be converted to EnumShape, this will fail.
      */
     override fun stringShape(shape: StringShape) {
         if (shape.hasTrait<EnumTrait>()) {
@@ -218,6 +218,9 @@ class CodegenVisitor(
         super.stringShape(shape)
     }
 
+    /**
+     * Enum Shape Visitor
+     */
     override fun enumShape(shape: EnumShape) {
         rustCrate.useShapeWriter(shape) {
             EnumGenerator(model, symbolProvider, this, shape).render()

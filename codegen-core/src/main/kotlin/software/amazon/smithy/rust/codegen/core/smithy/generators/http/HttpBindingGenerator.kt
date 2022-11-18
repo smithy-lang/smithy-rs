@@ -13,6 +13,7 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -22,7 +23,6 @@ import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -303,7 +303,7 @@ class HttpBindingGenerator(
                             rust("let body_str = std::str::from_utf8(body)?;")
                         }
                     }
-                    if (targetShape.hasTrait<EnumTrait>()) {
+                    if (targetShape is EnumShape) {
                         if (codegenTarget == CodegenTarget.SERVER) {
                             rust(
                                 "Ok(#T::try_from(body_str)?)",
