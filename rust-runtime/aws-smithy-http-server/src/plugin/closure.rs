@@ -9,7 +9,7 @@ use crate::operation::{Operation, OperationShape};
 
 use super::Plugin;
 
-/// A [`Plugin`] implemented by a closure over the operation name. See [`plugin_from_operation_name_fn`] for more details.
+/// An adapter to convert a `Fn(&'static str) -> Layer` closure into a [`Plugin`]. See [`plugin_from_operation_name_fn`] for more details.
 pub struct OperationNameFn<F> {
     f: F,
 }
