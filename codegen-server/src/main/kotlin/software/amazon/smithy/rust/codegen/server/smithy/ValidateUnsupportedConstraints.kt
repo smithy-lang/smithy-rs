@@ -141,20 +141,20 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model:
             LogMessage(
                 Level.SEVERE,
                 """
-                Operation ${it.shape.id} takes in input that is constrained 
-                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation 
+                Operation ${it.shape.id} takes in input that is constrained
+                (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation
                 exception. You must model this behavior in the operation shape in your model file.
                 """.trimIndent().replace("\n", "") +
                     """
-                        
-                ```smithy
-                use smithy.framework#ValidationException
-                
-                operation ${it.shape.id.name} {
-                    ...
-                    errors: [..., ValidationException] // <-- Add this.
-                }
-                ```
+
+                    ```smithy
+                    use smithy.framework#ValidationException
+
+                    operation ${it.shape.id.name} {
+                        ...
+                        errors: [..., ValidationException] // <-- Add this.
+                    }
+                    ```
                     """.trimIndent(),
             )
         }
@@ -219,11 +219,12 @@ fun validateUnsupportedConstraints(model: Model, service: ServiceShape, codegenC
         .map { (shape, patternTrait) -> UnsupportedPatternTraitOnStringShape(shape, patternTrait as PatternTrait) }
         .toSet()
 
-    // 6. Range trait on any shape is used. It has not been implemented yet.
+    // 6. Range trait used on a non-integer shape. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
         .asSequence()
+        .filter { !it.isIntegerShape }
         .filterMapShapesToTraits(setOf(RangeTrait::class.java))
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()

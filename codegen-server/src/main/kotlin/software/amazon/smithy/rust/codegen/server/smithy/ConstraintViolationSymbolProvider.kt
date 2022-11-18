@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -108,6 +109,20 @@ class ConstraintViolationSymbolProvider(
                 RustReservedWords.escapeIfNeeded(
                     shape.contextName(serviceShape).toSnakeCase(),
                 )
+                }"
+                val rustType = RustType.Opaque(constraintViolationName, namespace)
+                Symbol.builder()
+                    .rustType(rustType)
+                    .name(rustType.name)
+                    .namespace(rustType.namespace, "::")
+                    .definitionFile(Models.filename)
+                    .build()
+            }
+            is IntegerShape -> {
+                val namespace = "crate::${Models.namespace}::${
+                    RustReservedWords.escapeIfNeeded(
+                        shape.contextName(serviceShape).toSnakeCase(),
+                    )
                 }"
                 val rustType = RustType.Opaque(constraintViolationName, namespace)
                 Symbol.builder()

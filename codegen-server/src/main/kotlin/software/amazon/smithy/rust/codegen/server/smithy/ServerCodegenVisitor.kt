@@ -11,6 +11,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -43,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedIntegerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
@@ -360,6 +362,15 @@ open class ServerCodegenVisitor(
         fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
             ServerEnumGenerator(codegenContext, writer, shape)
         stringShape(shape, ::serverEnumGeneratorFactory)
+    }
+
+    override fun integerShape(shape: IntegerShape) {
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating a constrained integer $shape")
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedIntegerGenerator(codegenContext, this, shape).render()
+            }
+        }
     }
 
     protected fun stringShape(
