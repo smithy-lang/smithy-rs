@@ -210,53 +210,61 @@ private data class TraitInfo(
 ) {
     companion object {
         fun fromTrait(trait: AbstractTrait): TraitInfo? {
-            when (trait) {
+            return when (trait) {
                 is LengthTrait -> {
-                    return TraitInfo(
-                        { writer -> writer.rust("Self::check_length(&value)?;") },
-                        { writer ->
-                            writer.docs("Error when a string doesn't satisfy its `@length` requirements.")
-                            writer.rust("Length(usize),")
-                        },
-                        { writer ->
-                            writer.rust(
-                                """
-                                Self::Length(length) => crate::model::ValidationExceptionField {
-                                    message: format!("${trait.validationErrorMessage()}", length, &path),
-                                    path,
-                                },
-                                """.trimIndent(),
-                            )
-                        },
-                        { writer, constraintViolation -> renderLengthValidation(writer, trait, constraintViolation) },
-                    )
+                    this.fromLengthTrait(trait)
                 }
 
                 is PatternTrait -> {
-                    return TraitInfo(
-                        { writer -> writer.rust("Self::check_pattern(&value)?;") },
-                        { writer ->
-                            writer.docs("Error when a string doesn't satisfy its `@pattern`.")
-                            writer.rust("Pattern(&'static str),")
-                        },
-                        { writer ->
-                            writer.rust(
-                                """
-                                Self::Pattern(pattern) => crate::model::ValidationExceptionField {
-                                    message: format!("String at path {} failed to satisfy pattern {}", &path, pattern),
-                                    path
-                                },
-                                """.trimIndent(),
-                            )
-                        },
-                        { writer, constraintViolation -> renderPatternValidation(writer, trait, constraintViolation) },
-                    )
+                    this.fromPatternTrait(trait)
                 }
 
                 else -> {
-                    return null
+                    null
                 }
             }
+        }
+
+        private fun fromLengthTrait(lengthTrait: LengthTrait): TraitInfo {
+            return TraitInfo(
+                { writer -> writer.rust("Self::check_length(&value)?;") },
+                { writer ->
+                    writer.docs("Error when a string doesn't satisfy its `@length` requirements.")
+                    writer.rust("Length(usize),")
+                },
+                { writer ->
+                    writer.rust(
+                        """
+                        Self::Length(length) => crate::model::ValidationExceptionField {
+                            message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                            path,
+                        },
+                        """.trimIndent(),
+                    )
+                },
+                { writer, constraintViolation -> renderLengthValidation(writer, lengthTrait, constraintViolation) },
+            )
+        }
+
+        private fun fromPatternTrait(patternTrait: PatternTrait): TraitInfo {
+            return TraitInfo(
+                { writer -> writer.rust("Self::check_pattern(&value)?;") },
+                { writer ->
+                    writer.docs("Error when a string doesn't satisfy its `@pattern`.")
+                    writer.rust("Pattern(&'static str),")
+                },
+                { writer ->
+                    writer.rust(
+                        """
+                        Self::Pattern(pattern) => crate::model::ValidationExceptionField {
+                            message: format!("String at path {} failed to satisfy pattern {}", &path, pattern),
+                            path
+                        },
+                        """.trimIndent(),
+                    )
+                },
+                { writer, constraintViolation -> renderPatternValidation(writer, patternTrait, constraintViolation) },
+            )
         }
     }
 }
