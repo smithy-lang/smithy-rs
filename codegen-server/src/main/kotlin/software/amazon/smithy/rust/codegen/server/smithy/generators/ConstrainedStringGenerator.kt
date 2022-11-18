@@ -71,7 +71,7 @@ private data class TraitInfo(
                         { writer -> writer.rust("Self::check_pattern(&value)?;") },
                         { writer ->
                             writer.docs("Error when a string doesn't satisfy its `@pattern`.")
-                            writer.rust("Pattern(String),")
+                            writer.rust("Pattern(&'static str),")
                         },
                         { writer ->
                             writer.rust(
@@ -139,7 +139,7 @@ private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTra
             if REGEX.is_match(string) {
                 Ok(())
             } else {
-                Err($constraintViolation::Pattern("$pattern".to_owned()))
+                Err($constraintViolation::Pattern("$pattern"))
             }
         }
         """.trimIndent(),
