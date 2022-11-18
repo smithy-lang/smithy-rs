@@ -433,7 +433,7 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "Business logic handlers can have up to 8 extensions in input"
+message = "Operation handlers can now have up to 8 extensions as input parameters. They were previously limited to 1 extension input parameter."
 references = ["smithy-rs#1999"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
 author = "82marbag"
