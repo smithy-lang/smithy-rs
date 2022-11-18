@@ -40,6 +40,7 @@ mod route;
 pub(crate) mod tiny_map;
 
 pub use self::lambda_handler::LambdaHandler;
+#[allow(deprecated)]
 pub use self::{
     future::RouterFuture, into_make_service::IntoMakeService, into_make_service_with_connect_info::ConnectInfo,
     into_make_service_with_connect_info::IntoMakeServiceWithConnectInfo, route::Route,
