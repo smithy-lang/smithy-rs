@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -39,13 +38,13 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyTypesDep = CargoDependency.SmithyTypes(runtimeConfig)
-    private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
-    private val smithyHttpDep = CargoDependency.SmithyHttp(runtimeConfig)
+    private val smithyTypesDep = CargoDependency.smithyTypes(runtimeConfig)
+    private val smithyClientDep = CargoDependency.smithyClient(runtimeConfig)
+    private val smithyHttpDep = CargoDependency.smithyHttp(runtimeConfig)
 
-    val awsTypes = awsTypes(runtimeConfig).asType()
+    val awsTypes = awsTypes(runtimeConfig).toType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
-    val awsSmithyClient = smithyClientDep.asType()
+    val awsSmithyClient = smithyClientDep.toType()
 
     val connectorSettings = RuntimeType("ConnectorSettings", smithyClientDep, "aws_smithy_client::http_connector")
     val defaultMiddleware = runtimeConfig.defaultMiddleware()
@@ -106,7 +105,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
                 AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
-            retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
+            retryClassifier = runtimeConfig.awsHttp().toType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
         rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
@@ -214,7 +213,7 @@ private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : 
     private val serviceShape = codegenContext.serviceShape
     private val crateName = codegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).toType())
 
     // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
     // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
@@ -279,7 +278,7 @@ private fun renderCustomizableOperationSendMethod(
     generics: FluentClientGenerics,
     writer: RustWriter,
 ) {
-    val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
+    val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
 
     val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
     val handleGenerics = generics.toRustGenerics()

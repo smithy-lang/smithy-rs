@@ -9,7 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -56,9 +55,9 @@ internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<Runti
         listOf(
             PubUseType(RuntimeType.Blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.DateTime(runtimeConfig), ::hasDateTimes),
-        ) + CargoDependency.SmithyTypes(runtimeConfig).asType().let { types ->
+        ) + CargoDependency.smithyTypes(runtimeConfig).toType().let { types ->
             listOf(PubUseType(types.member("error::display::DisplayErrorContext")) { true })
-        } + CargoDependency.SmithyHttp(runtimeConfig).asType().let { http ->
+        } + CargoDependency.smithyHttp(runtimeConfig).toType().let { http ->
             listOf(
                 PubUseType(http.member("result::SdkError")) { true },
                 PubUseType(http.member("byte_stream::ByteStream"), ::hasStreamingOperations),

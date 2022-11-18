@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -82,8 +81,8 @@ abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSec
 
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
-    private val codegenScope = arrayOf("client" to clientDep.asType())
+    private val clientDep = CargoDependency.smithyClient(codegenContext.runtimeConfig)
+    private val codegenScope = arrayOf("client" to clientDep.toType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
             is FluentClientSection.FluentClientDocs -> writable {
