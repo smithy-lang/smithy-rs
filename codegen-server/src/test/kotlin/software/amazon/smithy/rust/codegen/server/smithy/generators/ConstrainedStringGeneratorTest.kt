@@ -46,7 +46,7 @@ class ConstrainedStringGeneratorTest {
                 "👍👍👍👍",
             ),
             // Need to fix the setup to be able to add `@pattern` tests.
-            // Triple("@pattern(\"^[a-z]+$\")", "valid", "123 invalid"),
+            Triple("@pattern(\"^[a-z]+$\")", "valid", "123 invalid"),
         ).map {
             TestCase(
                 """
