@@ -73,7 +73,7 @@ class RequestBindingGenerator(
     private val httpBindingGenerator =
         HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape, ::builderSymbol)
     private val index = HttpBindingIndex.of(model)
-    private val encoder = CargoDependency.smithyTypes(runtimeConfig).asType().member("primitive::Encoder")
+    private val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),

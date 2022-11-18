@@ -230,7 +230,7 @@ class RequestBindingGeneratorTest {
                         .set_int_list(Some(vec![0,1,44]))
                         .key(ts.clone())
                         .upload_id("some-valid-id")
-                       .set_extras(Some(vec![0,1]))
+                        .set_extras(Some(vec![0,1]))
                         .some_value("qp")
                         .media_type("base64encodethis")
                         .prefix("k".to_string(), "😹".to_string())
