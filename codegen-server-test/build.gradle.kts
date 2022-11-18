@@ -54,7 +54,12 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "constraints",
             imports = listOf("$commonModels/constraints.smithy"),
         ),
-        CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJson",
+            "rest_json",
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
         CodegenTest(
             "aws.protocoltests.restjson#RestJsonExtras",
             "rest_json_extras",
@@ -70,7 +75,13 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "json_rpc11",
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
-        CodegenTest("aws.protocoltests.misc#MiscService", "misc", imports = listOf("$commonModels/misc.smithy")),
+        CodegenTest(
+            "aws.protocoltests.misc#MiscService",
+            "misc",
+            imports = listOf("$commonModels/misc.smithy"),
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
         CodegenTest(
             "com.amazonaws.ebs#Ebs", "ebs",
             imports = listOf("$commonModels/ebs.json"),
