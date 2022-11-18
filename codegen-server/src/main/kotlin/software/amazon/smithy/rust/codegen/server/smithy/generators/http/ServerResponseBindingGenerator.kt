@@ -40,6 +40,9 @@ class ServerResponseBindingGenerator(
                 ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(
                     codegenContext,
                 ),
+                ServerResponseBeforeRenderingHeadersHttpBindingCustomization(
+                    codegenContext,
+                ),
             ),
         )
 
@@ -65,6 +68,35 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
                 rust("let ${section.variableName} = &${section.variableName}.0;")
             }
         }
-        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders -> emptySection
+
+        is HttpBindingSection.BeforeRenderingHeaders,
+        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        -> emptySection
+    }
+}
+
+/**
+ * A customization to, just before we render a _constrained_ member shape to an HTTP response header,
+ * unwrap the wrapper newtype and take a shared reference to the actual inner type within it.
+ */
+class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
+    HttpBindingCustomization() {
+    override fun section(section: HttpBindingSection): Writable = when (section) {
+        is HttpBindingSection.BeforeRenderingHeaders -> writable {
+            if (workingWithPublicConstrainedWrapperTupleType(
+                    section.shape,
+                    codegenContext.model,
+                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                )
+            ) {
+                if (section.shape.isIntegerShape) {
+                    rust("let ${section.variableName} = &${section.variableName}.0;")
+                }
+            }
+        }
+
+        is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
+        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        -> emptySection
     }
 }

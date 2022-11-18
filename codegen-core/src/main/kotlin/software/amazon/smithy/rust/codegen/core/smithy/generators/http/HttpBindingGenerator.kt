@@ -80,6 +80,8 @@ enum class HttpMessageType {
 sealed class HttpBindingSection(name: String) : Section(name) {
     data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: MapShape) :
         HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
+    data class BeforeRenderingHeaders(val variableName: String, val shape: Shape) :
+        HttpBindingSection("BeforeRenderingHeaders")
     data class AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
 }
@@ -519,43 +521,58 @@ class HttpBindingGenerator(
         val targetShape = model.expectShape(memberShape.target)
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
-        ifSet(targetShape, memberSymbol, "&input.$memberName") { field ->
-            listForEach(targetShape, field) { innerField, targetId ->
-                val innerMemberType = model.expectShape(targetId)
-                if (innerMemberType.isPrimitive()) {
-                    val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
-                    rust("let mut encoder = #T::from(${autoDeref(innerField)});", encoder)
-                }
-                val formatted = headerFmtFun(
-                    this,
-                    innerMemberType,
-                    memberShape,
-                    innerField,
-                    isListHeader = targetShape is CollectionShape,
-                )
-                val safeName = safeName("formatted")
-                write("let $safeName = $formatted;")
-                rustBlock("if !$safeName.is_empty()") {
-                    rustTemplate(
-                        """
-                        let header_value = $safeName;
-                        let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
-                            #{invalid_field_error:W}
-                        })?;
-                        builder = builder.header("${httpBinding.locationName}", header_value);
-                        """,
-                        "invalid_field_error" to OperationBuildError(runtimeConfig).invalidField(memberName) {
-                            rust(
-                                """
-                                format!(
-                                    "`{}` cannot be used as a header value: {}",
-                                    &${memberShape.redactIfNecessary(model, "header_value")},
-                                    err
-                                )
-                                """,
-                            )
-                        },
+
+        safeName().also { local ->
+            // This variable assignment ensures that the name of the value expression is always a valid variable name
+            // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
+            // This allows customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
+            rust("""let $local = &input.$memberName;""")
+            for (customization in customizations) {
+                customization.section(
+                    HttpBindingSection.BeforeRenderingHeaders(local, targetShape),
+                )(this)
+            }
+
+            ifSet(targetShape, memberSymbol, "&$local") { field ->
+                // TODO: this should delegate to a renderCollection method which in turn re-enters into this function
+                // when serializing each element of the collection, as we do in JsonSerializer
+                listForEach(targetShape, field) { innerField, targetId ->
+                    val innerMemberType = model.expectShape(targetId)
+                    if (innerMemberType.isPrimitive()) {
+                        val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
+                        rust("let mut encoder = #T::from(${autoDeref(innerField)});", encoder)
+                    }
+                    val formatted = headerFmtFun(
+                        this,
+                        innerMemberType,
+                        memberShape,
+                        innerField,
+                        isListHeader = targetShape is CollectionShape,
                     )
+                    val safeName = safeName("formatted")
+                    write("let $safeName = $formatted;")
+                    rustBlock("if !$safeName.is_empty()") {
+                        rustTemplate(
+                            """
+                            let header_value = $safeName;
+                            let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                                #{invalid_field_error:W}
+                            })?;
+                            builder = builder.header("${httpBinding.locationName}", header_value);
+                            """,
+                            "invalid_field_error" to OperationBuildError(runtimeConfig).invalidField(memberName) {
+                                rust(
+                                    """
+                                    format!(
+                                        "`{}` cannot be used as a header value: {}",
+                                        &${memberShape.redactIfNecessary(model, "header_value")},
+                                        err
+                                    )
+                                    """,
+                                )
+                            },
+                        )
+                    }
                 }
             }
         }
