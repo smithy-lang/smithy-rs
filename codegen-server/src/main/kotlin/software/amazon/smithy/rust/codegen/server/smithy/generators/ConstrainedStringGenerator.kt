@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.escapedPattern
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -257,7 +258,7 @@ private data class TraitInfo(
                     writer.rust(
                         """
                         Self::Pattern(pattern) => crate::model::ValidationExceptionField {
-                            message: format!("String at path {} failed to satisfy pattern {}", &path, pattern),
+                            message: format!("${patternTrait.validationErrorMessage()}", &path, pattern),
                             path
                         },
                         """.trimIndent(),
@@ -301,9 +302,7 @@ private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait,
  * supplied regex in the `@pattern` trait.
  */
 private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTrait, constraintViolation: Symbol) {
-    // Escape `\`s to not end up with broken rust code in the presence of regexes with slashes.
-    // This turns `Regex::new("^[\S\s]+$")` into `Regex::new("^[\\S\\s]+$")`.
-    val pattern = patternTrait.pattern.toString().replace("\\", "\\\\")
+    val pattern = patternTrait.escapedPattern()
 
     writer.rustTemplate(
         """
