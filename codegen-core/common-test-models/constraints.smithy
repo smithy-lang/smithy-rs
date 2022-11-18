@@ -23,10 +23,6 @@ service ConstraintsService {
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
         HttpPrefixHeadersTargetingLengthMapOperation,
 
-        QueryParamsTargetingMapOfRangeIntegerOperation,
-        QueryParamsTargetingMapOfListOfRangeIntegerOperation,
-        QueryParamsTargetingMapOfSetOfRangeIntegerOperation,
-
         QueryParamsTargetingMapOfEnumStringOperation,
         QueryParamsTargetingMapOfListOfEnumStringOperation,
         // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
@@ -46,7 +42,7 @@ operation ConstrainedShapesOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}/{enumStringLabel}", method: "POST")
+@http(uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{lengthStringLabel}/{enumStringLabel}", method: "POST")
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
@@ -74,13 +70,6 @@ operation QueryParamsTargetingMapOfLengthStringOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/query-params-targeting-map-of-range-integer-operation", method: "POST")
-operation QueryParamsTargetingMapOfRangeIntegerOperation {
-    input: QueryParamsTargetingMapOfRangeIntegerOperationInputOutput,
-    output: QueryParamsTargetingMapOfRangeIntegerOperationInputOutput,
-    errors: [ValidationException]
-}
-
 @http(uri: "/query-params-targeting-map-of-enum-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfEnumStringOperation {
     input: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
@@ -95,24 +84,10 @@ operation QueryParamsTargetingMapOfListOfLengthStringOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/query-params-targeting-map-of-list-of-range-integer-operation", method: "POST")
-operation QueryParamsTargetingMapOfListOfRangeIntegerOperation {
-    input: QueryParamsTargetingMapOfListOfRangeIntegerOperationInputOutput,
-    output: QueryParamsTargetingMapOfListOfRangeIntegerOperationInputOutput,
-    errors: [ValidationException]
-}
-
 @http(uri: "/query-params-targeting-map-of-set-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
-    errors: [ValidationException]
-}
-
-@http(uri: "/query-params-targeting-map-of-set-of-range-integer-operation", method: "POST")
-operation QueryParamsTargetingMapOfSetOfRangeIntegerOperation {
-    input: QueryParamsTargetingMapOfSetOfRangeIntegerOperationInputOutput,
-    output: QueryParamsTargetingMapOfSetOfRangeIntegerOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -176,10 +151,6 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @required
     @httpPrefixHeaders("X-Length-String-Prefix-Headers-")
     lengthStringHeaderMap: MapOfLengthString,
-
-    @required
-    @httpPrefixHeaders("X-Range-Integer-Prefix-Headers-")
-    rangeIntegerHeaderMap: MapOfRangeInteger,
 
     @httpHeader("X-Length")
     lengthStringHeader: LengthString,
@@ -259,11 +230,6 @@ structure QueryParamsTargetingMapOfLengthStringOperationInputOutput {
     mapOfLengthString: MapOfLengthString
 }
 
-structure QueryParamsTargetingMapOfRangeIntegerOperationInputOutput {
-    @httpQueryParams
-    mapOfRangeInteger: MapOfRangedInteger
-}
-
 structure QueryParamsTargetingMapOfEnumStringOperationInputOutput {
     @httpQueryParams
     mapOfEnumString: MapOfEnumString
@@ -274,19 +240,9 @@ structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
     mapOfListOfLengthString: MapOfListOfLengthString
 }
 
-structure QueryParamsTargetingMapOfListOfRangeIntegerOperationInputOutput {
-    @httpQueryParams
-    mapOfListOfRangeInteger: MapOfListOfRangeInteger
-}
-
 structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfSetOfLengthString: MapOfSetOfLengthString
-}
-
-structure QueryParamsTargetingMapOfSetOfRangeIntegerOperationInputOutput {
-    @httpQueryParams
-    mapOfSetOfRangeInteger: MapOfSetOfRangeInteger
 }
 
 structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
@@ -378,8 +334,8 @@ map MapOfLengthString {
     value: LengthString,
 }
 
-map MapOfRangedInteger {
-    key: RangeInteger,
+map MapOfRangeInteger {
+    key: LengthString,
     value: RangeInteger,
 }
 
@@ -394,7 +350,7 @@ map MapOfListOfLengthString {
 }
 
 map MapOfListOfRangeInteger {
-    key: Rangedinteger,
+    key: LengthString,
     value: ListOfRangeInteger,
 }
 
@@ -409,7 +365,7 @@ map MapOfSetOfLengthString {
 }
 
 map MapOfSetOfRangeInteger {
-    key: RangeInteger,
+    key: LengthString,
     value: SetOfRangeInteger,
 }
 
