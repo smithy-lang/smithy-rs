@@ -94,6 +94,10 @@ private sealed class UnsupportedConstraintMessageKind {
                 level,
                 buildMessageShapeHasUnsupportedConstraintTrait(shape, rangeTrait, constraintTraitsUberIssue),
             )
+            is UnsupportedUniqueItemsTraitOnShape -> LogMessage(
+                level,
+                buildMessageShapeHasUnsupportedConstraintTrait(shape, uniqueItemsTrait, constraintTraitsUberIssue),
+            )
         }
     }
 }
@@ -104,6 +108,7 @@ private data class UnsupportedLengthTraitOnStreamingBlobShape(val shape: BlobSha
 private data class UnsupportedLengthTraitOnCollectionOrOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) : UnsupportedConstraintMessageKind()
 private data class UnsupportedPatternTraitOnStringShape(val shape: Shape, val patternTrait: PatternTrait) : UnsupportedConstraintMessageKind()
 private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) : UnsupportedConstraintMessageKind()
+private data class UnsupportedUniqueItemsTraitOnShape(val shape: Shape, val uniqueItemsTrait: UniqueItemsTrait) : UnsupportedConstraintMessageKind()
 
 data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>)
@@ -228,13 +233,23 @@ fun validateUnsupportedConstraints(model: Model, service: ServiceShape, codegenC
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()
 
+    // 7. UniqueItems trait on any shape is used. It has not been implemented yet.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
+    val unsupportedUniqueItemsTraitOnShapeSet = walker
+        .walkShapes(service)
+        .asSequence()
+        .filterMapShapesToTraits(setOf(UniqueItemsTrait::class.java))
+        .map { (shape, uniqueItemsTrait) -> UnsupportedUniqueItemsTraitOnShape(shape, uniqueItemsTrait as UniqueItemsTrait) }
+        .toSet()
+
     val messages =
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedConstraintOnShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnCollectionOrOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedPatternTraitOnStringShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
+            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedUniqueItemsTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }
