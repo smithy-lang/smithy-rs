@@ -5,8 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.util
 
-import kotlin.collections.Map
-
 /**
  * Deep merges two maps, with the properties of `other` taking priority over the properties of `this`.
  */

@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -157,8 +156,8 @@ class JsonSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
-    private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
+    private val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to runtimeConfig.serializationError(),

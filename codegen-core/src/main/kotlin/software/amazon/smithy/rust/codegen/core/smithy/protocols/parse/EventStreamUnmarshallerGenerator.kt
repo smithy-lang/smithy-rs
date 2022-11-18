@@ -24,7 +24,6 @@ import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -59,7 +58,7 @@ class EventStreamUnmarshallerGenerator(
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
     private val errorSymbol = if (codegenTarget == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType("MessageStreamError", smithyEventStream, "aws_smithy_http::event_stream").toSymbol()
     } else {
@@ -67,15 +66,15 @@ class EventStreamUnmarshallerGenerator(
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
+        "Blob" to RuntimeType("Blob", CargoDependency.smithyTypes(runtimeConfig), "aws_smithy_types"),
         "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
         "expect_fns" to RuntimeType("smithy", smithyEventStream, "aws_smithy_eventstream"),
         "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
         "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
         "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
         "OpError" to errorSymbol,
-        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
-        "tracing" to CargoDependency.Tracing.asType(),
+        "SmithyError" to RuntimeType("Error", CargoDependency.smithyTypes(runtimeConfig), "aws_smithy_types"),
+        "tracing" to CargoDependency.Tracing.toType(),
         "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
         "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
     )

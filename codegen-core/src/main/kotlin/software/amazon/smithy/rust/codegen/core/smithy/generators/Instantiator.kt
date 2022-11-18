@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -138,7 +137,7 @@ open class Instantiator(
                     writer.rust(
                         """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
-                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
+                        CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Parse"),
                     )
                 }
 
@@ -147,7 +146,7 @@ open class Instantiator(
 
             is BooleanShape -> writer.rust(data.asBooleanNode().get().toString())
             is DocumentShape -> writer.rustBlock("") {
-                val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+                val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
                 rustTemplate(
                     """
                     let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
