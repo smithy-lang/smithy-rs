@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
-class ConstrainedIntGeneratorTest {
+class ConstrainedIntegerGeneratorTest {
 
     data class TestCase(val model: Model, val validInteger: Int, val invalidInteger: Int)
 
