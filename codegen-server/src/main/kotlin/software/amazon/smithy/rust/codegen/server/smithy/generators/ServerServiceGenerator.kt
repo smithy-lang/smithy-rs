@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
@@ -66,6 +67,10 @@ open class ServerServiceGenerator(
                 """
                 Contains the [`operation_registry::OperationRegistry`], a place where
                 you can register your service's operation implementations.
+
+                # Deprecation
+
+                This service builder is deprecated - use [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder`] instead.
                 """,
             ),
         ) {
