@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -25,7 +24,7 @@ class ServerOperationGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to
-                ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+                ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
         )
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model

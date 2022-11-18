@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  *
  * See the [ShapesReachableFromOperationInputTagger] model transform for how it's used.
  */
-class ShapeReachableFromOperationInputTagTrait() : AnnotationTrait(ID, Node.objectNode()) {
+class ShapeReachableFromOperationInputTagTrait : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
         val ID = ShapeId.from("smithy.api.internal#syntheticStructureReachableFromOperationInputTag")
     }

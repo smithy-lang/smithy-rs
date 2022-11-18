@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -95,18 +94,18 @@ class EndpointConfigCustomization(
 ) :
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().asType().copy(name = "ResolveAwsEndpoint")
+    private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().toType().copy(name = "ResolveAwsEndpoint")
     private val smithyEndpointResolver =
-        CargoDependency.SmithyHttp(runtimeConfig).asType().member("endpoint::ResolveEndpoint")
-    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().asType().member("Params")
-    private val endpointShim = runtimeConfig.awsEndpoint().asType().member("EndpointShim")
+        CargoDependency.smithyHttp(runtimeConfig).toType().member("endpoint::ResolveEndpoint")
+    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().toType().member("Params")
+    private val endpointShim = runtimeConfig.awsEndpoint().toType().member("EndpointShim")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         "SmithyResolver" to smithyEndpointResolver,
         "PlaceholderParams" to placeholderEndpointParams,
         "ResolveAwsEndpoint" to resolveAwsEndpoint,
         "EndpointShim" to endpointShim,
-        "aws_types" to awsTypes(runtimeConfig).asType(),
+        "aws_types" to awsTypes(runtimeConfig).toType(),
     )
 
     override fun section(section: ServiceConfig): Writable = writable {
@@ -138,14 +137,16 @@ class EndpointConfigCustomization(
                     ///
                     /// ## Examples
                     /// ```no_run
+                    /// ## fn wrapper() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
                     /// use #{aws_types}::region::Region;
                     /// use $moduleUseName::config::{Builder, Config};
                     /// use $moduleUseName::Endpoint;
                     ///
                     /// let config = $moduleUseName::Config::builder()
-                    ///     .endpoint_resolver(
-                    ///         Endpoint::immutable("http://localhost:8080".parse().expect("valid URI"))
-                    ///     ).build();
+                    ///     .endpoint_resolver(Endpoint::immutable("http://localhost:8080")?)
+                    ///     .build();
+                    /// ## Ok(())
+                    /// ## }
                     /// ```
                     pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{ResolveAwsEndpoint} + 'static) -> Self {
                         self.endpoint_resolver = Some(std::sync::Arc::new(#{EndpointShim}::from_resolver(endpoint_resolver)) as _);
@@ -182,7 +183,7 @@ class EndpointConfigCustomization(
 
 class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) :
     OperationCustomization() {
-    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().asType().member("Params")
+    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().toType().member("Params")
     private val codegenScope = arrayOf(
         "PlaceholderParams" to placeholderEndpointParams,
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -213,7 +214,7 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::endpoint::Endpoint;",
-                    CargoDependency.SmithyHttp(runtimeConfig).asType(),
+                    CargoDependency.smithyHttp(runtimeConfig).toType(),
                 )
             }
             else -> emptySection
@@ -224,8 +225,8 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
 class EndpointResolverGenerator(codegenContext: CodegenContext, private val endpointData: ObjectNode) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val endpointPrefix = codegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
-    private val awsEndpoint = runtimeConfig.awsEndpoint().asType()
-    private val awsTypes = runtimeConfig.awsTypes().asType()
+    private val awsEndpoint = runtimeConfig.awsEndpoint().toType()
+    private val awsTypes = runtimeConfig.awsTypes().toType()
     private val codegenScope =
         arrayOf(
             "Partition" to awsEndpoint.member("Partition"),

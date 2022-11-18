@@ -14,8 +14,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -51,7 +51,7 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
         .map { codegenContext.model.expectShape(it, StructureShape::class.java) }
         .sortedBy { it.id.getName(codegenContext.serviceShape) }
 
-    private val sdkError = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("result::SdkError")
+    private val sdkError = CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType().member("result::SdkError")
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.private("error_meta")) {
             renderDefinition()
@@ -147,7 +147,7 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
                 val sym = symbolProvider.toSymbol(error)
                 rust("${sym.name}(#T),", sym)
             }
-            rust("/// An unhandled error occurred.")
+            docs(UNHANDLED_ERROR_DOCS)
             rust("Unhandled(#T)", unhandledError())
         }
     }

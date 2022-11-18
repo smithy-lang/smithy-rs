@@ -17,7 +17,6 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -69,7 +68,8 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::error::DeserializeError"),
+        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
+            .member("deserialize::error::DeserializeError"),
         "Response" to RuntimeType.http.member("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
@@ -83,9 +83,15 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     /**
      * RestJson1 implementations can denote errors in responses in several ways.
      * New server-side protocol implementations MUST use a header field named `X-Amzn-Errortype`.
+     *
+     * Note that the spec says that implementations SHOULD strip the error shape ID's namespace.
+     * However, our server implementation renders the full shape ID (including namespace), since some
+     * existing clients rely on it to deserialize the error shape and fail if only the shape name is present.
+     * This is compliant with the spec, see https://github.com/awslabs/smithy/pull/1493.
+     * See https://github.com/awslabs/smithy/issues/1494 too.
      */
     override fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> =
-        listOf("x-amzn-errortype" to errorShape.id.name)
+        listOf("x-amzn-errortype" to errorShape.id.toString())
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
         fun builderSymbol(shape: StructureShape): Symbol =
