@@ -264,31 +264,31 @@ convert_to_request_rejection!(hyper::Error, HttpBody);
 // Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
 convert_to_request_rejection!(lambda_http::Error, HttpBody);
 
-macro_rules! any_rejection {
-    ($name:ident, $($var:ident),+) => (
-        pub enum $name<$($var),*> {
-            $($var ($var),)*
-        }
-
-        impl<P, $($var,)*> IntoResponse<P> for $name<$($var),*>
-        where
-            $($var: IntoResponse<P>,)*
-        {
-            #[allow(non_snake_case)]
-            fn into_response(self) -> http::Response<crate::body::BoxBody> {
-                match self {
-                    $($name::$var ($var) => $var.into_response(),)*
-                }
-            }
-        }
-    )
-}
-
 pub mod any_rejections {
     //! This module hosts enums, up to size 8, which implement [`IntoResponse`] when their variants implement
     //! [`IntoResponse`].
 
     use super::IntoResponse;
+
+    macro_rules! any_rejection {
+        ($name:ident, $($var:ident),+) => (
+            pub enum $name<$($var),*> {
+                $($var ($var),)*
+            }
+
+            impl<P, $($var,)*> IntoResponse<P> for $name<$($var),*>
+            where
+                $($var: IntoResponse<P>,)*
+            {
+                #[allow(non_snake_case)]
+                fn into_response(self) -> http::Response<crate::body::BoxBody> {
+                    match self {
+                        $($name::$var ($var) => $var.into_response(),)*
+                    }
+                }
+            }
+        )
+    }
 
     // any_rejection!(One, A);
     any_rejection!(Two, A, B);

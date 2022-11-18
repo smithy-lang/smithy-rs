@@ -62,24 +62,10 @@ where
     }
 }
 
-impl<Op, F, Fut, Ext0> Handler<Op, (Ext0,)> for F
-where
-    Op: OperationShape,
-    F: Fn(Op::Input, Ext0) -> Fut,
-    Fut: Future,
-    Fut::Output: IntoResult<Op::Output, Op::Error>,
-{
-    type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
-
-    fn call(&mut self, input: Op::Input, exts: (Ext0,)) -> Self::Future {
-        (self)(input, exts.0).map(IntoResult::into_result)
-    }
-}
-
 // fn(Input, Ext_i) -> Output
 macro_rules! impl_handler {
     ($($var:ident),+) => (
-        impl<Op, F, Fut, $($var,)*> Handler<Op, ($($var),*)> for F
+        impl<Op, F, Fut, $($var,)*> Handler<Op, ($($var,)*)> for F
         where
             Op: OperationShape,
             F: Fn(Op::Input, $($var,)*) -> Fut,
@@ -97,6 +83,7 @@ macro_rules! impl_handler {
     )
 }
 
+impl_handler!(Exts0);
 impl_handler!(Exts0, Exts1);
 impl_handler!(Exts0, Exts1, Exts2);
 impl_handler!(Exts0, Exts1, Exts2, Exts3);
