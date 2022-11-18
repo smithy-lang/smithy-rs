@@ -136,12 +136,6 @@ class ConstrainedIntegerGenerator(
                     value.into_inner()
                 }
             }
-
-            impl #{AsRef}<$inner> for $name {
-                fn as_ref(&self) -> &$inner {
-                    self.inner()
-                }
-            }
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "ConstraintViolation" to constraintViolation,

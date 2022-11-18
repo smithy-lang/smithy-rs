@@ -368,7 +368,7 @@ class JsonSerializerGenerator(
                 val rustType = symbolProvider.toSymbol(target).rustType()
                 val conversion = writable {
                     if (rustType is RustType.Opaque) {
-                        rust("(*${value.asRef()}.as_ref()).into()")
+                        rust("(*${value.asRef()}.inner()).into()")
                     } else {
                         rust("(${value.asValue()}).into()")
                     }
