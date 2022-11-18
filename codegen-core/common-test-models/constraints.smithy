@@ -19,11 +19,16 @@ service ConstraintsService {
         // combination.
         QueryParamsTargetingLengthMapOperation,
         QueryParamsTargetingMapOfLengthStringOperation,
-        QueryParamsTargetingMapOfEnumStringOperation,
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
-        QueryParamsTargetingMapOfListOfEnumStringOperation,
         HttpPrefixHeadersTargetingLengthMapOperation,
+
+        QueryParamsTargetingMapOfRangeIntegerOperation,
+        QueryParamsTargetingMapOfListOfRangeIntegerOperation,
+        QueryParamsTargetingMapOfSetOfRangeIntegerOperation,
+
+        QueryParamsTargetingMapOfEnumStringOperation,
+        QueryParamsTargetingMapOfListOfEnumStringOperation,
         // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
         // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
@@ -69,6 +74,13 @@ operation QueryParamsTargetingMapOfLengthStringOperation {
     errors: [ValidationException]
 }
 
+@http(uri: "/query-params-targeting-map-of-range-integer-operation", method: "POST")
+operation QueryParamsTargetingMapOfRangeIntegerOperation {
+    input: QueryParamsTargetingMapOfRangeIntegerOperationInputOutput,
+    output: QueryParamsTargetingMapOfRangeIntegerOperationInputOutput,
+    errors: [ValidationException]
+}
+
 @http(uri: "/query-params-targeting-map-of-enum-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfEnumStringOperation {
     input: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
@@ -83,10 +95,24 @@ operation QueryParamsTargetingMapOfListOfLengthStringOperation {
     errors: [ValidationException]
 }
 
+@http(uri: "/query-params-targeting-map-of-list-of-range-integer-operation", method: "POST")
+operation QueryParamsTargetingMapOfListOfRangeIntegerOperation {
+    input: QueryParamsTargetingMapOfListOfRangeIntegerOperationInputOutput,
+    output: QueryParamsTargetingMapOfListOfRangeIntegerOperationInputOutput,
+    errors: [ValidationException]
+}
+
 @http(uri: "/query-params-targeting-map-of-set-of-length-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-set-of-range-integer-operation", method: "POST")
+operation QueryParamsTargetingMapOfSetOfRangeIntegerOperation {
+    input: QueryParamsTargetingMapOfSetOfRangeIntegerOperationInputOutput,
+    output: QueryParamsTargetingMapOfSetOfRangeIntegerOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -141,15 +167,25 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @required
     @httpLabel
+    rangeIntegerLabel: RangeInteger,
+
+    @required
+    @httpLabel
     enumStringLabel: EnumString,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
-    // @required
-    @httpPrefixHeaders("X-Prefix-Headers-")
+    @required
+    @httpPrefixHeaders("X-Length-String-Prefix-Headers-")
     lengthStringHeaderMap: MapOfLengthString,
+
+    @required
+    @httpPrefixHeaders("X-Range-Integer-Prefix-Headers-")
+    rangeIntegerHeaderMap: MapOfRangeInteger,
 
     @httpHeader("X-Length")
     lengthStringHeader: LengthString,
+
+    @httpHeader("X-Range-Integer")
+    rangeIntegerHeader: RangeInteger,
 
     // @httpHeader("X-Length-MediaType")
     // lengthStringHeaderWithMediaType: MediaTypeLengthString,
@@ -159,6 +195,12 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpHeader("X-Length-List")
     lengthStringListHeader: ListOfLengthString,
+
+    @httpHeader("X-Range-Integer-Set")
+    rangeIntegerSetHeader: SetOfRangeInteger,
+
+    @httpHeader("X-Range-Integer-List")
+    rangeIntegerListHeader: ListOfRangeInteger,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
     // @httpHeader("X-Enum")
@@ -170,6 +212,9 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpQuery("lengthString")
     lengthStringQuery: LengthString,
 
+    @httpQuery("rangeInteger")
+    rangeIntegerQuery: RangeInteger,
+
     @httpQuery("enumString")
     enumStringQuery: EnumString,
 
@@ -178,6 +223,12 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("lengthStringSet")
     lengthStringSetQuery: SetOfLengthString,
+
+    @httpQuery("rangeIntegerList")
+    rangeIntegerListQuery: ListOfRangeInteger,
+
+    @httpQuery("rangeIntegerSet")
+    rangeIntegerSetQuery: SetOfRangeInteger,
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
@@ -198,9 +249,19 @@ structure QueryParamsTargetingLengthMapOperationInputOutput {
     lengthMap: ConBMap
 }
 
+structure QueryParamsTargetingRangeIntegerMapOperationInputOutput {
+    @httpQueryParams
+    rangeIntegerMap: ConBMap
+}
+
 structure QueryParamsTargetingMapOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfLengthString: MapOfLengthString
+}
+
+structure QueryParamsTargetingMapOfRangeIntegerOperationInputOutput {
+    @httpQueryParams
+    mapOfRangeInteger: MapOfRangedInteger
 }
 
 structure QueryParamsTargetingMapOfEnumStringOperationInputOutput {
@@ -213,9 +274,19 @@ structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
     mapOfListOfLengthString: MapOfListOfLengthString
 }
 
+structure QueryParamsTargetingMapOfListOfRangeIntegerOperationInputOutput {
+    @httpQueryParams
+    mapOfListOfRangeInteger: MapOfListOfRangeInteger
+}
+
 structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfSetOfLengthString: MapOfSetOfLengthString
+}
+
+structure QueryParamsTargetingMapOfSetOfRangeIntegerOperationInputOutput {
+    @httpQueryParams
+    mapOfSetOfRangeInteger: MapOfSetOfRangeInteger
 }
 
 structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
@@ -274,6 +345,11 @@ structure ConA {
     maxLengthString: MaxLengthString,
     fixedLengthString: FixedLengthString,
 
+    rangeInteger: RangeInteger,
+    minRangeInteger: MinRangeInteger,
+    maxRangeInteger: MaxRangeInteger,
+    fixedValueInteger: FixedValueInteger,
+
     conBList: ConBList,
     conBList2: ConBList2,
 
@@ -290,12 +366,21 @@ structure ConA {
     setOfLengthString: SetOfLengthString,
     mapOfLengthString: MapOfLengthString,
 
+    listOfRangeInteger: ListOfRangeInteger,
+    setOfRangeInteger: SetOfRangeInteger,
+    mapOfRangeInteger: MapOfRangeInteger,
+
     nonStreamingBlob: NonStreamingBlob
 }
 
 map MapOfLengthString {
     key: LengthString,
     value: LengthString,
+}
+
+map MapOfRangedInteger {
+    key: RangeInteger,
+    value: RangeInteger,
 }
 
 map MapOfEnumString {
@@ -308,6 +393,11 @@ map MapOfListOfLengthString {
     value: ListOfLengthString,
 }
 
+map MapOfListOfRangeInteger {
+    key: Rangedinteger,
+    value: ListOfRangeInteger,
+}
+
 map MapOfListOfEnumString {
     key: EnumString,
     value: ListOfEnumString,
@@ -316,6 +406,11 @@ map MapOfListOfEnumString {
 map MapOfSetOfLengthString {
     key: LengthString,
     value: SetOfLengthString,
+}
+
+map MapOfSetOfRangeInteger {
+    key: RangeInteger,
+    value: SetOfRangeInteger,
 }
 
 @length(min: 2, max: 8)
@@ -329,7 +424,7 @@ string LengthString
 @length(min: 2)
 string MinLengthString
 
-@length(min: 69)
+@length(max: 69)
 string MaxLengthString
 
 @length(min: 69, max: 69)
@@ -338,6 +433,18 @@ string FixedLengthString
 @mediaType("video/quicktime")
 @length(min: 1, max: 69)
 string MediaTypeLengthString
+
+@range(min: -0, max: 69)
+integer RangeInteger
+
+@range(min: -10)
+integer MinRangeInteger
+
+@range(max: 69)
+integer MaxRangeInteger
+
+@range(min: 69, max: 69)
+integer FixedValueInteger
 
 /// A union with constrained members.
 union ConstrainedUnion {
@@ -372,6 +479,14 @@ set SetOfLengthString {
 
 list ListOfLengthString {
     member: LengthString
+}
+
+set SetOfRangeInteger {
+    member: RangeInteger
+}
+
+list ListOfRangeInteger {
+    member: RangeInteger
 }
 
 list ListOfEnumString {
