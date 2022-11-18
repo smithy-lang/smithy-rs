@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -31,8 +30,8 @@ class CustomizableOperationGenerator(
         const val CUSTOMIZE_MODULE = "crate::operation::customize"
     }
 
-    private val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
+    private val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
+    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
 
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.operation(Visibility.PUBLIC)) {
@@ -68,7 +67,7 @@ class CustomizableOperationGenerator(
             // SDK Types
             "http_result" to smithyHttp.member("result"),
             "http_body" to smithyHttp.member("body"),
-            "HttpRequest" to CargoDependency.Http.asType().member("Request"),
+            "HttpRequest" to CargoDependency.Http.toType().member("Request"),
             "handle_generics_decl" to handleGenerics.declaration(),
             "handle_generics_bounds" to handleGenerics.bounds(),
             "operation_generics_decl" to operationGenerics.declaration(),
@@ -143,8 +142,8 @@ class CustomizableOperationGenerator(
     }
 
     private fun renderCustomizableOperationSend(writer: RustWriter) {
-        val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
-        val smithyClient = CargoDependency.SmithyClient(runtimeConfig).asType()
+        val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
+        val smithyClient = CargoDependency.smithyClient(runtimeConfig).toType()
 
         val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
         val handleGenerics = generics.toRustGenerics()

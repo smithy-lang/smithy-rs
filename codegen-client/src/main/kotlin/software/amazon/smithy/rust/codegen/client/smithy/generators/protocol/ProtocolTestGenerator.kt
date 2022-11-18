@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -68,8 +67,8 @@ class ProtocolTestGenerator(
     private val instantiator = clientInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
-        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
+        "SmithyHttp" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType(),
+        "AssertEq" to CargoDependency.PrettyAssertions.toType().member("assert_eq!"),
     )
 
     sealed class TestCase {
@@ -282,7 +281,7 @@ class ProtocolTestGenerator(
             """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
-            "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
+            "parse_http_response" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType()
                 .member("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
