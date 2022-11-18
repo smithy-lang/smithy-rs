@@ -29,6 +29,30 @@ where
 
 /// Constructs a [`Plugin`] using a closure over the operation name `F: Fn(&'static str) -> L` where `L` is a HTTP
 /// [`Layer`](tower::Layer).
+///
+/// # Example
+///
+/// ```rust
+/// use aws_smithy_http_server::plugin::plugin_from_operation_name_fn;
+/// use tower::layer::layer_fn;
+///
+/// // A `Service` which prints the operation name before calling `S`.
+/// struct PrintService<S> {
+///     operation_name: &'static str,
+///     inner: S
+/// }
+///
+/// // A `Layer` applying `PrintService`.
+/// struct PrintLayer {
+///     operation_name: &'static str
+/// }
+///
+/// // Defines a closure taking the operation name to `PrintLayer`.
+/// let f = |operation_name| PrintLayer { operation_name };
+///
+/// // This plugin applies the `PrintService` middleware around every operation.
+/// let plugin = plugin_from_operation_name_fn(f);
+/// ```
 pub fn plugin_from_operation_name_fn<F>(f: F) -> OperationNameFn<F> {
     OperationNameFn { f }
 }
