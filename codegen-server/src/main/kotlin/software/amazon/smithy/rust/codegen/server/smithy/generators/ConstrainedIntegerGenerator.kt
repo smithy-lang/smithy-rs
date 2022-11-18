@@ -106,6 +106,12 @@ class ConstrainedIntegerGenerator(
                 }
             }
 
+            impl #{From}<$name> for #{MaybeConstrained} {
+                fn from(value: $name) -> Self {
+                    Self::Constrained(value)
+                }
+            }
+
             impl #{Display} for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                    ${shape.redactIfNecessary(model, "self.0")}.fmt(f)
