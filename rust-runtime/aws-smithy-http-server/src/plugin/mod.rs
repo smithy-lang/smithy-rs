@@ -3,15 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+mod closure;
 mod filter;
 mod identity;
+mod layer;
 mod pipeline;
 mod stack;
 
 use crate::operation::Operation;
 
+pub use closure::{plugin_from_operation_name_fn, OperationNameFn};
 pub use filter::{filter_by_operation_name, FilterByOperationName};
 pub use identity::IdentityPlugin;
+pub use layer::HttpLayer;
 pub use pipeline::PluginPipeline;
 pub use stack::PluginStack;
 
