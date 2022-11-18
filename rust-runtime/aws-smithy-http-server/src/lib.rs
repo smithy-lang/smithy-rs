@@ -21,6 +21,7 @@ pub mod protocols;
 #[doc(hidden)]
 pub mod rejection;
 pub mod request;
+#[doc(hidden)]
 pub mod response;
 pub mod routing;
 #[doc(hidden)]
