@@ -45,8 +45,15 @@ class ConstrainedStringGeneratorTest {
                 "👍👍👍", // These three emojis are three Unicode scalar values.
                 "👍👍👍👍",
             ),
-            // Need to fix the setup to be able to add `@pattern` tests.
             Triple("@pattern(\"^[a-z]+$\")", "valid", "123 invalid"),
+            Triple(
+                """
+                @length(min: 3, max: 10)
+                @pattern("^a string$)
+                """.trimIndent(),
+                "a string", "an invalid string",
+            ),
+            Triple("@pattern(\"123\")", "some pattern 123 in the middle", "no pattern at all"),
         ).map {
             TestCase(
                 """
