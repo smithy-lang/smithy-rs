@@ -7,15 +7,20 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -23,14 +28,12 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -44,7 +47,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serializeFunctionName
-import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -56,16 +58,24 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
  */
 sealed class JsonSerializerSection(name: String) : Section(name) {
     /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
-    data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSerializerSection("ServerError")
+    data class ServerError(val structureShape: StructureShape, val jsonObject: String) :
+        JsonSerializerSection("ServerError")
 
     /** Mutate a map prior to it being serialized. **/
-    data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSerializerSection("BeforeIteratingOverMap")
+    data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) :
+        JsonSerializerSection("BeforeIteratingOverMap")
+
+    /** Mutate a member value prior to it being serialized. **/
+    data class BeforeSerializingMember(val shape: Shape, val valueExpression: ValueExpression) :
+        JsonSerializerSection("BeforeSerializingMemberValue")
 
     /** Mutate the input object prior to finalization. */
-    data class InputStruct(val structureShape: StructureShape, val jsonObject: String) : JsonSerializerSection("InputStruct")
+    data class InputStruct(val structureShape: StructureShape, val jsonObject: String) :
+        JsonSerializerSection("InputStruct")
 
     /** Mutate the output object prior to finalization. */
-    data class OutputStruct(val structureShape: StructureShape, val jsonObject: String) : JsonSerializerSection("OutputStruct")
+    data class OutputStruct(val structureShape: StructureShape, val jsonObject: String) :
+        JsonSerializerSection("OutputStruct")
 }
 
 /**
@@ -336,22 +346,31 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.serializeMember(context: MemberContext) {
         val targetShape = model.expectShape(context.shape.target)
-        if (symbolProvider.toSymbol(context.shape).isOptional()) {
-            safeName().also { local ->
-                rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
-                    val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
+        safeName().also { local ->
+            // This variable assignment ensures that the name of the value expression is always a valid variable name
+            // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
+            // This allows customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
+            rust("""let $local = ${context.valueExpression.asRef()};""")
+            val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
+
+            for (customization in customizations) {
+                customization.section(JsonSerializerSection.BeforeSerializingMember(targetShape, innerContext.valueExpression))(this)
+            }
+
+            if (symbolProvider.toSymbol(context.shape).isOptional()) {
+                rustBlock("if let Some($local) = ${innerContext.valueExpression.asRef()}") {
                     serializeMemberValue(innerContext, targetShape)
                 }
                 if (context.writeNulls) {
                     rustBlock("else") {
-                        rust("${context.writerExpression}.null();")
+                        rust("${innerContext.writerExpression}.null();")
                     }
                 }
-            }
-        } else {
-            with(serializerUtil) {
-                ignoreZeroValues(context.shape, context.valueExpression) {
-                    serializeMemberValue(context, targetShape)
+            } else {
+                with(serializerUtil) {
+                    ignoreZeroValues(innerContext.shape, innerContext.valueExpression) {
+                        serializeMemberValue(innerContext, targetShape)
+                    }
                 }
             }
         }
@@ -364,26 +383,10 @@ class JsonSerializerGenerator(
         when (target) {
             is StringShape -> rust("$writer.string(${value.name}.as_str());")
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
-            is IntegerShape -> {
-                val rustType = symbolProvider.toSymbol(target).rustType()
-                val conversion = writable {
-                    if (rustType is RustType.Opaque) {
-                        rust("(*((${value.asRef()}).inner())).into()")
-                    } else {
-                        rust("(${value.asValue()}).into()")
-                    }
-                }
-                rustTemplate(
-                    "$writer.number(##[allow(clippy::useless_conversion)]#{Variant}::NegInt(#{Conversion:W}));",
-                    "Variant" to smithyTypes.member("Number"),
-                    "Conversion" to conversion,
-                )
-            }
             is NumberShape -> {
-                val numberType = when (symbolProvider.toSymbol(target).rustType()) {
-                    is RustType.Float -> "Float"
-                    // NegInt takes an i64 while PosInt takes u64. We need this to be signed here
-                    is RustType.Integer -> "NegInt"
+                val numberType = when (target) {
+                    is IntegerShape, is ByteShape, is LongShape, is ShortShape -> "NegInt"
+                    is DoubleShape, is FloatShape -> "Float"
                     else -> throw IllegalStateException("unreachable")
                 }
                 rust(
@@ -391,10 +394,12 @@ class JsonSerializerGenerator(
                     smithyTypes.member("Number"),
                 )
             }
+
             is BlobShape -> rust(
                 "$writer.string_unchecked(&#T(${value.asRef()}));",
                 RuntimeType.Base64Encode(runtimeConfig),
             )
+
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
@@ -405,18 +410,23 @@ class JsonSerializerGenerator(
                     "ConvertInto" to typeConversionGenerator.convertViaInto(target),
                 )
             }
+
             is CollectionShape -> jsonArrayWriter(context) { arrayName ->
                 serializeCollection(Context(arrayName, value, target))
             }
+
             is MapShape -> jsonObjectWriter(context) { objectName ->
                 serializeMap(Context(objectName, value, target))
             }
+
             is StructureShape -> jsonObjectWriter(context) { objectName ->
                 serializeStructure(StructContext(objectName, value.asRef(), target))
             }
+
             is UnionShape -> jsonObjectWriter(context) { objectName ->
                 serializeUnion(Context(objectName, value, target))
             }
+
             is DocumentShape -> rust("$writer.document(${value.asRef()});")
             else -> TODO(target.toString())
         }
@@ -449,7 +459,9 @@ class JsonSerializerGenerator(
         val keyName = safeName("key")
         val valueName = safeName("value")
         for (customization in customizations) {
-            customization.section(JsonSerializerSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(this)
+            customization.section(JsonSerializerSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(
+                this,
+            )
         }
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyExpression = "$keyName.as_str()"
