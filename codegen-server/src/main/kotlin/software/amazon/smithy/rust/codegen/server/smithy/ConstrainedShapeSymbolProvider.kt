@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -96,6 +97,14 @@ class ConstrainedShapeSymbolProvider(
                 }
             }
             is StringShape -> {
+                if (shape.isDirectlyConstrained(base)) {
+                    val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
+                    symbolBuilder(shape, rustType).locatedIn(Models).build()
+                } else {
+                    base.toSymbol(shape)
+                }
+            }
+            is IntegerShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
                     symbolBuilder(shape, rustType).locatedIn(Models).build()

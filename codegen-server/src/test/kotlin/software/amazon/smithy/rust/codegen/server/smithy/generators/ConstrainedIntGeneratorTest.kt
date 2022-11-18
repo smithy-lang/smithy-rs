@@ -85,7 +85,7 @@ class ConstrainedIntGeneratorTest {
                 name = "inner",
                 test = """
                     let constrained = ConstrainedInteger::try_from(${testCase.validInteger}).unwrap();
-                    assert_eq!(constrained.inner(), ${testCase.validInteger});
+                    assert_eq!(constrained.inner(), &${testCase.validInteger});
                 """,
             )
             unitTest(
@@ -108,7 +108,7 @@ class ConstrainedIntGeneratorTest {
             namespace test
 
             @range(min: -1, max: 69)
-            string ConstrainedInteger
+            integer ConstrainedInteger
         """.asSmithyModel()
         val constrainedIntegerShape = model.lookup<IntegerShape>("test#ConstrainedInteger")
 
