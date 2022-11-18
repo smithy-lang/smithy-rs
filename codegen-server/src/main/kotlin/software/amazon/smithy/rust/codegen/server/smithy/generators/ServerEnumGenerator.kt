@@ -4,7 +4,7 @@
  */
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -22,8 +21,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
 open class ServerEnumGenerator(
     val codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
-    shape: StringShape,
-) : EnumGenerator(codegenContext.model, codegenContext.symbolProvider, writer, shape, shape.expectTrait()) {
+    shape: EnumShape,
+) : EnumGenerator(codegenContext.model, codegenContext.symbolProvider, writer, shape) {
     override var target: CodegenTarget = CodegenTarget.SERVER
 
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
@@ -54,7 +53,7 @@ open class ServerEnumGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
-                val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
+                val enumValueSet = sortedMembers.joinToString(", ") { it.value }
                 val message = "Value {} at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
 
                 rustTemplate(

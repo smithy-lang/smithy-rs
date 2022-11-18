@@ -11,6 +11,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -21,7 +22,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -359,37 +359,22 @@ open class ServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
-            ServerEnumGenerator(codegenContext, writer, shape)
-        stringShape(shape, ::serverEnumGeneratorFactory)
-    }
-
-    protected fun stringShape(
-        shape: StringShape,
-        enumShapeGeneratorFactory: (codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) -> ServerEnumGenerator,
-    ) {
         if (shape.hasTrait<EnumTrait>()) {
-            logger.info("[rust-server-codegen] Generating an enum $shape")
-            rustCrate.useShapeWriter(shape) {
-                enumShapeGeneratorFactory(codegenContext, this, shape).render()
-                ConstrainedTraitForEnumGenerator(model, codegenContext.symbolProvider, this, shape).render()
-            }
+            throw CodegenException("Unnamed @enum shapes are unsupported: $shape")
         }
-
-        if (shape.hasTrait<EnumTrait>() && shape.hasTrait<LengthTrait>()) {
-            logger.warning(
-                """
-                String shape $shape has an `enum` trait and the `length` trait. This is valid according to the Smithy
-                IDL v1 spec, but it's unclear what the semantics are. In any case, the Smithy core libraries should enforce the
-                constraints (which it currently does not), not each code generator.
-                See https://github.com/awslabs/smithy/issues/1121f for more information.
-                """.trimIndent().replace("\n", " "),
-            )
-        } else if (!shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) {
                 ConstrainedStringGenerator(codegenContext, this, shape).render()
             }
+        }
+    }
+
+    override fun enumShape(shape: EnumShape) {
+        logger.info("[rust-server-codegen] Generating an enum $shape")
+        rustCrate.useShapeWriter(shape) {
+            ServerEnumGenerator(codegenContext, this, shape).render()
+            ConstrainedTraitForEnumGenerator(model, codegenContext.symbolProvider, this, shape).render()
         }
     }
 

@@ -6,9 +6,11 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -39,7 +41,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamN
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
@@ -211,10 +212,15 @@ class CodegenVisitor(
      * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) {
-                EnumGenerator(model, symbolProvider, this, shape, enum).render()
-            }
+        if (shape.hasTrait<EnumTrait>()) {
+            throw CodegenException("Unnamed @enum shapes are unsupported: $shape")
+        }
+        super.stringShape(shape)
+    }
+
+    override fun enumShape(shape: EnumShape) {
+        rustCrate.useShapeWriter(shape) {
+            EnumGenerator(model, symbolProvider, this, shape).render()
         }
     }
 
