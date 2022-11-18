@@ -65,7 +65,11 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
         CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
-        CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocol",
+            "json_rpc11",
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
         CodegenTest("aws.protocoltests.misc#MiscService", "misc", imports = listOf("$commonModels/misc.smithy")),
         CodegenTest(
             "com.amazonaws.ebs#Ebs", "ebs",
