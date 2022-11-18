@@ -15,6 +15,8 @@ use pyo3::{pyclass, pymethods};
 use thiserror::Error;
 use tokio_rustls::rustls::{Certificate, Error as RustTlsError, PrivateKey, ServerConfig};
 
+pub mod listener;
+
 /// PyTlsConfig represents TLS configuration created from Python.
 #[pyclass(name = "TlsConfig", text_signature = "(*, key_path, cert_path)")]
 #[derive(Clone)]
