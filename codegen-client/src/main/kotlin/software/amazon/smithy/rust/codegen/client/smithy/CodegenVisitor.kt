@@ -106,6 +106,8 @@ class CodegenVisitor(
      */
     internal fun baselineTransform(model: Model) =
         model
+            // Convert string shapes with an @enum trait to an enum shape
+            .let { ModelTransformer.create().changeStringEnumsToEnumShapes(model, true) }
             // Flattens mixins out of the model and removes them from the model
             .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
             // Add errors attached at the service level to the models
