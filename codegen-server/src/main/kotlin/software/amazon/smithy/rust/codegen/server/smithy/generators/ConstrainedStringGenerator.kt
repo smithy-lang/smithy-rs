@@ -134,10 +134,9 @@ private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTra
     writer.rustTemplate(
         """
         fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
-            static REGEX : #{OnceCell}::sync::OnceCell<#{Regex}::Regex> = #{OnceCell}::sync::OnceCell::new();
-            let regex = REGEX.get_or_init(|| #{Regex}::Regex::new("$pattern").unwrap());
+            static REGEX : #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new("$pattern").unwrap());
 
-            if regex.is_match(string) {
+            if REGEX.is_match(string) {
                 Ok(())
             } else {
                 Err($constraintViolation::Pattern("$pattern".to_owned()))
