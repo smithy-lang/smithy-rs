@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -94,6 +95,10 @@ private data class TraitInfo(
     }
 }
 
+/**
+ * Renders a `check_length` function to validate the string matches the
+ * required length indicated by the `@length` trait.
+ */
 private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait, constraintViolation: Symbol) {
     val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
         "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
@@ -116,6 +121,11 @@ private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait,
         """.trimIndent(),
     )
 }
+
+/**
+ * Renders a `check_pattern` function to validate the string matches the
+ * supplied regex in the `@pattern` trait.
+ */
 private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTrait, constraintViolation: Symbol) {
     // Escape `\`s to not end up with broken rust code in the presence of regexes with slashes.
     // This turns `Regex::new("^[\S\s]+$")` into `Regex::new("^[\\S\\s]+$")`.
@@ -139,6 +149,8 @@ private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTra
     )
 }
 
+private val supportedStringConstraintTraits = listOf(LengthTrait::class.java, PatternTrait::class.java)
+
 /**
  * [ConstrainedStringGenerator] generates a wrapper tuple newtype holding a constrained `String`.
  * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy
@@ -148,7 +160,6 @@ class ConstrainedStringGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: StringShape,
-    val constraints: List<AbstractTrait>,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -161,8 +172,12 @@ class ConstrainedStringGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val constraintsInfo: List<TraitInfo> =
+        supportedStringConstraintTraits
+            .mapNotNull { shape.getTrait(it).orNull() }
+            .mapNotNull(TraitInfo::fromTrait)
 
-    private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol, constraintsInfo: List<TraitInfo>) {
+    private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol) {
         writer.rustBlock("impl $name") {
             for (traitInfo in constraintsInfo) {
                 traitInfo.renderValidationFunctionDefinition(writer, constraintViolation)
@@ -190,7 +205,6 @@ class ConstrainedStringGenerator(
         val name = symbol.name
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
-        val constraintsInfo: List<TraitInfo> = constraints.mapNotNull(TraitInfo::fromTrait)
 
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
@@ -232,7 +246,7 @@ class ConstrainedStringGenerator(
             )
         }
 
-        renderTryFrom(inner, name, constraintViolation, constraintsInfo)
+        renderTryFrom(inner, name, constraintViolation)
 
         writer.rustTemplate(
             """
@@ -268,11 +282,11 @@ class ConstrainedStringGenerator(
 
         val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
         writer.withModule(RustModule(constraintViolationModuleName, RustMetadata(visibility = constrainedTypeVisibility))) {
-            renderConstraintViolationEnum(this, shape, constraintViolation, constraintsInfo)
+            renderConstraintViolationEnum(this, shape, constraintViolation)
         }
     }
 
-    private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol, constraintsInfo: List<TraitInfo>) {
+    private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
         writer.rustBlock(
             """
             ##[derive(Debug, PartialEq)]

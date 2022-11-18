@@ -14,7 +14,6 @@ import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
@@ -22,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
@@ -77,7 +75,7 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape, listOf(constrainedStringShape.expectTrait<LengthTrait>())).render()
+            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
 
             unitTest(
                 name = "try_from_success",
@@ -131,7 +129,7 @@ class ConstrainedStringGeneratorTest {
 
         val writer = RustWriter.forModule(ModelsModule.name)
 
-        ConstrainedStringGenerator(codegenContext, writer, constrainedStringShape, listOf(constrainedStringShape.expectTrait<LengthTrait>())).render()
+        ConstrainedStringGenerator(codegenContext, writer, constrainedStringShape).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) std::string::String);"
@@ -157,8 +155,8 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
         project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape, listOf(constrainedStringShape.expectTrait<LengthTrait>())).render()
-            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape, listOf(sensitiveConstrainedStringShape.expectTrait<LengthTrait>())).render()
+            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
+            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape).render()
 
             unitTest(
                 name = "non_sensitive_string_display_implementation",
