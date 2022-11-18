@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -135,8 +134,8 @@ private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTra
             }
         }
         """.trimIndent(),
-        "Regex" to ServerCargoDependency.Regex.asType(),
-        "OnceCell" to ServerCargoDependency.OnceCell.asType(),
+        "Regex" to ServerCargoDependency.Regex.toType(),
+        "OnceCell" to ServerCargoDependency.OnceCell.toType(),
     )
 }
 
