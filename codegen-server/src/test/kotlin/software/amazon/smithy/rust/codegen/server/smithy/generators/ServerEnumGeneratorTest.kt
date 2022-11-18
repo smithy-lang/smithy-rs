@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -36,7 +36,7 @@ class ServerEnumGeneratorTest {
 
     private val codegenContext = serverTestCodegenContext(model)
     private val writer = RustWriter.forModule("model")
-    private val shape = model.lookup<StringShape>("test#InstanceType")
+    private val shape = model.lookup<EnumShape>("test#InstanceType")
 
     @Test
     fun `it generates TryFrom, FromStr and errors for enums`() {
