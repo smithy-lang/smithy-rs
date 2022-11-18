@@ -45,7 +45,7 @@ class EventStreamErrorMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     payloadContentType: String,
 ) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
     private val operationErrorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType("MessageStreamError", smithyEventStream, "aws_smithy_http::event_stream").toSymbol()
     } else {
