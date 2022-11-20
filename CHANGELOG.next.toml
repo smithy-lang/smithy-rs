@@ -478,3 +478,9 @@ x-amzn-errortype: com.example.service#InvalidRequestException
 references = ["smithy-rs#1982"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = "Make generated enum `values()` functions callable in const contexts."
+references = []
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "lsr0"
