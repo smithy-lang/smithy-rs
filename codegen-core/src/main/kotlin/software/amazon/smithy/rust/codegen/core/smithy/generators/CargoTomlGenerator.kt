@@ -53,7 +53,15 @@ class CargoTomlGenerator(
         val cargoFeatures = features.map { it.name to it.deps }.toMutableList()
         if (features.isNotEmpty()) {
             cargoFeatures.add("default" to features.filter { it.default }.map { it.name })
+            // add serde related features
+            cargoFeatures.add("unstable-serde-serialize" to listOf())
+            cargoFeatures.add("unstable-serde-deserialize" to listOf())
         }
+
+        // add serde
+        val dep = dependencies.toMutableList()
+        dep.add(CargoDependency.Serde)
+        val newDependencies = dep.toList()
 
         val cargoToml = mapOf(
             "package" to listOfNotNull(
@@ -70,9 +78,9 @@ class CargoTomlGenerator(
                     ).toMap(),
                 ).toMap(),
             ).toMap(),
-            "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }
+            "dependencies" to newDependencies.filter { it.scope == DependencyScope.Compile }
                 .associate { it.name to it.toMap() },
-            "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
+            "dev-dependencies" to newDependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
             "features" to cargoFeatures.toMap(),
         ).deepMergeWith(manifestCustomizations)
