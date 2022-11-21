@@ -23,6 +23,10 @@ service ConstraintsService {
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
         QueryParamsTargetingMapOfListOfEnumStringOperation,
+
+        QueryParamsTargetingMapOfPatternStringOperation,
+        QueryParamsTargetingMapOfLengthPatternStringOperation,
+
         HttpPrefixHeadersTargetingLengthMapOperation,
         // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
         // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
@@ -95,6 +99,20 @@ operation QueryParamsTargetingMapOfListOfEnumStringOperation {
     input: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
     output: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
     errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-pattern-string", method: "POST")
+operation QueryParamsTargetingMapOfPatternStringOperation {
+    input: QueryParamsTargetingMapOfPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfPatternStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-length-pattern-string", method: "POST")
+operation QueryParamsTargetingMapOfLengthPatternStringOperation {
+    input: QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput,
+    errors: [ValidationException],
 }
 
 @http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "POST")
@@ -181,6 +199,16 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
+}
+
+structure QueryParamsTargetingMapOfPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfPatternString: MapOfPatternString
+}
+
+structure QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthPatternString: MapOfLengthPatternString,
 }
 
 structure HttpPrefixHeadersTargetingLengthMapOperationInputOutput {
@@ -335,6 +363,13 @@ string MaxLengthString
 @length(min: 69, max: 69)
 string FixedLengthString
 
+@pattern("[a-d]{5}")
+string PatternString
+
+@pattern("[a-f0-5]*")
+@length(min:5, max: 10)
+string LengthPatternString
+
 @mediaType("video/quicktime")
 @length(min: 1, max: 69)
 string MediaTypeLengthString
@@ -426,6 +461,16 @@ set ConBSet {
 
 set NestedSet {
     member: String
+}
+
+map MapOfPatternString {
+    key: String,
+    value: PatternString,
+}
+
+map MapOfLengthPatternString {
+    key: String,
+    value: LengthPatternString,
 }
 
 @length(min: 1, max: 69)
