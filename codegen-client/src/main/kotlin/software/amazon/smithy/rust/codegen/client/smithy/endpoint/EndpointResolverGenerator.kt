@@ -15,7 +15,6 @@ import software.amazon.smithy.rulesengine.language.syntax.fn.Function
 import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
-import software.amazon.smithy.rulesengine.language.syntax.rule.TreeRule
 import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
@@ -23,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asType
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.comment
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -195,9 +194,8 @@ class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, private val
     }
 
     private fun generateRulesList(rules: List<Rule>, suppressExhaustivenessCheck: Boolean = false) = writable {
-        val isExhaustive = isExhaustive(rules.last())
         rules.forEach { rule ->
-            rule.documentation.orNull()?.also { docs(it, newlinePrefix = "// ") }
+            rule.documentation.orNull()?.also { comment(escape(it)) }
             generateRule(rule)(this)
         }
         if (!isExhaustive(rules.last()) && !suppressExhaustivenessCheck) {

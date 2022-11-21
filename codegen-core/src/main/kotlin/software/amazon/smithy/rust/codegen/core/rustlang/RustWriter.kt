@@ -296,6 +296,15 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
 }
 
 /**
+ * Writes a comment into the code
+ *
+ * Equivalent to [docs] but lines are preceded with `// ` instead of `///`
+ */
+fun <T : AbstractCodeWriter<T>> T.comment(text: String, vararg args: Any): T {
+    return docs(text, *args, newlinePrefix = "// ")
+}
+
+/**
  * Generates a `#[deprecated]` attribute for [shape].
  */
 fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
