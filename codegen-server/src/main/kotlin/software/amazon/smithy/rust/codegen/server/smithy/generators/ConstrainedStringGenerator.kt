@@ -7,9 +7,9 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -31,10 +31,9 @@ import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
-
-private val supportedStringConstraintTraits = listOf(LengthTrait::class.java, PatternTrait::class.java)
 
 /**
  * [ConstrainedStringGenerator] generates a wrapper tuple newtype holding a constrained `String`.
@@ -212,7 +211,7 @@ private data class TraitInfo(
     val validationFunctionDefinition: (constraintViolation: Symbol) -> Writable,
 ) {
     companion object {
-        fun fromTrait(trait: AbstractTrait): TraitInfo? {
+        fun fromTrait(trait: Trait): TraitInfo? {
             return when (trait) {
                 is LengthTrait -> {
                     this.fromLengthTrait(trait)
