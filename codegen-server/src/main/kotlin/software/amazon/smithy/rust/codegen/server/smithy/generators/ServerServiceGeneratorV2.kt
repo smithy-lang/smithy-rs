@@ -343,7 +343,7 @@ class ServerServiceGeneratorV2(
 
                 /// Constructs a builder for [`$serviceName`].
                 ///
-                /// Use [`$serviceName::builder_without_plugins`] if you need to specify plugins.
+                /// Use [`$serviceName::builder_with_plugins`] if you need to specify plugins.
                 pub fn builder_without_plugins<Body>() -> $builderName<Body, #{SmithyHttpServer}::plugin::IdentityPlugin> {
                     Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin)
                 }
