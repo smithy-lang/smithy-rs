@@ -8,6 +8,5 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.model.traits.PatternTrait
 
 @Suppress("UnusedReceiverParameter")
-fun PatternTrait.validationErrorMessage(): String {
-    return "Value at '{}' failed to satisfy constraint: Member must satisfy regex '{}'."
-}
+fun PatternTrait.validationErrorMessage(): String =
+    "Value at '{}' failed to satisfy constraint: Member must satisfy regex '{}'."
