@@ -531,6 +531,7 @@ class HttpBindingGenerator(
         val memberShape = httpBinding.member
         val targetShape = model.expectShape(memberShape.target)
         val memberName = symbolProvider.toMemberName(memberShape)
+        val headerName = httpBinding.locationName
         val timestampFormat =
             index.determineTimestampFormat(memberShape, HttpBinding.Location.HEADER, defaultTimestampFormat)
         val renderErrorMessage = { headerValueVariableName: String ->
@@ -556,7 +557,7 @@ class HttpBindingGenerator(
                 if (targetShape is CollectionShape) {
                     renderMultiValuedHeader(
                         model,
-                        httpBinding.location,
+                        headerName,
                         variableName,
                         targetShape,
                         timestampFormat,
@@ -564,7 +565,7 @@ class HttpBindingGenerator(
                     )
                 } else {
                     renderHeaderValue(
-                        httpBinding.location,
+                        headerName,
                         variableName,
                         targetShape,
                         false,
@@ -578,7 +579,7 @@ class HttpBindingGenerator(
 
     private fun RustWriter.renderMultiValuedHeader(
         model: Model,
-        httpBindingLocation: HttpLocation,
+        headerName: String,
         variableName: String,
         shape: CollectionShape,
         timestampFormat: TimestampFormatTrait.Format,
@@ -587,7 +588,7 @@ class HttpBindingGenerator(
         val loopVariableName = safeName("inner")
         rustBlock("for $loopVariableName in $variableName") {
             this.renderHeaderValue(
-                httpBindingLocation,
+                headerName,
                 loopVariableName,
                 model.expectShape(shape.member.target),
                 true,
@@ -598,7 +599,7 @@ class HttpBindingGenerator(
     }
 
     private fun RustWriter.renderHeaderValue(
-        headerName: HttpLocation,
+        headerName: String,
         variableName: String,
         shape: Shape,
         isMultiValuedHeader: Boolean,
