@@ -44,7 +44,7 @@ open class ServerServiceGenerator(
     fun render() {
         rustCrate.lib {
             val serviceName = codegenContext.serviceShape.id.name.toString()
-            rust("##[doc(inline, hidden)]")
+            rust("##[doc(inline)]")
             rust("pub use crate::service::$serviceName;")
         }
 
