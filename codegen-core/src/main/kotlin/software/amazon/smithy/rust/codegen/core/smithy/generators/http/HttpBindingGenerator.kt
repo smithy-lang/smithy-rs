@@ -530,9 +530,7 @@ class HttpBindingGenerator(
         check(httpBinding.location == HttpLocation.HEADER)
         val memberShape = httpBinding.member
         val targetShape = model.expectShape(memberShape.target)
-        // length_string_header
         val memberName = symbolProvider.toMemberName(memberShape)
-        // X-Length
         val timestampFormat =
             index.determineTimestampFormat(memberShape, HttpBinding.Location.HEADER, defaultTimestampFormat)
         val renderErrorMessage = { headerValueVariableName: String ->
