@@ -64,7 +64,7 @@ class ConstrainedStringGenerator(
     private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol) {
         writer.rustBlock("impl $name") {
             for (traitInfo in constraintsInfo) {
-                rustTemplate("#ValidationFunction:W", "ValidationFunction" to traitInfo.validationFunctionDefinition(constraintViolation))
+                rustTemplate("#{ValidationFunction:W}", "ValidationFunction" to traitInfo.validationFunctionDefinition(constraintViolation))
             }
         }
 
@@ -77,7 +77,7 @@ class ConstrainedStringGenerator(
                 """,
             ) {
                 for (traitInfo in constraintsInfo) {
-                    rustTemplate("#TryFromCheck:W", "TryFromCheck" to traitInfo.tryFromCheck)
+                    rustTemplate("#{TryFromCheck:W}", "TryFromCheck" to traitInfo.tryFromCheck)
                 }
                 rust("Ok(Self(value))")
             }
@@ -178,8 +178,8 @@ class ConstrainedStringGenerator(
         ) {
             for (traitInfo in constraintsInfo) {
                 rustTemplate(
-                    "#ConstraintViolationVariant",
-                    "ConstraintViolationVariant:W" to traitInfo.constraintViolationVariant,
+                    "#{ConstraintViolationVariant:W}",
+                    "ConstraintViolationVariant" to traitInfo.constraintViolationVariant,
                 )
             }
         }
@@ -192,7 +192,7 @@ class ConstrainedStringGenerator(
                 ) {
                     rustBlock("match self") {
                         for (traitInfo in constraintsInfo) {
-                            rustTemplate("#ValidationExceptionField:W", "ValidationExceptionField" to traitInfo.asValidationExceptionField)
+                            rustTemplate("#{ValidationExceptionField:W}", "ValidationExceptionField" to traitInfo.asValidationExceptionField)
                         }
                     }
                 }
@@ -308,12 +308,12 @@ private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTra
     writer.rustTemplate(
         """
         fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
-            static REGEX : #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r#"$pattern"#).unwrap());
+            static REGEX : #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).unwrap());
 
             if REGEX.is_match(string) {
                 Ok(())
             } else {
-                Err($constraintViolation::Pattern(r#"$pattern"#))
+                Err($constraintViolation::Pattern(r##"$pattern"##))
             }
         }
         """,
