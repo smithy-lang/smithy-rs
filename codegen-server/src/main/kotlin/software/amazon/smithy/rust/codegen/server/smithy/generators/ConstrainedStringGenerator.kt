@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.escapedPattern
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -302,17 +301,17 @@ private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait,
  * supplied regex in the `@pattern` trait.
  */
 private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTrait, constraintViolation: Symbol) {
-    val pattern = patternTrait.escapedPattern()
+    val pattern = patternTrait.pattern
 
     writer.rustTemplate(
         """
         fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
-            static REGEX : #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new("$pattern").unwrap());
+            static REGEX : #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r#"$pattern"#).unwrap());
 
             if REGEX.is_match(string) {
                 Ok(())
             } else {
-                Err($constraintViolation::Pattern("$pattern"))
+                Err($constraintViolation::Pattern(r#"$pattern"#))
             }
         }
         """,
