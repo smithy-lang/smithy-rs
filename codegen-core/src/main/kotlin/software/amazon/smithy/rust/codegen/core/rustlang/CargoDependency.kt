@@ -82,7 +82,7 @@ class InlineDependency(
             visibility: Visibility,
             vararg additionalDependencies: RustDependency,
         ): InlineDependency {
-            val module = RustModule.newModule(name, visibility)
+            val module = RustModule.new(name, visibility)
             val filename = if (name.endsWith(".rs")) { name } else { "$name.rs" }
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")

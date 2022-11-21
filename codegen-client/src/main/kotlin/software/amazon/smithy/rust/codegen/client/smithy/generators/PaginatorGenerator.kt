@@ -76,7 +76,7 @@ class PaginatorGenerator private constructor(
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo =
         idx.getPaginationInfo(service, operation).orNull() ?: PANIC("failed to load pagination info")
-    private val module = RustModule.public("paginator", documentation = "Paginators for the service")
+    private val module = RustModule.public("paginator", "Paginators for the service")
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)

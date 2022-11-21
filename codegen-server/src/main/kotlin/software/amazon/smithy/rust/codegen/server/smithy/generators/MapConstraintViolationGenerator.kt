@@ -63,7 +63,7 @@ class MapConstraintViolationGenerator(
             Visibility.PUBCRATE
         }
         modelsModuleWriter.withInlineModule(
-            RustModule.newModule(
+            RustModule.new(
                 constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
                 constraintViolationVisibility,
             ),

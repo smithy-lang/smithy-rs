@@ -76,7 +76,7 @@ class UnconstrainedUnionGenerator(
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
-        unconstrainedModuleWriter.withInlineModule(RustModule.newModule(moduleName, Visibility.PUBCRATE)) {
+        unconstrainedModuleWriter.withInlineModule(RustModule.new(moduleName, Visibility.PUBCRATE)) {
             rustBlock(
                 """
                 ##[allow(clippy::enum_variant_names)]
@@ -133,7 +133,7 @@ class UnconstrainedUnionGenerator(
             Visibility.PUBCRATE
         }
         modelsModuleWriter.withInlineModule(
-            RustModule.newModule(
+            RustModule.new(
                 constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
                 constraintViolationVisibility,
             ),

@@ -383,7 +383,6 @@ fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
 fun handleOptionality(symbol: Symbol, member: MemberShape, nullableIndex: NullableIndex, nullabilityCheckMode: CheckMode): Symbol =
     symbol.letIf(nullableIndex.isMemberNullable(member, nullabilityCheckMode)) { symbol.makeOptional() }
 
-// TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
 private const val RUST_MODULE_KEY = "rustmodule"
 private const val SHAPE_KEY = "shape"

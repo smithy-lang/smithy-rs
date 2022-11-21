@@ -134,7 +134,7 @@ class ServerBuilderGenerator(
 
     fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
-        writer.withInlineModule(RustModule.newModule(moduleName, visibility)) {
+        writer.withInlineModule(RustModule.new(moduleName, visibility)) {
             renderBuilder(this)
         }
     }
