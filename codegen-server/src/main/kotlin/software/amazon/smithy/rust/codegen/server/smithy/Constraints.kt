@@ -23,15 +23,9 @@ import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-
-val UnconstrainedModule =
-    RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
-val ConstrainedModule =
-    RustModule.private("constrained", "Constrained types for constrained shapes.")
 
 /**
  * This file contains utilities to work with constrained shapes.
@@ -74,6 +68,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
         //  `required`, so we can't use `member.isOptional` here.
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
+
     is MapShape -> this.hasTrait<LengthTrait>()
     is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
     else -> false
@@ -134,7 +129,9 @@ fun Shape.typeNameContainsNonPublicType(
     publicConstrainedTypes: Boolean,
 ): Boolean = !publicConstrainedTypes && when (this) {
     is SimpleShape -> wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)
-    is MemberShape -> model.expectShape(this.target).typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+    is MemberShape -> model.expectShape(this.target)
+        .typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+
     is CollectionShape -> this.canReachConstrainedShape(model, symbolProvider)
     is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
     is StructureShape, is UnionShape -> false

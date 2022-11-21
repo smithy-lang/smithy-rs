@@ -100,7 +100,7 @@ class ProtocolTestGenerator(
                     Attribute.Custom("allow(unreachable_code, unused_variables)"),
                 ),
             )
-            writer.withInlineModule(RustModule.LeafModule(testModuleName, moduleMeta)) {
+            writer.withInlineModule(RustModule.LeafModule(testModuleName, moduleMeta, inline = true)) {
                 renderAllTestCases(allTests)
             }
         }

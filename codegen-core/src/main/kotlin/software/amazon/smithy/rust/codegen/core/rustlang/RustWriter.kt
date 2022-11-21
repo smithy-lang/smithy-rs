@@ -447,6 +447,9 @@ class RustWriter private constructor(
         module: RustModule.LeafModule,
         moduleWriter: Writable,
     ): RustWriter {
+        check(module.isInline()) {
+            "Only inline modules may be used with `withInlineModule`: $module"
+        }
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.

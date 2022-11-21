@@ -16,11 +16,15 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
 import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
@@ -75,22 +79,42 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilde
 class UnconstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
-    private val serviceShape: ServiceShape,
     private val publicConstrainedTypes: Boolean,
+    private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
+    private val visibility = when (publicConstrainedTypes) {
+        true -> Visibility.PUBLIC
+        false -> Visibility.PUBCRATE
+    }
 
+    /**
+     * Unconstrained type names are always suffixed with `Unconstrained` for clarity, even though we could dispense with it
+     * given that they all live inside the `unconstrained` module, so they don't collide with the constrained types.
+     */
+    private fun unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape: Shape): String {
+        check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
+        return RustReservedWords.escapeIfNeeded(shape.contextName(serviceShape).toPascalCase() + "Unconstrained")
+    }
+
+    // this is required because the `Name` field on the symbol is `Vec` (since usually it would be rendered as `Vec<Foo>`
+    // directly
     private fun unconstrainedSymbolForCollectionOrMapOrUnionShape(shape: Shape): Symbol {
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
-        val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape, serviceShape)
-        val namespace = "${UnconstrainedModule.fullyQualifiedPath()}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
-        val rustType = RustType.Opaque(name, namespace)
+        val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape)
+        val module = RustModule.new(
+            RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
+            // NOTE: this is to preserve the codegen diff, but pub(crate) modules are the same as private ones
+            visibility = Visibility.PUBCRATE,
+            parent = UnconstrainedModule,
+            inline = true,
+        )
+        val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
         return Symbol.builder()
             .rustType(rustType)
             .name(rustType.name)
-            .namespace(rustType.namespace, "::")
-            .locatedIn(UnconstrainedModule)
+            .locatedIn(module)
             .build()
     }
 
@@ -103,6 +127,7 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+
             is MapShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
                     unconstrainedSymbolForCollectionOrMapOrUnionShape(shape)
@@ -110,6 +135,7 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+
             is StructureShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
                     shape.serverBuilderSymbol(base, !publicConstrainedTypes)
@@ -117,6 +143,7 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+
             is UnionShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
                     unconstrainedSymbolForCollectionOrMapOrUnionShape(shape)
@@ -124,6 +151,7 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+
             is MemberShape -> {
                 // There are only two cases where we use this symbol provider on a member shape.
                 //
@@ -138,13 +166,19 @@ class UnconstrainedShapeSymbolProvider(
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)
                     // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config().nullabilityCheckMode)
+                    handleOptionality(
+                        handleRustBoxing(targetSymbol, shape),
+                        shape,
+                        nullableIndex,
+                        base.config().nullabilityCheckMode,
+                    )
                 } else {
                     base.toSymbol(shape)
                 }
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
             }
+
             is StringShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
                     symbolBuilder(shape, RustType.String).setDefault(Default.RustDefault).build()
@@ -152,15 +186,7 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+
             else -> base.toSymbol(shape)
         }
-}
-
-/**
- * Unconstrained type names are always suffixed with `Unconstrained` for clarity, even though we could dispense with it
- * given that they all live inside the `unconstrained` module, so they don't collide with the constrained types.
- */
-fun unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape: Shape, serviceShape: ServiceShape): String {
-    check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
-    return "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
 }

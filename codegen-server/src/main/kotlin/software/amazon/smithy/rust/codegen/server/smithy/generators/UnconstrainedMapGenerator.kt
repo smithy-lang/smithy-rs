@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -15,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -64,11 +64,10 @@ class UnconstrainedMapGenerator(
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val keySymbol = unconstrainedShapeSymbolProvider.toSymbol(keyShape)
         val valueSymbol = unconstrainedShapeSymbolProvider.toSymbol(valueShape)
 
-        unconstrainedModuleWriter.withInlineModule(RustModule.pubcrate(module)) {
+        unconstrainedModuleWriter.withInlineModule(symbol.module()) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]

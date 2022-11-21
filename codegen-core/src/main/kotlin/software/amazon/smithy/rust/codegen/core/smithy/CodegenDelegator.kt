@@ -47,10 +47,17 @@ open class RustCrate(
     private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
     private val features: MutableSet<Feature> = mutableSetOf()
 
+    // used to ensure we never create accidentally discard docs / incorrectly create modules with incorrect visibility
+    private var duplicateModuleWarningSystem: MutableMap<String, RustModule.LeafModule> = mutableMapOf()
+
     /**
      * Write into the module that this shape is [locatedIn]
      */
     fun useShapeWriter(shape: Shape, f: Writable) {
+        val module = symbolProvider.toSymbol(shape).module()
+        check(!module.isInline()) {
+            "Cannot use useShapeWriter with inline modules—use [RustWriter.withInlineModule] instead"
+        }
         withModule(symbolProvider.toSymbol(shape).module(), f)
     }
 
@@ -117,6 +124,17 @@ open class RustCrate(
         }
     }
 
+    private fun checkDups(module: RustModule.LeafModule) {
+        duplicateModuleWarningSystem[module.fullyQualifiedPath()]?.also { preexistingModule ->
+            check(module == preexistingModule) {
+                "Duplicate modules with differing properties were created! This will lead to non-deterministic behavior." +
+                    "\n Previous module: $preexistingModule." +
+                    "\n      New module: $module"
+            }
+        }
+        duplicateModuleWarningSystem[module.fullyQualifiedPath()] = module
+    }
+
     /**
      * Create a new module directly. The resulting module will be placed in `src/<modulename>.rs`
      */
@@ -127,6 +145,7 @@ open class RustCrate(
         when (module) {
             is RustModule.LibRs -> lib { moduleWriter(this) }
             is RustModule.LeafModule -> {
+                checkDups(module)
                 // Create a dependency which adds the mod statement for this module. This will be added to the writer
                 // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
                 val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
@@ -157,6 +176,11 @@ val OperationsModule = RustModule.public("operation", documentation = "All opera
 val ModelsModule = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs.")
 val InputsModule = RustModule.public("input", documentation = "Input structures for operations.")
 val OutputsModule = RustModule.public("output", documentation = "Output structures for operations.")
+
+val UnconstrainedModule =
+    RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
+val ConstrainedModule =
+    RustModule.private("constrained", "Constrained types for constrained shapes.")
 
 /**
  * Finalize all the writers by:

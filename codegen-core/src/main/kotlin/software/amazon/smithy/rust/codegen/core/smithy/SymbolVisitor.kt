@@ -135,7 +135,7 @@ fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
 }
 
 /** Set the symbolLocation for this symbol builder */
-fun Symbol.Builder.locatedIn(rustModule: RustModule): Symbol.Builder {
+fun Symbol.Builder.locatedIn(rustModule: RustModule.LeafModule): Symbol.Builder {
     val currentRustType = this.build().rustType()
     check(currentRustType is RustType.Opaque) {
         "Only `Opaque` can have their namespace updated"
@@ -390,8 +390,8 @@ private const val SYMBOL_DEFAULT = "symboldefault"
 private const val RENAMED_FROM_KEY = "renamedfrom"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
-fun Symbol.Builder.module(module: RustModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
-fun Symbol.module(): RustModule = this.expectProperty(RUST_MODULE_KEY, RustModule::class.java)
+fun Symbol.Builder.module(module: RustModule.LeafModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
+fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)
 
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
     return this.putProperty(RENAMED_FROM_KEY, name)

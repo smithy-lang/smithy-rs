@@ -185,6 +185,7 @@ class ServerProtocolTestGenerator(
                 ),
                 visibility = Visibility.PUBCRATE,
             ),
+            inline = true,
         )
 
         writer.withInlineModule(module) {
@@ -262,6 +263,7 @@ class ServerProtocolTestGenerator(
                     ),
                     visibility = Visibility.PRIVATE,
                 ),
+                inline = true,
             )
             writer.withInlineModule(module) {
                 renderAllTestCases(operationShape, allTests)

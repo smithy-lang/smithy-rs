@@ -84,6 +84,9 @@ object TestWorkspace {
                 version = "0.0.1"
                 """.trimIndent(),
             )
+            // ensure there at least an empty lib.rs file to avoid broken crates
+            newProject.resolve("src").mkdirs()
+            newProject.resolve("src/lib.rs").writeText("")
             subprojects.add(newProject.name)
             generate()
             return newProject

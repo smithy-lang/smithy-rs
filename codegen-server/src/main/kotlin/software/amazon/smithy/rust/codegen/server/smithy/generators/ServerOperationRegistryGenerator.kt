@@ -379,12 +379,13 @@ ${operationImplementationStubs(operations)}
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
         val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
 
-        val inputT = "${InputsModule.fullyQualifiedPath()}::${inputSymbol.name}"
-        val t = "${OutputsModule.fullyQualifiedPath()}::${outputSymbol.name}"
+        // using module names here to avoid generating `crate::...` since we've already added the import
+        val inputT = "${InputsModule.name}::${inputSymbol.name}"
+        val t = "${OutputsModule.name}::${outputSymbol.name}"
         val outputT = if (errors.isEmpty()) {
             t
         } else {
-            val e = "${ErrorsModule.fullyQualifiedPath()}::${errorSymbol.name}"
+            val e = "${ErrorsModule.name}::${errorSymbol.name}"
             "Result<$t, $e>"
         }
 

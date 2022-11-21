@@ -171,7 +171,6 @@ class ConstrainedStringGenerator(
             "From" to RuntimeType.From,
         )
 
-        val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
         writer.withInlineModule(constraintViolation.module()) {
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }

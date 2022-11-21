@@ -29,47 +29,38 @@ sealed class RustModule {
         val rustMetadata: RustMetadata,
         val documentation: String? = null,
         val parent: RustModule = LibRs,
+        val inline: Boolean = false,
     ) : RustModule() {
         init {
             check(!name.contains("::")) {
                 "Module names CANNOT contain `::`—modules must be nested with parent (name was: `$name`)"
             }
-
-            duplicateModuleWarningSystem[fullyQualifiedPath()]?.also { preexistingModule ->
-                check(this == preexistingModule) {
-                    "Duplicate modules with differing properties were created! This will lead to non-deterministic behavior." +
-                        "\n Previous module: $preexistingModule." +
-                        "\n New module: $this"
-                }
+            check(name != "") {
+                "Module name cannot be empty"
             }
-            duplicateModuleWarningSystem[fullyQualifiedPath()] = this
         }
     }
 
     companion object {
-        // used to ensure we never create accidentally discard docs / create variable visibility
-        private var duplicateModuleWarningSystem: MutableMap<String, LeafModule> = mutableMapOf()
 
         /** Creates a new module with the specified visibility */
         fun new(
             name: String,
             visibility: Visibility,
             documentation: String? = null,
+            inline: Boolean = false,
             parent: RustModule = LibRs,
         ): LeafModule {
-            return LeafModule(name, RustMetadata(visibility = visibility), documentation, parent = parent)
+            return LeafModule(name, RustMetadata(visibility = visibility), documentation, inline = inline, parent = parent)
         }
-
-        fun pubcrate(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PUBCRATE, documentation, parent)
 
         /** Creates a new public module */
         fun public(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PUBLIC, documentation = documentation, parent = parent)
+            new(name, visibility = Visibility.PUBLIC, documentation = documentation, inline = false, parent = parent)
 
         /** Creates a new private module */
         fun private(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PRIVATE, documentation = documentation, parent = parent)
+            new(name, visibility = Visibility.PRIVATE, documentation = documentation, inline = false, parent = parent)
 
         /* Common modules used across client, server and tests */
         val Config = public("config", documentation = "Configuration for the service.")
@@ -89,6 +80,11 @@ sealed class RustModule {
                 visibility = visibility,
                 documentation = "All operations that this crate can perform.",
             )
+    }
+
+    fun isInline(): Boolean = when (this) {
+        is LibRs -> false
+        is LeafModule -> this.inline
     }
 
     /**

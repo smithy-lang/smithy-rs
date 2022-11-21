@@ -8,9 +8,10 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
@@ -112,16 +113,16 @@ class UnionGeneratorTest {
             @deprecated
             union Bar { x: Integer }
         """.asSmithyModel()
-        val provider: SymbolProvider = testSymbolProvider(model)
-        val writer = RustWriter.root()
-        writer.rust("##![allow(deprecated)]")
-        writer.withInlineModule(RustModule.public("model")) {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.lib { rust("##![allow(deprecated)]") }
+        project.withModule(ModelsModule) {
             UnionGenerator(model, provider, this, model.lookup("test#Nested")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Foo")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Bar")).render()
         }
 
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion", unknownVariant: Boolean = true): RustWriter {

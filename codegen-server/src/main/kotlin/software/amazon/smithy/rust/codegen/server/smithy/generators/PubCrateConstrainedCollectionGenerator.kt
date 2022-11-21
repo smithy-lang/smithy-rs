@@ -7,10 +7,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
@@ -52,7 +52,6 @@ class PubCrateConstrainedCollectionGenerator(
         val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
 
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
-        val moduleName = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerConstrainedSymbol = if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
@@ -69,7 +68,7 @@ class PubCrateConstrainedCollectionGenerator(
             "From" to RuntimeType.From,
         )
 
-        writer.withInlineModule(RustModule.pubcrate(moduleName)) {
+        writer.withInlineModule(constrainedSymbol.module()) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
