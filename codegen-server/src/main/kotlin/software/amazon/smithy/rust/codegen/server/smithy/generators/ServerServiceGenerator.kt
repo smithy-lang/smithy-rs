@@ -68,7 +68,7 @@ open class ServerServiceGenerator(
                 RustMetadata(
                     visibility = Visibility.PUBLIC,
                     additionalAttributes = listOf(
-                        Attribute.Deprecated("0.52", "This module exports the deprecated `OperationRegistry`. Use the service builder exported from your root crate."),
+                        Attribute.Deprecated("0.52.0", "This module exports the deprecated `OperationRegistry`. Use the service builder exported from your root crate."),
                     ),
                 ),
                 """
