@@ -120,7 +120,7 @@ class ConstrainedIntegerGenerator(
                     if $condition {
                         Ok(Self(value))
                     } else {
-                        Err(#{ConstraintViolation}::Size(value))
+                        Err(#{ConstraintViolation}::Range(value))
                     }
                 }
             }
@@ -146,7 +146,7 @@ class ConstrainedIntegerGenerator(
                 """
                 ##[derive(Debug, PartialEq)]
                 pub enum ${constraintViolation.name} {
-                    Size($inner),
+                    Range($inner),
                 }
                 """,
             )
@@ -160,7 +160,7 @@ class ConstrainedIntegerGenerator(
                         rustBlock("match self") {
                             rust(
                                 """
-                                Self::Size(value) => crate::model::ValidationExceptionField {
+                                Self::Range(value) => crate::model::ValidationExceptionField {
                                     message: format!("${rangeTrait.validationErrorMessage()}", value, &path),
                                     path,
                                 },
