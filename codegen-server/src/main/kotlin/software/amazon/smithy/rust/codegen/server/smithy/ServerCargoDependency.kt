@@ -25,7 +25,7 @@ object ServerCargoDependency {
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.8.4"), scope = DependencyScope.Dev)
-    val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.7.0"))
+    val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
 }
