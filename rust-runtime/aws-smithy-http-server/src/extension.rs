@@ -25,8 +25,8 @@ use thiserror::Error;
 
 use crate::request::RequestParts;
 
-pub use crate::extract::extension::Extension;
-pub use crate::extract::extension::MissingExtension;
+pub use crate::request::extension::Extension;
+pub use crate::request::extension::MissingExtension;
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
 /// This extension type is set when it has been correctly determined that the request should be

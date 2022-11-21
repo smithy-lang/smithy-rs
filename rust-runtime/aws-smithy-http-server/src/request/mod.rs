@@ -45,6 +45,9 @@ use http::{request::Parts, Extensions, HeaderMap, Request, Uri};
 
 use crate::{rejection::any_rejections, response::IntoResponse};
 
+pub mod connect_info;
+pub mod extension;
+
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct RequestParts<B> {

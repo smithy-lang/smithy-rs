@@ -13,7 +13,6 @@ pub(crate) mod macros;
 pub mod body;
 pub(crate) mod error;
 pub mod extension;
-pub mod extract;
 #[doc(hidden)]
 pub mod instrumentation;
 #[doc(hidden)]
@@ -37,7 +36,7 @@ pub mod routers;
 
 #[doc(inline)]
 pub(crate) use self::error::Error;
-pub use self::extension::Extension;
+pub use self::request::extension::Extension;
 #[doc(inline)]
 pub use self::routing::Router;
 #[doc(inline)]

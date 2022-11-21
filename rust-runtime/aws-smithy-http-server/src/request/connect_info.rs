@@ -32,6 +32,8 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+//! Extractor for getting connection information from a client.
+
 use std::{
     convert::Infallible,
     fmt,
