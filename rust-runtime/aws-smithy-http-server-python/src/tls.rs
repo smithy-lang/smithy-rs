@@ -10,6 +10,7 @@
 
 use std::fs::File;
 use std::io::{self, BufReader, Read};
+use std::time::Duration;
 
 use pyo3::{pyclass, pymethods};
 use thiserror::Error;
@@ -18,19 +19,25 @@ use tokio_rustls::rustls::{Certificate, Error as RustTlsError, PrivateKey, Serve
 pub mod listener;
 
 /// PyTlsConfig represents TLS configuration created from Python.
-#[pyclass(name = "TlsConfig", text_signature = "(*, key_path, cert_path)")]
+#[pyclass(
+    name = "TlsConfig",
+    text_signature = "(*, key_path, cert_path, reload)"
+)]
 #[derive(Clone)]
 pub struct PyTlsConfig {
-    /// Absolute path of the DER-encoded RSA or PKCS private key.
+    /// Absolute path of the RSA or PKCS private key.
     key_path: String,
 
-    /// Absolute path of the DER-encoded x509 certificate.
+    /// Absolute path of the x509 certificate.
     cert_path: String,
+
+    /// Duration to reloading certificates.
+    reload_secs: u64,
 }
 
 impl PyTlsConfig {
     /// Build [ServerConfig] from [PyTlsConfig].
-    pub fn build(self) -> Result<ServerConfig, PyTlsConfigError> {
+    pub fn build(&self) -> Result<ServerConfig, PyTlsConfigError> {
         let cert_chain = self.cert_chain()?;
         let key_der = self.key_der()?;
         let mut config = ServerConfig::builder()
@@ -39,6 +46,11 @@ impl PyTlsConfig {
             .with_single_cert(cert_chain, key_der)?;
         config.alpn_protocols = vec!["h2".into(), "http/1.1".into()];
         Ok(config)
+    }
+
+    /// Returns reload duration.
+    pub fn reload_duration(&self) -> Duration {
+        Duration::from_secs(self.reload_secs)
     }
 
     /// Reads certificates from `cert_path`.
@@ -81,10 +93,13 @@ impl PyTlsConfig {
 #[pymethods]
 impl PyTlsConfig {
     #[new]
-    fn py_new(key_path: String, cert_path: String) -> Self {
+    #[args(reload_secs = "86400")] // <- 1 Day by default
+    fn py_new(key_path: String, cert_path: String, reload_secs: u64) -> Self {
+        // TODO: `reload: &PyDelta` segfaults, create an issue on PyO3
         Self {
             key_path,
             cert_path,
+            reload_secs,
         }
     }
 }
@@ -115,16 +130,30 @@ mod tests {
 
     use super::*;
 
+    const TEST_KEY: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/examples/pokemon-service-test/tests/testdata/localhost.key"
+    );
+    const TEST_CERT: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/examples/pokemon-service-test/tests/testdata/localhost.crt"
+    );
+
     #[test]
     fn creating_tls_config_in_python() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();
 
         let config = Python::with_gil(|py| {
-            let globals = [("TlsConfig", py.get_type::<PyTlsConfig>())].into_py_dict(py);
+            let globals = [
+                ("TEST_CERT", TEST_CERT.to_object(py)),
+                ("TEST_KEY", TEST_KEY.to_object(py)),
+                ("TlsConfig", py.get_type::<PyTlsConfig>().to_object(py)),
+            ]
+            .into_py_dict(py);
             let locals = PyDict::new(py);
             py.run(
                 r#"
-config = TlsConfig(key_path="key.rsa", cert_path="cert.pem")
+config = TlsConfig(key_path=TEST_KEY, cert_path=TEST_CERT, reload_secs=1000)
 "#,
                 Some(globals),
                 Some(locals),
@@ -132,24 +161,13 @@ config = TlsConfig(key_path="key.rsa", cert_path="cert.pem")
             locals.get_item("config").unwrap().extract::<PyTlsConfig>()
         })?;
 
-        assert_eq!("key.rsa", config.key_path);
-        assert_eq!("cert.pem", config.cert_path);
+        assert_eq!(TEST_KEY, config.key_path);
+        assert_eq!(TEST_CERT, config.cert_path);
+        assert_eq!(1000, config.reload_secs);
+
+        // Make sure build succeeds
+        config.build().unwrap();
 
         Ok(())
-    }
-
-    #[test]
-    fn building_server_config_from_tls_config() {
-        const TEST_KEY: &str = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/examples/pokemon-service-test/tests/testdata/localhost.key"
-        );
-        const TEST_CERT: &str = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/examples/pokemon-service-test/tests/testdata/localhost.crt"
-        );
-
-        let tls_config = PyTlsConfig::py_new(TEST_KEY.to_string(), TEST_CERT.to_string());
-        tls_config.build().unwrap();
     }
 }
