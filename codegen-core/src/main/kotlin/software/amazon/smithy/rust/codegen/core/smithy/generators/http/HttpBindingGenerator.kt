@@ -612,7 +612,7 @@ class HttpBindingGenerator(
             )(this)
         }
 
-        ifNotDefault(shape, variableName) { variableName ->
+        val block: RustWriter.(field: String) -> Unit = { variableName ->
             if (shape.isPrimitive()) {
                 val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
                 rust("let mut encoder = #T::from(${autoDeref(variableName)});", encoder)
@@ -638,6 +638,12 @@ class HttpBindingGenerator(
                     "invalid_field_error" to renderErrorMessage("header_value"),
                 )
             }
+        }
+        if (!isMultiValuedHeader) {
+            ifNotDefault(shape, variableName, block)
+        } else {
+            // Default values inside a collection should NOT be skipped
+            block(variableName)
         }
     }
 
