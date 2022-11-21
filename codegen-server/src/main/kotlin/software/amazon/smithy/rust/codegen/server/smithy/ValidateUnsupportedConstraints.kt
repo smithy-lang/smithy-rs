@@ -41,7 +41,7 @@ private sealed class UnsupportedConstraintMessageKind {
             This is not supported in the smithy-rs server SDK.
             ${ if (willSupport) "It will be supported in the future." else "" }
             See the tracking issue ($trackingIssue).
-            If you want to go ahead and generate the server SDK ignoring unsupported constraint traits, set the key `ignoreUnsupportedConstraintTraits`
+            If you want to go ahead and generate the server SDK ignoring unsupported constraint traits, set the key `ignoreUnsupportedConstraints`
             inside the `runtimeConfig.codegenConfig` JSON object in your `smithy-build.json` to `true`.
             """.trimIndent().replace("\n", " ")
 
