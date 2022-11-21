@@ -347,26 +347,30 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeMember(context: MemberContext) {
         val targetShape = model.expectShape(context.shape.target)
         safeName().also { local ->
-            // This variable assignment ensures that the name of the value expression is always a valid variable name
-            // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
-            // This allows customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
-            rust("""let $local = ${context.valueExpression.asRef()};""")
-            val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
-
-            for (customization in customizations) {
-                customization.section(JsonSerializerSection.BeforeSerializingMember(targetShape, innerContext.valueExpression))(this)
-            }
-
             if (symbolProvider.toSymbol(context.shape).isOptional()) {
-                rustBlock("if let Some($local) = ${innerContext.valueExpression.asRef()}") {
+                rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
+                    val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
+                    for (customization in customizations) {
+                        customization.section(JsonSerializerSection.BeforeSerializingMember(targetShape, innerContext.valueExpression))(this)
+                    }
                     serializeMemberValue(innerContext, targetShape)
                 }
                 if (context.writeNulls) {
                     rustBlock("else") {
-                        rust("${innerContext.writerExpression}.null();")
+                        rust("${context.writerExpression}.null();")
                     }
                 }
             } else {
+                // This variable assignment ensures that the name of the value expression is always a valid variable name
+                // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
+                // This allows customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
+                rust("""let $local = ${context.valueExpression.asRef()};""")
+                val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
+
+                for (customization in customizations) {
+                    customization.section(JsonSerializerSection.BeforeSerializingMember(targetShape, innerContext.valueExpression))(this)
+                }
+
                 with(serializerUtil) {
                     ignoreZeroValues(innerContext.shape, innerContext.valueExpression) {
                         serializeMemberValue(innerContext, targetShape)
