@@ -95,7 +95,7 @@ impl PyTlsConfig {
     #[new]
     #[args(reload_secs = "86400")] // <- 1 Day by default
     fn py_new(key_path: String, cert_path: String, reload_secs: u64) -> Self {
-        // TODO: `reload: &PyDelta` segfaults, create an issue on PyO3
+        // TODO(BugOnUpstream): `reload: &PyDelta` segfaults, create an issue on PyO3
         Self {
             key_path,
             cert_path,
