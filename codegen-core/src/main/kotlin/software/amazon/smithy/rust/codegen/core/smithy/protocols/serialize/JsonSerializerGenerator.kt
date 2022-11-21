@@ -65,9 +65,9 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
     data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) :
         JsonSerializerSection("BeforeIteratingOverMap")
 
-    /** Mutate a member value prior to it being serialized. **/
-    data class BeforeSerializingMember(val shape: Shape, val valueExpression: ValueExpression) :
-        JsonSerializerSection("BeforeSerializingMemberValue")
+    /** Manipulate the value of a non-null member prior to it being serialized. **/
+    data class BeforeSerializingNonNullMember(val shape: Shape, val valueExpression: ValueExpression) :
+        JsonSerializerSection("BeforeSerializingNonNullMember")
 
     /** Mutate the input object prior to finalization. */
     data class InputStruct(val structureShape: StructureShape, val jsonObject: String) :
@@ -351,7 +351,7 @@ class JsonSerializerGenerator(
                 rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
                     val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
                     for (customization in customizations) {
-                        customization.section(JsonSerializerSection.BeforeSerializingMember(targetShape, innerContext.valueExpression))(this)
+                        customization.section(JsonSerializerSection.BeforeSerializingNonNullMember(targetShape, innerContext.valueExpression))(this)
                     }
                     serializeMemberValue(innerContext, targetShape)
                 }
@@ -368,7 +368,7 @@ class JsonSerializerGenerator(
                 val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
 
                 for (customization in customizations) {
-                    customization.section(JsonSerializerSection.BeforeSerializingMember(targetShape, innerContext.valueExpression))(this)
+                    customization.section(JsonSerializerSection.BeforeSerializingNonNullMember(targetShape, innerContext.valueExpression))(this)
                 }
 
                 with(serializerUtil) {

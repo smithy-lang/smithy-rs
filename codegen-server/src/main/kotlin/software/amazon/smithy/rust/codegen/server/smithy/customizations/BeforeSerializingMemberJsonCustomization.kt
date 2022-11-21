@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstr
  */
 class BeforeSerializingMemberJsonCustomization(private val codegenContext: ServerCodegenContext) : JsonSerializerCustomization() {
     override fun section(section: JsonSerializerSection): Writable = when (section) {
-        is JsonSerializerSection.BeforeSerializingMember -> writable {
+        is JsonSerializerSection.BeforeSerializingNonNullMember -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(
                     section.shape,
                     codegenContext.model,
