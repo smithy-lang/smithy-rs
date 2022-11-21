@@ -110,9 +110,9 @@ class ConstrainedStringGenerator(
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
-        writer.rustBlockTemplate("impl $name") {
-            rust(
-                """
+        writer.rust(
+            """
+            impl $name {
                 /// Extracts a string slice containing the entire underlying `String`.
                 pub fn as_str(&self) -> &str {
                     &self.0
@@ -127,9 +127,8 @@ class ConstrainedStringGenerator(
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-                """,
-            )
-        }
+            }""",
+        )
 
         renderTryFrom(inner, name, constraintViolation)
 
