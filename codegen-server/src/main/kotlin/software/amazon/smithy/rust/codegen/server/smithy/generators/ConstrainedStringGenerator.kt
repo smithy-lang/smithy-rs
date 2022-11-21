@@ -127,7 +127,7 @@ class ConstrainedStringGenerator(
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-                """.trimIndent(),
+                """,
             )
         }
 
@@ -176,7 +176,7 @@ class ConstrainedStringGenerator(
             """
             ##[derive(Debug, PartialEq)]
             pub enum ${constraintViolation.name}
-            """.trimIndent(),
+            """,
         ) {
             for (traitInfo in constraintsInfo) {
                 traitInfo.renderConstraintViolationVariant(this)
@@ -240,7 +240,7 @@ private data class TraitInfo(
                             message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
                             path,
                         },
-                        """.trimIndent(),
+                        """,
                     )
                 },
                 { writer, constraintViolation -> renderLengthValidation(writer, lengthTrait, constraintViolation) },
@@ -261,7 +261,7 @@ private data class TraitInfo(
                             message: format!("${patternTrait.validationErrorMessage()}", &path, pattern),
                             path
                         },
-                        """.trimIndent(),
+                        """,
                     )
                 },
                 { writer, constraintViolation -> renderPatternValidation(writer, patternTrait, constraintViolation) },
@@ -293,7 +293,7 @@ private fun renderLengthValidation(writer: RustWriter, lengthTrait: LengthTrait,
                 Err($constraintViolation::Length(length))
             }
         }
-        """.trimIndent(),
+        """,
     )
 }
 
@@ -315,7 +315,7 @@ private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTra
                 Err($constraintViolation::Pattern("$pattern"))
             }
         }
-        """.trimIndent(),
+        """,
         "Regex" to ServerCargoDependency.Regex.toType(),
         "OnceCell" to ServerCargoDependency.OnceCell.toType(),
     )
