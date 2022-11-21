@@ -621,7 +621,7 @@ class HttpBindingGenerator(
                 shape,
                 timestampFormat,
                 variableName,
-                isListHeader = isMultiValuedHeader,
+                isMultiValuedHeader = isMultiValuedHeader,
             )
             val safeName = safeName("formatted")
             write("let $safeName = $formatted;")
@@ -669,7 +669,7 @@ class HttpBindingGenerator(
                     valueTargetShape,
                     timestampFormat,
                     "v",
-                    isListHeader = false,
+                    isMultiValuedHeader = false,
                 )
                 };
                     let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
@@ -705,11 +705,11 @@ class HttpBindingGenerator(
         target: Shape,
         timestampFormat: TimestampFormatTrait.Format,
         targetName: String,
-        isListHeader: Boolean,
+        isMultiValuedHeader: Boolean,
     ): String {
         fun quoteValue(value: String): String {
             // Timestamp shapes are not quoted in header lists
-            return if (isListHeader && !target.isTimestampShape) {
+            return if (isMultiValuedHeader && !target.isTimestampShape) {
                 val quoteFn = writer.format(headerUtil.member("quote_header_value"))
                 "$quoteFn($value)"
             } else {
