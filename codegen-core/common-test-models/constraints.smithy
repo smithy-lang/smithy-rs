@@ -161,8 +161,10 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     // @httpHeader("X-Length-MediaType")
     // lengthStringHeaderWithMediaType: MediaTypeLengthString,
 
-    @httpHeader("X-Length-Set")
-    lengthStringSetHeader: SetOfLengthString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpHeader("X-Length-Set")
+    // lengthStringSetHeader: SetOfLengthString,
 
     @httpHeader("X-Length-List")
     lengthStringListHeader: ListOfLengthString,
@@ -192,8 +194,10 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpQuery("lengthStringList")
     lengthStringListQuery: ListOfLengthString,
 
-    @httpQuery("lengthStringSet")
-    lengthStringSetQuery: SetOfLengthString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpQuery("lengthStringSet")
+    // lengthStringSetQuery: SetOfLengthString,
 
     @httpQuery("rangeIntegerList")
     rangeIntegerListQuery: ListOfRangeInteger,
@@ -309,7 +313,9 @@ structure ConA {
     conBList: ConBList,
     conBList2: ConBList2,
 
-    conBSet: ConBSet,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // conBSet: ConBSet,
 
     conBMap: ConBMap,
 
@@ -319,7 +325,9 @@ structure ConA {
     enumString: EnumString,
 
     listOfLengthString: ListOfLengthString,
-    setOfLengthString: SetOfLengthString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfLengthString: SetOfLengthString,
     mapOfLengthString: MapOfLengthString,
 
     listOfRangeInteger: ListOfRangeInteger,
@@ -361,7 +369,10 @@ map MapOfListOfEnumString {
 
 map MapOfSetOfLengthString {
     key: LengthString,
-    value: SetOfLengthString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // value: SetOfLengthString,
+    value: ListOfLengthString
 }
 
 map MapOfSetOfRangeInteger {
@@ -409,7 +420,9 @@ union ConstrainedUnion {
 
     constrainedStructure: ConB,
     conBList: ConBList,
-    conBSet: ConBSet,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // conBSet: ConBSet,
     conBMap: ConBMap,
 }
 
@@ -491,13 +504,15 @@ list NestedList {
     member: ConB
 }
 
-set ConBSet {
-    member: NestedSet
-}
-
-set NestedSet {
-    member: String
-}
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// set ConBSet {
+//     member: NestedSet
+// }
+//
+// set NestedSet {
+//     member: String
+// }
 
 @length(min: 1, max: 69)
 map ConBMap {

@@ -225,6 +225,27 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
+    fun `it should detect when the unique items trait is used`() {
+        val model =
+            """
+            $baseModel
+            
+            structure TestInputOutput {
+                uniqueItemsList: UniqueItemsList
+            }
+            
+            @uniqueItems
+            list UniqueItemsList {
+                member: String
+            }
+            """.asSmithyModel()
+        val validationResult = validateModel(model)
+
+        validationResult.messages shouldHaveSize 1
+        validationResult.messages[0].message shouldContain "The list shape `test#UniqueItemsList` has the constraint trait `smithy.api#uniqueItems` attached"
+    }
+
+    @Test
     fun `it should abort when ignoreUnsupportedConstraints is false and unsupported constraints are used`() {
         val validationResult = validateModel(constraintTraitOnStreamingBlobShapeModel, ServerCodegenConfig())
 

@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -32,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 fun HttpTrait.uriFormatString(): String {
@@ -54,7 +56,7 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
  * Generates methods to serialize and deserialize requests based on the HTTP trait. Specifically:
  * 1. `fn update_http_request(builder: http::request::Builder) -> Builder`
  *
- * This method takes a builder (perhaps pre configured with some headers) from the caller and sets the HTTP
+ * This method takes a builder (perhaps pre-configured with some headers) from the caller and sets the HTTP
  * headers & URL based on the HTTP trait implementation.
  */
 class RequestBindingGenerator(
@@ -71,7 +73,7 @@ class RequestBindingGenerator(
     private val httpBindingGenerator =
         HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape, ::builderSymbol)
     private val index = HttpBindingIndex.of(model)
-    private val Encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
+    private val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -207,22 +209,56 @@ class RequestBindingGenerator(
                 val memberShape = param.member
                 val memberSymbol = symbolProvider.toSymbol(memberShape)
                 val memberName = symbolProvider.toMemberName(memberShape)
-                val outerTarget = model.expectShape(memberShape.target)
-                ifSet(outerTarget, memberSymbol, "&_input.$memberName") { field ->
-                    // if `param` is a list, generate another level of iteration
-                    listForEach(outerTarget, field) { innerField, targetId ->
-                        val target = model.expectShape(targetId)
-                        rust(
-                            "query.push_kv(${param.locationName.dq()}, ${
-                            paramFmtFun(writer, target, memberShape, innerField)
-                            });",
+                val target = model.expectShape(memberShape.target)
+
+                if (memberShape.isRequired) {
+                    val codegenScope = arrayOf(
+                        "BuildError" to OperationBuildError(runtimeConfig).missingField(
+                            memberName,
+                            "cannot be empty or unset",
+                        ),
+                    )
+                    val derefName = safeName("inner")
+                    rust("let $derefName = &_input.$memberName;")
+                    if (memberSymbol.isOptional()) {
+                        rustTemplate(
+                            "let $derefName = $derefName.as_ref().ok_or_else(|| #{BuildError:W})?;",
+                            *codegenScope,
                         )
+                    }
+
+                    // Strings that aren't enums must be checked to see if they're empty
+                    if (target.isStringShape && !target.hasTrait<EnumTrait>()) {
+                        rustBlock("if $derefName.is_empty()") {
+                            rustTemplate("return Err(#{BuildError:W});", *codegenScope)
+                        }
+                    }
+
+                    paramList(target, derefName, param, writer, memberShape)
+                } else {
+                    ifSet(target, memberSymbol, "&_input.$memberName") { field ->
+                        // if `param` is a list, generate another level of iteration
+                        paramList(target, field, param, writer, memberShape)
                     }
                 }
             }
             writer.rust("Ok(())")
         }
         return true
+    }
+
+    private fun RustWriter.paramList(
+        outerTarget: Shape,
+        field: String,
+        param: HttpBinding,
+        writer: RustWriter,
+        memberShape: MemberShape,
+    ) {
+        listForEach(outerTarget, field) { innerField, targetId ->
+            val target = model.expectShape(targetId)
+            val value = paramFmtFun(writer, target, memberShape, innerField)
+            rust("""query.push_kv("${param.locationName}", $value);""")
+        }
     }
 
     /**
@@ -234,6 +270,7 @@ class RequestBindingGenerator(
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_string"))
                 "&$func(&$targetName)"
             }
+
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.QUERY, protocol.defaultTimestampFormat)
@@ -241,11 +278,13 @@ class RequestBindingGenerator(
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_timestamp"))
                 "&$func($targetName, ${writer.format(timestampFormatType)})?"
             }
+
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")
             }
+
             else -> {
-                "${writer.format(Encoder)}::from(${autoDeref(targetName)}).encode()"
+                "${writer.format(encoder)}::from(${autoDeref(targetName)}).encode()"
             }
         }
     }
@@ -272,6 +311,7 @@ class RequestBindingGenerator(
                 }
                 rust("let $outputVar = $func($input, #T);", encodingStrategy)
             }
+
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.LABEL, protocol.defaultTimestampFormat)
@@ -279,10 +319,11 @@ class RequestBindingGenerator(
                 val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
                 rust("let $outputVar = $func($input, ${format(timestampFormatType)})?;")
             }
+
             else -> {
                 rust(
                     "let mut ${outputVar}_encoder = #T::from(${autoDeref(input)}); let $outputVar = ${outputVar}_encoder.encode();",
-                    Encoder,
+                    encoder,
                 )
             }
         }

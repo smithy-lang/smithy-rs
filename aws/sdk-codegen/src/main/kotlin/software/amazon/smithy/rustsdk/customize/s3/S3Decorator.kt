@@ -66,8 +66,8 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
         return model.letIf(applies(service.id)) {
             ModelTransformer.create().mapShapes(model) { shape ->
                 shape.letIf(isInInvalidXmlRootAllowList(shape)) {
-                    logger.info("Adding AllowInvalidXmlRoot trait to $shape")
-                    (shape as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+                    logger.info("Adding AllowInvalidXmlRoot trait to $it")
+                    (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
                 }
             }
         }
