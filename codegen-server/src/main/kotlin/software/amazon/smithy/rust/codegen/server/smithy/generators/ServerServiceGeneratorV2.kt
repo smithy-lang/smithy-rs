@@ -355,7 +355,7 @@ class ServerServiceGeneratorV2(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
-                /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::routing::into_make_service_with_connect_info::ConnectInfo).
+                /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::routing::ConnectInfo).
                 pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
                     #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
                 }
@@ -372,7 +372,7 @@ class ServerServiceGeneratorV2(
 
                 /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
                 ///
-                /// This has the effect of erasing all types accumulated via [`layer`].
+                /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
                 pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
                     S: #{Tower}::Service<

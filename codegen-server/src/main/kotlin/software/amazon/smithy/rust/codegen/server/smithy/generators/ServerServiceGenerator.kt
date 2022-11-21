@@ -77,7 +77,7 @@ open class ServerServiceGenerator(
 
                 ## Deprecation
 
-                This service builder is deprecated - use [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder`] instead.
+                This service builder is deprecated - use [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder_with_plugins`] or [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder_without_plugins`] instead.
                 """,
             ),
         ) {

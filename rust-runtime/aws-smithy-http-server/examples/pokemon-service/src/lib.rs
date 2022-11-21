@@ -57,7 +57,7 @@ struct PokemonTranslations {
 /// **NOTE: It is up to the implementation of the state structure to handle concurrency by protecting**
 /// **its attributes using synchronization mechanisms.**
 ///
-/// The framework stores the `Arc<T>` inside an [`http::Extensions`] and conveniently passes it to
+/// The framework stores the `Arc<T>` inside an `http::Extensions` and conveniently passes it to
 /// the operation's implementation, making it able to handle operations with two different async signatures:
 /// * `FnOnce(InputType) -> Future<OutputType>`
 /// * `FnOnce(InputType, Extension<Arc<T>>) -> Future<OutputType>`
