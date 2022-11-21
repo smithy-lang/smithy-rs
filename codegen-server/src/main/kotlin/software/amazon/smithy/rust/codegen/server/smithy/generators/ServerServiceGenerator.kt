@@ -75,7 +75,7 @@ open class ServerServiceGenerator(
                 Contains the [`operation_registry::OperationRegistry`], a place where
                 you can register your service's operation implementations.
 
-                # Deprecation
+                ## Deprecation
 
                 This service builder is deprecated - use [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder`] instead.
                 """,
