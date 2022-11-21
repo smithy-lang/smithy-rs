@@ -69,7 +69,7 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
             }
         }
 
-        is HttpBindingSection.BeforeRenderingHeaders,
+        is HttpBindingSection.BeforeRenderingHeaderValue,
         is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
         -> emptySection
     }
@@ -82,7 +82,7 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
 class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
     HttpBindingCustomization() {
     override fun section(section: HttpBindingSection): Writable = when (section) {
-        is HttpBindingSection.BeforeRenderingHeaders -> writable {
+        is HttpBindingSection.BeforeRenderingHeaderValue -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(
                     section.shape,
                     codegenContext.model,

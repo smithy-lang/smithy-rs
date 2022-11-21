@@ -83,8 +83,8 @@ sealed class HttpBindingSection(name: String) : Section(name) {
     data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: MapShape) :
         HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
 
-    data class BeforeRenderingHeaders(val variableName: String, val shape: Shape) :
-        HttpBindingSection("BeforeRenderingHeaders")
+    data class BeforeRenderingHeaderValue(val variableName: String, val shape: Shape) :
+        HttpBindingSection("BeforeRenderingHeaderValue")
 
     data class AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoAHashMapOfHttpPrefixHeaders")
@@ -607,7 +607,7 @@ class HttpBindingGenerator(
     ) {
         for (customization in customizations) {
             customization.section(
-                HttpBindingSection.BeforeRenderingHeaders(variableName, shape),
+                HttpBindingSection.BeforeRenderingHeaderValue(variableName, shape),
             )(this)
         }
 
