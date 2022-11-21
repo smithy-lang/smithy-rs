@@ -4,13 +4,13 @@
  */
 
 // This program is exported as a binary named `pokemon-service`.
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
-use aws_smithy_http_server::{plugin::PluginPipeline, AddExtensionLayer};
+use aws_smithy_http_server::plugin::PluginPipeline;
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, get_storage,
-    plugin::PrintExt, setup_tracing, State,
+    plugin::PrintExt, setup_tracing,
 };
 use pokemon_service_server_sdk::service::PokemonService;
 
