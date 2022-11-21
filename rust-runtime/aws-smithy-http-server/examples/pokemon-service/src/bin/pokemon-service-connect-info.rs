@@ -14,7 +14,7 @@ use pokemon_service_server_sdk::{
     error::{GetStorageError, NotAuthorized},
     input::GetStorageInput,
     output::GetStorageOutput,
-    service::PokemonService,
+    PokemonService,
 };
 
 #[derive(Parser, Debug)]

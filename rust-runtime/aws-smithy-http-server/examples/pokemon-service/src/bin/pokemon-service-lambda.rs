@@ -11,7 +11,7 @@ use pokemon_service::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, get_storage,
     plugin::PrintExt, setup_tracing, State,
 };
-use pokemon_service_server_sdk::service::PokemonService;
+use pokemon_service_server_sdk::PokemonService;
 
 #[tokio::main]
 pub async fn main() {
