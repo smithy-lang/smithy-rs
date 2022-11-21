@@ -32,6 +32,11 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+//! Types and traits for extracting data from requests.
+//!
+//! See [Accessing Un-modelled data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
+//! a comprehensive overview.
+
 use std::{
     convert::Infallible,
     future::{ready, Future, Ready},
