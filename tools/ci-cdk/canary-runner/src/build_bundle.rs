@@ -64,6 +64,7 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
         ReleaseTag::from_str("v0.4.1").unwrap(), // first version to add support for paginators
+        ReleaseTag::from_str("release-2022-10-26").unwrap() // first version to add and use the `SdkError::into_service_error` method
     ];
 }
 
