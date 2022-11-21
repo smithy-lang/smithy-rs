@@ -249,17 +249,20 @@ private data class TraitInfo(
         }
 
         private fun fromPatternTrait(patternTrait: PatternTrait): TraitInfo {
+            val pattern = patternTrait.pattern
+
             return TraitInfo(
-                { rust("Self::check_pattern(&value)?;") },
+                { rust("let value = Self::check_pattern(value)?;") },
                 {
                     docs("Error when a string doesn't satisfy its `@pattern`.")
-                    rust("Pattern(&'static str),")
+                    docs("Contains the String that failed the pattern.")
+                    rust("Pattern(String),")
                 },
                 {
                     rust(
                         """
-                        Self::Pattern(pattern) => crate::model::ValidationExceptionField {
-                            message: format!("${patternTrait.validationErrorMessage()}", &path, pattern),
+                        Self::Pattern(string) => crate::model::ValidationExceptionField {
+                            message: format!("${patternTrait.validationErrorMessage()}", &string, &path, r##"$pattern"##),
                             path
                         },
                         """,
@@ -307,13 +310,13 @@ private fun renderPatternValidation(writer: RustWriter, patternTrait: PatternTra
 
     writer.rustTemplate(
         """
-        fn check_pattern(string: &str) -> Result<(), $constraintViolation> {
+        fn check_pattern(string: String) -> Result<String, $constraintViolation> {
             static REGEX : #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).unwrap());
 
-            if REGEX.is_match(string) {
-                Ok(())
+            if REGEX.is_match(&string) {
+                Ok(string)
             } else {
-                Err($constraintViolation::Pattern(r##"$pattern"##))
+                Err($constraintViolation::Pattern(string))
             }
         }
         """,

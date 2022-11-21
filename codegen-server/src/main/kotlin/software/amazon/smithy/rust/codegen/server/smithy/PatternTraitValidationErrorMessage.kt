@@ -9,4 +9,4 @@ import software.amazon.smithy.model.traits.PatternTrait
 
 @Suppress("UnusedReceiverParameter")
 fun PatternTrait.validationErrorMessage(): String =
-    "Value at '{}' failed to satisfy constraint: Member must satisfy regex '{}'."
+    "Value {} at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}"
