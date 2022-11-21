@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -97,7 +96,7 @@ class XmlBindingTraitParserGenerator(
     data class Ctx(val tag: String, val accum: String?)
 
     private val symbolProvider = codegenContext.symbolProvider
-    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).asType()
+    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).toType()
     private val xmlDecodeError = smithyXml.member("decode::XmlDecodeError")
 
     private val scopedDecoder = smithyXml.member("decode::ScopedDecoder")
@@ -111,7 +110,7 @@ class XmlBindingTraitParserGenerator(
         "next_start_element" to smithyXml.member("decode::next_start_element"),
         "try_data" to smithyXml.member("decode::try_data"),
         "ScopedDecoder" to scopedDecoder,
-        "aws_smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType(),
+        "aws_smithy_types" to CargoDependency.smithyTypes(runtimeConfig).toType(),
     )
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)

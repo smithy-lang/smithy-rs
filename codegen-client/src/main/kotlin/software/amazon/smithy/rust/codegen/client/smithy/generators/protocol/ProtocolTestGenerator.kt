@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -68,9 +67,8 @@ class ProtocolTestGenerator(
     private val instantiator = clientInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
-        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
+        "SmithyHttp" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType(),
+        "AssertEq" to CargoDependency.PrettyAssertions.toType().member("assert_eq!"),
     )
 
     sealed class TestCase {
@@ -138,12 +136,12 @@ class ProtocolTestGenerator(
         testModuleWriter: RustWriter,
         block: Writable,
     ) {
-        testModuleWriter.setNewlinePrefix("/// ")
+        testModuleWriter.newlinePrefix = "/// "
         testCase.documentation.map {
             testModuleWriter.writeWithNoFormatting(it)
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
-        testModuleWriter.setNewlinePrefix("")
+        testModuleWriter.newlinePrefix = ""
         TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
@@ -187,8 +185,8 @@ class ProtocolTestGenerator(
                 rustTemplate(
                     """
                     let mut http_request = http_request;
-                    let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(#{Http}::Uri::from_static(${withScheme.dq()}));
-                    ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
+                    let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(${withScheme.dq()}).expect("valid endpoint");
+                    ep.set_endpoint(http_request.uri_mut(), parts.acquire().get()).expect("valid endpoint");
                     """,
                     *codegenScope,
                 )
@@ -283,7 +281,7 @@ class ProtocolTestGenerator(
             """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
-            "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
+            "parse_http_response" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType()
                 .member("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {

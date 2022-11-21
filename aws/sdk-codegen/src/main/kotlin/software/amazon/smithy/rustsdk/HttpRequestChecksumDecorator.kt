@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -32,9 +31,9 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
         "http_body_checksum", visibility = Visibility.PUBLIC,
         CargoDependency.Http,
         CargoDependency.HttpBody,
-        CargoDependency.SmithyHttp(this),
-        CargoDependency.SmithyChecksums(this),
-        CargoDependency.SmithyTypes(this),
+        CargoDependency.smithyHttp(this),
+        CargoDependency.smithyChecksums(this),
+        CargoDependency.smithyTypes(this),
         CargoDependency.Bytes,
         CargoDependency.Tracing,
         this.sigAuth(),
@@ -105,7 +104,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             };
             """,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to CargoDependency.SmithyChecksums(runtimeConfig).asType().member("ChecksumAlgorithm"),
+            "ChecksumAlgorithm" to CargoDependency.smithyChecksums(runtimeConfig).toType().member("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing
