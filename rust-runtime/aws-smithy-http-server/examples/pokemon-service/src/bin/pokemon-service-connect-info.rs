@@ -31,7 +31,7 @@ struct Args {
 /// Retrieves the user's storage. No authentication required for locals.
 pub async fn get_storage_with_local_approved(
     input: GetStorageInput,
-    connect_info: Extension<ConnectInfo<SocketAddr>>,
+    connect_info: ConnectInfo<SocketAddr>,
 ) -> Result<GetStorageOutput, GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
     let local = connect_info.0 .0.ip() == "127.0.0.1".parse::<IpAddr>().unwrap();
