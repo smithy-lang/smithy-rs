@@ -14,7 +14,6 @@ import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -26,7 +25,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCode
 import java.util.stream.Stream
 
 class ConstrainedStringGeneratorTest {
-    val a = PatternTrait("something")
     data class TestCase(val model: Model, val validString: String, val invalidString: String)
 
     class ConstrainedStringGeneratorTestProvider : ArgumentsProvider {
@@ -50,7 +48,7 @@ class ConstrainedStringGeneratorTest {
                 """
                 @length(min: 3, max: 10)
                 @pattern("^a string$")
-                """.trimIndent(),
+                """,
                 "a string", "an invalid string",
             ),
             Triple("@pattern(\"123\")", "some pattern 123 in the middle", "no pattern at all"),
