@@ -12,6 +12,10 @@ use aws_smithy_http::body::SdkBody;
 use aws_types::region::SigningRegion;
 use aws_types::Credentials;
 use aws_types::SigningService;
+use http::Uri;
+use once_cell::sync::Lazy;
+use regex::Regex;
+use std::borrow::Cow;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
@@ -20,6 +24,9 @@ pub type SigningError = aws_sigv4::http_request::SigningError;
 
 const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
     `expires_in` duration because the credentials used to sign it will expire first.";
+
+static TWO_OR_MORE_LEADING_FORWARD_SLASHES: Lazy<Regex> =
+    Lazy::new(|| Regex::new("^(/|%2F){2,}").unwrap());
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum SigningAlgorithm {
@@ -185,6 +192,19 @@ impl SigV4Signer {
         let settings = Self::settings(operation_config);
         let signing_params = Self::signing_params(settings, credentials, request_config);
 
+        // The following is _not_ part of URI path normalization as required by constructing the canonical request.
+        // While URI path normalization should be disabled for S3, multiple leading forward slashes in the URI path
+        // must be deduped from `request` for any service, including S3. Failure to do so will result in the
+        // `SignatureDoesNotMatch` error.
+        if let Cow::Owned(forward_slashes_deduped) =
+            dedupe_leading_forward_slashes(request.uri().path())
+        {
+            let mut parts = request.uri().clone().into_parts();
+            parts.path_and_query = Some(forward_slashes_deduped.parse().unwrap());
+
+            *request.uri_mut() = Uri::from_parts(parts).unwrap();
+        }
+
         let (signing_instructions, signature) = {
             // A body that is already in memory can be signed directly. A body that is not in memory
             // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
@@ -217,12 +237,17 @@ impl SigV4Signer {
     }
 }
 
+fn dedupe_leading_forward_slashes(uri_path: &str) -> Cow<'_, str> {
+    TWO_OR_MORE_LEADING_FORWARD_SLASHES.replace(uri_path, "/")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{RequestConfig, SigV4Signer, EXPIRATION_WARNING};
+    use super::{dedupe_leading_forward_slashes, RequestConfig, SigV4Signer, EXPIRATION_WARNING};
     use aws_sigv4::http_request::SigningSettings;
     use aws_types::region::SigningRegion;
     use aws_types::{Credentials, SigningService};
+    use std::borrow::Cow;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
 
@@ -256,5 +281,56 @@ mod tests {
 
         SigV4Signer::signing_params(settings, &credentials, &request_config);
         assert!(logs_contain(EXPIRATION_WARNING));
+    }
+
+    #[test]
+    fn dedupe_leading_forward_slashes_should_work_when_input_contains_leading_forward_slashes() {
+        assert_eq!(
+            dedupe_leading_forward_slashes("//foo/bar"),
+            Cow::<'_, str>::Owned("/foo/bar".to_owned())
+        );
+        assert_eq!(
+            dedupe_leading_forward_slashes("///foo/bar"),
+            Cow::<'_, str>::Owned("/foo/bar".to_owned())
+        );
+    }
+
+    #[test]
+    fn dedupe_leading_forward_slashes_should_work_when_input_contains_percent_encoded_leading_forward_slashes(
+    ) {
+        assert_eq!(
+            dedupe_leading_forward_slashes("/%2Ffoo/bar"),
+            Cow::<'_, str>::Owned("/foo/bar".to_owned())
+        );
+        assert_eq!(
+            dedupe_leading_forward_slashes("//%2Ffoo/bar"),
+            Cow::<'_, str>::Owned("/foo/bar".to_owned())
+        );
+        assert_eq!(
+            dedupe_leading_forward_slashes("/%2F/foo/bar"),
+            Cow::<'_, str>::Owned("/foo/bar".to_owned())
+        );
+    }
+
+    #[test]
+    fn dedupe_leading_forward_slashes_should_not_modify_input_when_multiple_slashes_appear_in_the_middle_of_input(
+    ) {
+        assert_eq!(
+            dedupe_leading_forward_slashes("/foo//bar"),
+            Cow::<'_, str>::Borrowed("/foo//bar")
+        );
+        assert_eq!(
+            dedupe_leading_forward_slashes("/foo/%2Fbar"),
+            Cow::<'_, str>::Borrowed("/foo/%2Fbar")
+        );
+    }
+
+    #[test]
+    fn dedupe_leading_forward_slashes_should_not_modify_input_when_input_starts_with_a_single_forward_slash(
+    ) {
+        assert_eq!(
+            dedupe_leading_forward_slashes("/foo/bar"),
+            Cow::<'_, str>::Borrowed("/foo/bar")
+        );
     }
 }
