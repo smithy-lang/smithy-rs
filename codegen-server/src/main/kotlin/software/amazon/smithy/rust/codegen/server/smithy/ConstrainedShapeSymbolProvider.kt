@@ -96,15 +96,7 @@ class ConstrainedShapeSymbolProvider(
                     symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
                 }
             }
-            is StringShape -> {
-                if (shape.isDirectlyConstrained(base)) {
-                    val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-                    symbolBuilder(shape, rustType).locatedIn(Models).build()
-                } else {
-                    base.toSymbol(shape)
-                }
-            }
-            is IntegerShape -> {
+            is StringShape, is IntegerShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
                     symbolBuilder(shape, rustType).locatedIn(Models).build()

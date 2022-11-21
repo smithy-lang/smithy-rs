@@ -7,14 +7,19 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import java.util.stream.Stream
 
 const val baseModelString =
     """
@@ -32,13 +37,17 @@ const val baseModelString =
 
     structure TestInputOutput {
         constrainedString: ConstrainedString,
+        constrainedInteger: ConstrainedInteger,
         constrainedMap: ConstrainedMap,
         unconstrainedMap: TransitivelyConstrainedMap
     }
 
     @length(min: 1, max: 69)
     string ConstrainedString
-    
+
+    @range(min: 10, max: 29)
+    integer ConstrainedInteger
+
     string UnconstrainedString
 
     @length(min: 1, max: 69)
@@ -64,24 +73,31 @@ class ConstrainedShapeSymbolProviderTest {
     private val symbolProvider = serverTestSymbolProvider(model, serviceShape)
     private val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
 
-    private val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
-    private val constrainedMapType = constrainedShapeSymbolProvider.toSymbol(constrainedMapShape).rustType()
+    @ParameterizedTest
+    @MethodSource("getShapes")
+    fun `it should return a constrained type for a constrained shape`(shapeName: String, shapeCheck: (Shape) -> Boolean) {
+        val constrainedShape = model.lookup<Shape>("test#$shapeName")
+        assert(shapeCheck(constrainedShape))
+        val constrainedType = constrainedShapeSymbolProvider.toSymbol(constrainedShape).rustType()
 
-    @Test
-    fun `it should return a constrained string type for a constrained string shape`() {
-        val constrainedStringShape = model.lookup<StringShape>("test#ConstrainedString")
-        val constrainedStringType = constrainedShapeSymbolProvider.toSymbol(constrainedStringShape).rustType()
-
-        constrainedStringType shouldBe RustType.Opaque("ConstrainedString", "crate::model")
+        constrainedType shouldBe RustType.Opaque(shapeName, "crate::model")
     }
 
-    @Test
-    fun `it should return a constrained map type for a constrained map shape`() {
-        constrainedMapType shouldBe RustType.Opaque("ConstrainedMap", "crate::model")
+    companion object {
+        @JvmStatic
+        fun getShapes(): Stream<Arguments> {
+            return Stream.of(
+                Arguments.of("ConstrainedInteger", { s: Shape -> s.isIntegerShape }),
+                Arguments.of("ConstrainedString", { s: Shape -> s.isStringShape }),
+                Arguments.of("ConstrainedMap", { s: Shape -> s.isMapShape }),
+            )
+        }
     }
 
     @Test
     fun `it should not blindly delegate to the base symbol provider when the shape is an aggregate shape and is not directly constrained`() {
+        val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
+        val constrainedMapType = constrainedShapeSymbolProvider.toSymbol(constrainedMapShape).rustType()
         val unconstrainedMapShape = model.lookup<MapShape>("test#TransitivelyConstrainedMap")
         val unconstrainedMapType = constrainedShapeSymbolProvider.toSymbol(unconstrainedMapShape).rustType()
 
