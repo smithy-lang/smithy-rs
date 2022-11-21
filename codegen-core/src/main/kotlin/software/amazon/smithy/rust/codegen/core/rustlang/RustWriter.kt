@@ -15,6 +15,8 @@ import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -460,13 +462,10 @@ class RustWriter private constructor(
     }
 
     /**
-     * Generate a wrapping if statement around a field.
-     *
-     * - If the field is optional, it will only be called if the field is present
-     * - If the field is an unboxed primitive, it will only be called if the field is non-zero
-     *
+     * Generate a wrapping if statement around a nullable field.
+     * It will only be called if the field is not `None`.
      */
-    fun ifSet(shape: Shape, member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
+    fun ifSome(member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
         when {
             member.isOptional() -> {
                 val derefName = safeName("inner")
@@ -475,16 +474,42 @@ class RustWriter private constructor(
                 }
             }
 
-            shape is NumberShape -> rustBlock("if ${outerField.removePrefix("&")} != 0") {
+            else -> this.block(outerField)
+        }
+    }
+
+    /**
+     * Generate a wrapping if statement around a primitive field.
+     * The specified block will only be called if the field is not set to its default value - `0` for
+     * numbers, `false` for booleans.
+     */
+    fun ifNotDefault(shape: Shape, outerField: String, block: RustWriter.(field: String) -> Unit) {
+        when (shape) {
+            is FloatShape, is DoubleShape -> rustBlock("if ${autoDeref(outerField)} != 0.0") {
                 block(outerField)
             }
 
-            shape is BooleanShape -> rustBlock("if ${outerField.removePrefix("&")}") {
+            is NumberShape -> rustBlock("if ${autoDeref(outerField)} != 0") {
+                block(outerField)
+            }
+
+            is BooleanShape -> rustBlock("if ${autoDeref(outerField)}") {
                 block(outerField)
             }
 
             else -> this.block(outerField)
         }
+    }
+
+    /**
+     * Generate a wrapping if statement around a field.
+     *
+     * - If the field is optional, it will only be called if the field is present
+     * - If the field is an unboxed primitive, it will only be called if the field is non-zero
+     *
+     */
+    fun ifSet(shape: Shape, member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
+        ifSome(member, outerField) { local -> ifNotDefault(shape, local, block) }
     }
 
     fun listForEach(
@@ -545,7 +570,8 @@ class RustWriter private constructor(
     inner class RustWriteableInjector : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             @Suppress("UNCHECKED_CAST")
-            val func = t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
+            val func =
+                t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
             val innerWriter = RustWriter(filename, namespace, printWarning = false)
             func(innerWriter)
             innerWriter.dependencies.forEach { addDependency(it) }

@@ -530,10 +530,6 @@ class HttpBindingGenerator(
         check(httpBinding.location == HttpLocation.HEADER)
         val memberShape = httpBinding.member
         val targetShape = model.expectShape(memberShape.target)
-
-        // 👇🏻 Needed for determining optionality
-        val memberSymbol = symbolProvider.toSymbol(memberShape)
-
         // length_string_header
         val memberName = symbolProvider.toMemberName(memberShape)
         // X-Length
@@ -556,15 +552,9 @@ class HttpBindingGenerator(
         safeName().also { local ->
             // This variable assignment ensures that the name of the value expression is always a valid variable name
             // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
-            // This allows customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
+            // This allows later customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
             rust("""let $local = &input.$memberName;""")
-            for (customization in customizations) {
-                customization.section(
-                    HttpBindingSection.BeforeRenderingHeaders(local, targetShape),
-                )(this)
-            }
-
-            ifSet(targetShape, memberSymbol, "&$local") { variableName ->
+            ifSome(symbolProvider.toSymbol(memberShape), local) { variableName ->
                 if (targetShape is CollectionShape) {
                     renderMultiValuedHeader(
                         model,
@@ -617,30 +607,38 @@ class HttpBindingGenerator(
         timestampFormat: TimestampFormatTrait.Format,
         renderErrorMessage: (String) -> Writable,
     ) {
-        if (shape.isPrimitive()) {
-            val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
-            rust("let mut encoder = #T::from(${autoDeref(variableName)});", encoder)
+        for (customization in customizations) {
+            customization.section(
+                HttpBindingSection.BeforeRenderingHeaders(variableName, shape),
+            )(this)
         }
-        val formatted = headerFmtFun(
-            this,
-            shape,
-            timestampFormat,
-            variableName,
-            isListHeader = isMultiValuedHeader,
-        )
-        val safeName = safeName("formatted")
-        write("let $safeName = $formatted;")
-        rustBlock("if !$safeName.is_empty()") {
-            rustTemplate(
-                """
-                let header_value = $safeName;
-                let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
-                    #{invalid_field_error:W}
-                })?;
-                builder = builder.header("$headerName", header_value);
-                """,
-                "invalid_field_error" to renderErrorMessage("header_value"),
+
+        ifNotDefault(shape, variableName) { variableName ->
+            if (shape.isPrimitive()) {
+                val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
+                rust("let mut encoder = #T::from(${autoDeref(variableName)});", encoder)
+            }
+            val formatted = headerFmtFun(
+                this,
+                shape,
+                timestampFormat,
+                variableName,
+                isListHeader = isMultiValuedHeader,
             )
+            val safeName = safeName("formatted")
+            write("let $safeName = $formatted;")
+            rustBlock("if !$safeName.is_empty()") {
+                rustTemplate(
+                    """
+                    let header_value = $safeName;
+                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                        #{invalid_field_error:W}
+                    })?;
+                    builder = builder.header("$headerName", header_value);
+                    """,
+                    "invalid_field_error" to renderErrorMessage("header_value"),
+                )
+            }
         }
     }
 
@@ -654,20 +652,28 @@ class HttpBindingGenerator(
         val timestampFormat =
             index.determineTimestampFormat(memberShape, HttpBinding.Location.HEADER, defaultTimestampFormat)
 
-        ifSet(targetShape, memberSymbol, "&input.$memberName") { field ->
+        ifSet(targetShape, memberSymbol, "&input.$memberName") { local ->
             for (customization in customizations) {
                 customization.section(
-                    HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(field, targetShape),
+                    HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(local, targetShape),
                 )(this)
             }
             rustTemplate(
                 """
-                for (k, v) in $field {
+                for (k, v) in $local {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{invalid_header_name:W}
                     })?;
-                    let header_value = ${headerFmtFun(this, valueTargetShape, timestampFormat, "v", isListHeader = false)};
+                    let header_value = ${
+                headerFmtFun(
+                    this,
+                    valueTargetShape,
+                    timestampFormat,
+                    "v",
+                    isListHeader = false,
+                )
+                };
                     let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                         #{invalid_header_value:W}
                     })?;
