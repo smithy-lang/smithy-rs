@@ -482,5 +482,5 @@ author = "david-perez"
 [[smithy-rs]]
 message = "Make generated enum `values()` functions callable in const contexts."
 references = ["smithy-rs#2011"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "lsr0"
