@@ -378,7 +378,7 @@ string FixedLengthString
 string PatternString
 
 @pattern("[a-f0-5]*")
-@length(min:5, max: 10)
+@length(min: 5, max: 10)
 string LengthPatternString
 
 @mediaType("video/quicktime")
