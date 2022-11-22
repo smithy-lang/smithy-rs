@@ -321,6 +321,79 @@ class ServerServiceGeneratorV2(
 
         rustTemplate(
             """
+            /// The [`$serviceName`] is the place where you can register
+            /// your service's operation implementations.
+            ///
+            /// Use [`$builderName`] to construct the
+            /// `$serviceName`. For each of the [operations] modeled in
+            /// your Smithy service, you need to provide an implementation in the
+            /// form of a Rust async function or closure that takes in the
+            /// operation's input as their first parameter, and returns the
+            /// operation's output. If your operation is fallible (i.e. it
+            /// contains the `errors` member in your Smithy model), the function
+            /// implementing the operation has to be fallible (i.e. return a
+            /// [`Result`]). **You must register an implementation for all
+            /// operations with the correct signature**, or your application
+            /// will fail to compile.
+            ///
+            /// [`$serviceName`] implements [`tower::make::MakeService`], a _service
+            /// factory_. You can feed this value to a [Hyper server], and the
+            /// server will instantiate and [`serve`] your service, calling [`$serviceName::into_make_service`].
+            ///
+            /// [`$serviceName::into_make_service_with_connect_info`] converts $serviceName into [`tower::make::MakeService`]
+            /// with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
+            /// You can write your implementations to be passed in the connection information, populated by the [Hyper server].
+            ///
+            /// Here's a full example to get you started:
+            ///
+            /// ```rust
+            /// use std::net::SocketAddr;
+            /// use pokemon_service_server_sdk::{input, output, error};
+            ///
+            /// ##[tokio::main]
+            /// pub async fn main() {
+            ///    let app = PokemonService::builder_without_plugins()
+            ///        .check_health(check_health)
+            ///        .do_nothing(do_nothing)
+            ///        .get_pokemon_species(get_pokemon_species)
+            ///        .build()
+            ///        .expect("failed to build an instance of PokemonService");
+            ///
+            ///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
+            ///        .parse()
+            ///        .expect("unable to parse the server bind address and port");
+            ///
+            ///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+            ///
+            ///    // Run your service!
+            ///    // if let Err(err) = server.await {
+            ///    //   eprintln!("server error: {}", err);
+            ///    // }
+            /// }
+            ///
+            /// /// Health check operation, to check the service is up
+            /// /// Not (yet) a deep check
+            /// async fn check_health(input: input::CheckHealthInput) -> Result<output::CheckHealthOutput, error::CheckHealthError> {
+            ///     todo!()
+            /// }
+            ///
+            /// /// DoNothing operation, used to stress test the framework.
+            /// async fn do_nothing(input: input::DoNothingInput) -> Result<output::DoNothingOutput, error::DoNothingError> {
+            ///     todo!()
+            /// }
+            ///
+            /// /// Retrieve information about a Pokémon species.
+            /// async fn get_pokemon_species(input: input::GetPokemonSpeciesInput) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
+            ///     todo!()
+            /// }
+            ///
+            /// ```
+            ///
+            /// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
+            /// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
+            /// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+            /// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
+            /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
