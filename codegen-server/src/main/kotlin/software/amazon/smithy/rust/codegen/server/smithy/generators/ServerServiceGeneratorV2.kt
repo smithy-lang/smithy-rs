@@ -198,6 +198,9 @@ class ServerServiceGeneratorV2(
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
             ///
             /// Forgetting to register a handler for one or more operations will result in an error.
+            ///
+            /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
+            /// unspecified route requested.
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
                 let router = {
