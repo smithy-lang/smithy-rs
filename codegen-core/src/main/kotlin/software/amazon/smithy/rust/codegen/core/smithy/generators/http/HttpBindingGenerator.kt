@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGen
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
@@ -553,7 +554,15 @@ class HttpBindingGenerator(
             // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
             // This allows later customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
             rust("""let $local = &input.$memberName;""")
-            ifSome(symbolProvider.toSymbol(memberShape), local) { variableName ->
+            val memberSymbol = symbolProvider.toSymbol(memberShape)
+            // If a header is of a primitive type and required (e.g. `bool`), we do not serialize it on the
+            // wire if it's set to the default value for that primitive type (e.g. `false` for `bool`).
+            // If the header is optional, instead, we want to serialize it if it has been set by the user to the
+            // default value for that primitive type (e.g. `Some(false)` for an `Option<bool>` header).
+            // If a header is multivalued, we always want to serialize its primitive members, regardless of their
+            // values.
+            val serializePrimitiveValuesIfDefault = memberSymbol.isOptional() || (targetShape is CollectionShape)
+            ifSome(memberSymbol, local) { variableName ->
                 if (targetShape is CollectionShape) {
                     renderMultiValuedHeader(
                         model,
@@ -571,6 +580,7 @@ class HttpBindingGenerator(
                         false,
                         timestampFormat,
                         renderErrorMessage,
+                        serializePrimitiveValuesIfDefault,
                     )
                 }
             }
@@ -591,9 +601,10 @@ class HttpBindingGenerator(
                 headerName,
                 loopVariableName,
                 model.expectShape(shape.member.target),
-                true,
+                isMultiValuedHeader = true,
                 timestampFormat,
                 renderErrorMessage,
+                serializeIfDefault = true,
             )
         }
     }
@@ -605,6 +616,7 @@ class HttpBindingGenerator(
         isMultiValuedHeader: Boolean,
         timestampFormat: TimestampFormatTrait.Format,
         renderErrorMessage: (String) -> Writable,
+        serializeIfDefault: Boolean,
     ) {
         for (customization in customizations) {
             customization.section(
@@ -639,11 +651,10 @@ class HttpBindingGenerator(
                 )
             }
         }
-        if (!isMultiValuedHeader) {
-            ifNotDefault(shape, variableName, block)
-        } else {
-            // Default values inside a collection should NOT be skipped
+        if (serializeIfDefault) {
             block(variableName)
+        } else {
+            ifNotDefault(shape, variableName, block)
         }
     }
 
