@@ -7,7 +7,7 @@ The `cdk.json` file tells the CDK Toolkit how to synthesize the infrastructure.
 
 ## Canary local development
 
-Sometimes it's useful to only deploy the the canary resources to a test AWS account to iterate
+Sometimes it's useful to only deploy the canary resources to a test AWS account to iterate
 on the `canary-runner` and `canary-lambda`. To do this, run the following:
 
 ```bash
