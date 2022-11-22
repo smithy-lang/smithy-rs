@@ -169,8 +169,10 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpHeader("X-Length-List")
     lengthStringListHeader: ListOfLengthString,
 
-    @httpHeader("X-Range-Integer-Set")
-    rangeIntegerSetHeader: SetOfRangeInteger,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpHeader("X-Range-Integer-Set")
+    // rangeIntegerSetHeader: SetOfRangeInteger,
 
     @httpHeader("X-Range-Integer-List")
     rangeIntegerListHeader: ListOfRangeInteger,
@@ -202,8 +204,10 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpQuery("rangeIntegerList")
     rangeIntegerListQuery: ListOfRangeInteger,
 
-    @httpQuery("rangeIntegerSet")
-    rangeIntegerSetQuery: SetOfRangeInteger,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpQuery("rangeIntegerSet")
+    // rangeIntegerSetQuery: SetOfRangeInteger,
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
@@ -331,7 +335,9 @@ structure ConA {
     mapOfLengthString: MapOfLengthString,
 
     listOfRangeInteger: ListOfRangeInteger,
-    setOfRangeInteger: SetOfRangeInteger,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfRangeInteger: SetOfRangeInteger,
     mapOfRangeInteger: MapOfRangeInteger,
 
     nonStreamingBlob: NonStreamingBlob
@@ -375,10 +381,12 @@ map MapOfSetOfLengthString {
     value: ListOfLengthString
 }
 
-map MapOfSetOfRangeInteger {
-    key: LengthString,
-    value: SetOfRangeInteger,
-}
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// map MapOfSetOfRangeInteger {
+//     key: LengthString,
+//     value: SetOfRangeInteger,
+// }
 
 @length(min: 2, max: 8)
 list LengthListOfLengthString {
@@ -450,9 +458,11 @@ list ListOfLengthString {
     member: LengthString
 }
 
-set SetOfRangeInteger {
-    member: RangeInteger
-}
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// set SetOfRangeInteger {
+//     member: RangeInteger
+// }
 
 list ListOfRangeInteger {
     member: RangeInteger
