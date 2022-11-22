@@ -5,7 +5,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use aws_smithy_http_server::routing::ConnectInfo;
+use aws_smithy_http_server::request::connect_info::ConnectInfo;
 use clap::Parser;
 use pokemon_service::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, setup_tracing,

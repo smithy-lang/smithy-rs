@@ -32,7 +32,7 @@ pub mod routers;
 
 #[doc(inline)]
 pub(crate) use self::error::Error;
-pub use self::extension::Extension;
+pub use self::request::extension::Extension;
 #[doc(inline)]
 #[allow(deprecated)]
 pub use self::routing::Router;
