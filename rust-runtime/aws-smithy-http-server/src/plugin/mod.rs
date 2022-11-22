@@ -39,7 +39,7 @@
 //! # use aws_smithy_http_server::plugin::*;
 //! # let a = (); let b = ();
 //! // Combine `Plugin`s `a` and `b`
-//! let plugin = PluginPipeline::empty()
+//! let plugin = PluginPipeline::new()
 //!     .push(a)
 //!     .push(b);
 //! ```
