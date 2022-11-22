@@ -3,10 +3,47 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The plugin system allows for parameterized modification of [`Operation`]s during the build procedure.
+//! The plugin system allows the user to build middleware with an awareness of the operation its applied to.
 //!
 //! The system centers around the [`Plugin`] trait. In addition, this module provides helpers for composing and
 //! combining [`Plugin`]s.
+//!
+//! # Filtered application of a HTTP [`Layer`](tower::Layer)
+//!
+//! ```
+//! # use aws_smithy_http_server::plugin::*;
+//! # let layer = ();
+//! // Create a `Plugin` from a HTTP `Layer`
+//! let plugin = HttpLayer(layer);
+//!
+//! // Only apply the layer to operations with name "GetPokemonSpecies"
+//! let plugin = filter_by_operation_name(plugin, |name| name == "GetPokemonSpecies");
+//! ```
+//!
+//! # Construct [`Plugin`] from Operation name closure
+//!
+//! ```
+//! # use aws_smithy_http_server::plugin::*;
+//! // A `tower::Layer` which requires the operation name
+//! struct PrintLayer {
+//!     name: &'static str
+//! }
+//!
+//! // Create a `Plugin` using `PrintLayer`
+//! let plugin = plugin_from_operation_name_fn(|name| PrintLayer { name });
+//! ```
+//!
+//! # Combine [`Plugin`]s
+//!
+//! ```
+//! # use aws_smithy_http_server::plugin::*;
+//! # let a = (); let b = ();
+//! // Combine `Plugin`s `a` and `b`
+//! let plugin = PluginPipeline::empty()
+//!     .push(a)
+//!     .push(b);
+//! ```
+//!
 
 mod closure;
 mod filter;

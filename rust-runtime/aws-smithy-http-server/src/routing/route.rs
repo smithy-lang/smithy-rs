@@ -54,7 +54,7 @@ pub struct Route<B = Body> {
 }
 
 impl<B> Route<B> {
-    /// Constructs a new [`Route`] from any well-formed HTTP service which is cloneable.
+    /// Constructs a new [`Route`] from a well-formed HTTP service which is cloneable.
     pub fn new<T>(svc: T) -> Self
     where
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
