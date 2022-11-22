@@ -34,7 +34,6 @@ class ConstraintsTest {
 
         structure TestInputOutput {
             map: MapA,
-
             recursive: RecursiveShape
         }
 
@@ -68,7 +67,6 @@ class ConstraintsTest {
         structure StructureA {
             @range(min: 1, max: 69)
             int: Integer,
-
             @required
             string: String
         }
@@ -77,12 +75,9 @@ class ConstraintsTest {
         structure StructureB {
             @pattern("\\w+")
             patternString: String,
-
             @required
             requiredString: String,
-
             mapA: MapA,
-
             @length(min: 1, max: 5)
             mapAPrecedence: MapA
         }
