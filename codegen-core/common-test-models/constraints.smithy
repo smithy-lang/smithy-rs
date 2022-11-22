@@ -169,9 +169,6 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpHeader("X-Length-List")
     lengthStringListHeader: ListOfLengthString,
 
-    @httpHeader("X-Range-Integer-Set")
-    rangeIntegerSetHeader: SetOfRangeInteger,
-
     @httpHeader("X-Range-Integer-List")
     rangeIntegerListHeader: ListOfRangeInteger,
 
@@ -201,9 +198,6 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("rangeIntegerList")
     rangeIntegerListQuery: ListOfRangeInteger,
-
-    @httpQuery("rangeIntegerSet")
-    rangeIntegerSetQuery: SetOfRangeInteger,
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
@@ -331,7 +325,6 @@ structure ConA {
     mapOfLengthString: MapOfLengthString,
 
     listOfRangeInteger: ListOfRangeInteger,
-    setOfRangeInteger: SetOfRangeInteger,
     mapOfRangeInteger: MapOfRangeInteger,
 
     nonStreamingBlob: NonStreamingBlob
@@ -373,11 +366,6 @@ map MapOfSetOfLengthString {
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // value: SetOfLengthString,
     value: ListOfLengthString
-}
-
-map MapOfSetOfRangeInteger {
-    key: LengthString,
-    value: SetOfRangeInteger,
 }
 
 @length(min: 2, max: 8)
@@ -448,10 +436,6 @@ set SetOfLengthString {
 
 list ListOfLengthString {
     member: LengthString
-}
-
-set SetOfRangeInteger {
-    member: RangeInteger
 }
 
 list ListOfRangeInteger {
