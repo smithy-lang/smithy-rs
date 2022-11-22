@@ -291,13 +291,19 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
             rustTemplate(
                 """
                 fn check_pattern(string: String) -> Result<String, $constraintViolation> {
-                    static REGEX : #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).unwrap());
+                    let regex = Self::compile_regex();
 
-                    if REGEX.is_match(&string) {
+                    if regex.is_match(&string) {
                         Ok(string)
                     } else {
                         Err($constraintViolation::Pattern(string))
                     }
+                }
+
+                pub fn compile_regex() -> &'static #{Regex}::Regex {
+                    static REGEX: #{OnceCell}::sync::OnceCell<#{Regex}::Regex> = #{OnceCell}::sync::OnceCell::new();
+
+                    REGEX.get_or_init(|| #{Regex}::Regex::new(r##"$pattern"##).unwrap())
                 }
                 """,
                 "Regex" to ServerCargoDependency.Regex.toType(),
