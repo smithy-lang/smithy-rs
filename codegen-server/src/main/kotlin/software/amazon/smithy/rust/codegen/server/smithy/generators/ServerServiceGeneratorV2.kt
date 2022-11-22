@@ -319,10 +319,13 @@ class ServerServiceGeneratorV2(
     private fun serviceStruct(): Writable = writable {
         documentShape(service, model)
 
+        val functionSignatures =
+            operations.joinToString("\n") { "/// async fn ${builderFieldNames[it]}(input: input::${it.input.get().name}) -> Result<output::${it.output.get().name}, error::${it.id.name}Error> { todo!() }" }
+
         rustTemplate(
             """
-            /// The [`$serviceName`] is the place where you can register
-            /// your service's operation implementations.
+            /// The [`$builderName`] is the place where you can register
+            /// your service $serviceName's operation implementations.
             ///
             /// Use [`$builderName`] to construct the
             /// `$serviceName`. For each of the [operations] modeled in
@@ -352,12 +355,10 @@ class ServerServiceGeneratorV2(
             ///
             /// ##[tokio::main]
             /// pub async fn main() {
-            ///    let app = PokemonService::builder_without_plugins()
-            ///        .check_health(check_health)
-            ///        .do_nothing(do_nothing)
-            ///        .get_pokemon_species(get_pokemon_species)
+            ///    let app = $serviceName::builder_without_plugins()
+            ${builderFieldNames.values.joinToString("\n") { "///        .$it($it)" }}
             ///        .build()
-            ///        .expect("failed to build an instance of PokemonService");
+            ///        .expect("failed to build an instance of $serviceName");
             ///
             ///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
             ///        .parse()
@@ -371,21 +372,7 @@ class ServerServiceGeneratorV2(
             ///    // }
             /// }
             ///
-            /// /// Health check operation, to check the service is up
-            /// /// Not (yet) a deep check
-            /// async fn check_health(input: input::CheckHealthInput) -> Result<output::CheckHealthOutput, error::CheckHealthError> {
-            ///     todo!()
-            /// }
-            ///
-            /// /// DoNothing operation, used to stress test the framework.
-            /// async fn do_nothing(input: input::DoNothingInput) -> Result<output::DoNothingOutput, error::DoNothingError> {
-            ///     todo!()
-            /// }
-            ///
-            /// /// Retrieve information about a Pokémon species.
-            /// async fn get_pokemon_species(input: input::GetPokemonSpeciesInput) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
-            ///     todo!()
-            /// }
+            $functionSignatures
             ///
             /// ```
             ///
