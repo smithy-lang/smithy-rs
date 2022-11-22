@@ -101,7 +101,7 @@ operation QueryParamsTargetingMapOfListOfEnumStringOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/query-params-targeting-map-of-pattern-string", method: "POST")
+@http(uri: "/query-params-targeting-map-of-pattern-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfPatternStringOperation {
     input: QueryParamsTargetingMapOfPatternStringOperationInputOutput,
     output: QueryParamsTargetingMapOfPatternStringOperationInputOutput,
@@ -378,7 +378,7 @@ string FixedLengthString
 string PatternString
 
 @pattern("[a-f0-5]*")
-@length(min:5, max: 10)
+@length(min: 5, max: 10)
 string LengthPatternString
 
 @mediaType("video/quicktime")
