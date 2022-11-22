@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
@@ -40,6 +41,12 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
+        rustCrate.lib {
+            val serviceName = codegenContext.serviceShape.id.name.toString()
+            rust("##[doc(inline, hidden)]")
+            rust("pub use crate::service::$serviceName;")
+        }
+
         rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) {
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
         }

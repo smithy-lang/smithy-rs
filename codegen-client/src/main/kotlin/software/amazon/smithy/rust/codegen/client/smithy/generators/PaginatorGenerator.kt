@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -110,13 +109,13 @@ class PaginatorGenerator private constructor(
         "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
 
         // SDK Types
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType()
+        "SdkError" to CargoDependency.smithyHttp(runtimeConfig).toType()
             .copy(name = "result::SdkError"),
-        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
-        "fn_stream" to CargoDependency.SmithyAsync(runtimeConfig).asType().member("future::fn_stream"),
+        "client" to CargoDependency.smithyClient(runtimeConfig).toType(),
+        "fn_stream" to CargoDependency.smithyAsync(runtimeConfig).toType().member("future::fn_stream"),
 
         // External Types
-        "Stream" to CargoDependency.TokioStream.asType().member("Stream"),
+        "Stream" to CargoDependency.TokioStream.toType().member("Stream"),
 
     )
 
@@ -172,14 +171,14 @@ class PaginatorGenerator private constructor(
                     let handle = self.handle;
                     #{fn_stream}::FnStream::new(move |tx| Box::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
-                        let mut input = match builder.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into())) {
+                        let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
                             Ok(input) => input,
                             Err(e) => { let _ = tx.send(Err(e)).await; return; }
                         };
                         loop {
                             let op = match input.make_operation(&handle.conf)
                                 .await
-                                .map_err(|err| #{SdkError}::ConstructionFailure(err.into())) {
+                                .map_err(#{SdkError}::construction_failure) {
                                 Ok(op) => op,
                                 Err(e) => {
                                     let _ = tx.send(Err(e)).await;

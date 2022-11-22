@@ -6,6 +6,7 @@ use aws.protocols#restJson1
 use aws.api#service
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 apply QueryPrecedence @httpRequestTests([
     {
@@ -80,12 +81,16 @@ service RestJsonExtras {
         appliesTo: "client",
     },
     {
-        documentation: "Upper case error modeled lower case",
+        documentation: """
+            Upper case error modeled lower case.
+            Servers render the full shape ID (including namespace), since some
+            existing clients rely on it to deserialize the error shape and fail
+            if only the shape name is present.""",
         id: "ServiceLevelErrorServer",
         protocol: "aws.protocols#restJson1",
         code: 500,
         body: "{}",
-        headers: { "X-Amzn-Errortype": "ExtraError" },
+        headers: { "X-Amzn-Errortype": "aws.protocoltests.restjson#ExtraError" },
         params: {},
         appliesTo: "server",
     }
@@ -120,6 +125,7 @@ structure StringPayloadInput {
     documentation: "Primitive ints should not be serialized when they are unset",
     uri: "/primitive-document",
     method: "POST",
+    appliesTo: "client",
     body: "{}",
     headers: { "Content-Type": "application/json" },
     params: {},
@@ -152,7 +158,8 @@ structure PrimitiveIntDocument {
 ])
 @http(uri: "/primitive", method: "POST")
 operation PrimitiveIntHeader {
-    output: PrimitiveIntHeaderInput
+    output: PrimitiveIntHeaderInput,
+    errors: [ValidationException],
 }
 
 integer PrimitiveInt
@@ -174,7 +181,8 @@ structure PrimitiveIntHeaderInput {
     }
 ])
 operation EnumQuery {
-    input: EnumQueryInput
+    input: EnumQueryInput,
+    errors: [ValidationException],
 }
 
 structure EnumQueryInput {
@@ -226,6 +234,7 @@ structure MapWithEnumKeyInputOutput {
 operation MapWithEnumKeyOp {
     input: MapWithEnumKeyInputOutput,
     output: MapWithEnumKeyInputOutput,
+    errors: [ValidationException],
 }
 
 
@@ -265,6 +274,7 @@ structure EscapedStringValuesInputOutput {
 operation EscapedStringValues {
     input: EscapedStringValuesInputOutput,
     output: EscapedStringValuesInputOutput,
+    errors: [ValidationException],
 }
 
 list NonSparseList {

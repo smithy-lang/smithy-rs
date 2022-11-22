@@ -43,6 +43,7 @@
   - [RFC-0020: Service Builder Improvements](./rfcs/rfc0020_service_builder.md)
   - [RFC-0021: Dependency Versions](./rfcs/rfc0021_dependency_versions.md)
   - [RFC-0022: Error Context and Compatibility](./rfcs/rfc0022_error_context_and_compatibility.md)
+  - [RFC-0023: Evolving the new service builder API](./rfcs/rfc0023_refine_builder.md)
   - [RFC-0024: RequestID](./rfcs/rfc0024_request_id.md)
 
 - [Contributing](./contributing/overview.md)

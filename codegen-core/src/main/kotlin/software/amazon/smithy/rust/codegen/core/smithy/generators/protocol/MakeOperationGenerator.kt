@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -33,6 +32,8 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
+// TODO(https://github.com/awslabs/smithy-rs/issues/1901): Move to `codegen-client`.
+
 /** Generates the `make_operation` function on input structs */
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
@@ -47,8 +48,8 @@ open class MakeOperationGenerator(
     protected val runtimeConfig = codegenContext.runtimeConfig
     protected val symbolProvider = codegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
-    private val defaultClassifier = CargoDependency.SmithyHttp(runtimeConfig)
-        .asType().member("retry::DefaultResponseRetryClassifier")
+    private val defaultClassifier = CargoDependency.smithyHttp(runtimeConfig)
+        .toType().member("retry::DefaultResponseRetryClassifier")
 
     private val sdkId =
         codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
@@ -56,7 +57,7 @@ open class MakeOperationGenerator(
 
     private val codegenScope = arrayOf(
         "config" to RuntimeType.Config,
-        "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
+        "header_util" to CargoDependency.smithyHttp(runtimeConfig).toType().member("header"),
         "http" to RuntimeType.http,
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
         "OpBuildError" to codegenContext.runtimeConfig.operationBuildError(),
