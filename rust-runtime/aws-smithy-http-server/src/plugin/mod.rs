@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! The plugin system allows for parameterized modification of [`Operation`]s during the build procedure.
+//!
+//! The system centers around the [`Plugin`] trait. In addition, this module provides helpers for composing and
+//! combining [`Plugin`]s.
+
 mod closure;
 mod filter;
 mod identity;
