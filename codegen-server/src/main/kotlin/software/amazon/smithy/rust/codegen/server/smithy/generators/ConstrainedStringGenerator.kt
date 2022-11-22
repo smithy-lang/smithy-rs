@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -59,7 +60,7 @@ class ConstrainedStringGenerator(
     private val constraintsInfo: List<TraitInfo> =
         supportedStringConstraintTraits
             .mapNotNull { shape.getTrait(it).orNull() }
-            .mapNotNull(StringTraitInfo::fromTrait)
+            .map(StringTraitInfo::fromTrait)
             .map(StringTraitInfo::toTraitInfo)
 
     private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol) {
@@ -308,7 +309,7 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
 
 private sealed class StringTraitInfo {
     companion object {
-        fun fromTrait(trait: Trait): StringTraitInfo? =
+        fun fromTrait(trait: Trait): StringTraitInfo =
             when (trait) {
                 is PatternTrait -> {
                     Pattern(trait)
@@ -316,7 +317,7 @@ private sealed class StringTraitInfo {
                 is LengthTrait -> {
                     Length(trait)
                 }
-                else -> null
+                else -> PANIC("StringTraitInfo.fromTrait called with unsupported trait $trait")
             }
     }
 
