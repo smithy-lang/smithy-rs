@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -32,12 +32,14 @@ class ServerServiceGeneratorV2(
         arrayOf(
             "Bytes" to CargoDependency.Bytes.toType(),
             "Http" to CargoDependency.Http.toType(),
+            "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
             "HttpBody" to CargoDependency.HttpBody.toType(),
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to CargoDependency.Tower.toType(),
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    val crateName = codegenContext.settings.moduleName.toSnakeCase()
 
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
@@ -101,6 +103,22 @@ class ServerServiceGeneratorV2(
                 ///
                 /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
                 /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
+                ///
+                /// ## Example
+                ///
+                /// ```no_run
+                /// use $crateName::$serviceName;
+                ///
+                #{Handler:W}
+                ///
+                /// let app = $serviceName::builder_without_plugins()
+                ///     .$fieldName(handler)
+                ///     /* Set other handlers */
+                ///     .build()
+                ///     .unwrap();
+                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ```
+                ///
                 pub fn $fieldName<HandlerType, Extensions>(self, handler: HandlerType) -> Self
                 where
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, Extensions>,
@@ -138,6 +156,7 @@ class ServerServiceGeneratorV2(
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
+                "Handler" to DocHandlerGenerator(operationShape, "///", codegenContext)::render,
                 *codegenScope,
             )
 
@@ -179,6 +198,9 @@ class ServerServiceGeneratorV2(
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
             ///
             /// Forgetting to register a handler for one or more operations will result in an error.
+            ///
+            /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
+            /// unspecified route requested.
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
                 let router = {
@@ -343,7 +365,7 @@ class ServerServiceGeneratorV2(
 
                 /// Constructs a builder for [`$serviceName`].
                 ///
-                /// Use [`$serviceName::builder_without_plugins`] if you need to specify plugins.
+                /// Use [`$serviceName::builder_with_plugins`] if you need to specify plugins.
                 pub fn builder_without_plugins<Body>() -> $builderName<Body, #{SmithyHttpServer}::plugin::IdentityPlugin> {
                     Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin)
                 }
@@ -415,6 +437,8 @@ class ServerServiceGeneratorV2(
     private fun missingOperationsError(): Writable = writable {
         rust(
             """
+            /// The error encountered when calling the [`$builderName::build`] method if one or more operation handlers are not
+            /// specified.
             ##[derive(Debug)]
             pub struct MissingOperationsError {
                 operation_names2setter_methods: std::collections::HashMap<&'static str, &'static str>,
