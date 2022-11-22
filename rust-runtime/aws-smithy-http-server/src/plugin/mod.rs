@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The plugin system allows the user to build middleware with an awareness of the operation its applied to.
+//! The plugin system allows you to build middleware with an awareness of the operation it is applied to.
 //!
 //! The system centers around the [`Plugin`] trait. In addition, this module provides helpers for composing and
 //! combining [`Plugin`]s.
