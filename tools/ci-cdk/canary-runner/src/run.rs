@@ -44,12 +44,12 @@ lazy_static::lazy_static! {
     // This is a map of SDK release tag to smithy-rs commit hash
     static ref PINNED_SMITHY_RS_VERSIONS: Vec<(ReleaseTag, &'static str)> = {
         let mut pinned = vec![
-            // Versions <= 0.6.0 no longer compile against the canary after this commit in smithy-rs
+            // Versions <= 0.6.0 no longer compiles against the canary after this commit in smithy-rs
             // due to the breaking change in https://github.com/awslabs/smithy-rs/pull/1085
             (ReleaseTag::from_str("v0.6.0").unwrap(), "d48c234796a16d518ca9e1dda5c7a1da4904318c"),
-            // Versions <= release-2022-10-26 no longer compile against the canary after this commit in smithy-rs
+            // Versions <= release-2022-10-26 no longer compiles against the canary after this commit in smithy-rs
             // due to the s3 canary update in https://github.com/awslabs/smithy-rs/pull/1974
-            (ReleaseTag::from_str("release-2022-10-26").unwrap(), "9f0bc36fa7da0e7a60713040017a9b7503bdf354")
+            (ReleaseTag::from_str("release-2022-10-26").unwrap(), "4563849dc7df8d5b11bce45bad32570cd5d41840")
         ];
         pinned.sort();
         pinned
