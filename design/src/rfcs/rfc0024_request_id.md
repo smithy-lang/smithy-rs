@@ -70,9 +70,6 @@ Common formats for RequestIDs are:
 For privacy reasons, any format that provides service details should be avoided. A random string is preferred.
 The proposed format is to use UUID, version 4.
 
-AWS Lambda sends a RequestID in the request context; there is no need to modify it.
-Services will apply their `Layer` if they need to extract the "AWS request ID" from the context given by the Lambda invocation.
-
 A `Service` that inserts a RequestId in the extensions will be implemented as follows:
 ```rust
 impl<R, S> Service<http::Request<R>> for ServerRequestIdProvider<S>
