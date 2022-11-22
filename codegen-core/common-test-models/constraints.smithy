@@ -25,7 +25,9 @@ service ConstraintsService {
         QueryParamsTargetingMapOfListOfEnumStringOperation,
 
         QueryParamsTargetingMapOfPatternStringOperation,
+        QueryParamsTargetingMapOfListOfPatternStringOperation,
         QueryParamsTargetingMapOfLengthPatternStringOperation,
+        QueryParamsTargetingMapOfListOfLengthPatternStringOperation,
 
         HttpPrefixHeadersTargetingLengthMapOperation,
         // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
@@ -108,11 +110,25 @@ operation QueryParamsTargetingMapOfPatternStringOperation {
     errors: [ValidationException]
 }
 
+@http(uri: "/query-params-targeting-map-of-list-of-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfListOfPatternStringOperation {
+    input: QueryParamsTargetingMapOfListOfPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfListOfPatternStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
 @http(uri: "/query-params-targeting-map-of-length-pattern-string", method: "POST")
 operation QueryParamsTargetingMapOfLengthPatternStringOperation {
     input: QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput,
     output: QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput,
     errors: [ValidationException],
+}
+
+@http(uri: "/query-params-targeting-map-of-list-of-length-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfListOfLengthPatternStringOperation {
+    input: QueryParamsTargetingMapOfListOfLengthPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfListOfLengthPatternStringOperationInputOutput,
+    errors: [ValidationException]
 }
 
 @http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "POST")
@@ -210,9 +226,19 @@ structure QueryParamsTargetingMapOfPatternStringOperationInputOutput {
     mapOfPatternString: MapOfPatternString
 }
 
+structure QueryParamsTargetingMapOfListOfPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfListOfPatternString: MapOfListOfPatternString
+}
+
 structure QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput {
     @httpQueryParams
     mapOfLengthPatternString: MapOfLengthPatternString,
+}
+
+structure QueryParamsTargetingMapOfListOfLengthPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthPatternString: MapOfListOfLengthPatternString,
 }
 
 structure HttpPrefixHeadersTargetingLengthMapOperationInputOutput {
@@ -326,7 +352,21 @@ structure ConA {
     // setOfLengthString: SetOfLengthString,
     mapOfLengthString: MapOfLengthString,
 
-    nonStreamingBlob: NonStreamingBlob
+    nonStreamingBlob: NonStreamingBlob,
+
+    patternString: PatternString,
+    mapOfPatternString: MapOfPatternString,
+    listOfPatternString: ListOfPatternString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfPatternString: SetOfPatternString,
+
+    lengthLengthPatternString: LengthPatternString,
+    mapOfLengthPatternString: MapOfLengthPatternString,
+    listOfLengthPatternString: ListOfLengthPatternString
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfLengthPatternString: SetOfLengthPatternString,
 }
 
 map MapOfLengthString {
@@ -347,6 +387,16 @@ map MapOfListOfLengthString {
 map MapOfListOfEnumString {
     key: EnumString,
     value: ListOfEnumString,
+}
+
+map MapOfListOfPatternString {
+    key: PatternString,
+    value: ListOfPatternString
+}
+
+map MapOfListOfLengthPatternString {
+    key: LengthPatternString,
+    value: ListOfLengthPatternString
 }
 
 map MapOfSetOfLengthString {
@@ -418,12 +468,28 @@ set SetOfLengthString {
     member: LengthString
 }
 
+set SetOfPatternString {
+    member: PatternString
+}
+
+set SetOfLengthPatternString {
+    member: LengthPatternString
+}
+
 list ListOfLengthString {
     member: LengthString
 }
 
 list ListOfEnumString {
     member: EnumString
+}
+
+list ListOfPatternString {
+    member: PatternString
+}
+
+list ListOfLengthPatternString {
+    member: LengthPatternString
 }
 
 structure ConB {
