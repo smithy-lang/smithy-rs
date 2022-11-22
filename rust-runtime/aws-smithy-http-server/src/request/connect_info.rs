@@ -32,6 +32,8 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+//! Extractor for getting connection information from a client.
+
 use std::{
     convert::Infallible,
     fmt,
@@ -48,12 +50,11 @@ use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 use crate::{request::FromParts, Extension};
 
-/// A [`MakeService`] created from a router.
+/// A [`MakeService`] used to insert [`ConnectInfo<T>`] into [`http::Request`]s.
 ///
-/// See [`Router::into_make_service_with_connect_info`] for more details.
+/// The `T` must be derivable from the underlying IO resource using the [`Connected`] trait.
 ///
 /// [`MakeService`]: tower::make::MakeService
-/// [`Router::into_make_service_with_connect_info`]: crate::routing::Router::into_make_service_with_connect_info
 pub struct IntoMakeServiceWithConnectInfo<S, C> {
     inner: S,
     _connect_info: PhantomData<fn() -> C>,
@@ -96,10 +97,6 @@ where
 ///
 /// The goal for this trait is to allow users to implement custom IO types that
 /// can still provide the same connection metadata.
-///
-/// See [`Router::into_make_service_with_connect_info`] for more details.
-///
-/// [`Router::into_make_service_with_connect_info`]: crate::routing::Router::into_make_service_with_connect_info
 pub trait Connected<T>: Clone {
     /// Create type holding information about the connection.
     fn connect_info(target: T) -> Self;
@@ -140,13 +137,9 @@ opaque_future! {
 
 /// Extractor for getting connection information produced by a `Connected`.
 ///
-/// Note this extractor requires you to use
-/// [`Router::into_make_service_with_connect_info`] to run your app
-/// otherwise it will fail at runtime.
-///
-/// See [`Router::into_make_service_with_connect_info`] for more details.
-///
-/// [`Router::into_make_service_with_connect_info`]: crate::routing::Router::into_make_service_with_connect_info
+/// Note this extractor requires the existence of [`Extension<ConnectInfo<T>>`] in the [`http::Extensions`]. This is
+/// automatically inserted by the [`IntoMakeServiceWithConnectInfo`] middleware, which can be applied using the
+/// `into_make_service_with_connect_info` method on your generated service.
 #[derive(Clone, Debug)]
 pub struct ConnectInfo<T>(pub T);
 
