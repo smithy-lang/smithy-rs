@@ -434,6 +434,8 @@ class ServerServiceGeneratorV2(
     private fun missingOperationsError(): Writable = writable {
         rust(
             """
+            /// The error encountered when calling the [`$builderName::build`] method while one or more operations are not
+            /// specified.
             ##[derive(Debug)]
             pub struct MissingOperationsError {
                 operation_names2setter_methods: std::collections::HashMap<&'static str, &'static str>,
