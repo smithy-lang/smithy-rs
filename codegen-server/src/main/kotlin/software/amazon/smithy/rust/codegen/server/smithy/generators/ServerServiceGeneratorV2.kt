@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -32,12 +32,14 @@ class ServerServiceGeneratorV2(
         arrayOf(
             "Bytes" to CargoDependency.Bytes.toType(),
             "Http" to CargoDependency.Http.toType(),
+            "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
             "HttpBody" to CargoDependency.HttpBody.toType(),
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to CargoDependency.Tower.toType(),
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    val crateName = codegenContext.settings.moduleName.toSnakeCase()
 
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
@@ -101,6 +103,22 @@ class ServerServiceGeneratorV2(
                 ///
                 /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
                 /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
+                ///
+                /// ## Example
+                ///
+                /// ```no_run
+                /// use $crateName::$serviceName;
+                ///
+                #{Handler:W}
+                ///
+                /// let app = $serviceName::builder_without_plugins()
+                ///     .$fieldName(handler)
+                ///     /* Set other handlers */
+                ///     .build()
+                ///     .unwrap();
+                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ```
+                ///
                 pub fn $fieldName<HandlerType, Extensions>(self, handler: HandlerType) -> Self
                 where
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, Extensions>,
@@ -138,6 +156,7 @@ class ServerServiceGeneratorV2(
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
+                "Handler" to DocHandlerGenerator(operationShape, "///", codegenContext)::render,
                 *codegenScope,
             )
 
