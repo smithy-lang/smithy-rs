@@ -545,12 +545,12 @@ list NestedList {
 // }
 
 map MapOfPatternString {
-    key: String,
+    key: PatternString,
     value: PatternString,
 }
 
 map MapOfLengthPatternString {
-    key: String,
+    key: LengthPatternString,
     value: LengthPatternString,
 }
 
