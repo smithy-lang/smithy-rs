@@ -69,6 +69,11 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation",
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
+        CodegenTest(
+            "aws.protocoltests.extras.restjson.validation#RestJsonValidation", "malformed_range_extras",
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+            imports = listOf("$commonModels/malformed-range-extras.smithy"),
+        ),
         CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
         CodegenTest(
             "aws.protocoltests.json#JsonProtocol",
