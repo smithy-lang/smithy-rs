@@ -35,6 +35,7 @@ open class ServerServiceGenerator(
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
     protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
+    private val serviceName = codegenContext.serviceShape.id.name.toString()
 
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
@@ -42,7 +43,6 @@ open class ServerServiceGenerator(
      */
     fun render() {
         rustCrate.lib {
-            val serviceName = codegenContext.serviceShape.id.name.toString()
             rust("##[doc(inline, hidden)]")
             rust("pub use crate::service::$serviceName;")
         }
@@ -85,9 +85,7 @@ open class ServerServiceGenerator(
                 ),
             ),
         ) {
-            for (operation in operations) {
-                ServerOperationGenerator(codegenContext, operation).render(this)
-            }
+            ServerOperationShapeGenerator(operations, codegenContext).render(this)
         }
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
