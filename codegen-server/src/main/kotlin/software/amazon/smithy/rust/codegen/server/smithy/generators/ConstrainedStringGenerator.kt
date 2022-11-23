@@ -86,6 +86,7 @@ class ConstrainedStringGenerator(
             }
             """,
             "TryFrom" to RuntimeType.TryFrom,
+            "ConstraintViolation" to constraintViolation,
             "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
         )
     }
@@ -190,9 +191,11 @@ class ConstrainedStringGenerator(
             writer.rustTemplate(
                 """
                 impl ${constraintViolation.name} {
-                     pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                       #{ValidationExceptionFields:W}
-                     }
+                    pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                        match self {
+                            #{ValidationExceptionFields:W}
+                        }
+                    }
                 }
                 """,
                 "String" to RuntimeType.String,
@@ -207,7 +210,7 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
             { rust("Self::check_length(&value)?;") },
             {
                 docs("Error when a string doesn't satisfy its `@length` requirements.")
-                rust("Length(usize),")
+                rust("Length(usize)")
             },
             {
                 rust(
@@ -263,7 +266,7 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
             {
                 docs("Error when a string doesn't satisfy its `@pattern`.")
                 docs("Contains the String that failed the pattern.")
-                rust("Pattern(String),")
+                rust("Pattern(String)")
             },
             {
                 rust(
