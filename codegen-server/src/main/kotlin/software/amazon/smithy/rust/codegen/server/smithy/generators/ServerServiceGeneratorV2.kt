@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -319,15 +319,18 @@ class ServerServiceGeneratorV2(
     private fun serviceStruct(): Writable = writable {
         documentShape(service, model)
 
-        val functionSignatures =
-            operations.joinToString("\n") { "/// async fn ${builderFieldNames[it]}(input: input::${it.input.get().name}) -> Result<output::${it.output.get().name}, error::${it.id.name}Error> { todo!() }" }
+        val functionImpls =
+            operations.joinToString("\n") {
+                "/// async fn ${builderFieldNames[it]}(input: input::${it.input.get().name}) -> " +
+                    "Result<output::${it.output.get().name}, error::${it.id.name}Error> { todo!() }"
+            }
 
         rustTemplate(
             """
             /// The [`$builderName`] is the place where you can register
             /// your service $serviceName's operation implementations.
             ///
-            /// Use [`$builderName`] to construct the
+            /// Use [`$serviceName::builder_without_plugins()`] to construct the $builderName, to build
             /// `$serviceName`. For each of the [operations] modeled in
             /// your Smithy service, you need to provide an implementation in the
             /// form of an async function that takes in the
@@ -351,7 +354,7 @@ class ServerServiceGeneratorV2(
             ///
             /// ```rust
             /// use std::net::SocketAddr;
-            /// use pokemon_service_server_sdk::{input, output, error};
+            /// use ${codegenContext.moduleUseName()}::{input, output, error, $serviceName};
             ///
             /// ##[tokio::main]
             /// pub async fn main() {
@@ -360,8 +363,7 @@ class ServerServiceGeneratorV2(
             ///        .build()
             ///        .expect("failed to build an instance of $serviceName");
             ///
-            ///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
-            ///        .parse()
+            ///    let bind: SocketAddr = "127.0.0.1:6969".parse()
             ///        .expect("unable to parse the server bind address and port");
             ///
             ///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
@@ -372,7 +374,7 @@ class ServerServiceGeneratorV2(
             ///    // }
             /// }
             ///
-            $functionSignatures
+            $functionImpls
             ///
             /// ```
             ///
