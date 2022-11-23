@@ -19,10 +19,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -64,26 +63,31 @@ class ConstrainedStringGenerator(
             .map(StringTraitInfo::toTraitInfo)
 
     private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol) {
-        writer.rustBlock("impl $name") {
-            for (traitInfo in constraintsInfo) {
-                rustTemplate("#{ValidationFunction:W}", "ValidationFunction" to traitInfo.validationFunctionDefinition(constraintViolation))
+        writer.rustTemplate(
+            """
+            impl $name {
+                #{ValidationFunctions:W}
             }
-        }
+            """,
+            "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation) }.join("\n"),
+        )
 
-        writer.rustBlockTemplate("impl #{TryFrom}<$inner> for $name", "TryFrom" to RuntimeType.TryFrom) {
-            rustTemplate("type Error = #{ConstraintViolation};", "ConstraintViolation" to constraintViolation)
-            rustBlock(
-                """
+        writer.rustTemplate(
+            """
+            impl #{TryFrom}<$inner> for $name {
+                type Error = #{ConstraintViolation};
+
                 /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error>
-                """,
-            ) {
-                for (traitInfo in constraintsInfo) {
-                    rustTemplate("#{TryFromCheck:W}", "TryFromCheck" to traitInfo.tryFromCheck)
+                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                  #{TryFromChecks:W}
+
+                  Ok(Self(value))
                 }
-                rust("Ok(Self(value))")
             }
-        }
+            """,
+            "TryFrom" to RuntimeType.TryFrom,
+            "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
+        )
     }
 
     fun render() {
@@ -172,33 +176,28 @@ class ConstrainedStringGenerator(
     }
 
     private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
-        writer.rustBlock(
+        writer.rustTemplate(
             """
             ##[derive(Debug, PartialEq)]
-            pub enum ${constraintViolation.name}
-            """,
-        ) {
-            for (traitInfo in constraintsInfo) {
-                rustTemplate(
-                    "#{ConstraintViolationVariant:W}",
-                    "ConstraintViolationVariant" to traitInfo.constraintViolationVariant,
-                )
+            pub enum ${constraintViolation.name} {
+              #{Variants:W}
             }
-        }
+            """,
+            "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
+        )
 
         if (shape.isReachableFromOperationInput()) {
-            writer.rustBlock("impl ${constraintViolation.name}") {
-                rustBlockTemplate(
-                    "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
-                    "String" to RuntimeType.String,
-                ) {
-                    rustBlock("match self") {
-                        for (traitInfo in constraintsInfo) {
-                            rustTemplate("#{ValidationExceptionField:W}", "ValidationExceptionField" to traitInfo.asValidationExceptionField)
-                        }
-                    }
+            writer.rustTemplate(
+                """
+                impl ${constraintViolation.name} {
+                     pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                       #{ValidationExceptionFields:W}
+                     }
                 }
-            }
+                """,
+                "String" to RuntimeType.String,
+                "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
+            )
         }
     }
 }
