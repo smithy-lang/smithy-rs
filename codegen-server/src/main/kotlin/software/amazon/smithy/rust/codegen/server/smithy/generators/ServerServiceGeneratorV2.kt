@@ -156,7 +156,7 @@ class ServerServiceGeneratorV2(
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "Handler" to DocHandlerGenerator(operationShape, "///", codegenContext)::render,
+                "Handler" to DocHandlerGenerator(operationShape, "///", "handler", codegenContext)::render,
                 *codegenScope,
             )
 
@@ -343,7 +343,7 @@ class ServerServiceGeneratorV2(
 
         val handlers: Writable = operations
             .map { operation ->
-                DocHandlerGenerator(operation, "///", codegenContext).docSignature()
+                DocHandlerGenerator(operation, "///", builderFieldNames[operation]!!, codegenContext).docSignature()
             }
             .reduce { acc, wt ->
                 writable {

@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 /**
 Generates a stub for use within documentation.
  */
-class DocHandlerGenerator(private val operation: OperationShape, private val commentToken: String = "//", codegenContext: CodegenContext) {
+class DocHandlerGenerator(private val operation: OperationShape, private val commentToken: String = "//", private val handlerName: String, codegenContext: CodegenContext) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val crateName = codegenContext.moduleUseName()
@@ -49,7 +49,7 @@ class DocHandlerGenerator(private val operation: OperationShape, private val com
                 """
                 $commentToken ## use $crateName::${Inputs.namespace}::${inputSymbol.name};
                 $commentToken ## use $crateName::${Outputs.namespace}::${outputSymbol.name};
-                $commentToken async fn handler(input: ${inputSymbol.name}) -> $outputT {
+                $commentToken async fn $handlerName(input: ${inputSymbol.name}) -> $outputT {
                 $commentToken     todo!()
                 $commentToken }
                 """.trimIndent(),
