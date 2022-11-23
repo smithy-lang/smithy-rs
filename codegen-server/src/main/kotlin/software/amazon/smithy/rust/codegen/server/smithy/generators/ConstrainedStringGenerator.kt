@@ -304,9 +304,9 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                 }
 
                 pub fn compile_regex() -> &'static #{Regex}::Regex {
-                    static REGEX: #{OnceCell}::sync::OnceCell<#{Regex}::Regex> = #{OnceCell}::sync::OnceCell::new();
+                    static REGEX: #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##));
 
-                    REGEX.get_or_init(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##))
+                    &REGEX
                 }
                 """,
                 "Regex" to ServerCargoDependency.Regex.toType(),
