@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -73,24 +74,27 @@ class ConstrainedShapeSymbolProviderTest {
     private val symbolProvider = serverTestSymbolProvider(model, serviceShape)
     private val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
 
-    @ParameterizedTest
-    @MethodSource("getShapes")
-    fun `it should return a constrained type for a constrained shape`(shapeName: String, shapeCheck: (Shape) -> Boolean) {
-        val constrainedShape = model.lookup<Shape>("test#$shapeName")
-        assert(shapeCheck(constrainedShape))
-        val constrainedType = constrainedShapeSymbolProvider.toSymbol(constrainedShape).rustType()
-
-        constrainedType shouldBe RustType.Opaque(shapeName, "crate::model")
-    }
-
     companion object {
         @JvmStatic
-        fun getShapes(): Stream<Arguments> =
+        fun getConstrainedShapes(): Stream<Arguments> =
             Stream.of(
                 Arguments.of("ConstrainedInteger", { s: Shape -> s is IntegerShape }),
                 Arguments.of("ConstrainedString", { s: Shape -> s is StringShape }),
                 Arguments.of("ConstrainedMap", { s: Shape -> s is MapShape }),
             )
+    }
+
+    @ParameterizedTest
+    @MethodSource("getConstrainedShapes")
+    fun `it should return a constrained type for a constrained shape`(
+        shapeName: String,
+        shapeCheck: (Shape) -> Boolean,
+    ) {
+        val constrainedShape = model.lookup<Shape>("test#$shapeName")
+        assert(shapeCheck(constrainedShape))
+        val constrainedType = constrainedShapeSymbolProvider.toSymbol(constrainedShape).rustType()
+
+        constrainedType shouldBe RustType.Opaque(shapeName, "crate::model")
     }
 
     @Test
