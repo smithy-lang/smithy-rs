@@ -202,6 +202,10 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val String = RuntimeType("String", dependency = null, namespace = "std::string")
 
+        // serde types
+        val SerdeSerialize = RuntimeType("Serialize", dependency = null, namespace = "serde")
+        val SerdeDeserialize = RuntimeType("Deserialize", dependency = null, namespace = "serde")
+
         fun DateTime(runtimeConfig: RuntimeConfig) =
             RuntimeType("DateTime", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
 

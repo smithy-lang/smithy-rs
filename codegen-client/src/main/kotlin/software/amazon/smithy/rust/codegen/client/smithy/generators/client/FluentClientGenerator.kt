@@ -206,7 +206,7 @@ class FluentClientGenerator(
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                     """,
                 )
-
+                // operation level stuff
                 writer.rust(
                     """
                     pub fn ${
@@ -236,6 +236,7 @@ class FluentClientGenerator(
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
+                
                 val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
                 rust(
                     """
