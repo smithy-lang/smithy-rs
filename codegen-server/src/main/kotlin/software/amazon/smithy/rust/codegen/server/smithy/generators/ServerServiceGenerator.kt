@@ -75,7 +75,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule(
+            RustModule.LeafModule(
                 "operation_shape",
                 RustMetadata(
                     visibility = Visibility.PUBLIC,
@@ -90,7 +90,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
+            RustModule.LeafModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) {
             ServerServiceGeneratorV2(
                 codegenContext,

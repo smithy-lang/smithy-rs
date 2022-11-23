@@ -8,6 +8,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
@@ -44,7 +45,8 @@ object ServerCargoDependency {
 object ServerInlineDependency {
     fun serverOperationHandler(runtimeConfig: RuntimeConfig): InlineDependency =
         InlineDependency.forRustFile(
-            "server_operation_handler_trait",
+            RustModule.private("server_operation_handler_trait"),
+            "/inlineable/src/server_operation_handler_trait.rs",
             ServerCargoDependency.SmithyHttpServer(runtimeConfig),
             CargoDependency.Http,
             ServerCargoDependency.PinProjectLite,

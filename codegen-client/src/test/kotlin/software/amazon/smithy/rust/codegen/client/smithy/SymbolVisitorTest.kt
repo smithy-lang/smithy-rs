@@ -29,9 +29,9 @@ import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.smithy.Errors
-import software.amazon.smithy.rust.codegen.core.smithy.Models
-import software.amazon.smithy.rust.codegen.core.smithy.Operations
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.smithy.OperationsModule
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -57,7 +57,7 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "MyStruct"
-        sym.definitionFile shouldContain Models.filename
+        sym.definitionFile shouldContain ModelsModule.definitionFile()
         sym.namespace shouldBe "crate::model"
     }
 
@@ -77,7 +77,7 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "TerribleError"
-        sym.definitionFile shouldContain Errors.filename
+        sym.definitionFile shouldContain ErrorsModule.definitionFile()
     }
 
     @Test
@@ -101,7 +101,7 @@ class SymbolVisitorTest {
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
         sym.rustType().render(false) shouldBe "StandardUnit"
-        sym.definitionFile shouldContain Models.filename
+        sym.definitionFile shouldContain ModelsModule.definitionFile()
         sym.namespace shouldBe "crate::model"
     }
 
@@ -260,7 +260,7 @@ class SymbolVisitorTest {
             }
         """.asSmithyModel()
         val symbol = testSymbolProvider(model).toSymbol(model.expectShape(ShapeId.from("smithy.example#PutObject")))
-        symbol.definitionFile shouldBe("src/${Operations.filename}")
+        symbol.definitionFile shouldBe(OperationsModule.definitionFile())
         symbol.name shouldBe "PutObject"
     }
 }
