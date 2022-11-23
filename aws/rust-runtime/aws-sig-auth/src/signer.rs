@@ -148,9 +148,9 @@ impl SigV4Signer {
         };
         settings.uri_path_normalization_mode =
             if operation_config.signing_options.normalize_uri_path {
-                UriPathNormalizationMode::Enabled
+                UriPathNormalizationMode::PerRfc3986
             } else {
-                UriPathNormalizationMode::Disabled
+                UriPathNormalizationMode::ForS3
             };
         settings.signature_location = match operation_config.signature_type {
             HttpSignatureType::HttpRequestHeaders => SignatureLocation::Headers,
@@ -197,20 +197,22 @@ impl SigV4Signer {
         request: &mut http::Request<SdkBody>,
     ) -> Result<Signature, SigningError> {
         let settings = Self::settings(operation_config);
-        let signing_params = Self::signing_params(settings, credentials, request_config);
 
-        // The following is _not_ part of URI path normalization as required by constructing the canonical request.
-        // While URI path normalization should be disabled for S3, multiple leading forward slashes in the URI path
-        // must be deduped from `request` for any service, including S3. Failure to do so will result in the
-        // `SignatureDoesNotMatch` error.
-        if let Cow::Owned(forward_slashes_deduped) =
-            dedupe_leading_forward_slashes(request.uri().path())
-        {
-            let mut parts = request.uri().clone().into_parts();
-            parts.path_and_query = Some(forward_slashes_deduped.parse().unwrap());
+        // Multiple leading forward slashes in the URI path must be deduped from `request` for S3.
+        // Merely de-duping them from a URI used for calculating canonical URI is not enough.
+        // Failure to do so will result in the `SignatureDoesNotMatch` error.
+        if settings.uri_path_normalization_mode == UriPathNormalizationMode::ForS3 {
+            if let Cow::Owned(forward_slashes_deduped) =
+                dedupe_leading_forward_slashes(request.uri().path())
+            {
+                let mut parts = request.uri().clone().into_parts();
+                parts.path_and_query = Some(forward_slashes_deduped.parse().unwrap());
 
-            *request.uri_mut() = Uri::from_parts(parts).unwrap();
+                *request.uri_mut() = Uri::from_parts(parts).unwrap();
+            }
         }
+
+        let signing_params = Self::signing_params(settings, credentials, request_config);
 
         let (signing_instructions, signature) = {
             // A body that is already in memory can be signed directly. A body that is not in memory

@@ -138,7 +138,7 @@ fun disableDoubleEncode(service: ServiceShape) = when (service.id) {
     else -> false
 }
 
-fun disableUriPathNormalization(service: ServiceShape) = when (service.id) {
+fun optOutOfNormalizingUriPathsPerRfc(service: ServiceShape) = when (service.id) {
     ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
     else -> false
 }
@@ -168,7 +168,7 @@ class SigV4SigningFeature(
                 if (disableDoubleEncode(service)) {
                     rust("signing_config.signing_options.double_uri_encode = false;")
                 }
-                if (disableUriPathNormalization(service)) {
+                if (optOutOfNormalizingUriPathsPerRfc(service)) {
                     rust("signing_config.signing_options.normalize_uri_path = false;")
                 }
                 if (operation.hasTrait<UnsignedPayloadTrait>()) {
