@@ -8,7 +8,7 @@ use std::{
     path::{Component, Path},
 };
 
-// Normalzie `uri_path` according to
+// Normalize `uri_path` according to
 // https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
 pub(super) fn normalize_uri_path(uri_path: &str) -> Cow<'_, str> {
     // If the absolute path is empty, use a forward slash (/).
