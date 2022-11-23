@@ -242,11 +242,8 @@ message = """
 
 * The `length` trait on `string` shapes.
 * The `length` trait on `map` shapes.
-<<<<<<< HEAD
 * The `range` trait on `integer` shapes.
-=======
 * The `pattern` trait on `string` shapes.
->>>>>>> main
 
 Upon receiving a request that violates the modeled constraints, the server SDK will reject it with a message indicating why.
 
