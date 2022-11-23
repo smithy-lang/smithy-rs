@@ -104,12 +104,13 @@ class ConstrainedIntegerGeneratorTest {
 
     @Test
     fun `type should not be constructible without using a constructor`() {
-        val model = """
+        val model = 
+            """
             namespace test
 
             @range(min: -1, max: 69)
             integer ConstrainedInteger
-        """.asSmithyModel()
+            """.asSmithyModel()
         val constrainedIntegerShape = model.lookup<IntegerShape>("test#ConstrainedInteger")
 
         val codegenContext = serverTestCodegenContext(model)
