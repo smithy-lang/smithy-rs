@@ -5,26 +5,33 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.model.traits.PatternTrait
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -49,22 +56,46 @@ class ConstrainedStringGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val constraintsInfo: List<TraitInfo> =
+        supportedStringConstraintTraits
+            .mapNotNull { shape.getTrait(it).orNull() }
+            .map(StringTraitInfo::fromTrait)
+            .map(StringTraitInfo::toTraitInfo)
+
+    private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol) {
+        writer.rustTemplate(
+            """
+            impl $name {
+                #{ValidationFunctions:W}
+            }
+            """,
+            "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation) }.join("\n"),
+        )
+
+        writer.rustTemplate(
+            """
+            impl #{TryFrom}<$inner> for $name {
+                type Error = #{ConstraintViolation};
+
+                /// ${rustDocsTryFromMethod(name, inner)}
+                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                  #{TryFromChecks:W}
+
+                  Ok(Self(value))
+                }
+            }
+            """,
+            "TryFrom" to RuntimeType.TryFrom,
+            "ConstraintViolation" to constraintViolation,
+            "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
+        )
+    }
 
     fun render() {
-        val lengthTrait = shape.expectTrait<LengthTrait>()
-
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
-
-        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
-            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
-        } else if (lengthTrait.min.isPresent) {
-            "${lengthTrait.min.get()} <= length"
-        } else {
-            "length <= ${lengthTrait.max.get()}"
-        }
 
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
@@ -85,55 +116,47 @@ class ConstrainedStringGenerator(
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
-        writer.rustTemplate(
+        writer.rust(
             """
             impl $name {
                 /// Extracts a string slice containing the entire underlying `String`.
                 pub fn as_str(&self) -> &str {
                     &self.0
                 }
-                
+
                 /// ${rustDocsInnerMethod(inner)}
                 pub fn inner(&self) -> &$inner {
                     &self.0
                 }
-                
+
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-            }
-            
+            }""",
+        )
+
+        renderTryFrom(inner, name, constraintViolation)
+
+        writer.rustTemplate(
+            """
             impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = $inner;
             }
-            
+
             impl #{From}<$inner> for #{MaybeConstrained} {
                 fn from(value: $inner) -> Self {
                     Self::Unconstrained(value)
                 }
             }
-            
+
             impl #{Display} for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                    ${shape.redactIfNecessary(model, "self.0")}.fmt(f)
                 }
             }
-            
-            impl #{TryFrom}<$inner> for $name {
-                type Error = #{ConstraintViolation};
-                
-                /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                    let length = value.chars().count();
-                    if $condition {
-                        Ok(Self(value))
-                    } else {
-                        Err(#{ConstraintViolation}::Length(length))
-                    }
-                }
-            }
-            
+
+
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
                     value.into_inner()
@@ -145,39 +168,167 @@ class ConstrainedStringGenerator(
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,
             "From" to RuntimeType.From,
-            "TryFrom" to RuntimeType.TryFrom,
         )
 
         val constraintViolationModuleName = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
         writer.withModule(RustModule(constraintViolationModuleName, RustMetadata(visibility = constrainedTypeVisibility))) {
-            rust(
-                """
-                ##[derive(Debug, PartialEq)]
-                pub enum ${constraintViolation.name} {
-                    Length(usize),
-                }
-                """,
-            )
+            renderConstraintViolationEnum(this, shape, constraintViolation)
+        }
+    }
 
-            if (shape.isReachableFromOperationInput()) {
-                rustBlock("impl ${constraintViolation.name}") {
-                    rustBlockTemplate(
-                        "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
-                        "String" to RuntimeType.String,
-                    ) {
-                        rustBlock("match self") {
-                            rust(
-                                """
-                                Self::Length(length) => crate::model::ValidationExceptionField {
-                                    message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                                    path,
-                                },
-                                """,
-                            )
+    private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
+        writer.rustTemplate(
+            """
+            ##[derive(Debug, PartialEq)]
+            pub enum ${constraintViolation.name} {
+              #{Variants:W}
+            }
+            """,
+            "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
+        )
+
+        if (shape.isReachableFromOperationInput()) {
+            writer.rustTemplate(
+                """
+                impl ${constraintViolation.name} {
+                    pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                        match self {
+                            #{ValidationExceptionFields:W}
                         }
                     }
                 }
-            }
+                """,
+                "String" to RuntimeType.String,
+                "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
+            )
         }
     }
+}
+private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
+    override fun toTraitInfo(): TraitInfo {
+        return TraitInfo(
+            { rust("Self::check_length(&value)?;") },
+            {
+                docs("Error when a string doesn't satisfy its `@length` requirements.")
+                rust("Length(usize)")
+            },
+            {
+                rust(
+                    """
+                    Self::Length(length) => crate::model::ValidationExceptionField {
+                        message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                        path,
+                    },
+                    """,
+                )
+            },
+            this::renderValidationFunction,
+        )
+    }
+
+    /**
+     * Renders a `check_length` function to validate the string matches the
+     * required length indicated by the `@length` trait.
+     */
+    private fun renderValidationFunction(constraintViolation: Symbol): Writable {
+        return {
+            val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
+                "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
+            } else if (lengthTrait.min.isPresent) {
+                "${lengthTrait.min.get()} <= length"
+            } else {
+                "length <= ${lengthTrait.max.get()}"
+            }
+
+            rust(
+                """
+                fn check_length(string: &str) -> Result<(), $constraintViolation> {
+                    let length = string.chars().count();
+
+                    if $condition {
+                        Ok(())
+                    } else {
+                        Err($constraintViolation::Length(length))
+                    }
+                }
+                """,
+            )
+        }
+    }
+}
+
+private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
+    override fun toTraitInfo(): TraitInfo {
+        val pattern = patternTrait.pattern
+
+        return TraitInfo(
+            { rust("let value = Self::check_pattern(value)?;") },
+            {
+                docs("Error when a string doesn't satisfy its `@pattern`.")
+                docs("Contains the String that failed the pattern.")
+                rust("Pattern(String)")
+            },
+            {
+                rust(
+                    """
+                    Self::Pattern(string) => crate::model::ValidationExceptionField {
+                        message: format!("${patternTrait.validationErrorMessage()}", &string, &path, r##"$pattern"##),
+                        path
+                    },
+                    """,
+                )
+            },
+            this::renderValidationFunction,
+        )
+    }
+
+    /**
+     * Renders a `check_pattern` function to validate the string matches the
+     * supplied regex in the `@pattern` trait.
+     */
+    private fun renderValidationFunction(constraintViolation: Symbol): Writable {
+        val pattern = patternTrait.pattern
+        val errorMessageForUnsupportedRegex = """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support"""
+
+        return {
+            rustTemplate(
+                """
+                fn check_pattern(string: String) -> Result<String, $constraintViolation> {
+                    let regex = Self::compile_regex();
+
+                    if regex.is_match(&string) {
+                        Ok(string)
+                    } else {
+                        Err($constraintViolation::Pattern(string))
+                    }
+                }
+
+                pub fn compile_regex() -> &'static #{Regex}::Regex {
+                    static REGEX: #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##));
+
+                    &REGEX
+                }
+                """,
+                "Regex" to ServerCargoDependency.Regex.toType(),
+                "OnceCell" to ServerCargoDependency.OnceCell.toType(),
+            )
+        }
+    }
+}
+
+private sealed class StringTraitInfo {
+    companion object {
+        fun fromTrait(trait: Trait): StringTraitInfo =
+            when (trait) {
+                is PatternTrait -> {
+                    Pattern(trait)
+                }
+                is LengthTrait -> {
+                    Length(trait)
+                }
+                else -> PANIC("StringTraitInfo.fromTrait called with unsupported trait $trait")
+            }
+    }
+
+    abstract fun toTraitInfo(): TraitInfo
 }
