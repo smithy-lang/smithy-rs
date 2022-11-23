@@ -335,7 +335,7 @@ class JsonParserGenerator(
                     .map(#{Type}::try_from)
                     .transpose()?
                 """,
-                "Type" to returnSymbolToParse(target).symbol.rustType(),
+                "Type" to returnSymbolToParse(target).symbol,
                 *codegenScope,
             )
         }
