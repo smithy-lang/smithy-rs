@@ -177,25 +177,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
-    fun `it should detect when the pattern trait on string shapes is used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                patternString: PatternString
-            }
-
-            @pattern("^[A-Za-z]+$")
-            string PatternString
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The string shape `test#PatternString` has the constraint trait `smithy.api#pattern` attached"
-    }
-
-    @Test
     fun `it should detect when the range trait is used on a shape we do not support`() {
         val model =
             """
