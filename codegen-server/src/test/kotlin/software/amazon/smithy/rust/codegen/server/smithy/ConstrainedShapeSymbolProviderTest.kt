@@ -85,13 +85,12 @@ class ConstrainedShapeSymbolProviderTest {
 
     companion object {
         @JvmStatic
-        fun getShapes(): Stream<Arguments> {
-            return Stream.of(
-                Arguments.of("ConstrainedInteger", { s: Shape -> s.isIntegerShape }),
-                Arguments.of("ConstrainedString", { s: Shape -> s.isStringShape }),
-                Arguments.of("ConstrainedMap", { s: Shape -> s.isMapShape }),
+        fun getShapes(): Stream<Arguments> =
+            Stream.of(
+                Arguments.of("ConstrainedInteger", { s: Shape -> s is IntegerShape }),
+                Arguments.of("ConstrainedString", { s: Shape -> s is StringShape }),
+                Arguments.of("ConstrainedMap", { s: Shape -> s is MapShape }),
             )
-        }
     }
 
     @Test
