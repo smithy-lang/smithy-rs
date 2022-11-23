@@ -43,7 +43,7 @@ apply MalformedRange @httpMalformedRequestTests([
             method: "POST",
             uri: "/MalformedRange",
             body: """
-            { "byte" : $value:L }""",
+            { "short" : $value:L }""",
             headers: {
                 "content-type": "application/json"
             }
@@ -136,7 +136,7 @@ apply MalformedRange @httpMalformedRequestTests([
             method: "POST",
             uri: "/MalformedRange",
             body: """
-            { "byte" : $value:L }""",
+            { "integer" : $value:L }""",
             headers: {
                 "content-type": "application/json"
             }
@@ -229,7 +229,7 @@ apply MalformedRange @httpMalformedRequestTests([
             method: "POST",
             uri: "/MalformedRange",
             body: """
-            { "byte" : $value:L }""",
+            { "long" : $value:L }""",
             headers: {
                 "content-type": "application/json"
             }
