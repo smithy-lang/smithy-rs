@@ -83,10 +83,6 @@ class UnconstrainedShapeSymbolProvider(
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
-    private val visibility = when (publicConstrainedTypes) {
-        true -> Visibility.PUBLIC
-        false -> Visibility.PUBCRATE
-    }
 
     /**
      * Unconstrained type names are always suffixed with `Unconstrained` for clarity, even though we could dispense with it
@@ -94,18 +90,19 @@ class UnconstrainedShapeSymbolProvider(
      */
     private fun unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape: Shape): String {
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
+        // Normally, one could use the base symbol provider's name. However, in this case, the name will be `Vec` or
+        // `HashMap` because the symbol provider _does not_ newtype the shapes. However, for unconstrained shapes,
+        // we need to introduce a newtype that preserves the original name of the shape from smithy. To handle that,
+        // we load the name of the shape directly from the model prior to add `Unconstrained`.
         return RustReservedWords.escapeIfNeeded(shape.contextName(serviceShape).toPascalCase() + "Unconstrained")
     }
 
-    // this is required because the `Name` field on the symbol is `Vec` (since usually it would be rendered as `Vec<Foo>`
-    // directly
     private fun unconstrainedSymbolForCollectionOrMapOrUnionShape(shape: Shape): Symbol {
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
         val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape)
         val module = RustModule.new(
             RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
-            // NOTE: this is to preserve the codegen diff, but pub(crate) modules are the same as private ones
             visibility = Visibility.PUBCRATE,
             parent = UnconstrainedModule,
             inline = true,

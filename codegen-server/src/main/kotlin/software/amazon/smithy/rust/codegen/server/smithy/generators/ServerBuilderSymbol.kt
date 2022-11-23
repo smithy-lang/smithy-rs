@@ -31,11 +31,11 @@ fun StructureShape.serverBuilderSymbol(symbolProvider: SymbolProvider, pubCrate:
         } else {
             ""
         }
-    val vis = when (pubCrate) {
+    val visibility = when (pubCrate) {
         true -> Visibility.PUBCRATE
         false -> Visibility.PUBLIC
     }
-    val builderModule = RustModule.new(builderNamespace, vis, parent = structureSymbol.module(), inline = true)
+    val builderModule = RustModule.new(builderNamespace, visibility, parent = structureSymbol.module(), inline = true)
     val rustType = RustType.Opaque("Builder", builderModule.fullyQualifiedPath())
     return Symbol.builder()
         .rustType(rustType)

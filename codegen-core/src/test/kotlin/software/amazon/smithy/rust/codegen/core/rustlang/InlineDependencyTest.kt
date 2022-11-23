@@ -33,8 +33,8 @@ internal class InlineDependencyTest {
     @Test
     fun `locate dependencies from the inlineable module`() {
         val dep = InlineDependency.idempotencyToken()
-        val testWriter = TestWorkspace.testProject()
-        testWriter.unitTest {
+        val testProject = TestWorkspace.testProject()
+        testProject.unitTest {
             rustTemplate(
                 """
                 use #{idempotency}::uuid_v4;
@@ -45,7 +45,7 @@ internal class InlineDependencyTest {
                 "idempotency" to dep.asType(),
             )
         }
-        testWriter.compileAndTest()
+        testProject.compileAndTest()
     }
 
     @Test

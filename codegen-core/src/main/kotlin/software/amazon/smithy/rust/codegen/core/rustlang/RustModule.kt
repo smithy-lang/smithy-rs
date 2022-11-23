@@ -38,6 +38,10 @@ sealed class RustModule {
             check(name != "") {
                 "Module name cannot be empty"
             }
+
+            check(!RustReservedWords.isReserved(name)) {
+                "Module `$name` cannot be a module name—it is a reserved word."
+            }
         }
     }
 
@@ -51,7 +55,13 @@ sealed class RustModule {
             inline: Boolean = false,
             parent: RustModule = LibRs,
         ): LeafModule {
-            return LeafModule(name, RustMetadata(visibility = visibility), documentation, inline = inline, parent = parent)
+            return LeafModule(
+                RustReservedWords.escapeIfNeeded(name),
+                RustMetadata(visibility = visibility),
+                documentation,
+                inline = inline,
+                parent = parent,
+            )
         }
 
         /** Creates a new public module */
