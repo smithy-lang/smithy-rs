@@ -20,9 +20,9 @@ class SerializerUtil(private val model: Model) {
             // Zero values are always serialized in lists and collections, this only applies to structures
             model.expectShape(shape.container) !is StructureShape
         ) {
-            this.ifNotDefault(model.expectShape(shape.target), value.name) { inner(this) }
-        } else {
             inner(this)
+        } else {
+            this.ifNotDefault(model.expectShape(shape.target), value.name) { inner(this) }
         }
     }
 }
