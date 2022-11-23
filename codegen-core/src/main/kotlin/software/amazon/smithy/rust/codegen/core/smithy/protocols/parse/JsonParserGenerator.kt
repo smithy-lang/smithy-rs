@@ -50,7 +50,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.deserializeFunctionName
-import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -332,10 +331,10 @@ class JsonParserGenerator(
             rustTemplate(
                 """
                 #{expect_number_or_null}(tokens.next())?
-                    .map(#{Type}::try_from)
+                    .map(#{NumberType}::try_from)
                     .transpose()?
                 """,
-                "Type" to returnSymbolToParse(target).symbol,
+                "NumberType" to returnSymbolToParse(target).symbol,
                 *codegenScope,
             )
         }
