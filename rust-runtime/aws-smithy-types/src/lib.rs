@@ -14,7 +14,10 @@
 )]
 
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize, de::Visitor};
+#[cfg(feature = "unstable-serde-deserialize")]
+use serde::{Deserialize, de::Visitor};
+#[cfg(feature = "unstable-serde-serialize")]
+use serde::Serialize;
 pub mod base64;
 pub mod date_time;
 pub mod endpoint;
@@ -42,8 +45,6 @@ impl Serialize for Blob {
     }
 }
 
-#[cfg(feature = "unstable-serde-deserialize")]
-pub use deserialize_blob::*;
 #[cfg(feature = "unstable-serde-deserialize")]
 mod deserialize_blob {
     use super::*;
@@ -105,8 +106,10 @@ impl AsRef<[u8]> for Blob {
 /// Open content is useful for modeling unstructured data that has no schema, data that can't be
 /// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
 /// The serialization format of a document is an implementation detail of a protocol.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "unstable-serde-serialize", derive(Serialize))]
+#[cfg_attr(feature = "unstable-serde-deserialize", derive(Deserialize))]
+#[cfg_attr(any(feature = "unstable-serde-deserialize", feature = "unstable-serde-serialize"), serde(untagged))]
 pub enum Document {
     /// JSON object
     Object(HashMap<String, Document>),
@@ -122,9 +125,35 @@ pub enum Document {
     Null,
 }
 
+impl From<bool> for Document {
+    fn from(value: bool) -> Self {
+        Document::Bool(value)
+    }
+}
+
+impl From<String> for Document {
+    fn from(value: String) -> Self {
+        Document::String(value)
+    }
+}
+
+impl From<Vec<Document>> for Document {
+    fn from(values: Vec<Document>) -> Self {
+        Document::Array(values)
+    }
+}
+
+impl From<HashMap<String, Document>> for Document {
+    fn from(values: HashMap<String, Document>) -> Self {
+        Document::Object(values)
+    }
+}
+
+
 
 /// checks if a) serialization of json suceeds and b) it is compatible with serde_json
 #[test]
+#[cfg(all(feature = "unstable-serde-serialize", feature = "unstable-serde-deserialize"))]
 fn serialize_json() {
     let mut map: HashMap<String, Document> = HashMap::new();
     // string
@@ -156,34 +185,11 @@ fn serialize_json() {
     assert_eq!(obj, doc.unwrap());
 }
 
-impl From<bool> for Document {
-    fn from(value: bool) -> Self {
-        Document::Bool(value)
-    }
-}
-
-impl From<String> for Document {
-    fn from(value: String) -> Self {
-        Document::String(value)
-    }
-}
-
-impl From<Vec<Document>> for Document {
-    fn from(values: Vec<Document>) -> Self {
-        Document::Array(values)
-    }
-}
-
-impl From<HashMap<String, Document>> for Document {
-    fn from(values: HashMap<String, Document>) -> Self {
-        Document::Object(values)
-    }
-}
-
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "unstable-serde-deserialize", derive(Deserialize))]
+#[cfg_attr(any(feature = "unstable-serde-deserialize", feature = "unstable-serde-serialize"), serde(untagged))]
 pub enum Number {
     /// Unsigned 64-bit integer value.
     PosInt(u64),
@@ -193,22 +199,7 @@ pub enum Number {
     Float(f64),
 }
 
-#[test]
-/// ensures that numbers are deserialized as expected
-/// 0 <= PosInt  
-/// 0 > NegInt  
-/// non integer values == Float
-fn number_deserialization_works() {
-    let n: Number = serde_json::from_str("1.1").unwrap();
-    assert_eq!(n, Number::Float(1.1));
-    let n: Number = serde_json::from_str("1").unwrap();
-    assert_eq!(n, Number::PosInt(1));
-    let n: Number = serde_json::from_str("0").unwrap();
-    assert_eq!(n, Number::PosInt(0));
-    let n: Number = serde_json::from_str("-1").unwrap();
-    assert_eq!(n, Number::NegInt(-1));
-}
-
+#[cfg(feature = "unstable-serde-serialize")]
 impl Serialize for Number {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -245,6 +236,24 @@ impl Number {
         }
     }
 }
+
+#[test]
+#[cfg(any(feature = "unstable-serde-deserialize", feature = "unstable-serde-serialize"))]
+/// ensures that numbers are deserialized as expected
+/// 0 <= PosInt  
+/// 0 > NegInt  
+/// non integer values == Float
+fn number_deserialization_works() {
+    let n: Number = serde_json::from_str("1.1").unwrap();
+    assert_eq!(n, Number::Float(1.1));
+    let n: Number = serde_json::from_str("1").unwrap();
+    assert_eq!(n, Number::PosInt(1));
+    let n: Number = serde_json::from_str("0").unwrap();
+    assert_eq!(n, Number::PosInt(0));
+    let n: Number = serde_json::from_str("-1").unwrap();
+    assert_eq!(n, Number::NegInt(-1));
+}
+
 
 /// The error type returned when conversion into an integer type or floating point type is lossy.
 #[derive(Debug)]
