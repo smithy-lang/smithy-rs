@@ -5,7 +5,7 @@
 
 use std::{
     borrow::Cow,
-    path::{Component, Path, PathBuf},
+    path::{Component, Path},
 };
 
 // Normalzie `uri_path` according to
@@ -31,35 +31,44 @@ pub(super) fn normalize_uri_path(uri_path: &str) -> Cow<'_, str> {
 }
 
 // Implement 5.2.4. Remove Dot Segments in https://www.rfc-editor.org/rfc/rfc3986
-//
-// We copy the code from https://docs.rs/cargo-util/latest/cargo_util/paths/fn.normalize_path.html
 fn normalize_path_segment(uri_path: &str) -> String {
     let path = Path::new(uri_path);
-    let mut components = path.components().peekable();
-    let mut result = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
-        components.next();
-        PathBuf::from(c.as_os_str())
-    } else {
-        PathBuf::new()
-    };
+    let mut result: Vec<String> = Vec::new();
 
-    for component in components {
+    for component in path.components() {
         match component {
             Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                result.push(component.as_os_str());
-            }
+            Component::RootDir => {}
             Component::CurDir => {}
             Component::ParentDir => {
                 result.pop();
             }
             Component::Normal(c) => {
-                result.push(c);
+                result.push(
+                    c.to_str()
+                        .expect("component in URI path should be valid Unicode")
+                        .to_owned(),
+                );
             }
         }
     }
 
-    result.into_os_string().into_string().unwrap()
+    let mut result = result.join("/");
+    if uri_path.starts_with('/') {
+        result.insert(0, '/');
+    }
+    if ends_with_slash(uri_path) && result != "/" {
+        result.push('/');
+    }
+
+    result
+}
+
+fn ends_with_slash(uri_path: &str) -> bool {
+    // These are all translated to "/" per 2.B and 2.C in section 5.2.4 in RFC 3986.
+    ["/", "/.", "/./", "/..", "/../"]
+        .iter()
+        .any(|s| uri_path.ends_with(s))
 }
 
 #[cfg(test)]
@@ -80,7 +89,8 @@ mod tests {
     }
 
     #[test]
-    fn normalize_uri_path_should_not_modify_single_segment_starting_with_a_single_forward_slash() {
+    fn normalize_uri_path_should_not_modify_single_non_dot_segment_starting_with_a_single_forward_slash(
+    ) {
         assert_eq!(normalize_uri_path("/foo"), Cow::Borrowed("/foo"));
     }
 
@@ -93,13 +103,14 @@ mod tests {
     }
 
     #[test]
-    fn normalize_uri_path_should_not_modify_multiple_segments_starting_with_a_single_forward_slash()
-    {
+    fn normalize_uri_path_should_not_modify_multiple_non_dot_segments_starting_with_a_single_forward_slash(
+    ) {
         assert_eq!(normalize_uri_path("/foo/bar"), Cow::Borrowed("/foo/bar"));
     }
 
     #[test]
-    fn normalize_uri_path_should_not_modify_multiple_segments_with_a_trailing_forward_slash() {
+    fn normalize_uri_path_should_not_modify_multiple_non_dot_segments_with_a_trailing_forward_slash(
+    ) {
         assert_eq!(normalize_uri_path("/foo/bar/"), Cow::Borrowed("/foo/bar/"));
     }
 
@@ -150,6 +161,18 @@ mod tests {
             normalize_uri_path("/./foo"),
             Cow::<'_, str>::Owned("/foo".to_owned())
         );
+        assert_eq!(
+            normalize_uri_path("/foo/bar/."),
+            Cow::<'_, str>::Owned("/foo/bar/".to_owned())
+        );
+        assert_eq!(
+            normalize_uri_path("/foo/bar/./"),
+            Cow::<'_, str>::Owned("/foo/bar/".to_owned())
+        );
+        assert_eq!(
+            normalize_uri_path("/foo/./bar/./"),
+            Cow::<'_, str>::Owned("/foo/bar/".to_owned())
+        );
     }
 
     // 2.C in https://www.rfc-editor.org/rfc/rfc3986#section-5.2.4
@@ -166,6 +189,18 @@ mod tests {
         assert_eq!(
             normalize_uri_path("/../foo"),
             Cow::<'_, str>::Owned("/foo".to_owned())
+        );
+        assert_eq!(
+            normalize_uri_path("/foo/bar/.."),
+            Cow::<'_, str>::Owned("/foo/".to_owned())
+        );
+        assert_eq!(
+            normalize_uri_path("/foo/bar/../"),
+            Cow::<'_, str>::Owned("/foo/".to_owned())
+        );
+        assert_eq!(
+            normalize_uri_path("/foo/../bar/../"),
+            Cow::<'_, str>::Owned("/".to_owned())
         );
     }
 
