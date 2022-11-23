@@ -288,6 +288,7 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
      */
     private fun renderValidationFunction(constraintViolation: Symbol): Writable {
         val pattern = patternTrait.pattern
+        val errorMessageForUnsupportedRegex = """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support"""
 
         return {
             rustTemplate(
@@ -305,10 +306,7 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                 pub fn compile_regex() -> &'static #{Regex}::Regex {
                     static REGEX: #{OnceCell}::sync::OnceCell<#{Regex}::Regex> = #{OnceCell}::sync::OnceCell::new();
 
-                    REGEX.get_or_init(||
-                        #{Regex}::Regex::new(r##"$pattern"##)
-                            .unwrap_or_else(|_| panic!("The regular expression {} is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support", r##"$pattern"##))
-                    )
+                    REGEX.get_or_init(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##))
                 }
                 """,
                 "Regex" to ServerCargoDependency.Regex.toType(),
