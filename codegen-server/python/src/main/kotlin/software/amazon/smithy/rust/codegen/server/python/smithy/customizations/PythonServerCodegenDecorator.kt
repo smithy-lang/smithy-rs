@@ -113,7 +113,7 @@ class PyProjectTomlDecorator : RustCodegenDecorator<ServerProtocolGenerator, Ser
     override val order: Byte = 0
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
-        rustCrate.withFile("pyproject.toml") { 
+        rustCrate.withFile("pyproject.toml") {
             val config = mapOf(
                 "build-system" to listOfNotNull(
                     "requires" to listOfNotNull("maturin>=0.14,<0.15"),
@@ -127,7 +127,6 @@ class PyProjectTomlDecorator : RustCodegenDecorator<ServerProtocolGenerator, Ser
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
-
 
 val DECORATORS = listOf(
     /**
