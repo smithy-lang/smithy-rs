@@ -229,7 +229,7 @@ fun validateUnsupportedConstraints(model: Model, service: ServiceShape, codegenC
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
         .asSequence()
-        .filter { !it.isIntegerShape }
+        .filterIsInstance<IntegerShape>()
         .filterMapShapesToTraits(setOf(RangeTrait::class.java))
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()
