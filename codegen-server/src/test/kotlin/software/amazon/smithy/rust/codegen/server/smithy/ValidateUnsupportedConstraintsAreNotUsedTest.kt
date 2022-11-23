@@ -229,11 +229,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 uniqueItemsList: UniqueItemsList
             }
-            
+
             @uniqueItems
             list UniqueItemsList {
                 member: String

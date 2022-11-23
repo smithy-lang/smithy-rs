@@ -242,13 +242,17 @@ message = """
 
 * The `length` trait on `string` shapes.
 * The `length` trait on `map` shapes.
+<<<<<<< HEAD
 * The `range` trait on `integer` shapes.
+=======
+* The `pattern` trait on `string` shapes.
+>>>>>>> main
 
 Upon receiving a request that violates the modeled constraints, the server SDK will reject it with a message indicating why.
 
 Unsupported (constraint trait, target shape) combinations will now fail at code generation time, whereas previously they were just ignored. This is a breaking change to raise awareness in service owners of their server SDKs behaving differently than what was modeled. To continue generating a server SDK with unsupported constraint traits, set `codegenConfig.ignoreUnsupportedConstraints` to `true` in your `smithy-build.json`.
 """
-references = ["smithy-rs#1199", "smithy-rs#1342", "smithy-rs#1401", "smithy-rs#2005"]
+references = ["smithy-rs#1199", "smithy-rs#1342", "smithy-rs#1401", "smithy-rs#2005", "smithy-rs#1998"]
 meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "server" }
 author = "david-perez"
 

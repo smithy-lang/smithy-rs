@@ -22,6 +22,7 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -42,6 +43,8 @@ fun Shape.hasConstraintTrait() =
         hasTrait<PatternTrait>() ||
         hasTrait<RangeTrait>() ||
         hasTrait<RequiredTrait>()
+
+val supportedStringConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait::class.java, PatternTrait::class.java)
 
 /**
  * We say a shape is _directly_ constrained if:
@@ -67,7 +70,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     is MapShape -> this.hasTrait<LengthTrait>()
-    is StringShape -> this.hasTrait<EnumTrait>() || this.hasTrait<LengthTrait>()
+    is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
     is IntegerShape -> this.hasTrait<RangeTrait>()
     else -> false
 }
@@ -93,7 +96,7 @@ fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: Sym
 
 fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTypes: Boolean): Boolean = when (this) {
     is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
-    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && this.hasTrait<LengthTrait>())
+    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
     is IntegerShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
     else -> false
