@@ -10,7 +10,7 @@ use smithy.framework#ValidationException
 /// A REST JSON service that sends JSON requests and responses with validation applied
 @service(sdkId: "Rest Json Validation Protocol")
 @restJson1
-service RestJsonValidation {
+service MalformedRangeValidation {
     version: "2022-11-23",
     operations: [
         MalformedRange,

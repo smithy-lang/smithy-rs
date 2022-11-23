@@ -907,6 +907,7 @@ class ServerProtocolTestGenerator(
         private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
+        private const val MalformedRangeValidation = "aws.protocoltests.extras.restjson.validation#MalformedRangeValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
             // Pending merge from the Smithy team: see https://github.com/awslabs/smithy/pull/1477.
             FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
@@ -994,6 +995,31 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinByte", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternSensitiveString", TestType.MalformedRequest),
+
+            // Tests involving using @range on bytes, shorts and longs.
+            // See https://github.com/awslabs/smithy-rs/issues/1968
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShort_case0", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShort_case1", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeLong_case0", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeLong_case1", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxShort", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxLong", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinShort", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinLong", TestType.MalformedRequest),
+
+            // See https://github.com/awslabs/smithy-rs/issues/1969
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShortOverride_case0", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShortOverride_case1", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeIntegerOverride_case0", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeIntegerOverride_case1", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeLongOverride_case0", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeLongOverride_case1", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxShortOverride", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxIntegerOverride", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxLongOverride", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinShortOverride", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinIntegerOverride", TestType.MalformedRequest),
+            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinLongOverride", TestType.MalformedRequest),
 
             // Some tests for the S3 service (restXml).
             FailingTest("com.amazonaws.s3#AmazonS3", "GetBucketLocationUnwrappedOutput", TestType.Response),

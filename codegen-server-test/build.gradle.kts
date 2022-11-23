@@ -70,7 +70,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
         CodegenTest(
-            "aws.protocoltests.extras.restjson.validation#RestJsonValidation", "malformed_range_extras",
+            "aws.protocoltests.extras.restjson.validation#MalformedRangeValidation", "malformed_range_extras",
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
             imports = listOf("$commonModels/malformed-range-extras.smithy"),
         ),
