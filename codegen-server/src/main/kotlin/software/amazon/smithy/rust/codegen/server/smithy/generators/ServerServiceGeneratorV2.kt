@@ -330,7 +330,7 @@ class ServerServiceGeneratorV2(
             /// Use [`$builderName`] to construct the
             /// `$serviceName`. For each of the [operations] modeled in
             /// your Smithy service, you need to provide an implementation in the
-            /// form of a Rust async function or closure that takes in the
+            /// form of an async function that takes in the
             /// operation's input as their first parameter, and returns the
             /// operation's output. If your operation is fallible (i.e. it
             /// contains the `errors` member in your Smithy model), the function
@@ -339,9 +339,9 @@ class ServerServiceGeneratorV2(
             /// operations with the correct signature**, or your application
             /// will fail to compile.
             ///
-            /// [`$serviceName`] implements [`tower::make::MakeService`], a _service
-            /// factory_. You can feed this value to a [Hyper server], and the
-            /// server will instantiate and [`serve`] your service, calling [`$serviceName::into_make_service`].
+            /// [`$serviceName`] can be converted into a type that implements [`tower::make::MakeService`], a _service
+            /// factory_, calling [`$serviceName::into_make_service`]. You can feed this value to a [Hyper server], and the
+            /// server will instantiate and [`serve`] your service.
             ///
             /// [`$serviceName::into_make_service_with_connect_info`] converts $serviceName into [`tower::make::MakeService`]
             /// with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
