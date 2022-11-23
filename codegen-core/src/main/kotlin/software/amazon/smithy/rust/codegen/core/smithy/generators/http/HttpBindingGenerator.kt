@@ -553,7 +553,7 @@ class HttpBindingGenerator(
             // This variable assignment ensures that the name of the value expression is always a valid variable name
             // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
             // This allows later customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
-            rust("""let $local = &input.$memberName;""")
+            rust("let $local = &input.$memberName;")
             val memberSymbol = symbolProvider.toSymbol(memberShape)
             // If a header is of a primitive type and required (e.g. `bool`), we do not serialize it on the
             // wire if it's set to the default value for that primitive type (e.g. `false` for `bool`).
