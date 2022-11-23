@@ -94,7 +94,7 @@ fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: Sym
 
 fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTypes: Boolean): Boolean = when (this) {
     is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
-    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && this.hasTrait<LengthTrait>())
+    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
     else -> false
 }
