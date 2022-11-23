@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 
 class SerializerUtil(private val model: Model) {
     fun RustWriter.ignoreZeroValues(shape: MemberShape, value: ValueExpression, inner: Writable) {
@@ -20,7 +21,9 @@ class SerializerUtil(private val model: Model) {
             // Zero values are always serialized in lists and collections, this only applies to structures
             model.expectShape(shape.container) !is StructureShape
         ) {
-            inner(this)
+            rustBlock("") {
+                inner(this)
+            }
         } else {
             this.ifNotDefault(model.expectShape(shape.target), value.name) { inner(this) }
         }

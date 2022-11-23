@@ -497,7 +497,9 @@ class RustWriter private constructor(
                 block(outerField)
             }
 
-            else -> this.block(outerField)
+            else -> rustBlock("") {
+                this.block(outerField)
+            }
         }
     }
 
