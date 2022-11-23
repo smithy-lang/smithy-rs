@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
+import com.moandjiezana.toml.TomlWriter
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -103,6 +104,31 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerProtocolGenerator,
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
+/**
+ * Generates `pyproject.toml` for the crate.
+ *  - Configures Maturin as the build system
+ */
+class PyProjectTomlDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+    override val name: String = "PyProjectTomlDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        rustCrate.withFile("pyproject.toml") { 
+            val config = mapOf(
+                "build-system" to listOfNotNull(
+                    "requires" to listOfNotNull("maturin>=0.14,<0.15"),
+                    "build-backend" to "maturin",
+                ).toMap(),
+            )
+            writeWithNoFormatting(TomlWriter().write(config))
+        }
+    }
+
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
+}
+
+
 val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
@@ -115,4 +141,6 @@ val DECORATORS = listOf(
     PubUsePythonTypesDecorator(),
     // Render the Python shared library export.
     PythonExportModuleDecorator(),
+    // Generate `pyproject.toml` for the crate.
+    PyProjectTomlDecorator(),
 )
