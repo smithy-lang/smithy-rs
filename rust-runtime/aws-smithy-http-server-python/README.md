@@ -13,8 +13,8 @@ instead of the [Hyper](https://hyper.rs/) HTTP server.
 In your `app.py`:
 
 ```diff
-from libpokemon_service_server_sdk import App
-from libpokemon_service_server_sdk.error import ResourceNotFoundException
+from pokemon_service_server_sdk import App
+from pokemon_service_server_sdk.error import ResourceNotFoundException
 
 # ...
 
@@ -70,5 +70,7 @@ CMD [ "/app.py" ]
 ```
 
 <!-- anchor_start:footer -->
+
 This crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) and the [smithy-rs](https://github.com/awslabs/smithy-rs) code generator. In most cases, it should not be used directly.
+
 <!-- anchor_end:footer -->
