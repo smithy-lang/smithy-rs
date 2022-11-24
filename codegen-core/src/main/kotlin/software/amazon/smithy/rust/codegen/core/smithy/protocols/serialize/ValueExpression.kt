@@ -23,10 +23,5 @@ sealed class ValueExpression {
         is Value -> "&$name"
     }
 
-    override fun toString(): String {
-        return when (this) {
-            is Reference -> name
-            is Value -> name
-        }
-    }
+    override fun toString(): String = this.name
 }
