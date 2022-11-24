@@ -44,6 +44,9 @@
 //!     .push(b);
 //! ```
 //!
+//! As noted in the [`PluginPipeline`] documentation, the plugins' runtime logic is executed in registration order,
+//! meaning that `a` is run _before_ `b` in the example above.
+//!
 
 mod closure;
 mod filter;
