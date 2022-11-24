@@ -483,15 +483,15 @@ class ServerServiceGeneratorV2(
                 }
             }
 
-        val hasErrors = service.errors.isNotEmpty()
+        val hasErrors = service.operations.any { model.expectShape(it).asOperationShape().get().errors.isNotEmpty() }
 
         writer.rustTemplate(
             """
             /// A fast and customizable Rust implementation of the $serviceName Smithy service.
             ///
             /// The primary export is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
-            /// trait and therefore can be handed to [`Hyper server`] using [`$serviceName::into_make_service`] or used in Lambda using [`#{SmithyHttpServer}::routing::LambdaHandler`].
-            /// The [`crate::${Inputs.namespace}`], ${if (hasErrors) "and " else ""}[`crate::${Outputs.namespace}`], ${if (!hasErrors) "and [`crate::${Errors.namespace}`]" else "" }
+            /// trait and therefore can be handed to [Hyper server] using [`$serviceName::into_make_service`] or used in Lambda using [`#{SmithyHttpServer}::routing::LambdaHandler`].
+            /// The [`crate::${Inputs.namespace}`], ${if (!hasErrors) "and " else ""}[`crate::${Outputs.namespace}`], ${if (hasErrors) "and [`crate::${Errors.namespace}`]" else "" }
             /// modules provide the types used in each operation.
             ///
             /// The primary export is [`$serviceName`]: it is the
@@ -511,14 +511,14 @@ class ServerServiceGeneratorV2(
             /// implementing the operation has to be fallible (i.e. return a [`Result`]).
             /// The possible forms for your async functions are:
             /// ```rust
-            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Result<Output, Error>;
-            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Output;
+            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Result<Output, Error>
+            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Output
             /// ```
             /// Both can take up to 8 extensions, or none:
             /// ```rust
             /// async fn handler_with_no_extensions(input: Input) -> ...;
-            /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}Extension<T>) -> ...;
-            /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}Extension<T>, ext1: #{SmithyHttpServer}Extension<T>) -> ...;
+            /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}Extension<T>) -> ...
+            /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}Extension<T>, ext1: #{SmithyHttpServer}Extension<T>) -> ...
             /// ...
             /// ```
             /// For a full list of the possible extensions, see: [`#{SmithyHttpServer}::request`]. Any `T: Send + Sync + 'static` is also allowed.
