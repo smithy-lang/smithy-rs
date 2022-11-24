@@ -1,0 +1,109 @@
+[
+    {
+      "connection_id": 0,
+      "action": {
+        "Request": {
+          "request": {
+            "uri": "https://s3.us-east-1.amazonaws.com/test-bucket-ad7c9f01-7f7b-4669-b550-75cc6d4df0f1/a/.././b.txt",
+            "headers": {
+              "x-amz-date": [
+                "20221124T023450Z"
+              ],
+              "x-amz-content-sha256": [
+                "4ae7c3b6ac0beff671efa8cf57386151c06e58ca53a78d83f36107316cec125f"
+              ],
+              "content-type": [
+                "application/octet-stream"
+              ],
+              "user-agent": [
+                "aws-sdk-rust/0.51.0 os/macos lang/rust/1.62.1"
+              ],
+              "x-amz-user-agent": [
+                "aws-sdk-rust/0.51.0 api/s3/0.21.0 os/macos lang/rust/1.62.1"
+              ],
+              "authorization": [
+                "AWS4-HMAC-SHA256 Credential=test/20221124/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-user-agent, Signature=e112b873ebcdf73ad09d97b064eb9c9a0a55bf4c21992a2db2297cbd5cc294f2"
+              ],
+              "content-length": [
+                "12"
+              ]
+            },
+            "method": "PUT"
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Data": {
+          "data": {
+            "Utf8": "Hello, world"
+          },
+          "direction": "Request"
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Request"
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Response": {
+          "response": {
+            "Ok": {
+              "status": 200,
+              "version": "HTTP/1.1",
+              "headers": {
+                "x-amz-id-2": [
+                  "sWWJL8KZzRAGtW2sO1uyoPBq+Z4SB3d/2s6TRqBzERuUW1RUdrS8hb6dIwYEOzV3ZzUDAfRHU44="
+                ],
+                "date": [
+                  "Thu, 24 Nov 2022 02:34:53 GMT"
+                ],
+                "x-amz-request-id": [
+                  "4YE7AB8BD8H9QHXC"
+                ],
+                "etag": [
+                    "\"bc6e6f16b8a077ef5fbc8d59d0b931b9\""
+                ],
+                "server": [
+                  "AmazonS3"
+                ],
+                "content-length": [
+                    "0"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Data": {
+          "data": {
+            "Utf8": ""
+          },
+          "direction": "Response"
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Response"
+        }
+      }
+    }
+  ]
