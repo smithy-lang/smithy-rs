@@ -17,9 +17,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.Errors
-import software.amazon.smithy.rust.codegen.core.smithy.Inputs
-import software.amazon.smithy.rust.codegen.core.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
+import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -491,7 +491,7 @@ class ServerServiceGeneratorV2(
             ///
             /// The primary export is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
             /// trait and therefore can be handed to [Hyper server] using [`$serviceName::into_make_service`] or used in Lambda using [`#{SmithyHttpServer}::routing::LambdaHandler`].
-            /// The [`crate::${Inputs.namespace}`], ${if (!hasErrors) "and " else ""}[`crate::${Outputs.namespace}`], ${if (hasErrors) "and [`crate::${Errors.namespace}`]" else "" }
+            /// The [`crate::${InputsModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputsModule.name}`], ${if (hasErrors) "and [`crate::${ErrorsModule.name}`]" else "" }
             /// modules provide the types used in each operation.
             ///
             /// The primary export is [`$serviceName`]: it is the
