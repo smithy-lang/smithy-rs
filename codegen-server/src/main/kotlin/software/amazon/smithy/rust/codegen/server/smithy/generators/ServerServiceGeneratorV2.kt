@@ -341,74 +341,8 @@ class ServerServiceGeneratorV2(
     private fun serviceStruct(): Writable = writable {
         documentShape(service, model)
 
-        val handlers: Writable = operations
-            .map { operation ->
-                DocHandlerGenerator(operation, "///", builderFieldNames[operation]!!, codegenContext).docSignature()
-            }
-            .reduce { acc, wt ->
-                writable {
-                    rustTemplate("#{acc:W} \n#{wt:W}", "acc" to acc, "wt" to wt)
-                }
-            }
-
         rustTemplate(
             """
-            /// The [`$builderName`] is the place where you can register
-            /// your service $serviceName's operation implementations.
-            ///
-            /// Use [`$serviceName::builder_without_plugins()`] to construct the $builderName, to build
-            /// `$serviceName`. For each of the [operations] modeled in
-            /// your Smithy service, you need to provide an implementation in the
-            /// form of an async function that takes in the
-            /// operation's input as their first parameter, and returns the
-            /// operation's output. If your operation is fallible (i.e. it
-            /// contains the `errors` member in your Smithy model), the function
-            /// implementing the operation has to be fallible (i.e. return a
-            /// [`Result`]). **You must register an implementation for all
-            /// operations with the correct signature**, or your service
-            /// will fail to build at runtime and panic.
-            ///
-            /// [`$serviceName`] can be converted into a type that implements [`tower::make::MakeService`], a _service
-            /// factory_, calling [`$serviceName::into_make_service`]. You can feed this value to a [Hyper server], and the
-            /// server will instantiate and [`serve`] your service.
-            ///
-            /// [`$serviceName::into_make_service_with_connect_info`] converts $serviceName into [`tower::make::MakeService`]
-            /// with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
-            /// You can write your implementations to be passed in the connection information, populated by the [Hyper server].
-            ///
-            /// Here's a full example to get you started:
-            ///
-            /// ```rust
-            /// use std::net::SocketAddr;
-            /// use ${codegenContext.moduleUseName()}::$serviceName;
-            ///
-            /// ##[tokio::main]
-            /// pub async fn main() {
-            ///    let app = $serviceName::builder_without_plugins()
-            ${builderFieldNames.values.joinToString("\n") { "///        .$it($it)" }}
-            ///        .build()
-            ///        .expect("failed to build an instance of $serviceName");
-            ///
-            ///    let bind: SocketAddr = "127.0.0.1:6969".parse()
-            ///        .expect("unable to parse the server bind address and port");
-            ///
-            ///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
-            ///
-            ///    // Run your service!
-            ///    // if let Err(err) = server.await {
-            ///    //   eprintln!("server error: {}", err);
-            ///    // }
-            /// }
-            ///
-            #{Handlers:W}
-            ///
-            /// ```
-            ///
-            /// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
-            /// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
-            /// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
-            /// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
-            /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
@@ -496,7 +430,6 @@ class ServerServiceGeneratorV2(
             "NotSetFields" to notSetFields.join(", "),
             "Router" to protocol.routerType(),
             "Protocol" to protocol.markerStruct(),
-            "Handlers" to handlers,
             *codegenScope,
         )
     }
@@ -536,8 +469,99 @@ class ServerServiceGeneratorV2(
     }
 
     fun render(writer: RustWriter) {
+        val handlers: Writable = operations
+            .map { operation ->
+                DocHandlerGenerator(operation, "///", builderFieldNames[operation]!!, codegenContext).docSignature()
+            }
+            .reduce { acc, wt ->
+                writable {
+                    rustTemplate("#{acc:W} \n#{wt:W}", "acc" to acc, "wt" to wt)
+                }
+            }
+
         writer.rustTemplate(
             """
+            /// This module contains the implementation of $serviceName.
+            /// [`$serviceName`] is used to set your business logic to implement your [operations],
+            /// customize your [operations]'s behaviors by applying middleware,
+            /// and run your server.
+            ///
+            /// [`$serviceName`] contains the [operations] modeled in your Smithy service.
+            /// You must set an implementation for all operations with the correct signature,
+            /// or your service will fail to be constructed at runtime and panic.
+            /// For each of the [operations] modeled in
+            /// your Smithy service, you need to provide an implementation in the
+            /// form of an async function that takes in the
+            /// operation's input as their first parameter, and returns the
+            /// operation's output. If your operation is fallible (i.e. it
+            /// contains the `errors` member in your Smithy model), the function
+            /// implementing the operation has to be fallible (i.e. return a
+            /// [`Result`]).
+            /// The possible forms for your async functions are:
+            /// ```rust
+            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Result<Output, Error>;
+            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Output;
+            /// ```
+            /// Both can take up to 8 extensions, or none:
+            /// ```rust
+            /// async fn handler_with_no_extensions(input: Input) -> ...;
+            /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}Extension<T>) -> ...;
+            /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}Extension<T>, ext1: #{SmithyHttpServer}Extension<T>) -> ...;
+            /// ...
+            /// ```
+            /// For a full list of the possible extensions, see: [`#{SmithyHttpServer}::request`]. Any `T: Send + Sync + 'static` is also allowed.
+            ///
+            /// To construct [`$serviceName`], you can build:
+            /// * [`$serviceName::builder_without_plugins()`] which returns a [`$builderName`] without any middleware applied.
+            /// * [`$serviceName::builder_with_plugins(plugins)`] which returns a [`$builderName`] that applies `plugins` to all your operations.
+            ///
+            /// To know more about plugins, see: [`#{SmithyHttpServer}::plugin`].
+            ///
+            /// When you have set all your operations, you can convert [`$serviceName`] into a [Service] calling:
+            /// * [`$serviceName::into_make_service`] that converts $serviceName into a type that implements [`tower::make::MakeService`], a _service factory_.
+            /// * [`$serviceName::into_make_service_with_connect_info`] that converts $serviceName into [`tower::make::MakeService`]
+            /// with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
+            /// You can write your implementations to be passed in the connection information, populated by the [Hyper server], as an [`#{SmithyHttpServer}Extension`].
+            ///
+            /// You can feed this value to a [Hyper server], and the
+            /// server will instantiate and [`serve`] your service.
+            ///
+            /// Here's a full example to get you started:
+            ///
+            /// ```rust
+            /// use std::net::SocketAddr;
+            /// use ${codegenContext.moduleUseName()}::$serviceName;
+            ///
+            /// ##[tokio::main]
+            /// pub async fn main() {
+            ///    let app = $serviceName::builder_without_plugins()
+            ${builderFieldNames.values.joinToString("\n") { "///        .$it($it)" }}
+            ///        .build()
+            ///        .expect("failed to build an instance of $serviceName");
+            ///
+            ///    let bind: SocketAddr = "127.0.0.1:6969".parse()
+            ///        .expect("unable to parse the server bind address and port");
+            ///
+            ///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+            ///    ## let server = async { Ok::<_, ()>(()) };
+            ///
+            ///    // Run your service!
+            ///    if let Err(err) = server.await {
+            ///      eprintln!("server error: {}", err);
+            ///    }
+            /// }
+            ///
+            #{Handlers:W}
+            ///
+            /// ```
+            ///
+            /// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
+            /// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
+            /// [HTTP binding traits]: https://smithy.io/2.0/spec/http-bindings.html
+            /// [operations]: https://smithy.io/2.0/spec/service-types.html##operation
+            /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
+            /// [Service]: https://docs.rs/tower-service/latest/tower_service/trait.Service.html
+
             #{Builder:W}
 
             #{MissingOperationsError:W}
@@ -550,6 +574,9 @@ class ServerServiceGeneratorV2(
             "MissingOperationsError" to missingOperationsError(),
             "RequestSpecs" to requestSpecsModule(),
             "Struct" to serviceStruct(),
+            "Handlers" to handlers,
+            "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(operation, "///", builderFieldNames[operation]!!, codegenContext).docSignature() },
+            *codegenScope,
         )
     }
 }
