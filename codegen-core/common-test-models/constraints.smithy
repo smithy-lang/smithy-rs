@@ -22,6 +22,7 @@ service ConstraintsService {
         QueryParamsTargetingMapOfEnumStringOperation,
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
+        QueryParamsTargetingMapOfLengthListOfPatternStringOperation,
         QueryParamsTargetingMapOfListOfEnumStringOperation,
 
         QueryParamsTargetingMapOfPatternStringOperation,
@@ -93,6 +94,13 @@ operation QueryParamsTargetingMapOfListOfLengthStringOperation {
 operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-length-list-of-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfLengthListOfPatternStringOperation {
+    input: QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -276,6 +284,11 @@ structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
     mapOfSetOfLengthString: MapOfSetOfLengthString
 }
 
+structure QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthListOfPatternString: MapOfLengthListOfPatternString
+}
+
 structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
     @httpQueryParams
     mapOfListOfEnumString: MapOfListOfEnumString
@@ -407,6 +420,11 @@ map MapOfSetOfLengthString {
     value: ListOfLengthString
 }
 
+map MapOfLengthListOfPatternString {
+    key: PatternString,
+    value: LengthListOfPatternString
+}
+
 @length(min: 2, max: 8)
 list LengthListOfLengthString {
     member: LengthString
@@ -490,6 +508,11 @@ list ListOfPatternString {
 
 list ListOfLengthPatternString {
     member: LengthPatternString
+}
+
+@length(min:12, max: 39)
+list LengthListOfPatternString {
+    member: PatternString
 }
 
 structure ConB {
