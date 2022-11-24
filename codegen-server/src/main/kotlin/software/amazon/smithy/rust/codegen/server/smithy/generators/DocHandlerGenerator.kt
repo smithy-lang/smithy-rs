@@ -12,9 +12,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.Errors
-import software.amazon.smithy.rust.codegen.core.smithy.Inputs
-import software.amazon.smithy.rust.codegen.core.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
+import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -43,12 +43,12 @@ class DocHandlerGenerator(private val operation: OperationShape, private val com
 
         return writable {
             if (operation.errors.isNotEmpty()) {
-                rust("$commentToken ## use $crateName::${Errors.namespace}::${errorSymbol.name};")
+                rust("$commentToken ## use $crateName::${ErrorsModule.name}::${errorSymbol.name};")
             }
             rust(
                 """
-                $commentToken ## use $crateName::${Inputs.namespace}::${inputSymbol.name};
-                $commentToken ## use $crateName::${Outputs.namespace}::${outputSymbol.name};
+                $commentToken ## use $crateName::${InputsModule.name}::${inputSymbol.name};
+                $commentToken ## use $crateName::${OutputsModule.name}::${outputSymbol.name};
                 $commentToken async fn $handlerName(input: ${inputSymbol.name}) -> $outputT {
                 $commentToken     todo!()
                 $commentToken }
