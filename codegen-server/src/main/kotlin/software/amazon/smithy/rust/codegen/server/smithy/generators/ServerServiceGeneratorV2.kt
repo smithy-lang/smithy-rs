@@ -17,6 +17,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.Errors
+import software.amazon.smithy.rust.codegen.core.smithy.Inputs
+import software.amazon.smithy.rust.codegen.core.smithy.Outputs
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -469,6 +472,7 @@ class ServerServiceGeneratorV2(
     }
 
     fun render(writer: RustWriter) {
+        val crateName = codegenContext.moduleUseName()
         val handlers: Writable = operations
             .map { operation ->
                 DocHandlerGenerator(operation, "///", builderFieldNames[operation]!!, codegenContext).docSignature()
@@ -481,12 +485,17 @@ class ServerServiceGeneratorV2(
 
         writer.rustTemplate(
             """
-            /// This module contains the implementation of $serviceName.
-            /// [`$serviceName`] is used to set your business logic to implement your [operations],
-            /// customize your [operations]'s behaviors by applying middleware,
-            /// and run your server.
+            /// A fast and customizable Rust implementation of the $serviceName Smithy service.
             ///
-            /// [`$serviceName`] contains the [operations] modeled in your Smithy service.
+            /// This crate provides all types required to setup the [`$serviceName`] Service.
+            /// The [`$crateName::${Inputs.namespace}`], [`$crateName::${Outputs.namespace}`], and [`$crateName::${Errors.namespace}`] modules provide the types used in each operation.
+            ///
+            /// The primary export is [`$serviceName`]: it is the
+            /// [`$builderName`] is used to set your business logic to implement your [operations],
+            /// customize your [operations]'s behaviors by applying middleware,
+            /// and build your service.
+            ///
+            /// [`$builderName`] contains the [operations] modeled in your Smithy service.
             /// You must set an implementation for all operations with the correct signature,
             /// or your service will fail to be constructed at runtime and panic.
             /// For each of the [operations] modeled in
@@ -495,8 +504,7 @@ class ServerServiceGeneratorV2(
             /// operation's input as their first parameter, and returns the
             /// operation's output. If your operation is fallible (i.e. it
             /// contains the `errors` member in your Smithy model), the function
-            /// implementing the operation has to be fallible (i.e. return a
-            /// [`Result`]).
+            /// implementing the operation has to be fallible (i.e. return a [`Result`]).
             /// The possible forms for your async functions are:
             /// ```rust
             /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Result<Output, Error>;
@@ -511,26 +519,26 @@ class ServerServiceGeneratorV2(
             /// ```
             /// For a full list of the possible extensions, see: [`#{SmithyHttpServer}::request`]. Any `T: Send + Sync + 'static` is also allowed.
             ///
-            /// To construct [`$serviceName`], you can build:
-            /// * [`$serviceName::builder_without_plugins()`] which returns a [`$builderName`] without any middleware applied.
+            /// To construct [`$serviceName`], you can use:
+            /// * [`$serviceName::builder_without_plugins()`] which returns a [`$builderName`] without any service-wide middleware applied.
             /// * [`$serviceName::builder_with_plugins(plugins)`] which returns a [`$builderName`] that applies `plugins` to all your operations.
             ///
             /// To know more about plugins, see: [`#{SmithyHttpServer}::plugin`].
             ///
-            /// When you have set all your operations, you can convert [`$serviceName`] into a [Service] calling:
+            /// When you have set all your operations, you can convert [`$serviceName`] into a tower [Service] calling:
             /// * [`$serviceName::into_make_service`] that converts $serviceName into a type that implements [`tower::make::MakeService`], a _service factory_.
             /// * [`$serviceName::into_make_service_with_connect_info`] that converts $serviceName into [`tower::make::MakeService`]
             /// with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
             /// You can write your implementations to be passed in the connection information, populated by the [Hyper server], as an [`#{SmithyHttpServer}Extension`].
             ///
-            /// You can feed this value to a [Hyper server], and the
+            /// You can feed this [Service] to a [Hyper server], and the
             /// server will instantiate and [`serve`] your service.
             ///
             /// Here's a full example to get you started:
             ///
             /// ```rust
             /// use std::net::SocketAddr;
-            /// use ${codegenContext.moduleUseName()}::$serviceName;
+            /// use $crateName::$serviceName;
             ///
             /// ##[tokio::main]
             /// pub async fn main() {
