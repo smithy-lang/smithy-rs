@@ -46,6 +46,11 @@ fun Shape.hasConstraintTrait() =
 val supportedStringConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait::class.java, PatternTrait::class.java)
 
 /**
+ * Supported constraint traits for the `list` and `set` shapes.
+ */
+val supportedCollectionConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait::class.java)
+
+/**
  * We say a shape is _directly_ constrained if:
  *
  *     - it has a constraint trait, or;
@@ -70,6 +75,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
     }
     is MapShape -> this.hasTrait<LengthTrait>()
     is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
+    is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
     else -> false
 }
 

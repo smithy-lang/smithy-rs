@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
-import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -198,12 +197,12 @@ fun validateUnsupportedConstraints(model: Model, service: ServiceShape, codegenC
         .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
         .toSet()
 
-    // 4. Length trait on collection shapes or on blob shapes is used. It has not been implemented yet for these target types.
+    // 4. Length trait on blob shapes is used. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
-    val unsupportedLengthTraitOnCollectionOrOnBlobShapeSet = walker
+    val unsupportedLengthTraitOnBlobShapeSet = walker
         .walkShapes(service)
         .asSequence()
-        .filter { it is CollectionShape || it is BlobShape }
+        .filter { it is BlobShape }
         .filter { it.hasTrait<LengthTrait>() }
         .map { UnsupportedLengthTraitOnCollectionOrOnBlobShape(it, it.expectTrait()) }
         .toSet()
@@ -230,7 +229,7 @@ fun validateUnsupportedConstraints(model: Model, service: ServiceShape, codegenC
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedConstraintOnShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedLengthTraitOnCollectionOrOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedLengthTraitOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedUniqueItemsTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 

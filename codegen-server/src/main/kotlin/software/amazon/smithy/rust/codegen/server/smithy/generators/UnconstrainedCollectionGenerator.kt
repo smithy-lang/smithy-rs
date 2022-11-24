@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
@@ -48,6 +49,12 @@ class UnconstrainedCollectionGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
+    private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
+        constrainedShapeSymbolProvider.toSymbol(shape)
+    } else {
+        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
+    }
 
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
@@ -57,7 +64,6 @@ class UnconstrainedCollectionGenerator(
         val name = symbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
-        val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
@@ -67,16 +73,16 @@ class UnconstrainedCollectionGenerator(
                 """
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerUnconstrainedSymbol}>);
-                
+
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
                         Self::Unconstrained(value)
                     }
                 }
-                
+
                 impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
-                
+
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
                         let res: Result<_, (usize, #{InnerConstraintViolationSymbol})> = value
                             .0
@@ -84,7 +90,7 @@ class UnconstrainedCollectionGenerator(
                             .enumerate()
                             .map(|(idx, inner)| inner.try_into().map_err(|inner_violation| (idx, inner_violation)))
                             .collect();
-                        res.map(Self)   
+                        res.map(Self)
                            .map_err(|(idx, inner_violation)| #{ConstraintViolationSymbol}(idx, inner_violation))
                     }
                 }
