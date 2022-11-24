@@ -682,13 +682,13 @@ class HttpBindingGenerator(
                         #{invalid_header_name:W}
                     })?;
                     let header_value = ${
-                    headerFmtFun(
-                        this,
-                        valueTargetShape,
-                        timestampFormat,
-                        "v",
-                        isMultiValuedHeader = false,
-                    )
+                headerFmtFun(
+                    this,
+                    valueTargetShape,
+                    timestampFormat,
+                    "v",
+                    isMultiValuedHeader = false,
+                )
                 };
                     let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                         #{invalid_header_value:W}
