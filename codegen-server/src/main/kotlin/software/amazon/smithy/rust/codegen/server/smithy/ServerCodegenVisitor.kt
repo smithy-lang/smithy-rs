@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
@@ -288,11 +289,13 @@ open class ServerCodegenVisitor(
     override fun setShape(shape: SetShape) = collectionShape(shape)
 
     private fun collectionShape(shape: CollectionShape) {
-        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
+        val renderUnconstrainedList =
+            shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
                 codegenContext.symbolProvider,
             )
-        ) {
+
+        if (renderUnconstrainedList) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for collection shape $shape")
             rustCrate.withModule(unconstrainedModule) unconstrainedModuleWriter@{
                 rustCrate.withModule(ModelsModule) modelsModuleWriter@{
@@ -305,9 +308,30 @@ open class ServerCodegenVisitor(
                 }
             }
 
-            logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
-            rustCrate.withModule(constrainedModule) {
-                PubCrateConstrainedCollectionGenerator(codegenContext, this, shape).render()
+            if (!shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+                logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
+                rustCrate.withModule(constrainedModule) {
+                    PubCrateConstrainedCollectionGenerator(codegenContext, this, shape).render()
+                }
+            }
+        }
+
+        val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
+        if (isDirectlyConstrained) {
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedCollectionGenerator(
+                    codegenContext,
+                    this,
+                    shape,
+                    if (renderUnconstrainedList) codegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape) else null,
+                ).render()
+            }
+        }
+
+        if (isDirectlyConstrained || renderUnconstrainedList) {
+            rustCrate.withModule(ModelsModule) {
+                // TODO
+                // ListConstraintViolationGenerator(codegenContext, this,shape).render()
             }
         }
     }

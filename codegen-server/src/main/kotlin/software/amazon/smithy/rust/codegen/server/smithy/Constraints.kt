@@ -48,7 +48,11 @@ val supportedStringConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait
 /**
  * Supported constraint traits for the `list` and `set` shapes.
  */
-val supportedCollectionConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait::class.java)
+val supportedCollectionConstraintTraits: List<Class<out Trait>> = listOf(
+    LengthTrait::class.java,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1670): Not yet supported.
+    // UniqueItemsTrait::class.java
+)
 
 /**
  * We say a shape is _directly_ constrained if:
