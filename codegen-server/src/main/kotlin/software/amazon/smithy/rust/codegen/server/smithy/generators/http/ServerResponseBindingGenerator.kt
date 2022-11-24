@@ -90,7 +90,7 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
                 )
             ) {
                 if (section.shape.isIntegerShape) {
-                    rust("let ${section.variableName} = &${section.variableName}.0;")
+                    rust("let ${section.value.name} = &(${section.value.asValue()}).0;")
                 }
             }
         }

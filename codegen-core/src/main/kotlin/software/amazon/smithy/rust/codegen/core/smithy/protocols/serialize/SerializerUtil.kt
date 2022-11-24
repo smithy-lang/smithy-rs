@@ -25,7 +25,7 @@ class SerializerUtil(private val model: Model) {
                 inner(this)
             }
         } else {
-            this.ifNotDefault(model.expectShape(shape.target), value.name) { inner(this) }
+            this.ifNotDefault(model.expectShape(shape.target), value) { inner(this) }
         }
     }
 }

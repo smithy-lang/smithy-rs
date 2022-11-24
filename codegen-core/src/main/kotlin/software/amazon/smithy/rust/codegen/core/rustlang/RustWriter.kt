@@ -24,6 +24,7 @@ import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -462,19 +463,19 @@ class RustWriter private constructor(
     }
 
     /**
-     * Generate a wrapping if statement around a nullable field.
-     * It will only be called if the field is not `None`.
+     * Generate a wrapping if statement around a nullable value.
+     * The provided code block will only be called if the value is not `None`.
      */
-    fun ifSome(member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
+    fun ifSome(member: Symbol, value: ValueExpression, block: RustWriter.(value: ValueExpression) -> Unit) {
         when {
             member.isOptional() -> {
-                val derefName = safeName("inner")
-                rustBlock("if let Some($derefName) = $outerField") {
-                    block(derefName)
+                val innerValue = ValueExpression.Reference(safeName("inner"))
+                rustBlock("if let Some(${innerValue.name}) = ${value.asRef()}") {
+                    block(innerValue)
                 }
             }
 
-            else -> this.block(outerField)
+            else -> this.block(value)
         }
     }
 
@@ -483,22 +484,22 @@ class RustWriter private constructor(
      * The specified block will only be called if the field is not set to its default value - `0` for
      * numbers, `false` for booleans.
      */
-    fun ifNotDefault(shape: Shape, outerField: String, block: RustWriter.(field: String) -> Unit) {
+    fun ifNotDefault(shape: Shape, variable: ValueExpression, block: RustWriter.(field: ValueExpression) -> Unit) {
         when (shape) {
-            is FloatShape, is DoubleShape -> rustBlock("if ${autoDeref(outerField)} != 0.0") {
-                block(outerField)
+            is FloatShape, is DoubleShape -> rustBlock("if ${variable.asValue()} != 0.0") {
+                block(variable)
             }
 
-            is NumberShape -> rustBlock("if ${autoDeref(outerField)} != 0") {
-                block(outerField)
+            is NumberShape -> rustBlock("if ${variable.asValue()} != 0") {
+                block(variable)
             }
 
-            is BooleanShape -> rustBlock("if ${autoDeref(outerField)}") {
-                block(outerField)
+            is BooleanShape -> rustBlock("if ${variable.asValue()}") {
+                block(variable)
             }
 
             else -> rustBlock("") {
-                this.block(outerField)
+                this.block(variable)
             }
         }
     }
@@ -510,8 +511,13 @@ class RustWriter private constructor(
      * - If the field is an unboxed primitive, it will only be called if the field is non-zero
      *
      */
-    fun ifSet(shape: Shape, member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
-        ifSome(member, outerField) { local -> ifNotDefault(shape, local, block) }
+    fun ifSet(
+        shape: Shape,
+        member: Symbol,
+        variable: ValueExpression,
+        block: RustWriter.(field: ValueExpression) -> Unit,
+    ) {
+        ifSome(member, variable) { inner -> ifNotDefault(shape, inner, block) }
     }
 
     fun listForEach(
