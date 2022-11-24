@@ -483,12 +483,16 @@ class ServerServiceGeneratorV2(
                 }
             }
 
+        val hasErrors = service.errors.isNotEmpty()
+
         writer.rustTemplate(
             """
             /// A fast and customizable Rust implementation of the $serviceName Smithy service.
             ///
-            /// This crate provides all types required to setup the [`$serviceName`] Service.
-            /// The [`$crateName::${Inputs.namespace}`], [`$crateName::${Outputs.namespace}`], and [`$crateName::${Errors.namespace}`] modules provide the types used in each operation.
+            /// The primary export is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
+            /// trait and therefore can be handed to [`Hyper server`] using [`$serviceName::into_make_service`] or used in Lambda using [`#{SmithyHttpServer}::routing::LambdaHandler`].
+            /// The [`crate::${Inputs.namespace}`], ${if (hasErrors) "and " else ""}[`crate::${Outputs.namespace}`], ${if (!hasErrors) "and [`crate::${Errors.namespace}`]" else "" }
+            /// modules provide the types used in each operation.
             ///
             /// The primary export is [`$serviceName`]: it is the
             /// [`$builderName`] is used to set your business logic to implement your [operations],
@@ -520,8 +524,8 @@ class ServerServiceGeneratorV2(
             /// For a full list of the possible extensions, see: [`#{SmithyHttpServer}::request`]. Any `T: Send + Sync + 'static` is also allowed.
             ///
             /// To construct [`$serviceName`], you can use:
-            /// * [`$serviceName::builder_without_plugins()`] which returns a [`$builderName`] without any service-wide middleware applied.
-            /// * [`$serviceName::builder_with_plugins(plugins)`] which returns a [`$builderName`] that applies `plugins` to all your operations.
+            /// * [`$serviceName::builder_without_plugins`] which returns a [`$builderName`] without any service-wide middleware applied.
+            /// * [`$serviceName::builder_with_plugins`] which returns a [`$builderName`] that applies `plugins` to all your operations.
             ///
             /// To know more about plugins, see: [`#{SmithyHttpServer}::plugin`].
             ///
