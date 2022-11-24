@@ -198,8 +198,8 @@ class RequestBindingGenerator(
                     model.expectShape(param.member.target),
                     memberSymbol,
                     ValueExpression.Reference("&_input.$memberName"),
-                ) { field ->
-                    rustBlock("for (k, v) in $field") {
+                ) { value ->
+                    rustBlock("for (k, v) in ${value.asRef()}") {
                         // if v is a list, generate another level of iteration
                         listForEach(model.expectShape(targetShape.value.target), "v") { innerField, _ ->
                             rustBlock("if !protected_params.contains(&k.as_str())") {
