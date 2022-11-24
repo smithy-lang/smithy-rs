@@ -17,7 +17,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.smithy.Models
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
@@ -59,7 +59,7 @@ class ConstrainedShapeSymbolProvider(
         check(shape is MapShape)
 
         val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-        return symbolBuilder(shape, rustType).locatedIn(Models).build()
+        return symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
     }
 
     override fun toSymbol(shape: Shape): Symbol {
@@ -99,7 +99,7 @@ class ConstrainedShapeSymbolProvider(
             is StringShape, is IntegerShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-                    symbolBuilder(shape, rustType).locatedIn(Models).build()
+                    symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
                 } else {
                     base.toSymbol(shape)
                 }

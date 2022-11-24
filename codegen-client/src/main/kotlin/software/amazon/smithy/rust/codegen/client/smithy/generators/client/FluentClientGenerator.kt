@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -220,7 +221,7 @@ class FluentClientGenerator(
                 )
             }
         }
-        writer.withModule(RustModule.public("fluent_builders")) {
+        writer.withInlineModule(RustModule.new("fluent_builders", visibility = Visibility.PUBLIC, inline = true)) {
             docs(
                 """
                 Utilities to ergonomically construct a request to the service.

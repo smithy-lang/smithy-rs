@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -52,7 +52,7 @@ class ServerCombinedErrorGeneratorTest {
     @Test
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.public("error")) {
+        project.withModule(ErrorsModule) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
                 model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, this)
             }
