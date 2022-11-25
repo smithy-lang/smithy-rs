@@ -511,14 +511,14 @@ class ServerServiceGeneratorV2(
             /// implementing the operation has to be fallible (i.e. return a [`Result`]).
             /// The possible forms for your async functions are:
             /// ```rust,no_run
-            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Result<Output, Error>
-            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Output
+            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Result<Output, Error>
+            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Output
             /// ```
             /// Both can take up to 8 extensions, or none:
             /// ```rust,no_run
             /// async fn handler_with_no_extensions(input: Input) -> ...;
-            /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}Extension<T>) -> ...
-            /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}Extension<T>, ext1: #{SmithyHttpServer}Extension<T>) -> ...
+            /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}::Extension<T>) -> ...
+            /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}::Extension<T>, ext1: #{SmithyHttpServer}::Extension<T>) -> ...
             /// ...
             /// ```
             /// For a full list of the possible extensions, see: [`#{SmithyHttpServer}::request`]. Any `T: Send + Sync + 'static` is also allowed.
@@ -533,7 +533,7 @@ class ServerServiceGeneratorV2(
             /// * [`$serviceName::into_make_service`] that converts $serviceName into a type that implements [`tower::make::MakeService`], a _service factory_.
             /// * [`$serviceName::into_make_service_with_connect_info`] that converts $serviceName into [`tower::make::MakeService`]
             /// with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
-            /// You can write your implementations to be passed in the connection information, populated by the [Hyper server], as an [`#{SmithyHttpServer}Extension`].
+            /// You can write your implementations to be passed in the connection information, populated by the [Hyper server], as an [`#{SmithyHttpServer}::Extension`].
             ///
             /// You can feed this [Service] to a [Hyper server], and the
             /// server will instantiate and [`serve`] your service.
