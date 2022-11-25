@@ -31,12 +31,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
  * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy
  * the constraints.
  *
- * The [`length` trait] is the only constraint trait applicable to list shapes.
+ * The [`length`] and [`uniqueItems`] traits are the only constraint traits applicable to list shapes.
+ * The [`uniqueItems`] trait has not been implemented yet.
  *
  * If [unconstrainedSymbol] is provided, the `MaybeConstrained` trait is implemented for the constrained type, using the
  * [unconstrainedSymbol]'s associated type as the associated type for the trait.
  *
- * [`length` trait]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
+ * [`length`]: https://smithy.io/2.0/spec/constraint-traits.html#length-trait
+ * [`uniqueItem`]: https://smithy.io/2.0/spec/constraint-traits.html#smithy-api-uniqueitems-trait
  */
 class ConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
