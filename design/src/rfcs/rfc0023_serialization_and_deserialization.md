@@ -11,7 +11,7 @@ RFC: Serialization and Deserialization
 We are going to implement Serialize and Deserialize traits from serde crate on some data types.   
 Data types are, a) builder data types and b) data types that builder types may have on its field(s) and c) `DateTime`, `Document`, `Blob` and `Number` implemented in `aws_smithy_types` crate.
 
-`DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human redable format.
+`DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format.
 
 # Use Case
 Users have requested `serde` traits to be implemented on data types implemented in rust SDK.  
