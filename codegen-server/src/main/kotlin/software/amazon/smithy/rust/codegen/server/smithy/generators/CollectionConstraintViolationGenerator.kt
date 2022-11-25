@@ -55,7 +55,8 @@ class CollectionConstraintViolationGenerator(
                 constraintViolationVariants += {
                     rustTemplate(
                         """
-                        ##[doc(hidden)] Member(usize, #{MemberConstraintViolationSymbol})
+                        ##[doc(hidden)]
+                        Member(usize, #{MemberConstraintViolationSymbol})
                         """,
                         "MemberConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(memberShape),
                     )
