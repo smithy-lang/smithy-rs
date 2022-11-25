@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViola
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 /**
  * Generates a Rust type for a constrained collection shape that is able to hold values for the corresponding
@@ -65,7 +64,6 @@ class UnconstrainedCollectionGenerator(
         val innerShape = model.expectShape(shape.member.target)
         val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
-        val constraintViolationName = constraintViolationSymbol.name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
         unconstrainedModuleWriter.withModule(RustModule(module, RustMetadata(visibility = Visibility.PUBCRATE))) {
@@ -102,44 +100,6 @@ class UnconstrainedCollectionGenerator(
                 "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
                 "TryFrom" to RuntimeType.TryFrom,
             )
-        }
-
-        val constraintViolationVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
-        modelsModuleWriter.withModule(
-            RustModule(
-                constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-                RustMetadata(visibility = constraintViolationVisibility),
-            ),
-        ) {
-            // The first component of the tuple struct is the index in the collection where the first constraint
-            // violation was found.
-            rustTemplate(
-                """
-                ##[derive(Debug, PartialEq)]
-                pub struct $constraintViolationName(
-                    pub(crate) usize,
-                    pub(crate) #{InnerConstraintViolationSymbol}
-                );
-                """,
-                "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
-            )
-
-            if (shape.isReachableFromOperationInput()) {
-                rustTemplate(
-                    """
-                    impl $constraintViolationName {
-                        pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                            self.1.as_validation_exception_field(format!("{}/{}", path, &self.0))
-                        }
-                    }
-                    """,
-                    "String" to RuntimeType.String,
-                )
-            }
         }
     }
 }
