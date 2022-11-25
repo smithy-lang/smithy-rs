@@ -62,35 +62,6 @@ class ConstrainedStringGenerator(
             .map(StringTraitInfo::fromTrait)
             .map(StringTraitInfo::toTraitInfo)
 
-    private fun renderTryFrom(inner: String, name: String, constraintViolation: Symbol) {
-        writer.rustTemplate(
-            """
-            impl $name {
-                #{ValidationFunctions:W}
-            }
-            """,
-            "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation) }.join("\n"),
-        )
-
-        writer.rustTemplate(
-            """
-            impl #{TryFrom}<$inner> for $name {
-                type Error = #{ConstraintViolation};
-
-                /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                  #{TryFromChecks:W}
-
-                  Ok(Self(value))
-                }
-            }
-            """,
-            "TryFrom" to RuntimeType.TryFrom,
-            "ConstraintViolation" to constraintViolation,
-            "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
-        )
-    }
-
     fun render() {
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
@@ -136,7 +107,7 @@ class ConstrainedStringGenerator(
             }""",
         )
 
-        renderTryFrom(inner, name, constraintViolation)
+        writer.renderTryFrom(inner, name, constraintViolation, constraintsInfo)
 
         writer.rustTemplate(
             """
@@ -204,55 +175,51 @@ class ConstrainedStringGenerator(
     }
 }
 private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
-    override fun toTraitInfo(): TraitInfo {
-        return TraitInfo(
-            { rust("Self::check_length(&value)?;") },
-            {
-                docs("Error when a string doesn't satisfy its `@length` requirements.")
-                rust("Length(usize)")
-            },
-            {
-                rust(
-                    """
-                    Self::Length(length) => crate::model::ValidationExceptionField {
-                        message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                        path,
-                    },
-                    """,
-                )
-            },
-            this::renderValidationFunction,
-        )
-    }
+    override fun toTraitInfo(): TraitInfo = TraitInfo(
+        { rust("Self::check_length(&value)?;") },
+        {
+            docs("Error when a string doesn't satisfy its `@length` requirements.")
+            rust("Length(usize)")
+        },
+        {
+            rust(
+                """
+                Self::Length(length) => crate::model::ValidationExceptionField {
+                    message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                    path,
+                },
+                """,
+            )
+        },
+        this::renderValidationFunction,
+    )
 
     /**
      * Renders a `check_length` function to validate the string matches the
      * required length indicated by the `@length` trait.
      */
-    private fun renderValidationFunction(constraintViolation: Symbol): Writable {
-        return {
-            val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
-                "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
-            } else if (lengthTrait.min.isPresent) {
-                "${lengthTrait.min.get()} <= length"
-            } else {
-                "length <= ${lengthTrait.max.get()}"
-            }
-
-            rust(
-                """
-                fn check_length(string: &str) -> Result<(), $constraintViolation> {
-                    let length = string.chars().count();
-
-                    if $condition {
-                        Ok(())
-                    } else {
-                        Err($constraintViolation::Length(length))
-                    }
-                }
-                """,
-            )
+    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
+        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
+            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
+        } else if (lengthTrait.min.isPresent) {
+            "${lengthTrait.min.get()} <= length"
+        } else {
+            "length <= ${lengthTrait.max.get()}"
         }
+
+        rust(
+            """
+            fn check_length(string: &str) -> Result<(), $constraintViolation> {
+                let length = string.chars().count();
+
+                if $condition {
+                    Ok(())
+                } else {
+                    Err($constraintViolation::Length(length))
+                }
+            }
+            """,
+        )
     }
 }
 
@@ -285,14 +252,15 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
      * Renders a `check_pattern` function to validate the string matches the
      * supplied regex in the `@pattern` trait.
      */
-    private fun renderValidationFunction(constraintViolation: Symbol): Writable {
+    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable {
         val pattern = patternTrait.pattern
-        val errorMessageForUnsupportedRegex = """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support"""
+        val errorMessageForUnsupportedRegex =
+            """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support"""
 
         return {
             rustTemplate(
                 """
-                fn check_pattern(string: String) -> Result<String, $constraintViolation> {
+                fn check_pattern(string: $unconstrainedTypeName) -> Result<$unconstrainedTypeName, $constraintViolation> {
                     let regex = Self::compile_regex();
 
                     if regex.is_match(&string) {

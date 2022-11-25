@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -12,6 +13,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -54,17 +57,10 @@ class ConstrainedIntegerGenerator(
         val rangeTrait = shape.expectTrait<RangeTrait>()
 
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
-        val name = symbol.name
-        val inner = RustType.Integer(32).render()
+        val constrainedTypeName = symbol.name
+        val unconstrainedTypeName = RustType.Integer(32).render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
-
-        val condition = if (rangeTrait.min.isPresent && rangeTrait.max.isPresent) {
-            "(${rangeTrait.min.get()}..=${rangeTrait.max.get()}).contains(&value)"
-        } else if (rangeTrait.min.isPresent) {
-            "${rangeTrait.min.get()} <= value"
-        } else {
-            "value <= ${rangeTrait.max.get()}"
-        }
+        val constraintsInfo = listOf(Range(rangeTrait).toTraitInfo(unconstrainedTypeName))
 
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
             Visibility.PUBLIC
@@ -72,61 +68,57 @@ class ConstrainedIntegerGenerator(
             Visibility.PUBCRATE
         }
         val constrainedTypeMetadata = RustMetadata(
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Hash)),
+            Attribute.Derives(
+                setOf(
+                    RuntimeType.Debug,
+                    RuntimeType.Clone,
+                    RuntimeType.PartialEq,
+                    RuntimeType.Eq,
+                    RuntimeType.Hash,
+                ),
+            ),
             visibility = constrainedTypeVisibility,
         )
 
-        writer.documentShape(shape, model, note = rustDocsNote(name))
+        writer.documentShape(shape, model, note = rustDocsNote(constrainedTypeName))
         constrainedTypeMetadata.render(writer)
-        writer.rust("struct $name(pub(crate) $inner);")
+        writer.rust("struct $constrainedTypeName(pub(crate) $unconstrainedTypeName);")
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
+        writer.renderTryFrom(unconstrainedTypeName, constrainedTypeName, constraintViolation, constraintsInfo)
         writer.rustTemplate(
             """
-            impl $name {
-                /// ${rustDocsInnerMethod(inner)}
-                pub fn inner(&self) -> &$inner {
+            impl $constrainedTypeName {
+                /// ${rustDocsInnerMethod(unconstrainedTypeName)}
+                pub fn inner(&self) -> &$unconstrainedTypeName {
                     &self.0
                 }
 
-                /// ${rustDocsIntoInnerMethod(inner)}
-                pub fn into_inner(self) -> $inner {
+                /// ${rustDocsIntoInnerMethod(unconstrainedTypeName)}
+                pub fn into_inner(self) -> $unconstrainedTypeName {
                     self.0
                 }
             }
 
-            impl #{ConstrainedTrait} for $name  {
-                type Unconstrained = $inner;
+            impl #{ConstrainedTrait} for $constrainedTypeName  {
+                type Unconstrained = $unconstrainedTypeName;
             }
 
-            impl #{From}<$inner> for #{MaybeConstrained} {
-                fn from(value: $inner) -> Self {
+            impl #{From}<$unconstrainedTypeName> for #{MaybeConstrained} {
+                fn from(value: $unconstrainedTypeName) -> Self {
                     Self::Unconstrained(value)
                 }
             }
 
-            impl #{Display} for $name {
+            impl #{Display} for $constrainedTypeName {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                    ${shape.redactIfNecessary(model, "self.0")}.fmt(f)
                 }
             }
 
-            impl #{TryFrom}<$inner> for $name {
-                type Error = #{ConstraintViolation};
-
-                /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
-                    if $condition {
-                        Ok(Self(value))
-                    } else {
-                        Err(#{ConstraintViolation}::Range(value))
-                    }
-                }
-            }
-
-            impl #{From}<$name> for $inner {
-                fn from(value: $name) -> Self {
+            impl #{From}<$constrainedTypeName> for $unconstrainedTypeName {
+                fn from(value: $constrainedTypeName) -> Self {
                     value.into_inner()
                 }
             }
@@ -145,7 +137,7 @@ class ConstrainedIntegerGenerator(
                 """
                 ##[derive(Debug, PartialEq)]
                 pub enum ${constraintViolation.name} {
-                    Range($inner),
+                    Range($unconstrainedTypeName),
                 }
                 """,
             )
@@ -170,5 +162,53 @@ class ConstrainedIntegerGenerator(
                 }
             }
         }
+    }
+}
+
+private data class Range(val rangeTrait: RangeTrait) {
+    fun toTraitInfo(unconstrainedTypeName: String): TraitInfo = TraitInfo(
+        { rust("Self::check_range(value)?;") },
+        {
+            docs("Error when an integer doesn't satisfy its `@range` requirements.")
+            rust("Range($unconstrainedTypeName)")
+        },
+        {
+            rust(
+                """
+                Self::Range(value) => crate::model::ValidationExceptionField {
+                    message: format!("${rangeTrait.validationErrorMessage()}", value, &path),
+                    path,
+                },
+                """,
+            )
+        },
+        this::renderValidationFunction,
+    )
+
+    /**
+     * Renders a `check_length` function to validate the string matches the
+     * required length indicated by the `@length` trait.
+     */
+    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
+        val valueVariableName = "value"
+        val condition = if (rangeTrait.min.isPresent && rangeTrait.max.isPresent) {
+            "(${rangeTrait.min.get()}..=${rangeTrait.max.get()}).contains(&$valueVariableName)"
+        } else if (rangeTrait.min.isPresent) {
+            "${rangeTrait.min.get()} <= $valueVariableName"
+        } else {
+            "$valueVariableName <= ${rangeTrait.max.get()}"
+        }
+
+        rust(
+            """
+            fn check_range($valueVariableName: $unconstrainedTypeName) -> Result<(), $constraintViolation> {
+                if $condition {
+                    Ok(())
+                } else {
+                    Err($constraintViolation::Range($valueVariableName))
+                }
+            }
+            """,
+        )
     }
 }
