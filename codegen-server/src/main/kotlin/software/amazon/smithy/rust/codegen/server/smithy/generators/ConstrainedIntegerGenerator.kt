@@ -186,8 +186,8 @@ private data class Range(val rangeTrait: RangeTrait) {
     )
 
     /**
-     * Renders a `check_length` function to validate the string matches the
-     * required length indicated by the `@length` trait.
+     * Renders a `check_range` function to validate the integer matches the
+     * required range indicated by the `@range` trait.
      */
     private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
         val valueVariableName = "value"
