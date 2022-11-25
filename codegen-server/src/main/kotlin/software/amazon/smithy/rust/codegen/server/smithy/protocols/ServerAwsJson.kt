@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonS
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapJsonCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapOrCollectionJsonCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerAwsJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
@@ -90,6 +90,6 @@ class ServerAwsJsonSerializerGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            customizations = listOf(ServerAwsJsonError(awsJsonVersion), BeforeIteratingOverMapJsonCustomization(codegenContext)),
+            customizations = listOf(ServerAwsJsonError(awsJsonVersion), BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext)),
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator

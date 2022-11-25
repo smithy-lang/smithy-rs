@@ -57,7 +57,7 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSerializerSection("ServerError")
 
     /** Mutate a map prior to it being serialized. **/
-    data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) : JsonSerializerSection("BeforeIteratingOverMap")
+    data class BeforeIteratingOverMapOrCollection(val shape: Shape, val valueExpression: ValueExpression) : JsonSerializerSection("BeforeIteratingOverMapOrCollection")
 
     /** Mutate the input object prior to finalization. */
     data class InputStruct(val structureShape: StructureShape, val jsonObject: String) : JsonSerializerSection("InputStruct")
@@ -423,6 +423,9 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
         val itemName = safeName("item")
+        for (customization in customizations) {
+            customization.section(JsonSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context.valueExpression))(this)
+        }
         rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
             serializeMember(MemberContext.collectionMember(context, itemName))
         }
@@ -432,7 +435,7 @@ class JsonSerializerGenerator(
         val keyName = safeName("key")
         val valueName = safeName("value")
         for (customization in customizations) {
-            customization.section(JsonSerializerSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(this)
+            customization.section(JsonSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context.valueExpression))(this)
         }
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyExpression = "$keyName.as_str()"

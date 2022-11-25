@@ -14,12 +14,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
 /**
- * A customization to, just before we iterate over a _constrained_ map shape in a JSON serializer, unwrap the wrapper
- * newtype and take a shared reference to the actual `std::collections::HashMap` within it.
+ * A customization to, just before we iterate over a _constrained_ map or collection shape in a JSON serializer,
+ * unwrap the wrapper newtype and take a shared reference to the actual value within it.
+ * That value will be a `std::collections::HashMap` for map shapes, and a `std::vec::Vec` for collection shapes.
  */
-class BeforeIteratingOverMapJsonCustomization(private val codegenContext: ServerCodegenContext) : JsonSerializerCustomization() {
+class BeforeIteratingOverMapOrCollectionJsonCustomization(private val codegenContext: ServerCodegenContext) : JsonSerializerCustomization() {
     override fun section(section: JsonSerializerSection): Writable = when (section) {
-        is JsonSerializerSection.BeforeIteratingOverMap -> writable {
+        is JsonSerializerSection.BeforeIteratingOverMapOrCollection -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(
                     section.shape,
                     codegenContext.model,
