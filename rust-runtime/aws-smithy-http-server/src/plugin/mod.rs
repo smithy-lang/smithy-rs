@@ -20,7 +20,7 @@
 //! let plugin = filter_by_operation_name(plugin, |name| name == "GetPokemonSpecies");
 //! ```
 //!
-//! # Construct [`Plugin`] from Operation name closure
+//! # Construct a [`Plugin`] from a closure that takes as input the operation name
 //!
 //! ```
 //! # use aws_smithy_http_server::plugin::*;

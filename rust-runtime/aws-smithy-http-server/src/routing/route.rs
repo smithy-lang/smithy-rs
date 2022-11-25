@@ -48,7 +48,7 @@ use tower::{
 
 /// A HTTP [`Service`] representing a single route.
 ///
-/// The construction of [`Route`] from a named HTTP [`Service`] S, erases the type of `S`.
+/// The construction of [`Route`] from a named HTTP [`Service`] `S`, erases the type of `S`.
 pub struct Route<B = Body> {
     service: BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
 }
