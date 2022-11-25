@@ -83,10 +83,10 @@ class ConstrainedIntegerGenerator(
         writer.documentShape(shape, model, note = rustDocsNote(constrainedTypeName))
         constrainedTypeMetadata.render(writer)
         writer.rust("struct $constrainedTypeName(pub(crate) $unconstrainedTypeName);")
+
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
-        writer.renderTryFrom(unconstrainedTypeName, constrainedTypeName, constraintViolation, constraintsInfo)
         writer.rustTemplate(
             """
             impl $constrainedTypeName {
@@ -131,6 +131,8 @@ class ConstrainedIntegerGenerator(
             "TryFrom" to RuntimeType.TryFrom,
             "AsRef" to RuntimeType.AsRef,
         )
+
+        writer.renderTryFrom(unconstrainedTypeName, constrainedTypeName, constraintViolation, constraintsInfo)
 
         writer.withInlineModule(constraintViolation.module()) {
             rust(
