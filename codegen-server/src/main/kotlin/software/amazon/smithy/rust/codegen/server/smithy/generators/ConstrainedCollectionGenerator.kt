@@ -105,6 +105,8 @@ class ConstrainedCollectionGenerator(
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
+
+                #{ValidationFunctions:W}
             }
 
             impl #{TryFrom}<$inner> for $name {
@@ -126,6 +128,7 @@ class ConstrainedCollectionGenerator(
             """,
             *codegenScope,
             "ConstraintChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
+            "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation) }.join("\n"),
         )
 
         if (!publicConstrainedTypes && isValueConstrained(shape, model, symbolProvider)) {
