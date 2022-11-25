@@ -5,8 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -21,13 +20,15 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 class CollectionConstraintViolationGenerator(
     codegenContext: ServerCodegenContext,
     private val modelsModuleWriter: RustWriter,
-    val shape: MapShape,
+    val shape: CollectionShape,
+//    val constraintsInfo : List<TraitInfo>,
 ) {
     private val model = codegenContext.model
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -43,26 +44,21 @@ class CollectionConstraintViolationGenerator(
         }
 
     fun render() {
-        val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
-        val valueShape = model.expectShape(shape.value.target)
+        val memberShape = model.expectShape(shape.member.target)
         val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbol.name
 
         val constraintViolationCodegenScopeMutableList: MutableList<Pair<String, Any>> = mutableListOf()
-        if (isKeyConstrained(keyShape, symbolProvider)) {
-            constraintViolationCodegenScopeMutableList.add("KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape))
+        val isMemberConstrained = memberShape.canReachConstrainedShape(model, symbolProvider)
+
+        if (isMemberConstrained) {
+            constraintViolationCodegenScopeMutableList.add("MemberConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(memberShape))
         }
-        if (isValueConstrained(valueShape, model, symbolProvider)) {
-            constraintViolationCodegenScopeMutableList.add("ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape))
-            constraintViolationCodegenScopeMutableList.add("KeySymbol" to constrainedShapeSymbolProvider.toSymbol(keyShape))
-        }
+
         val constraintViolationCodegenScope = constraintViolationCodegenScopeMutableList.toTypedArray()
 
-        val constraintViolationVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
+        val constraintViolationVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
+
         modelsModuleWriter.withModule(
             RustModule(
                 constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
@@ -70,16 +66,15 @@ class CollectionConstraintViolationGenerator(
             ),
         ) {
             // TODO(https://github.com/awslabs/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
-            //  types here. One will just have variants for each constraint trait on the map shape, for use by the user.
-            //  The other one will have variants if the shape's key or value is directly or transitively constrained,
+            //  types here. One will just have variants for each constraint trait on the collection shape, for use by the user.
+            //  The other one will have variants if the shape's member is directly or transitively constrained,
             //  and is for use by the framework.
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
-                pub${ if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate) " else "" } enum $constraintViolationName {
+                ${constraintViolationVisibility.toRustQualifier()} enum $constraintViolationName {
                     ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
-                    ${if (isKeyConstrained(keyShape, symbolProvider)) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
-                    ${if (isValueConstrained(valueShape, model, symbolProvider)) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
+                    ${if (isMemberConstrained) "##[doc(hidden)] Member(usize, #{MemberConstraintViolationSymbol})," else ""}
                 }
                 """,
                 *constraintViolationCodegenScope,
@@ -102,15 +97,8 @@ class CollectionConstraintViolationGenerator(
                                     """,
                                 )
                             }
-                            if (isKeyConstrained(keyShape, symbolProvider)) {
-                                // Note how we _do not_ append the key's member name to the path. This is intentional, as
-                                // per the `RestJsonMalformedLengthMapKey` test. Note keys are always strings.
-                                // https://github.com/awslabs/smithy/blob/ee0b4ff90daaaa5101f32da936c25af8c91cc6e9/smithy-aws-protocol-tests/model/restJson1/validation/malformed-length.smithy#L296-L295
-                                rust("""Self::Key(key_constraint_violation) => key_constraint_violation.as_validation_exception_field(path),""")
-                            }
-                            if (isValueConstrained(valueShape, model, symbolProvider)) {
-                                // `as_str()` works with regular `String`s and constrained string shapes.
-                                rust("""Self::Value(key, value_constraint_violation) => value_constraint_violation.as_validation_exception_field(path + "/" + key.as_str()),""")
+                            if (isMemberConstrained) {
+                                rust("""Self::Member(index, member_constraint_violation) => member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string()),""")
                             }
                         }
                     }
