@@ -54,8 +54,8 @@ class ConstrainedShapeSymbolProvider(
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
 
-    private fun publicConstrainedSymbolForMapShape(shape: Shape): Symbol {
-        check(shape is MapShape)
+    private fun publicConstrainedSymbolForMapOrCollectionShape(shape: Shape): Symbol {
+        check(shape is MapShape || shape is CollectionShape)
 
         val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
         return symbolBuilder(shape, rustType).locatedIn(Models).build()
@@ -74,7 +74,7 @@ class ConstrainedShapeSymbolProvider(
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
-                    publicConstrainedSymbolForMapShape(shape)
+                    publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val keySymbol = this.toSymbol(shape.key)
                     val valueSymbol = this.toSymbol(shape.value)
@@ -85,11 +85,9 @@ class ConstrainedShapeSymbolProvider(
                 }
             }
             is CollectionShape -> {
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Both arms return the same because we haven't
-                //  implemented any constraint trait on collection shapes yet.
                 if (shape.isDirectlyConstrained(base)) {
-                    val inner = this.toSymbol(shape.member)
-                    symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
+                    // TODO: Perform some check on the constraint traits that the list is tagged with.
+                    publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val inner = this.toSymbol(shape.member)
                     symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
