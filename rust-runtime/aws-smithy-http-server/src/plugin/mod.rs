@@ -14,7 +14,7 @@
 //! # use aws_smithy_http_server::plugin::*;
 //! # let layer = ();
 //! # struct GetPokemonSpecies;
-//! # impl GetPokemonSpecies { const NAME: &str = ""; };
+//! # impl GetPokemonSpecies { const NAME: &'static str = ""; };
 //! // Create a `Plugin` from a HTTP `Layer`
 //! let plugin = HttpLayer(layer);
 //!
