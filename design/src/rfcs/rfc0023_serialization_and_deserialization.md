@@ -52,7 +52,7 @@ For encoding, we considered using little endian, however, we believe that there 
 For human-readable format, `DateTime` is serialized in RFC-3339 format; 
 It expects the value to be in RFC-3339 format when it is Deserialized.  
 
-Non-human readable implements `DateTime` as a tuple of `u32` and `i64`; the latter corresponds to `seconds` field and the first is the `seubsecond_nanos`.
+Non-human readable implements `DateTime` as a tuple of `u32` and `i64`; the latter corresponds to `seconds` field and the first is the `subsecond_nanos`.
 
 - Reason behind the implementation of human-readable format
 
