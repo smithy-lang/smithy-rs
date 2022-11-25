@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
@@ -330,8 +331,7 @@ open class ServerCodegenVisitor(
 
         if (isDirectlyConstrained || renderUnconstrainedList) {
             rustCrate.withModule(ModelsModule) {
-                // TODO
-                // ListConstraintViolationGenerator(codegenContext, this,shape).render()
+                CollectionConstraintViolationGenerator(codegenContext, this, shape).render()
             }
         }
     }
