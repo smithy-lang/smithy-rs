@@ -335,6 +335,13 @@ enum class Visibility {
                 ifNot
             }
     }
+
+    fun toRustQualifier(): String =
+        when (this) {
+            PRIVATE -> ""
+            PUBCRATE -> "pub(crate)"
+            PUBLIC -> "pub"
+        }
 }
 
 /**
