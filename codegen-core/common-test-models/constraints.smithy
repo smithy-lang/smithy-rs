@@ -413,7 +413,7 @@ map MapOfLengthString {
 }
 
 map MapOfRangeInteger {
-    key: LengthString,
+    key: String,
     value: RangeInteger,
 }
 
