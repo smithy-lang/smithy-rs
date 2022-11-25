@@ -89,7 +89,7 @@ class UnconstrainedCollectionGenerator(
                             .map(|(idx, inner)| inner.try_into().map_err(|inner_violation| (idx, inner_violation)))
                             .collect();
                         res.map(Self)
-                           .map_err(|(idx, inner_violation)| #{ConstraintViolationSymbol}(idx, inner_violation))
+                           .map_err(|(idx, inner_violation)| #{ConstraintViolationSymbol}::Member(idx, inner_violation))
                     }
                 }
                 """,
