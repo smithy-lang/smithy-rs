@@ -283,11 +283,6 @@ structure QueryParamsTargetingLengthMapOperationInputOutput {
     lengthMap: ConBMap
 }
 
-structure QueryParamsTargetingRangeIntegerMapOperationInputOutput {
-    @httpQueryParams
-    rangeIntegerMap: ConBMap
-}
-
 structure QueryParamsTargetingMapOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfLengthString: MapOfLengthString
