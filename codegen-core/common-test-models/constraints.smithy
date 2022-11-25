@@ -427,11 +427,6 @@ map MapOfListOfLengthString {
     value: ListOfLengthString,
 }
 
-map MapOfListOfRangeInteger {
-    key: LengthString,
-    value: ListOfRangeInteger,
-}
-
 map MapOfListOfEnumString {
     key: EnumString,
     value: ListOfEnumString,
