@@ -510,12 +510,12 @@ class ServerServiceGeneratorV2(
             /// contains the `errors` member in your Smithy model), the function
             /// implementing the operation has to be fallible (i.e. return a [`Result`]).
             /// The possible forms for your async functions are:
-            /// ```rust
+            /// ```rust,no_run
             /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Result<Output, Error>
             /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}Extension<T>) -> Output
             /// ```
             /// Both can take up to 8 extensions, or none:
-            /// ```rust
+            /// ```rust,no_run
             /// async fn handler_with_no_extensions(input: Input) -> ...;
             /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}Extension<T>) -> ...
             /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}Extension<T>, ext1: #{SmithyHttpServer}Extension<T>) -> ...
