@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
@@ -317,6 +318,7 @@ open class ServerCodegenVisitor(
             }
         }
 
+        val constraintsInfo = CollectionTraitInfo.fromShape(shape)
         val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
         if (isDirectlyConstrained) {
             rustCrate.withModule(ModelsModule) {
@@ -324,6 +326,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     this,
                     shape,
+                    constraintsInfo,
                     if (renderUnconstrainedList) codegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape) else null,
                 ).render()
             }
@@ -331,7 +334,7 @@ open class ServerCodegenVisitor(
 
         if (isDirectlyConstrained || renderUnconstrainedList) {
             rustCrate.withModule(ModelsModule) {
-                CollectionConstraintViolationGenerator(codegenContext, this, shape).render()
+                CollectionConstraintViolationGenerator(codegenContext, this, shape, constraintsInfo).render()
             }
         }
     }

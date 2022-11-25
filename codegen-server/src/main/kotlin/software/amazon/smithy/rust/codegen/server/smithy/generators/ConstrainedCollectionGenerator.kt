@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.supportedCollectionConstraintTraits
+import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
  * [ConstrainedCollectionGenerator] generates a wrapper tuple newtype holding a constrained `std::vec::Vec`.
@@ -41,6 +42,7 @@ class ConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: CollectionShape,
+    private val constraintsInfo: List<TraitInfo>,
     private val unconstrainedSymbol: Symbol? = null,
 ) {
     private val model = codegenContext.model
@@ -55,11 +57,6 @@ class ConstrainedCollectionGenerator(
             }
         }
     private val symbolProvider = codegenContext.symbolProvider
-    private val constraintsInfo: List<TraitInfo> =
-        supportedCollectionConstraintTraits
-            .mapNotNull { shape.getTrait(it).orNull() }
-            .map(CollectionTraitInfo::fromTrait)
-            .map(CollectionTraitInfo::toTraitInfo)
 
     fun render() {
         assert(constraintsInfo.isNotEmpty()) {
@@ -161,7 +158,7 @@ class ConstrainedCollectionGenerator(
     }
 }
 
-private sealed class CollectionTraitInfo {
+internal sealed class CollectionTraitInfo {
     data class Length(val lengthTrait: LengthTrait) : CollectionTraitInfo() {
         override fun toTraitInfo(): TraitInfo =
             TraitInfo(
@@ -173,7 +170,14 @@ private sealed class CollectionTraitInfo {
                     rust("Length(usize)")
                 },
                 asValidationExceptionField = {
-                    // This should be unused here I think
+                    rust(
+                        """
+                        Self::Length(length) => crate::model::ValidationExceptionField {
+                            message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                            path,
+                        },
+                        """,
+                    )
                 },
                 validationFunctionDefinition = { constraintViolation ->
                     {
@@ -195,7 +199,7 @@ private sealed class CollectionTraitInfo {
     }
 
     companion object {
-        fun fromTrait(trait: Trait): CollectionTraitInfo =
+        private fun fromTrait(trait: Trait): CollectionTraitInfo =
             when (trait) {
                 is LengthTrait -> {
                     Length(trait)
@@ -208,6 +212,12 @@ private sealed class CollectionTraitInfo {
                     PANIC("CollectionTraitInfo.fromTrait called with unsupported trait $trait")
                 }
             }
+
+        fun fromShape(shape: CollectionShape): List<TraitInfo> =
+            supportedCollectionConstraintTraits
+                .mapNotNull { shape.getTrait(it).orNull() }
+                .map(CollectionTraitInfo::fromTrait)
+                .map(CollectionTraitInfo::toTraitInfo)
     }
 
     abstract fun toTraitInfo(): TraitInfo
