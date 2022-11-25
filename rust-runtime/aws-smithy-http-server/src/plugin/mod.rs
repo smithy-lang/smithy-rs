@@ -13,11 +13,13 @@
 //! ```
 //! # use aws_smithy_http_server::plugin::*;
 //! # let layer = ();
+//! # struct GetPokemonSpecies;
+//! # impl GetPokemonSpecies { const NAME: &str = ""; };
 //! // Create a `Plugin` from a HTTP `Layer`
 //! let plugin = HttpLayer(layer);
 //!
 //! // Only apply the layer to operations with name "GetPokemonSpecies"
-//! let plugin = filter_by_operation_name(plugin, |name| name == "GetPokemonSpecies");
+//! let plugin = filter_by_operation_name(plugin, |name| name == GetPokemonSpecies::NAME);
 //! ```
 //!
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
