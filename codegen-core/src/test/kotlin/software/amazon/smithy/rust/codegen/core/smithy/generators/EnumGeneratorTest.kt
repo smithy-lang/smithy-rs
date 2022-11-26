@@ -453,7 +453,8 @@ class EnumGeneratorTest {
                 assert_eq!(format!("{:?}", SomeEnum::Bar), "Bar");
                 assert_eq!(
                     format!("{:?}", SomeEnum::from("Baz")),
-                    "Unknown(UnknownVariantValue(\"Baz\"))");
+                    "Unknown(UnknownVariantValue(\"Baz\"))"
+                );
                 """,
             )
         }
