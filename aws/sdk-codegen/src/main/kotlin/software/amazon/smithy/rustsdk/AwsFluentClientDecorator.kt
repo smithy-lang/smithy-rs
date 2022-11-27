@@ -107,7 +107,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
             ),
             retryClassifier = runtimeConfig.awsHttp().toType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) {
+        rustCrate.withModule(CustomizableOperationGenerator.CustomizeModule) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
         rustCrate.withModule(FluentClientGenerator.clientModule) {

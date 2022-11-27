@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -33,7 +32,6 @@ typealias LibRsCustomization = NamedSectionGenerator<LibRsSection>
 class LibRsGenerator(
     private val settings: CoreRustSettings,
     private val model: Model,
-    private val modules: List<RustModule>,
     private val customizations: List<LibRsCustomization>,
     private val requireDocs: Boolean,
 ) {
@@ -66,7 +64,6 @@ class LibRsGenerator(
 
             // TODO(docs): Automated feature documentation
         }
-        modules.forEach { it.render(writer) }
         customizations.forEach { it.section(LibRsSection.Body(model))(writer) }
     }
 }

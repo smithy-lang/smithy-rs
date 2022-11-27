@@ -35,6 +35,7 @@ open class ServerServiceGenerator(
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
     protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
+    private val serviceName = codegenContext.serviceShape.id.name.toString()
 
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
@@ -42,7 +43,6 @@ open class ServerServiceGenerator(
      */
     fun render() {
         rustCrate.lib {
-            val serviceName = codegenContext.serviceShape.id.name.toString()
             rust("##[doc(inline, hidden)]")
             rust("pub use crate::service::$serviceName;")
         }
@@ -75,7 +75,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule(
+            RustModule.LeafModule(
                 "operation_shape",
                 RustMetadata(
                     visibility = Visibility.PUBLIC,
@@ -85,14 +85,12 @@ open class ServerServiceGenerator(
                 ),
             ),
         ) {
-            for (operation in operations) {
-                ServerOperationGenerator(codegenContext, operation).render(this)
-            }
+            ServerOperationShapeGenerator(operations, codegenContext).render(this)
         }
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
+            RustModule.LeafModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) {
             ServerServiceGeneratorV2(
                 codegenContext,

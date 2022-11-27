@@ -429,7 +429,8 @@ class RustWriter private constructor(
     }
 
     /**
-     * Create an inline module.
+     * Create an inline module. Instead of being in a new file, inline modules are written as a `mod { ... }` block
+     * directly into the parent.
      *
      * Callers must take care to use [this] when writing to ensure code is written to the right place:
      * ```kotlin
@@ -442,15 +443,19 @@ class RustWriter private constructor(
      *
      * The returned writer will inject any local imports into the module as needed.
      */
-    fun withModule(
-        module: RustModule,
+    fun withInlineModule(
+        module: RustModule.LeafModule,
         moduleWriter: Writable,
     ): RustWriter {
+        check(module.isInline()) {
+            "Only inline modules may be used with `withInlineModule`: $module"
+        }
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
         // into an inline module.
         val innerWriter = RustWriter(this.filename, "${this.namespace}::${module.name}", printWarning = false)
         moduleWriter(innerWriter)
+        module.documentation?.let { docs -> docs(docs) }
         module.rustMetadata.render(this)
         rustBlock("mod ${module.name}") {
             writeWithNoFormatting(innerWriter.toString())
