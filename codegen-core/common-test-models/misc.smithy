@@ -5,6 +5,7 @@ namespace aws.protocoltests.misc
 use aws.protocols#restJson1
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 /// A service to test miscellaneous aspects of code generation where protocol
 /// selection is not relevant. If you want to test something protocol-specific,
@@ -54,10 +55,11 @@ map MapA {
 
 /// This operation tests that (de)serializing required values from a nested
 /// shape works correctly.
-@http(uri: "/innerRequiredShapeOperation", method: "POST")
+@http(uri: "/requiredInnerShapeOperation", method: "POST")
 operation RequiredInnerShapeOperation {
     input: RequiredInnerShapeOperationInputOutput,
     output: RequiredInnerShapeOperationInputOutput,
+    errors: [ValidationException],
 }
 
 structure RequiredInnerShapeOperationInputOutput {
@@ -236,6 +238,7 @@ operation AcceptHeaderStarService {}
 operation RequiredHeaderCollectionOperation {
     input: RequiredHeaderCollectionOperationInputOutput,
     output: RequiredHeaderCollectionOperationInputOutput,
+    errors: [ValidationException]
 }
 
 structure RequiredHeaderCollectionOperationInputOutput {
@@ -252,6 +255,7 @@ list HeaderList {
     member: String
 }
 
-set HeaderSet {
+@uniqueItems
+list HeaderSet {
     member: String
 }

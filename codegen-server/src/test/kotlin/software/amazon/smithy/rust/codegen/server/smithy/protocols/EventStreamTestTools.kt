@@ -21,6 +21,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
@@ -313,7 +315,11 @@ object EventStreamTestModels {
                 </Response>
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
-    ).flatMap { listOf(it, it.copy(target = CodegenTarget.SERVER)) }
+    )
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1442) Server tests
+    //  should be run from the server subproject using the
+    //  `serverTestSymbolProvider()`.
+    // .flatMap { listOf(it, it.copy(target = CodegenTarget.SERVER)) }
 
     class UnmarshallTestCasesProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
@@ -351,7 +357,7 @@ object EventStreamTestTools {
         }
         val project = TestWorkspace.testProject(symbolProvider)
         val operationSymbol = symbolProvider.toSymbol(operationShape)
-        project.withModule(RustModule.public("error")) {
+        project.withModule(ErrorsModule) {
             val errors = model.shapes()
                 .filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }
                 .map { it.asStructureShape().get() }
@@ -369,11 +375,11 @@ object EventStreamTestTools {
                 }
             }
         }
-        project.withModule(RustModule.public("model")) {
+        project.withModule(ModelsModule) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
             recursivelyGenerateModels(model, symbolProvider, inputOutput, this, testCase.target)
         }
-        project.withModule(RustModule.public("output")) {
+        project.withModule(RustModule.Output) {
             operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
         return TestEventStreamProject(model, serviceShape, operationShape, unionShape, symbolProvider, project)

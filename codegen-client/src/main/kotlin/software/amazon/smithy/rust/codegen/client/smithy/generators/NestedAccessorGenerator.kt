@@ -7,10 +7,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -24,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.lensName
 
 /** Generator for accessing nested fields through optional values **/
 class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
-    private val module = RustModule("lens", RustMetadata(visibility = Visibility.PUBLIC), "Generated accessors for nested fields")
+    private val module = RustModule.private("lens", "Generated accessors for nested fields")
 
     /**
      * Generate an accessor on [root] that consumes [root] and returns an `Option<T>` for the nested item
@@ -79,11 +77,11 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                 if (symbolProvider.toSymbol(head).isOptional()) {
                     rust(
                         """
-                    let input = match ${ref}input.${symbolProvider.toMemberName(head)} {
-                        None => return None,
-                        Some(t) => t
-                    };
-                    """,
+                        let input = match ${ref}input.${symbolProvider.toMemberName(head)} {
+                            None => return None,
+                            Some(t) => t
+                        };
+                        """,
                     )
                 } else {
                     rust("let input = input.${symbolProvider.toMemberName(head)};")

@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -13,6 +14,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -22,39 +25,61 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
+//  Move this entire file, and its tests, to `codegen-client`.
+
+fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
+    structureShape.builderSymbol(symbolProvider)
+}
 
 fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
     val structureSymbol = symbolProvider.toSymbol(this)
     val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
-    val rustType = RustType.Opaque("Builder", "${structureSymbol.namespace}::$builderNamespace")
+    val module = RustModule.new(builderNamespace, visibility = Visibility.PUBLIC, parent = structureSymbol.module(), inline = true)
+    val rustType = RustType.Opaque("Builder", module.fullyQualifiedPath())
     return Symbol.builder()
         .rustType(rustType)
         .name(rustType.name)
-        .namespace(rustType.namespace, "::")
-        .definitionFile(structureSymbol.definitionFile)
+        .locatedIn(module)
         .build()
 }
 
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("SerializationError")
+fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("error::BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("error::SerializationError")
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
-    fun missingField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::MissingField { field: ${field.dq()}, details: ${details.dq()} }"
-    fun invalidField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::InvalidField { field: ${field.dq()}, details: ${details.dq()}.to_string() }"
-    fun serializationError(w: RustWriter, error: String) = "${w.format(runtimeConfig.operationBuildError())}::SerializationError($error.into())"
+    fun missingField(field: String, details: String) = writable {
+        rust("#T::missing_field(${field.dq()}, ${details.dq()})", runtimeConfig.operationBuildError())
+    }
+    fun invalidField(field: String, details: String) = invalidField(field) { rust(details.dq()) }
+    fun invalidField(field: String, details: Writable) = writable {
+        rustTemplate(
+            "#{error}::invalid_field(${field.dq()}, #{details:W})",
+            "error" to runtimeConfig.operationBuildError(),
+            "details" to details,
+        )
+    }
 }
 
 // Setter names will never hit a reserved word and therefore never need escaping.
@@ -65,6 +90,23 @@ class BuilderGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
 ) {
+    companion object {
+        /**
+         * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
+         * fallible builder to be constructed.
+         */
+        fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
+            // All operation inputs should have fallible builders in case a new required field is added in the future.
+            structureShape.hasTrait<SyntheticInputTrait>() ||
+                structureShape
+                    .members()
+                    .map { symbolProvider.toSymbol(it) }.any {
+                        // If any members are not optional && we can't use a default, we need to
+                        // generate a fallible builder.
+                        !it.isOptional() && !it.canUseDefault()
+                    }
+    }
+
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
@@ -73,13 +115,13 @@ class BuilderGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
-        writer.withModule(RustModule.public(segments.last())) {
+        writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
             renderBuilder(this)
         }
     }
 
     private fun renderBuildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
+        val fallibleBuilder = hasFallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
         val returnType = when (fallibleBuilder) {
             true -> "Result<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
@@ -96,10 +138,7 @@ class BuilderGenerator(
 
     private fun RustWriter.missingRequiredField(field: String) {
         val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
-        rust(
-            """#T::MissingField { field: "$field", details: "$detailedMessage" } """,
-            runtimeConfig.operationBuildError(),
-        )
+        OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
     }
 
     fun renderConvenienceMethod(implBlock: RustWriter) {
@@ -260,7 +299,7 @@ class BuilderGenerator(
                     when {
                         !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
                         !memberSymbol.isOptional() -> withBlock(
-                            ".ok_or(",
+                            ".ok_or_else(||",
                             ")?",
                         ) { missingRequiredField(memberName) }
                     }

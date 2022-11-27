@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
 import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -39,13 +38,13 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyTypesDep = CargoDependency.SmithyTypes(runtimeConfig)
-    private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
-    private val smithyHttpDep = CargoDependency.SmithyHttp(runtimeConfig)
+    private val smithyTypesDep = CargoDependency.smithyTypes(runtimeConfig)
+    private val smithyClientDep = CargoDependency.smithyClient(runtimeConfig)
+    private val smithyHttpDep = CargoDependency.smithyHttp(runtimeConfig)
 
-    val awsTypes = awsTypes(runtimeConfig).asType()
+    val awsTypes = awsTypes(runtimeConfig).toType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
-    val awsSmithyClient = smithyClientDep.asType()
+    val awsSmithyClient = smithyClientDep.toType()
 
     val connectorSettings = RuntimeType("ConnectorSettings", smithyClientDep, "aws_smithy_client::http_connector")
     val defaultMiddleware = runtimeConfig.defaultMiddleware()
@@ -106,9 +105,9 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
                 AwsPresignedFluentBuilderMethod(runtimeConfig),
                 AwsFluentClientDocs(codegenContext),
             ),
-            retryClassifier = runtimeConfig.awsHttp().asType().member("retry::AwsResponseRetryClassifier"),
+            retryClassifier = runtimeConfig.awsHttp().toType().member("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate)
-        rustCrate.withNonRootModule(CustomizableOperationGenerator.CUSTOMIZE_MODULE) {
+        rustCrate.withModule(CustomizableOperationGenerator.CustomizeModule) {
             renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
         }
         rustCrate.withModule(FluentClientGenerator.clientModule) {
@@ -158,25 +157,7 @@ private class AwsFluentClientExtensions(types: Types) {
         writer.rustBlockTemplate("impl Client", *codegenScope) {
             rustTemplate(
                 """
-                /// Creates a client with the given service config and connector override.
-                pub fn from_conf_conn<C, E>(conf: crate::Config, conn: C) -> Self
-                where
-                    C: #{SmithyConnector}<Error = E> + Send + 'static,
-                    E: Into<#{ConnectorError}>,
-                {
-                    let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
-                    let mut builder = #{aws_smithy_client}::Builder::new()
-                        .connector(#{DynConnector}::new(conn))
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
-                        .retry_config(retry_config.into())
-                        .operation_timeout_config(timeout_config.into());
-                    builder.set_sleep_impl(conf.sleep_impl());
-                    let client = builder.build();
-                    Self { handle: std::sync::Arc::new(Handle { client, conf }) }
-                }
-
-                /// Creates a new client from a shared config.
+                /// Creates a new client from an [SDK Config](#{aws_types}::sdk_config::SdkConfig).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
                     Self::from_conf(sdk_config.into())
@@ -192,8 +173,26 @@ private class AwsFluentClientExtensions(types: Types) {
                         panic!("An async sleep implementation is required for retries or timeouts to work. \
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");
                     }
-                    let mut builder = #{aws_smithy_client}::Builder::new()
-                        .dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
+
+                    let connector = conf.http_connector().and_then(|c| {
+                        let timeout_config = conf
+                            .timeout_config()
+                            .cloned()
+                            .unwrap_or_else(#{TimeoutConfig}::disabled);
+                        let connector_settings = #{ConnectorSettings}::from_timeout_config(
+                            &timeout_config,
+                        );
+                        c.connector(&connector_settings, conf.sleep_impl())
+                    });
+
+                    let builder = #{aws_smithy_client}::Builder::new();
+                    let builder = match connector {
+                        // Use provided connector
+                        Some(c) => builder.connector(c),
+                        // Use default connector based on enabled features
+                        None => builder.dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config)),
+                    };
+                    let mut builder = builder
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
                         .retry_config(retry_config.into())
                         .operation_timeout_config(timeout_config.into());
@@ -214,7 +213,7 @@ private class AwsFluentClientDocs(private val codegenContext: CodegenContext) : 
     private val serviceShape = codegenContext.serviceShape
     private val crateName = codegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).toType())
 
     // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
     // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
@@ -279,7 +278,7 @@ private fun renderCustomizableOperationSendMethod(
     generics: FluentClientGenerics,
     writer: RustWriter,
 ) {
-    val smithyHttp = CargoDependency.SmithyHttp(runtimeConfig).asType()
+    val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
 
     val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
     val handleGenerics = generics.toRustGenerics()
@@ -302,7 +301,7 @@ private fun renderCustomizableOperationSendMethod(
             /// Sends this operation's request
             pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
             where
-                E: std::error::Error,
+                E: std::error::Error + 'static,
                 O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
                 Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, SdkError<E>> + Send + Sync + Clone,
             {

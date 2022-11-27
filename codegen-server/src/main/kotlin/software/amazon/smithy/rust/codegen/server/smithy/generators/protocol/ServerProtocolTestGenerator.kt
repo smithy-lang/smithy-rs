@@ -18,6 +18,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMalformedRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpMalformedRequestTestsTrait
+import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseBodyDefinition
 import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseDefinition
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
@@ -31,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -103,13 +103,13 @@ class ServerProtocolTestGenerator(
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
-        "Hyper" to CargoDependency.Hyper.asType(),
-        "Tokio" to ServerCargoDependency.TokioDev.asType(),
-        "Tower" to CargoDependency.Tower.asType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
+        "SmithyHttp" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType(),
+        "Http" to CargoDependency.Http.toType(),
+        "Hyper" to CargoDependency.Hyper.toType(),
+        "Tokio" to ServerCargoDependency.TokioDev.toType(),
+        "Tower" to CargoDependency.Tower.toType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
+        "AssertEq" to CargoDependency.PrettyAssertions.toType().member("assert_eq!"),
         "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
     )
 
@@ -176,7 +176,7 @@ class ServerProtocolTestGenerator(
             }
         }
 
-        val module = RustModule(
+        val module = RustModule.LeafModule(
             PROTOCOL_TEST_HELPER_MODULE_NAME,
             RustMetadata(
                 additionalAttributes = listOf(
@@ -185,9 +185,10 @@ class ServerProtocolTestGenerator(
                 ),
                 visibility = Visibility.PUBCRATE,
             ),
+            inline = true,
         )
 
-        writer.withModule(module) {
+        writer.withInlineModule(module) {
             rustTemplate(
                 """
                 use #{Tower}::Service as _;
@@ -253,7 +254,7 @@ class ServerProtocolTestGenerator(
 
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
-            val module = RustModule(
+            val module = RustModule.LeafModule(
                 "server_${operationName.toSnakeCase()}_test",
                 RustMetadata(
                     additionalAttributes = listOf(
@@ -262,8 +263,9 @@ class ServerProtocolTestGenerator(
                     ),
                     visibility = Visibility.PRIVATE,
                 ),
+                inline = true,
             )
-            writer.withModule(module) {
+            writer.withInlineModule(module) {
                 renderAllTestCases(operationShape, allTests)
             }
         }
@@ -340,8 +342,13 @@ class ServerProtocolTestGenerator(
             }
 
             is TestCase.MalformedRequestTest -> {
-                // We haven't found any broken `HttpMalformedRequestTest`s yet.
-                it
+                val howToFixIt = BrokenMalformedRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
+                if (howToFixIt == null) {
+                    it
+                } else {
+                    val fixed = howToFixIt(it.testCase)
+                    TestCase.MalformedRequestTest(fixed)
+                }
             }
         }
     }
@@ -532,9 +539,11 @@ class ServerProtocolTestGenerator(
                 // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
                 // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
                 // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
-                "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(${
-                body.replace("\u000c", "\\u{000c}").dq()
-                }.as_bytes()))"
+                //
+                // We also escape to avoid interactions with templating in the case where the body contains `#`.
+                val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
+
+                "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
             } else {
                 "#{SmithyHttpServer}::body::Body::empty()"
             }
@@ -625,7 +634,7 @@ class ServerProtocolTestGenerator(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
-            let service = crate::service::$serviceName::unchecked_builder()
+            let service = crate::service::$serviceName::builder_without_plugins::<#{Hyper}::body::Body>()
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {
@@ -634,7 +643,7 @@ class ServerProtocolTestGenerator(
                         result
                     }
                 })
-                .build::<#{Hyper}::body::Body>();
+                .build_unchecked();
             let http_response = #{Tower}::ServiceExt::oneshot(service, http_request)
                 .await
                 .expect("unable to make an HTTP request");
@@ -933,18 +942,8 @@ class ServerProtocolTestGenerator(
 
             FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
 
-            // Tests involving constraint traits, which are not yet implemented.
-            // See https://github.com/awslabs/smithy-rs/pull/1342.
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case1", TestType.MalformedRequest),
+            // Tests involving constraint traits, which are not yet fully implemented.
+            // See https://github.com/awslabs/smithy-rs/issues/1401.
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlobOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlobOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthListOverride_case0", TestType.MalformedRequest),
@@ -958,17 +957,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListValue_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListValue_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMap_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMap_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapKey_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapKey_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case2", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKeyOverride_case0", TestType.MalformedRequest),
@@ -987,17 +977,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternStringOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnionOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnionOverride_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternList_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternList_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKey_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKey_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapValue_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapValue_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternReDOSString", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternString_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternString_case1", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnion_case0", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnion_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeByteOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeByteOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case0", TestType.MalformedRequest),
@@ -1008,9 +987,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthMaxStringOverride", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthMinStringOverride", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthQueryStringNoValue", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMaxString", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMinString", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxByteOverride", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloatOverride", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinByteOverride", TestType.MalformedRequest),
@@ -1019,10 +995,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinByte", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRequiredBodyExplicitNull", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRequiredBodyUnset", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRequiredHeaderUnset", TestType.MalformedRequest),
-            FailingTest(RestJsonValidation, "RestJsonMalformedRecursiveStructures", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternSensitiveString", TestType.MalformedRequest),
 
             // Some tests for the S3 service (restXml).
@@ -1194,6 +1166,34 @@ class ServerProtocolTestGenerator(
         ): HttpRequestTestCase =
             testCase.toBuilder().putHeader("x-amz-target", "JsonProtocol.${operationShape.id.name}").build()
 
+        private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#InvalidGreeting").build()
+        private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
+        private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
+
+        // TODO(https://github.com/awslabs/smithy/issues/1506)
+        private fun fixRestJsonMalformedPatternReDOSString(testCase: HttpMalformedRequestTestCase): HttpMalformedRequestTestCase {
+            val brokenResponse = testCase.response
+            val brokenBody = brokenResponse.body.get()
+            val fixedBody = HttpMalformedResponseBodyDefinition.builder()
+                .mediaType(brokenBody.mediaType)
+                .contents(
+                    """
+                    {
+                        "message" : "1 validation error detected. Value 000000000000000000000000000000000000000000000000000000000000000000000000000000000000! at '/evilString' failed to satisfy constraint: Member must satisfy regular expression pattern: ^([0-9]+)+${'$'}",
+                        "fieldList" : [{"message": "Value 000000000000000000000000000000000000000000000000000000000000000000000000000000000000! at '/evilString' failed to satisfy constraint: Member must satisfy regular expression pattern: ^([0-9]+)+${'$'}", "path": "/evilString"}]
+                    }
+                    """.trimIndent(),
+                )
+                .build()
+
+            return testCase.toBuilder()
+                .response(brokenResponse.toBuilder().body(fixedBody).build())
+                .build()
+        }
+
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
         // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
         // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Contribute a PR to fix them upstream.
@@ -1270,6 +1270,17 @@ class ServerProtocolTestGenerator(
         )
 
         private val BrokenResponseTests: Map<Pair<String, String>, KFunction1<HttpResponseTestCase, HttpResponseTestCase>> =
-            mapOf()
+            // TODO(https://github.com/awslabs/smithy/issues/1494)
+            mapOf(
+                Pair(RestJson, "RestJsonInvalidGreetingError") to ::fixRestJsonInvalidGreetingError,
+                Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
+                Pair(RestJson, "RestJsonComplexErrorWithNoMessage") to ::fixRestJsonComplexErrorWithNoMessage,
+            )
+
+        private val BrokenMalformedRequestTests: Map<Pair<String, String>, KFunction1<HttpMalformedRequestTestCase, HttpMalformedRequestTestCase>> =
+            // TODO(https://github.com/awslabs/smithy/issues/1506)
+            mapOf(
+                Pair(RestJsonValidation, "RestJsonMalformedPatternReDOSString") to ::fixRestJsonMalformedPatternReDOSString,
+            )
     }
 }

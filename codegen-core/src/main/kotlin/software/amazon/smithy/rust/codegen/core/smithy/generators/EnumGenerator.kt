@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
@@ -88,8 +89,8 @@ open class EnumGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StringShape,
-    private val enumTrait: EnumTrait,
+    protected val shape: StringShape,
+    protected val enumTrait: EnumTrait,
 ) {
     protected val symbol: Symbol = symbolProvider.toSymbol(shape)
     protected val enumName: String = symbol.name
@@ -152,7 +153,7 @@ open class EnumGenerator(
             }
 
             docs("Returns all the `&str` representations of the enum members.")
-            rustBlock("pub fn $Values() -> &'static [&'static str]") {
+            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.dq() }
                     rust(memberList)
@@ -209,7 +210,7 @@ open class EnumGenerator(
             }
 
             rust("/// Returns all the `&str` values of the enum members.")
-            rustBlock("pub fn $Values() -> &'static [&'static str]") {
+            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
                     write(memberList)
@@ -257,6 +258,7 @@ open class EnumGenerator(
             "Debug" to RuntimeType.Debug,
             "StdFmt" to RuntimeType.stdfmt,
         )
+    }
 
     protected open fun renderFromForStr() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {

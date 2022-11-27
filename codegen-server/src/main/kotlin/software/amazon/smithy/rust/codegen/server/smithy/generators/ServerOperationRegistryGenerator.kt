@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -23,9 +22,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.Errors
-import software.amazon.smithy.rust.codegen.core.smithy.Inputs
-import software.amazon.smithy.rust.codegen.core.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
+import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -60,9 +59,9 @@ class ServerOperationRegistryGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "Tower" to ServerCargoDependency.Tower.asType(),
+        "Tower" to ServerCargoDependency.Tower.toType(),
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError,
         "Display" to RuntimeType.Display,
@@ -87,9 +86,9 @@ class ServerOperationRegistryGenerator(
 
     private fun renderOperationRegistryRustDocs(writer: RustWriter) {
         val inputOutputErrorsImport = if (operations.any { it.errors.isNotEmpty() }) {
-            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
+            "/// use ${crateName.toSnakeCase()}::{${InputsModule.name}, ${OutputsModule.name}, ${ErrorsModule.name}};"
         } else {
-            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}};"
+            "/// use ${crateName.toSnakeCase()}::{${InputsModule.name}, ${OutputsModule.name}};"
         }
 
         writer.rustTemplate(
@@ -159,8 +158,8 @@ ${operationImplementationStubs(operations)}
             "Router" to ServerRuntimeType.Router(runtimeConfig),
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
-            "Tokio" to ServerCargoDependency.TokioDev.asType(),
-            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType(),
+            "Tokio" to ServerCargoDependency.TokioDev.toType(),
+            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).toType(),
         )
     }
 
@@ -380,12 +379,13 @@ ${operationImplementationStubs(operations)}
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
         val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
 
-        val inputT = "${Inputs.namespace}::${inputSymbol.name}"
-        val t = "${Outputs.namespace}::${outputSymbol.name}"
+        // using module names here to avoid generating `crate::...` since we've already added the import
+        val inputT = "${InputsModule.name}::${inputSymbol.name}"
+        val t = "${OutputsModule.name}::${outputSymbol.name}"
         val outputT = if (errors.isEmpty()) {
             t
         } else {
-            val e = "${Errors.namespace}::${errorSymbol.name}"
+            val e = "${ErrorsModule.name}::${errorSymbol.name}"
             "Result<$t, $e>"
         }
 
@@ -400,6 +400,6 @@ ${operationImplementationStubs(operations)}
         this,
         symbolProvider.toSymbol(this).name,
         serviceName,
-        ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec"),
+        ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().member("routing::request_spec"),
     )
 }

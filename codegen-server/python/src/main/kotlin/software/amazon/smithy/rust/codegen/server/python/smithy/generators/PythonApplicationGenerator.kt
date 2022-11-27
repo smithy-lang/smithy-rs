@@ -9,14 +9,13 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.Errors
-import software.amazon.smithy.rust.codegen.core.smithy.Inputs
-import software.amazon.smithy.rust.codegen.core.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
+import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -60,7 +59,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  *   of `App` called `register_service()` that can be used to decorate the Python implementation
  *   of this operation.
  *
- * This class also renders the implementation of the `aws_smity_http_server_python::PyServer` trait,
+ * This class also renders the implementation of the `aws_smithy_http_server_python::PyServer` trait,
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
@@ -76,18 +75,18 @@ class PythonApplicationGenerator(
     private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-            "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType(),
-            "tower" to PythonServerCargoDependency.Tower.asType(),
-            "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
-            "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
-            "hyper" to PythonServerCargoDependency.Hyper.asType(),
+            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "tokio" to PythonServerCargoDependency.Tokio.toType(),
+            "tracing" to PythonServerCargoDependency.Tracing.toType(),
+            "tower" to PythonServerCargoDependency.Tower.toType(),
+            "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
+            "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
+            "hyper" to PythonServerCargoDependency.Hyper.toType(),
             "HashMap" to RustType.HashMap.RuntimeType,
-            "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
+            "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
             "http" to RuntimeType.http,
         )
 
@@ -179,8 +178,8 @@ class PythonApplicationGenerator(
                 """
                 fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
                     #{tower}::util::BoxCloneService<
-                        #{http}::Request<#{SmithyServer}::body::Body>, 
-                        #{http}::Response<#{SmithyServer}::body::BoxBody>, 
+                        #{http}::Request<#{SmithyServer}::body::Body>,
+                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
                         std::convert::Infallible
                     >
                 >
@@ -189,7 +188,7 @@ class PythonApplicationGenerator(
             ) {
                 rustTemplate(
                     """
-                    let builder = crate::service::$serviceName::builder();
+                    let builder = crate::service::$serviceName::builder_without_plugins();
                     """,
                     *codegenScope,
                 )
@@ -209,7 +208,7 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let mut service = #{tower}::util::BoxCloneService::new(builder.build());
+                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
 
                     {
                         use #{tower}::Layer;
@@ -224,7 +223,6 @@ class PythonApplicationGenerator(
                             service = #{tower}::util::BoxCloneService::new(layer.layer(service));
                         }
                     }
-
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
@@ -339,12 +337,12 @@ class PythonApplicationGenerator(
         )
         writer.rust(
             """
-            /// from $libName import ${Inputs.namespace}
-            /// from $libName import ${Outputs.namespace}
+            /// from $libName import ${InputsModule.name}
+            /// from $libName import ${OutputsModule.name}
             """.trimIndent(),
         )
         if (operations.any { it.errors.isNotEmpty() }) {
-            writer.rust("""/// from $libName import ${Errors.namespace}""".trimIndent())
+            writer.rust("""/// from $libName import ${ErrorsModule.name}""".trimIndent())
         }
         writer.rust(
             """
@@ -398,8 +396,8 @@ class PythonApplicationGenerator(
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val inputT = "${Inputs.namespace}::${inputSymbol.name}"
-        val outputT = "${Outputs.namespace}::${outputSymbol.name}"
+        val inputT = "${InputsModule.name}::${inputSymbol.name}"
+        val outputT = "${OutputsModule.name}::${outputSymbol.name}"
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
         return "@app.$operationName\n/// def $operationName(input: $inputT, ctx: Context) -> $outputT"
     }
