@@ -16,9 +16,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 fun CodegenTarget.renderUnknownVariant() = when (this) {
@@ -47,16 +51,20 @@ class UnionGenerator(
     private val renderUnknownVariant: Boolean = true,
 ) {
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
+    private val unionSymbol = symbolProvider.toSymbol(shape)
 
     fun render() {
         renderUnion()
+        renderImplBlock()
+        if (shape.shouldRedact(model)) {
+            renderDebugImplForSensitiveUnion()
+        }
     }
 
     private fun renderUnion() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
 
-        val unionSymbol = symbolProvider.toSymbol(shape)
         val containerMeta = unionSymbol.expectRustMetadata()
         containerMeta.render(writer)
         writer.rustBlock("enum ${unionSymbol.name}") {
@@ -82,6 +90,9 @@ class UnionGenerator(
                 rust("Unknown,")
             }
         }
+    }
+
+    private fun renderImplBlock() {
         writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
                 val memberSymbol = symbolProvider.toSymbol(member)
@@ -108,6 +119,19 @@ class UnionGenerator(
                 }
             }
         }
+    }
+    private fun renderDebugImplForSensitiveUnion() {
+        writer.rustTemplate(
+            """
+            impl #{Debug} for ${unionSymbol.name} {
+                fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
+                    write!(f, $REDACTION)
+                }
+            }
+            """,
+            "Debug" to RuntimeType.Debug,
+            "StdFmt" to RuntimeType.stdfmt,
+        )
     }
 
     companion object {
