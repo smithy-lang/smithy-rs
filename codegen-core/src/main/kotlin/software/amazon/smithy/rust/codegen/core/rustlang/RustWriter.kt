@@ -515,6 +515,25 @@ class RustWriter private constructor(
      * - If the field is optional, it will only be called if the field is present
      * - If the field is an unboxed primitive, it will only be called if the field is non-zero
      *
+     * # Example
+     *
+     * For a nullable structure shape (e.g. `Option<MyStruct>`), the following code will be generated:
+     *
+     * ```
+     * if let Some(v) = my_nullable_struct {
+     *   /* {block(variable)} */
+     * }
+     * ```
+     *
+     * # Example
+     *
+     * For a non-nullable integer shape, the following code will be generated:
+     *
+     * ```
+     * if my_int != 0 {
+     *   /* {block(variable)} */
+     * }
+     * ```
      */
     fun ifSet(
         shape: Shape,
