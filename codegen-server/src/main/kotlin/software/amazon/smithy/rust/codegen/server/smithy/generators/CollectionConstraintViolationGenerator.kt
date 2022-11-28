@@ -6,14 +6,13 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -44,12 +43,7 @@ class CollectionConstraintViolationGenerator(
         val isMemberConstrained = memberShape.canReachConstrainedShape(model, symbolProvider)
         val constraintViolationVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
 
-        modelsModuleWriter.withModule(
-            RustModule(
-                constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last(),
-                RustMetadata(visibility = constraintViolationVisibility),
-            ),
-        ) {
+        modelsModuleWriter.withInlineModule(constraintViolationSymbol.module()) {
             var constraintViolationVariants = constraintsInfo.map { it.constraintViolationVariant }
             if (isMemberConstrained) {
                 constraintViolationVariants += {

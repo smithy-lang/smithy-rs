@@ -300,7 +300,7 @@ open class ServerCodegenVisitor(
 
             if (!shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
                 logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
-                rustCrate.withModule(constrainedModule) {
+                rustCrate.withModule(ConstrainedModule) {
                     PubCrateConstrainedCollectionGenerator(codegenContext, this, shape).render()
                 }
             }
