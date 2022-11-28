@@ -51,10 +51,10 @@ impl PokemonServiceVariant {
         process
     }
 
-    fn base_url(&self) -> String {
+    fn base_url(&self) -> &'static str {
         match self {
-            PokemonServiceVariant::Http => "http://localhost:13734".to_string(),
-            PokemonServiceVariant::Http2 => "https://localhost:13734".to_string(),
+            PokemonServiceVariant::Http => "http://localhost:13734",
+            PokemonServiceVariant::Http2 => "https://localhost:13734",
         }
     }
 }
@@ -130,7 +130,7 @@ pub fn http2_client() -> PokemonClient {
     Client::with_config(raw_client, config)
 }
 
-fn rewrite_base_url(base_url: String) -> impl Fn(Request) -> Request + Clone {
+fn rewrite_base_url(base_url: &'static str) -> impl Fn(Request) -> Request + Clone {
     move |mut req| {
         let http_req = req.http_mut();
         let uri = format!("{base_url}{}", http_req.uri().path());
