@@ -47,7 +47,7 @@ lazy_static::lazy_static! {
             // Versions <= 0.6.0 no longer compile against the canary after this commit in smithy-rs
             // due to the breaking change in https://github.com/awslabs/smithy-rs/pull/1085
             (ReleaseTag::from_str("v0.6.0").unwrap(), "d48c234796a16d518ca9e1dda5c7a1da4904318c"),
-            // Versions <= release-2022-10-26 no longer compiles against the canary after this commit in smithy-rs
+            // Versions <= release-2022-10-26 no longer compile against the canary after this commit in smithy-rs
             // due to the s3 canary update in https://github.com/awslabs/smithy-rs/pull/1974
             (ReleaseTag::from_str("release-2022-10-26").unwrap(), "3e24477ae7a0a2b3853962a064bc8333a016af54")
         ];
