@@ -16,6 +16,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
@@ -23,12 +24,14 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
 
+@Suppress("DEPRECATION")
 class ConstrainedCollectionGeneratorTest {
     data class TestCase(val model: Model, val validList: ArrayNode, val invalidList: ArrayNode)
 
@@ -74,57 +77,68 @@ class ConstrainedCollectionGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(ConstrainedListGeneratorTestProvider::class)
     fun `it should generate constrained collection types`(testCase: TestCase) {
-        val constrainedListShape = testCase.model.lookup<ListShape>("test#ConstrainedList")
+        val constrainedListShape = testCase.model.lookup<CollectionShape>("test#ConstrainedList")
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+        //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+        // val constrainedSetShape = testCase.model.lookup<CollectionShape>("test#ConstrainedSet")
 
         val codegenContext = serverTestCodegenContext(testCase.model)
         val symbolProvider = codegenContext.symbolProvider
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
-            render(codegenContext, this, constrainedListShape)
-
-            val instantiator = serverInstantiator(codegenContext)
-            rustBlock("##[cfg(test)] fn build_valid_list() -> std::vec::Vec<std::string::String>") {
-                instantiator.render(this, constrainedListShape, testCase.validList)
-            }
-            rustBlock("##[cfg(test)] fn build_invalid_list() -> std::vec::Vec<std::string::String>") {
-                instantiator.render(this, constrainedListShape, testCase.invalidList)
+        listOf(constrainedListShape /*, constrainedSetShape */).forEach { shape ->
+            val shapeName = when (shape) {
+                is ListShape -> "list"
+                is SetShape -> "set"
+                else -> UNREACHABLE("Shape is either list or set.")
             }
 
-            unitTest(
-                name = "try_from_success",
-                test = """
-                    let list = build_valid_list();
-                    let _constrained: ConstrainedList = list.try_into().unwrap();
-                """,
-            )
-            unitTest(
-                name = "try_from_fail",
-                test = """
-                    let list = build_invalid_list();
-                    let constrained_res: Result<ConstrainedList, _> = list.try_into();
-                    constrained_res.unwrap_err();
-                """,
-            )
-            unitTest(
-                name = "inner",
-                test = """
-                    let list = build_valid_list();
-                    let constrained = ConstrainedList::try_from(list.clone()).unwrap();
+            project.withModule(ModelsModule) {
+                render(codegenContext, this, shape)
 
-                    assert_eq!(constrained.inner(), &list);
-                """,
-            )
-            unitTest(
-                name = "into_inner",
-                test = """
-                    let list = build_valid_list();
-                    let constrained = ConstrainedList::try_from(list.clone()).unwrap();
+                val instantiator = serverInstantiator(codegenContext)
+                rustBlock("##[cfg(test)] fn build_valid_$shapeName() -> std::vec::Vec<std::string::String>") {
+                    instantiator.render(this, shape, testCase.validList)
+                }
+                rustBlock("##[cfg(test)] fn build_invalid_$shapeName() -> std::vec::Vec<std::string::String>") {
+                    instantiator.render(this, shape, testCase.invalidList)
+                }
 
-                    assert_eq!(constrained.into_inner(), list);
-                """,
-            )
+                unitTest(
+                    name = "try_from_success",
+                    test = """
+                        let $shapeName = build_valid_$shapeName();
+                        let _constrained: ConstrainedList = $shapeName.try_into().unwrap();
+                    """,
+                )
+                unitTest(
+                    name = "try_from_fail",
+                    test = """
+                        let $shapeName = build_invalid_$shapeName();
+                        let constrained_res: Result<ConstrainedList, _> = $shapeName.try_into();
+                        constrained_res.unwrap_err();
+                    """,
+                )
+                unitTest(
+                    name = "inner",
+                    test = """
+                        let $shapeName = build_valid_$shapeName();
+                        let constrained = ConstrainedList::try_from($shapeName.clone()).unwrap();
+
+                        assert_eq!(constrained.inner(), &$shapeName);
+                    """,
+                )
+                unitTest(
+                    name = "into_inner",
+                    test = """
+                        let $shapeName = build_valid_$shapeName();
+                        let constrained = ConstrainedList::try_from($shapeName.clone()).unwrap();
+
+                        assert_eq!(constrained.into_inner(), $shapeName);
+                    """,
+                )
+            }
         }
 
         project.compileAndTest()
