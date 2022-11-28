@@ -36,12 +36,16 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * we support it or not_.
  */
 fun Shape.hasConstraintTrait() =
-    hasTrait<LengthTrait>() ||
-        hasTrait<EnumTrait>() ||
-        hasTrait<UniqueItemsTrait>() ||
-        hasTrait<PatternTrait>() ||
-        hasTrait<RangeTrait>() ||
-        hasTrait<RequiredTrait>()
+    allConstraintTraits.any(this::hasTrait)
+
+val allConstraintTraits = setOf(
+    LengthTrait::class.java,
+    PatternTrait::class.java,
+    RangeTrait::class.java,
+    UniqueItemsTrait::class.java,
+    EnumTrait::class.java,
+    RequiredTrait::class.java,
+)
 
 val supportedStringConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait::class.java, PatternTrait::class.java)
 

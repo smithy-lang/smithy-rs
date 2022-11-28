@@ -16,9 +16,7 @@ import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.StreamingTrait
@@ -106,14 +104,6 @@ private data class UnsupportedUniqueItemsTraitOnShape(val shape: Shape, val uniq
 data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>)
 
-private val allConstraintTraits = setOf(
-    LengthTrait::class.java,
-    PatternTrait::class.java,
-    RangeTrait::class.java,
-    UniqueItemsTrait::class.java,
-    EnumTrait::class.java,
-    RequiredTrait::class.java,
-)
 private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
 
 fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model: Model, service: ServiceShape): ValidationResult {

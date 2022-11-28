@@ -68,7 +68,7 @@ class ConstrainedShapeSymbolProvider(
                 //  (constraint trait precedence).
                 val target = model.expectShape(shape.target)
                 val targetSymbol = this.toSymbol(target)
-                // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
                 handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config().nullabilityCheckMode)
             }
             is MapShape -> {
@@ -86,7 +86,7 @@ class ConstrainedShapeSymbolProvider(
             }
             is CollectionShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    // TODO: Perform some check on the constraint traits that the list is tagged with.
+                    assert(constraintCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val inner = this.toSymbol(shape.member)
@@ -103,5 +103,19 @@ class ConstrainedShapeSymbolProvider(
             }
             else -> base.toSymbol(shape)
         }
+    }
+
+    /**
+     * Checks that the collection:
+     *  - Has at least 1 supported constraint applied to it, and
+     *  - That it has no unsupported constraints applied.
+     *
+     * This check is relatively expensive, so we only run it on `assert`s.
+     */
+    private fun constraintCollectionCheck(shape: CollectionShape): Boolean {
+        val supportedConstraintTraits = supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it) }.toSet()
+        val allConstraintTraits = allConstraintTraits.mapNotNull { shape.getTrait(it) }.toSet()
+
+        return supportedConstraintTraits.isNotEmpty() && allConstraintTraits.subtract(supportedConstraintTraits).isEmpty()
     }
 }
