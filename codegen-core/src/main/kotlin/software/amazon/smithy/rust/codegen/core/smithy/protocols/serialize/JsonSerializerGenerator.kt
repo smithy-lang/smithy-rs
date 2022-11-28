@@ -364,7 +364,7 @@ class JsonSerializerGenerator(
                 // This variable assignment ensures that the name of the value expression is always a valid variable name
                 // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
                 // This allows customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
-                rust("""let $local = ${context.valueExpression.asRef()};""")
+                rust("let $local = ${context.valueExpression.asRef()};")
                 val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
 
                 for (customization in customizations) {
