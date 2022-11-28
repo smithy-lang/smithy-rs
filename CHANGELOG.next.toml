@@ -487,13 +487,13 @@ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "lsr0"
 
 [[aws-sdk-rust]]
-message = "Implementation of the Debug trait for enums can redact what is printed per the sensitive trait."
-references = ["smithy-rs#1983"]
+message = "Implementation of the Debug trait for container shapes can redact what is printed per the sensitive trait."
+references = ["smithy-rs#1983", "smithy-rs#2029"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[smithy-rs]]
-message = "Implementation of the Debug trait for enums can redact what is printed per the sensitive trait."
-references = ["smithy-rs#1983"]
+message = "Implementation of the Debug trait for container shapes can redact what is printed per the sensitive trait."
+references = ["smithy-rs#1983", "smithy-rs#2029"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
