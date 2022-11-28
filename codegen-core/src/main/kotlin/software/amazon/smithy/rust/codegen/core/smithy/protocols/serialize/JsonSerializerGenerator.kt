@@ -346,8 +346,8 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.serializeMember(context: MemberContext) {
         val targetShape = model.expectShape(context.shape.target)
-        safeName().also { local ->
-            if (symbolProvider.toSymbol(context.shape).isOptional()) {
+        if (symbolProvider.toSymbol(context.shape).isOptional()) {
+            safeName().also { local ->
                 rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
                     context.valueExpression = ValueExpression.Reference(local)
                     for (customization in customizations) {
@@ -365,17 +365,17 @@ class JsonSerializerGenerator(
                         rust("${context.writerExpression}.null();")
                     }
                 }
-            } else {
-                for (customization in customizations) {
-                    customization.section(JsonSerializerSection.BeforeSerializingNonNullMember(targetShape, context))(
-                        this,
-                    )
-                }
+            }
+        } else {
+            for (customization in customizations) {
+                customization.section(JsonSerializerSection.BeforeSerializingNonNullMember(targetShape, context))(
+                    this,
+                )
+            }
 
-                with(serializerUtil) {
-                    ignoreZeroValues(context.shape, context.valueExpression) {
-                        serializeMemberValue(context, targetShape)
-                    }
+            with(serializerUtil) {
+                ignoreZeroValues(context.shape, context.valueExpression) {
+                    serializeMemberValue(context, targetShape)
                 }
             }
         }
