@@ -166,7 +166,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val validationResult = validateModel(model)
 
         validationResult.messages shouldHaveSize 1
-        validationResult.messages.forSome { it.message shouldContain "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached" }
+        validationResult.messages[0].message shouldContain "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached"
     }
 
     @Test
