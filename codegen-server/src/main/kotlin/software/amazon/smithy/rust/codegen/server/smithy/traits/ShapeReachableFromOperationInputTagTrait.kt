@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
@@ -42,3 +43,4 @@ fun CollectionShape.isReachableFromOperationInput() = isShapeReachableFromOperat
 fun UnionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun MapShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun IntegerShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+fun NumberShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
