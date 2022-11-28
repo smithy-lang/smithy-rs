@@ -151,7 +151,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
-    fun `it should detect when the length trait on collection shapes or on blob shapes is used`() {
+    fun `it should detect when the length trait on blob shapes is used`() {
         val model =
             """
             $baseModel
@@ -162,17 +162,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
 
             @length(min: 1)
-            list LengthCollection {
-                member: String
-            }
-
-            @length(min: 1)
             blob LengthBlob
             """.asSmithyModel()
         val validationResult = validateModel(model)
 
-        validationResult.messages shouldHaveSize 2
-        validationResult.messages.forSome { it.message shouldContain "The list shape `test#LengthCollection` has the constraint trait `smithy.api#length` attached" }
+        validationResult.messages shouldHaveSize 1
         validationResult.messages.forSome { it.message shouldContain "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached" }
     }
 
@@ -200,11 +194,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 uniqueItemsList: UniqueItemsList
             }
-            
+
             @uniqueItems
             list UniqueItemsList {
                 member: String
