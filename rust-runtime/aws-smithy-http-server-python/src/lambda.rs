@@ -149,7 +149,7 @@ impl PyLambdaContext {
 
 #[cfg(test)]
 mod tests {
-    use http::{HeaderMap, HeaderValue};
+    use http::{header::HeaderName, HeaderMap, HeaderValue};
     use lambda_http::lambda_runtime::{Config, Context};
     use pyo3::{prelude::*, py_run};
 
@@ -159,26 +159,25 @@ mod tests {
     fn py_lambda_context() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();
 
-        let mut headers = HeaderMap::new();
-        {
-            headers.insert(
-                "lambda-runtime-aws-request-id",
+        let headers = HeaderMap::from_iter([
+            (
+                HeaderName::from_static("lambda-runtime-aws-request-id"),
                 HeaderValue::from_static("my-id"),
-            );
-            headers.insert(
-                "lambda-runtime-deadline-ms",
+            ),
+            (
+                HeaderName::from_static("lambda-runtime-deadline-ms"),
                 HeaderValue::from_static("123"),
-            );
-            headers.insert(
-                "lambda-runtime-invoked-function-arn",
+            ),
+            (
+                HeaderName::from_static("lambda-runtime-invoked-function-arn"),
                 HeaderValue::from_static("arn::myarn"),
-            );
-            headers.insert(
-                "lambda-runtime-trace-id",
+            ),
+            (
+                HeaderName::from_static("lambda-runtime-trace-id"),
                 HeaderValue::from_static("my-trace-id"),
-            );
-            headers.insert(
-                "lambda-runtime-client-context",
+            ),
+            (
+                HeaderName::from_static("lambda-runtime-client-context"),
                 HeaderValue::from_str(
                     &r#"
 {
@@ -201,9 +200,9 @@ mod tests {
                     .collect::<String>(),
                 )
                 .unwrap(),
-            );
-            headers.insert(
-                "lambda-runtime-cognito-identity",
+            ),
+            (
+                HeaderName::from_static("lambda-runtime-cognito-identity"),
                 HeaderValue::from_str(
                     &r#"
 {
@@ -215,8 +214,8 @@ mod tests {
                     .collect::<String>(),
                 )
                 .unwrap(),
-            );
-        }
+            ),
+        ]);
         let lambda_context = Context::try_from(headers).unwrap();
         let lambda_context = lambda_context.with_config(&Config {
             function_name: "my-fn".to_string(),

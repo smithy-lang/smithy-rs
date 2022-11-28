@@ -5,7 +5,7 @@
 
 //! Testing utilities for [PyContext].
 
-use http::{HeaderMap, HeaderValue};
+use http::{header::HeaderName, HeaderMap, HeaderValue};
 use lambda_http::Context;
 use pyo3::{
     types::{PyDict, PyModule},
@@ -32,15 +32,16 @@ pub fn get_context(code: &str) -> PyContext {
 }
 
 pub fn lambda_ctx(req_id: &'static str, deadline_ms: &'static str) -> Context {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "lambda-runtime-aws-request-id",
-        HeaderValue::from_static(req_id),
-    );
-    headers.insert(
-        "lambda-runtime-deadline-ms",
-        HeaderValue::from_static(deadline_ms),
-    );
+    let headers = HeaderMap::from_iter([
+        (
+            HeaderName::from_static("lambda-runtime-aws-request-id"),
+            HeaderValue::from_static(req_id),
+        ),
+        (
+            HeaderName::from_static("lambda-runtime-deadline-ms"),
+            HeaderValue::from_static(deadline_ms),
+        ),
+    ]);
     Context::try_from(headers).unwrap()
 }
 
