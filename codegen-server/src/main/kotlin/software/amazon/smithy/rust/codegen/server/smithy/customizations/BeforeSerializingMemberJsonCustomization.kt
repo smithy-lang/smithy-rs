@@ -7,10 +7,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerSection
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
@@ -27,12 +27,9 @@ class BeforeSerializingMemberJsonCustomization(private val codegenContext: Serve
                     codegenContext.settings.codegenConfig.publicConstrainedTypes,
                 )
             ) {
-                // Note that this particular implementation just so happens to work because when the customization
-                // is invoked in the JSON serializer, the value expression is guaranteed to be a variable binding name.
-                // If the expression in the future were to be more complex, we wouldn't be able to write the left-hand
-                // side of this assignment.
                 if (section.shape is IntegerShape) {
-                    rust("""let ${section.valueExpression.name} = &${section.valueExpression.name}.0;""")
+                    section.context.valueExpression =
+                        ValueExpression.Reference("&${section.context.valueExpression.name}.0")
                 }
             }
         }

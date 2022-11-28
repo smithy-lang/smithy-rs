@@ -61,12 +61,12 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) :
         JsonSerializerSection("ServerError")
 
-    /** Mutate a map prior to it being serialized. **/
-    data class BeforeIteratingOverMap(val shape: MapShape, val valueExpression: ValueExpression) :
+    /** Manipulate the serializer context for a map prior to it being serialized. **/
+    data class BeforeIteratingOverMap(val shape: MapShape, val context: JsonSerializerGenerator.Context<MapShape>) :
         JsonSerializerSection("BeforeIteratingOverMap")
 
-    /** Manipulate the value of a non-null member prior to it being serialized. **/
-    data class BeforeSerializingNonNullMember(val shape: Shape, val valueExpression: ValueExpression) :
+    /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
+    data class BeforeSerializingNonNullMember(val shape: Shape, val context: JsonSerializerGenerator.MemberContext) :
         JsonSerializerSection("BeforeSerializingNonNullMember")
 
     /** Mutate the input object prior to finalization. */
@@ -90,20 +90,20 @@ class JsonSerializerGenerator(
     private val jsonName: (MemberShape) -> String,
     private val customizations: List<JsonSerializerCustomization> = listOf(),
 ) : StructuredDataSerializerGenerator {
-    private data class Context<T : Shape>(
+    data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
         val writerExpression: String,
         /** Expression representing the value to write to the JsonValueWriter */
-        val valueExpression: ValueExpression,
+        var valueExpression: ValueExpression,
         /** Path in the JSON to get here, used for errors */
         val shape: T,
     )
 
-    private data class MemberContext(
+    data class MemberContext(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
         val writerExpression: String,
         /** Expression representing the value to write to the JsonValueWriter */
-        val valueExpression: ValueExpression,
+        var valueExpression: ValueExpression,
         val shape: MemberShape,
         /** Whether to serialize null values if the type is optional */
         val writeNulls: Boolean = false,
@@ -156,7 +156,7 @@ class JsonSerializerGenerator(
     }
 
     // Specialized since it holds a JsonObjectWriter expression rather than a JsonValueWriter
-    private data class StructContext(
+    data class StructContext(
         /** Name of the JsonObjectWriter */
         val objectName: String,
         /** Name of the variable that holds the struct */
@@ -349,11 +349,16 @@ class JsonSerializerGenerator(
         safeName().also { local ->
             if (symbolProvider.toSymbol(context.shape).isOptional()) {
                 rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
-                    val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
+                    context.valueExpression = ValueExpression.Reference(local)
                     for (customization in customizations) {
-                        customization.section(JsonSerializerSection.BeforeSerializingNonNullMember(targetShape, innerContext.valueExpression))(this)
+                        customization.section(
+                            JsonSerializerSection.BeforeSerializingNonNullMember(
+                                targetShape,
+                                context,
+                            ),
+                        )(this)
                     }
-                    serializeMemberValue(innerContext, targetShape)
+                    serializeMemberValue(context, targetShape)
                 }
                 if (context.writeNulls) {
                     rustBlock("else") {
@@ -361,19 +366,15 @@ class JsonSerializerGenerator(
                     }
                 }
             } else {
-                // This variable assignment ensures that the name of the value expression is always a valid variable name
-                // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
-                // This allows customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
-                rust("let $local = ${context.valueExpression.asRef()};")
-                val innerContext = context.copy(valueExpression = ValueExpression.Reference(local))
-
                 for (customization in customizations) {
-                    customization.section(JsonSerializerSection.BeforeSerializingNonNullMember(targetShape, innerContext.valueExpression))(this)
+                    customization.section(JsonSerializerSection.BeforeSerializingNonNullMember(targetShape, context))(
+                        this,
+                    )
                 }
 
                 with(serializerUtil) {
-                    ignoreZeroValues(innerContext.shape, innerContext.valueExpression) {
-                        serializeMemberValue(innerContext, targetShape)
+                    ignoreZeroValues(context.shape, context.valueExpression) {
+                        serializeMemberValue(context, targetShape)
                     }
                 }
             }
@@ -463,7 +464,7 @@ class JsonSerializerGenerator(
         val keyName = safeName("key")
         val valueName = safeName("value")
         for (customization in customizations) {
-            customization.section(JsonSerializerSection.BeforeIteratingOverMap(context.shape, context.valueExpression))(
+            customization.section(JsonSerializerSection.BeforeIteratingOverMap(context.shape, context))(
                 this,
             )
         }
