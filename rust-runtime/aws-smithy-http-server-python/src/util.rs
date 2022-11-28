@@ -6,7 +6,7 @@
 pub mod collection;
 pub mod error;
 
-use pyo3::prelude::*;
+use pyo3::{PyAny, PyObject, PyResult, PyTypeInfo, Python};
 
 // Captures some information about a Python function.
 #[derive(Debug, PartialEq)]
@@ -42,8 +42,45 @@ fn is_coroutine(py: Python, func: &PyObject) -> PyResult<bool> {
         .extract::<bool>()
 }
 
+// Checks whether given Python type is `Optional[T]`.
+pub fn is_optional_of<T: PyTypeInfo>(py: Python, ty: &PyAny) -> PyResult<bool> {
+    // for reference: https://stackoverflow.com/a/56833826
+
+    // in Python `Optional[T]` is an alias for `Union[T, None]`
+    // so we should check if the type origin is `Union`
+    let union_ty = py.import("typing")?.getattr("Union")?;
+    match ty.getattr("__origin__").map(|origin| origin.is(union_ty)) {
+        Ok(true) => {}
+        // Here we can ignore errors because `__origin__` is not present on all types
+        // and it is not really an error, it is just a type we don't expect
+        _ => return Ok(false),
+    };
+
+    let none = py.None();
+    // in typing, `None` is a special case and it is converted to `type(None)`,
+    // so we are getting type of `None` here to match
+    let none_ty = none.as_ref(py).get_type();
+    let target_ty = py.get_type::<T>();
+
+    // `Union` should be tuple of `(T, NoneType)`
+    match ty
+        .getattr("__args__")
+        .and_then(|args| args.extract::<(&PyAny, &PyAny)>())
+    {
+        Ok((first_ty, second_ty)) => Ok(first_ty.is(target_ty) && second_ty.is(none_ty)),
+        // Here we can ignore errors because `__args__` is not present on all types
+        // and it is not really an error, it is just a type we don't expect
+        _ => Ok(false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use pyo3::{
+        types::{PyBool, PyDict, PyModule, PyString},
+        IntoPy,
+    };
+
     use super::*;
 
     #[test]
@@ -82,6 +119,52 @@ async def async_func():
                     num_args: 0,
                 },
                 func_metadata(py, &async_func)?
+            );
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn check_if_is_optional_of() -> PyResult<()> {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let typing = py.import("typing")?;
+            let module = PyModule::from_code(
+                py,
+                r#"
+import typing
+
+class Types:
+    opt_of_str: typing.Optional[str] = "hello"
+    opt_of_bool: typing.Optional[bool] = None
+    regular_str: str = "world"
+"#,
+                "",
+                "",
+            )?;
+
+            let types = module.getattr("Types")?.into_py(py);
+            let type_hints = typing
+                .call_method1("get_type_hints", (types,))
+                .and_then(|res| res.extract::<&PyDict>())?;
+
+            assert_eq!(
+                true,
+                is_optional_of::<PyString>(py, type_hints.get_item("opt_of_str").unwrap())?
+            );
+            assert_eq!(
+                false,
+                is_optional_of::<PyString>(py, type_hints.get_item("regular_str").unwrap())?
+            );
+            assert_eq!(
+                true,
+                is_optional_of::<PyBool>(py, type_hints.get_item("opt_of_bool").unwrap())?
+            );
+            assert_eq!(
+                false,
+                is_optional_of::<PyString>(py, type_hints.get_item("opt_of_bool").unwrap())?
             );
 
             Ok(())

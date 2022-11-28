@@ -7,9 +7,9 @@
 
 use std::collections::HashSet;
 
-use pyo3::{types::PyDict, PyAny, PyObject, PyResult, PyTypeInfo, Python, ToPyObject};
+use pyo3::{types::PyDict, PyObject, PyResult, Python, ToPyObject};
 
-use crate::rich_py_err;
+use crate::{rich_py_err, util::is_optional_of};
 
 use super::lambda::PyLambdaContext;
 
@@ -102,38 +102,6 @@ fn get_lambda_ctx_fields(py: Python, ctx: &PyObject) -> PyResult<HashSet<String>
         }
     }
     Ok(fields)
-}
-
-// Checks whether given Python type is `Optional[T]`.
-fn is_optional_of<T: PyTypeInfo>(py: Python, ty: &PyAny) -> PyResult<bool> {
-    // for reference: https://stackoverflow.com/a/56833826
-
-    // in Python `Optional[T]` is an alias for `Union[T, None]`
-    // so we should check if the type origin is `Union`
-    let union_ty = py.import("typing")?.getattr("Union")?;
-    match ty.getattr("__origin__").map(|origin| origin.is(union_ty)) {
-        Ok(true) => {}
-        // Here we can ignore errors because `__origin__` is not present on all types
-        // and it is not really an error, it is just a type we don't expect
-        _ => return Ok(false),
-    };
-
-    let none = py.None();
-    // in typing, `None` is a special case and it is converted to `type(None)`,
-    // so we are getting type of `None` here to match
-    let none_ty = none.as_ref(py).get_type();
-    let target_ty = py.get_type::<T>();
-
-    // `Union` should be tuple of `(T, NoneType)`
-    match ty
-        .getattr("__args__")
-        .and_then(|args| args.extract::<(&PyAny, &PyAny)>())
-    {
-        Ok((first_ty, second_ty)) => Ok(first_ty.is(target_ty) && second_ty.is(none_ty)),
-        // Here we can ignore errors because `__args__` is not present on all types
-        // and it is not really an error, it is just a type we don't expect
-        _ => Ok(false),
-    }
 }
 
 #[cfg(test)]
