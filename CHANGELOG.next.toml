@@ -485,3 +485,15 @@ message = "Make generated enum `values()` functions callable in const contexts."
 references = ["smithy-rs#2011"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "lsr0"
+
+[[aws-sdk-rust]]
+message = "Implementation of the Debug trait for enums can redact what is printed per the sensitive trait."
+references = ["smithy-rs#1983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Implementation of the Debug trait for enums can redact what is printed per the sensitive trait."
+references = ["smithy-rs#1983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
