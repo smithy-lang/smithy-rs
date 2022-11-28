@@ -44,7 +44,7 @@ lazy_static::lazy_static! {
     // This is a map of SDK release tag to smithy-rs commit hash
     static ref PINNED_SMITHY_RS_VERSIONS: Vec<(ReleaseTag, &'static str)> = {
         let mut pinned = vec![
-            // Versions <= 0.6.0 no longer compiles against the canary after this commit in smithy-rs
+            // Versions <= 0.6.0 no longer compile against the canary after this commit in smithy-rs
             // due to the breaking change in https://github.com/awslabs/smithy-rs/pull/1085
             (ReleaseTag::from_str("v0.6.0").unwrap(), "d48c234796a16d518ca9e1dda5c7a1da4904318c"),
             // Versions <= release-2022-10-26 no longer compiles against the canary after this commit in smithy-rs
