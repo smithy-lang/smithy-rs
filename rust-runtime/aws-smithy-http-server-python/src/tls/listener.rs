@@ -52,13 +52,11 @@ where
 
         loop {
             match ready!(self.as_mut().project().inner.poll_next(cx)) {
-                Some(conn) => match conn {
-                    Ok(conn) => return Poll::Ready(Some(Ok(conn))),
-                    Err(err) => {
-                        // Don't propogate errors to Hyper because it causes server to shutdown
-                        tracing::error!(error = ?err, "tls connection error");
-                    }
-                },
+                Some(Ok(conn)) => return Poll::Ready(Some(Ok(conn))),
+                Some(Err(err)) => {
+                    // Don't propogate errors to Hyper because it causes server to shutdown
+                    tracing::error!(error = ?err, "tls connection error");
+                }
                 None => return Poll::Ready(None),
             }
         }
