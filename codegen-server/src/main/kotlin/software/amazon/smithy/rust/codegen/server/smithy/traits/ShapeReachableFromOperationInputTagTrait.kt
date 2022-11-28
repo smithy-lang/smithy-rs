@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.traits
 
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
@@ -30,7 +31,7 @@ class ShapeReachableFromOperationInputTagTrait : AnnotationTrait(ID, Node.object
 }
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
-    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape -> {
+    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape, is IntegerShape -> {
         shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
     } else -> PANIC("this method does not support shape type ${shape.type}")
 }
@@ -40,3 +41,4 @@ fun StructureShape.isReachableFromOperationInput() = isShapeReachableFromOperati
 fun CollectionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun UnionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
 fun MapShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+fun IntegerShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)

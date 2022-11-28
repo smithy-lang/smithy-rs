@@ -32,6 +32,11 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+//! Types and traits for extracting data from requests.
+//!
+//! See [Accessing Un-modelled data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
+//! a comprehensive overview.
+
 use std::{
     convert::Infallible,
     future::{ready, Future, Ready},
@@ -44,6 +49,9 @@ use futures_util::{
 use http::{request::Parts, Extensions, HeaderMap, Request, Uri};
 
 use crate::{rejection::any_rejections, response::IntoResponse};
+
+pub mod connect_info;
+pub mod extension;
 
 #[doc(hidden)]
 #[derive(Debug)]
@@ -111,8 +119,8 @@ impl<B> RequestParts<B> {
     }
 }
 
-/// Provides a protocol aware extraction from a [`Request`]. This borrows the
-/// [`Parts`], in contrast to [`FromRequest`].
+// NOTE: We cannot reference `FromRequest` here, as a point of contrast, as it's `doc(hidden)`.
+/// Provides a protocol aware extraction from a requests [`Parts`].
 pub trait FromParts<Protocol>: Sized {
     type Rejection: IntoResponse<Protocol>;
 

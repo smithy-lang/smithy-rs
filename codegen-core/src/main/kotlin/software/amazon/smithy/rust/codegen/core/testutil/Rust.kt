@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
@@ -85,6 +84,9 @@ object TestWorkspace {
                 version = "0.0.1"
                 """.trimIndent(),
             )
+            // ensure there at least an empty lib.rs file to avoid broken crates
+            newProject.resolve("src").mkdirs()
+            newProject.resolve("src/lib.rs").writeText("")
             subprojects.add(newProject.name)
             generate()
             return newProject
@@ -190,14 +192,6 @@ fun RustWriter.unitTest(
     return rustBlock("fn $name()", *args, block = block)
 }
 
-val DefaultTestPublicModules = setOf(
-    RustModule.Error,
-    RustModule.Model,
-    RustModule.Input,
-    RustModule.Output,
-    RustModule.Config,
-).associateBy { it.name }
-
 /**
  * WriterDelegator used for test purposes
  *
@@ -211,7 +205,6 @@ class TestWriterDelegator(
     RustCrate(
         fileManifest,
         symbolProvider,
-        DefaultTestPublicModules,
         codegenConfig,
     ) {
     val baseDir: Path = fileManifest.baseDir
@@ -219,6 +212,8 @@ class TestWriterDelegator(
     fun printGeneratedFiles() {
         fileManifest.printGeneratedFiles()
     }
+
+    fun generatedFiles() = fileManifest.files.map { baseDir.relativize(it) }
 }
 
 fun FileManifest.printGeneratedFiles() {

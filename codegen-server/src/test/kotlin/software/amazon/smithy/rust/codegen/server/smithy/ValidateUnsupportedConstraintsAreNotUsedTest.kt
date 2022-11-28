@@ -22,12 +22,12 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     private val baseModel =
         """
         namespace test
-        
+
         service TestService {
             version: "123",
             operations: [TestOperation]
         }
-        
+
         operation TestOperation {
             input: TestInputOutput,
             output: TestInputOutput,
@@ -44,7 +44,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 @required
                 requiredString: String
@@ -62,7 +62,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 @length(min: 1, max: 69)
                 lengthString: String
@@ -79,7 +79,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 @required
                 string: String
@@ -93,12 +93,12 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     private val constraintTraitOnStreamingBlobShapeModel =
         """
         $baseModel
-        
+
         structure TestInputOutput {
             @required
             streamingBlob: StreamingBlob
         }
-        
+
         @streaming
         @length(min: 69)
         blob StreamingBlob
@@ -123,20 +123,20 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 eventStream: EventStream
             }
-            
+
             @streaming
             union EventStream {
                 message: Message
             }
-            
+
             structure Message {
                 lengthString: LengthString
             }
-            
+
             @length(min: 1)
             string LengthString
             """.asSmithyModel()
@@ -155,17 +155,17 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 collection: LengthCollection,
                 blob: LengthBlob
             }
-            
+
             @length(min: 1)
             list LengthCollection {
                 member: String
             }
-            
+
             @length(min: 1)
             blob LengthBlob
             """.asSmithyModel()
@@ -177,41 +177,32 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
-    fun `it should detect when the pattern trait on string shapes is used`() {
+    fun `it should detect when the range trait is used on a shape we do not support`() {
         val model =
             """
             $baseModel
-            
-            structure TestInputOutput {
-                patternString: PatternString
-            }
-            
-            @pattern("^[A-Za-z]+$")
-            string PatternString
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
 
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The string shape `test#PatternString` has the constraint trait `smithy.api#pattern` attached"
-    }
-
-    @Test
-    fun `it should detect when the range trait is used`() {
-        val model =
-            """
-            $baseModel
-            
             structure TestInputOutput {
-                rangeInteger: RangeInteger
+                rangeByte: RangeByte
+                rangeShort: RangeShort
+                rangeLong: RangeLong
             }
-            
+
             @range(min: 1)
-            integer RangeInteger
+            byte RangeByte
+
+            @range(min: 1)
+            long RangeLong
+
+            @range(min: 1)
+            short RangeShort
             """.asSmithyModel()
         val validationResult = validateModel(model)
 
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The integer shape `test#RangeInteger` has the constraint trait `smithy.api#range` attached"
+        validationResult.messages shouldHaveSize 3
+        validationResult.messages[0].message shouldContain "The long shape `test#RangeLong` has the constraint trait `smithy.api#range` attached"
+        validationResult.messages[1].message shouldContain "The short shape `test#RangeShort` has the constraint trait `smithy.api#range` attached"
+        validationResult.messages[2].message shouldContain "The byte shape `test#RangeByte` has the constraint trait `smithy.api#range` attached"
     }
 
     @Test
@@ -219,11 +210,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 uniqueItemsList: UniqueItemsList
             }
-            
+
             @uniqueItems
             list UniqueItemsList {
                 member: String

@@ -11,8 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -26,20 +24,16 @@ class CustomizableOperationGenerator(
     private val generics: FluentClientGenerics,
     private val includeFluentClient: Boolean,
 ) {
+
     companion object {
-        const val CUSTOMIZE_MODULE = "crate::operation::customize"
+        val CustomizeModule = RustModule.public("customize", "Operation customization and supporting types", parent = RustModule.operation(Visibility.PUBLIC))
     }
 
     private val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
     private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
 
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.operation(Visibility.PUBLIC)) {
-            docs("Operation customization and supporting types")
-            rust("pub mod customize;")
-        }
-
-        crate.withNonRootModule(CUSTOMIZE_MODULE) {
+        crate.withModule(CustomizeModule) {
             rustTemplate(
                 """
                 pub use #{Operation};
