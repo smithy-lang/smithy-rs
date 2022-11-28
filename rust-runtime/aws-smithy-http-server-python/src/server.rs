@@ -244,6 +244,10 @@ event_loop.add_signal_handler(signal.SIGINT,
         self.register_python_signals(py, event_loop.to_object(py))?;
 
         // Spawn a new background [std::thread] to run the application.
+        // This is needed because `asyncio` doesn't work properly if it doesn't control the main thread.
+        // At the end of this function you can see we are calling `event_loop.run_forever()` to
+        // yield execution of main thread to `asyncio` runtime.
+        // For more details: https://docs.rs/pyo3-asyncio/latest/pyo3_asyncio/#pythons-event-loop-and-the-main-thread
         tracing::trace!("start the tokio runtime in a background task");
         thread::spawn(move || {
             // The thread needs a new [tokio] runtime.
@@ -443,9 +447,6 @@ event_loop.add_signal_handler(signal.SIGINT,
     }
 
     /// Lambda main entrypoint: start the handler on Lambda.
-    ///
-    /// Unlike the `run_server`, `run_lambda_handler` does not spawns other processes,
-    /// it starts the Lambda handler on the current process.
     #[cfg(feature = "aws-lambda")]
     #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
     fn run_lambda_handler(&mut self, py: Python) -> PyResult<()> {
@@ -458,6 +459,10 @@ event_loop.add_signal_handler(signal.SIGINT,
         let service = self.build_and_configure_service(py, event_loop)?;
 
         // Spawn a new background [std::thread] to run the application.
+        // This is needed because `asyncio` doesn't work properly if it doesn't control the main thread.
+        // At the end of this function you can see we are calling `event_loop.run_forever()` to
+        // yield execution of main thread to `asyncio` runtime.
+        // For more details: https://docs.rs/pyo3-asyncio/latest/pyo3_asyncio/#pythons-event-loop-and-the-main-thread
         tracing::trace!("start the tokio runtime in a background task");
         thread::spawn(move || {
             let rt = runtime::Builder::new_multi_thread()
