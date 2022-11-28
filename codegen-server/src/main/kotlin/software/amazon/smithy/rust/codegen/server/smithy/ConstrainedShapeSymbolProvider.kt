@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -96,7 +97,8 @@ class ConstrainedShapeSymbolProvider(
                     symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
                 }
             }
-            is StringShape, is IntegerShape -> {
+
+            is StringShape, is IntegerShape, is ShortShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
                     symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
@@ -104,6 +106,7 @@ class ConstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+
             else -> base.toSymbol(shape)
         }
     }

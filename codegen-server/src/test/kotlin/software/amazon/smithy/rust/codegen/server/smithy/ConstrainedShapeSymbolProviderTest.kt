@@ -49,7 +49,7 @@ const val baseModelString =
     string ConstrainedString
 
     @range(min: -2, max: 10)
-    integer ConstrainedShort
+    short ConstrainedShort
 
     @range(min: 10, max: 29)
     integer ConstrainedInteger

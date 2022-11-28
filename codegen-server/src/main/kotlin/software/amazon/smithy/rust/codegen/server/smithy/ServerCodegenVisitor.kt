@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -45,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedIntegerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedShortGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.MapConstraintViolationGenerator
@@ -357,6 +359,15 @@ open class ServerCodegenVisitor(
             logger.info("[rust-server-codegen] Generating a constrained integer $shape")
             rustCrate.withModule(ModelsModule) {
                 ConstrainedIntegerGenerator(codegenContext, this, shape).render()
+            }
+        }
+    }
+
+    override fun shortShape(shape: ShortShape) {
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating a constrained short $shape")
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedShortGenerator(codegenContext, this, shape).render()
             }
         }
     }

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.NumberShape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -38,6 +39,18 @@ class ConstrainedIntegerGenerator(
     val shape: IntegerShape,
 ) {
     val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(32))
+
+    fun render() {
+        inner.render()
+    }
+}
+
+class ConstrainedShortGenerator(
+    val codegenContext: ServerCodegenContext,
+    val writer: RustWriter,
+    val shape: ShortShape,
+) {
+    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(16))
 
     fun render() {
         inner.render()
