@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 fun CodegenTarget.renderUnknownVariant() = when (this) {
@@ -58,6 +59,10 @@ class UnionGenerator(
 
         val unionSymbol = symbolProvider.toSymbol(shape)
         val containerMeta = unionSymbol.expectRustMetadata()
+
+        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", derive(#T))]\n", RuntimeType.SerdeSerialize)
+        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", derive(#T))]\n", RuntimeType.SerdeDeserialize)
+
         containerMeta.render(writer)
         writer.rustBlock("enum ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
