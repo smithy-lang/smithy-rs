@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 /**
@@ -86,7 +87,7 @@ class ConstrainedShapeSymbolProvider(
             }
             is CollectionShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    assert(constraintCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
+                    assert(constrainedCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val inner = this.toSymbol(shape.member)
@@ -112,9 +113,9 @@ class ConstrainedShapeSymbolProvider(
      *
      * This check is relatively expensive, so we only run it on `assert`s.
      */
-    private fun constraintCollectionCheck(shape: CollectionShape): Boolean {
-        val supportedConstraintTraits = supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it) }.toSet()
-        val allConstraintTraits = allConstraintTraits.mapNotNull { shape.getTrait(it) }.toSet()
+    private fun constrainedCollectionCheck(shape: CollectionShape): Boolean {
+        val supportedConstraintTraits = supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
+        val allConstraintTraits = allConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
 
         return supportedConstraintTraits.isNotEmpty() && allConstraintTraits.subtract(supportedConstraintTraits).isEmpty()
     }
