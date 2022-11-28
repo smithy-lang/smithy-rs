@@ -73,10 +73,10 @@ pub enum PercentEncodingMode {
 #[derive(Debug, Eq, PartialEq)]
 pub enum UriPathNormalizationMode {
     /// We normalize URI paths according to the RFC
-    PerRfc3986,
+    Enabled,
 
-    /// We do not normalize URI per the RFC but may need to dedupe multiple leading forward slashes
-    ForS3,
+    /// We do not normalize URI paths
+    Disabled,
 }
 
 impl Default for SigningSettings {
@@ -90,7 +90,7 @@ impl Default for SigningSettings {
             signature_location: SignatureLocation::Headers,
             expires_in: None,
             excluded_headers: Some(EXCLUDED_HEADERS.to_vec()),
-            uri_path_normalization_mode: UriPathNormalizationMode::PerRfc3986,
+            uri_path_normalization_mode: UriPathNormalizationMode::Enabled,
         }
     }
 }

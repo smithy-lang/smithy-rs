@@ -141,9 +141,9 @@ impl SigV4Signer {
         };
         settings.uri_path_normalization_mode =
             if operation_config.signing_options.normalize_uri_path {
-                UriPathNormalizationMode::PerRfc3986
+                UriPathNormalizationMode::Enabled
             } else {
-                UriPathNormalizationMode::ForS3
+                UriPathNormalizationMode::Disabled
             };
         settings.signature_location = match operation_config.signature_type {
             HttpSignatureType::HttpRequestHeaders => SignatureLocation::Headers,

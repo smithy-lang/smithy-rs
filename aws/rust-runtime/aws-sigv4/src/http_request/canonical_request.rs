@@ -132,8 +132,8 @@ impl<'a> CanonicalRequest<'a> {
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
         let path = match params.settings.uri_path_normalization_mode {
-            UriPathNormalizationMode::PerRfc3986 => normalize_uri_path(path),
-            UriPathNormalizationMode::ForS3 => Cow::Borrowed(path),
+            UriPathNormalizationMode::Enabled => normalize_uri_path(path),
+            UriPathNormalizationMode::Disabled => Cow::Borrowed(path),
         };
         let path = match params.settings.percent_encoding_mode {
             // The string is already URI encoded, we don't need to encode everything again, just `%`
