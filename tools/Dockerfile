@@ -46,12 +46,12 @@ RUN set -eux; \
 #
 FROM bare_base_image AS install_rust
 ARG rust_stable_version=1.62.1
-ARG rust_nightly_version=nightly-2022-07-25
+ARG rust_nightly_version=nightly-2022-11-16
 ARG cargo_deny_version=0.12.2
 ARG cargo_udeps_version=0.1.29
 ARG cargo_hack_version=0.5.14
 ARG cargo_minimal_versions_version=0.1.4
-ARG cargo_check_external_types_version=0.1.5
+ARG cargo_check_external_types_version=0.1.6
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
@@ -118,7 +118,7 @@ RUN set -eux; \
 #
 FROM bare_base_image AS final_image
 ARG rust_stable_version=1.62.1
-ARG rust_nightly_version=nightly-2022-07-25
+ARG rust_nightly_version=nightly-2022-11-16
 RUN set -eux; \
     yum -y updateinfo; \
     yum -y install \
