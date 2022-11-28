@@ -487,11 +487,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "lsr0"
 
 [[aws-sdk-rust]]
-message = """
-Normalize URI paths when constructing canonical requests and de-duplicate leading forward slashes from requests for S3.
-The former entails path normalization described in RFC3986 but will not be performed on requests for S3. The latter,
-on the other hand, is only applicable to requests for S3 and addresses a bug reported in aws-sdk-rust#661.
-"""
+message = "Normalize URI paths per RFC3986 when constructing canonical requests, except for S3."
 references = ["smithy-rs#2018"]
-meta = { "breaking" = true, "tada" = false, "bug" = true }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
