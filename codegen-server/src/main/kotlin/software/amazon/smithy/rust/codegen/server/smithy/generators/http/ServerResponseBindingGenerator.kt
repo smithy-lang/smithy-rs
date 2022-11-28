@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
@@ -84,13 +85,14 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
     override fun section(section: HttpBindingSection): Writable = when (section) {
         is HttpBindingSection.BeforeRenderingHeaderValue -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(
-                    section.shape,
+                    section.context.shape,
                     codegenContext.model,
                     codegenContext.settings.codegenConfig.publicConstrainedTypes,
                 )
             ) {
-                if (section.shape.isIntegerShape) {
-                    rust("let ${section.value.name} = &(${section.value.asValue()}).0;")
+                if (section.context.shape.isIntegerShape) {
+                    section.context.valueExpression =
+                        ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
                 }
             }
         }

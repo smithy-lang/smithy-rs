@@ -84,7 +84,7 @@ sealed class HttpBindingSection(name: String) : Section(name) {
     data class BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders(val variableName: String, val shape: MapShape) :
         HttpBindingSection("BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders")
 
-    data class BeforeRenderingHeaderValue(val value: ValueExpression, val shape: Shape) :
+    data class BeforeRenderingHeaderValue(var context: HttpBindingGenerator.HeaderValueSerializationContext) :
         HttpBindingSection("BeforeRenderingHeaderValue")
 
     data class AfterDeserializingIntoAHashMapOfHttpPrefixHeaders(val memberShape: MemberShape) :
@@ -549,40 +549,34 @@ class HttpBindingGenerator(
             }
         }
 
-        safeName().also { local ->
-            // This variable assignment ensures that the name of the value expression is always a valid variable name
-            // instead of being, for example, a field access expression (e.g. `my_struct.my_field`).
-            // This allows later customization to leverage variable shadowing effectively (e.g. to unwrap constrained types).
-            rust("let $local = &input.$memberName;")
-            val memberSymbol = symbolProvider.toSymbol(memberShape)
-            // If a header is of a primitive type and required (e.g. `bool`), we do not serialize it on the
-            // wire if it's set to the default value for that primitive type (e.g. `false` for `bool`).
-            // If the header is optional, instead, we want to serialize it if it has been set by the user to the
-            // default value for that primitive type (e.g. `Some(false)` for an `Option<bool>` header).
-            // If a header is multivalued, we always want to serialize its primitive members, regardless of their
-            // values.
-            val serializePrimitiveValuesIfDefault = memberSymbol.isOptional() || (targetShape is CollectionShape)
-            ifSome(memberSymbol, ValueExpression.Reference(local)) { variableName ->
-                if (targetShape is CollectionShape) {
-                    renderMultiValuedHeader(
-                        model,
-                        headerName,
-                        variableName,
-                        targetShape,
-                        timestampFormat,
-                        renderErrorMessage,
-                    )
-                } else {
-                    renderHeaderValue(
-                        headerName,
-                        variableName,
-                        targetShape,
-                        false,
-                        timestampFormat,
-                        renderErrorMessage,
-                        serializePrimitiveValuesIfDefault,
-                    )
-                }
+        val memberSymbol = symbolProvider.toSymbol(memberShape)
+        // If a header is of a primitive type and required (e.g. `bool`), we do not serialize it on the
+        // wire if it's set to the default value for that primitive type (e.g. `false` for `bool`).
+        // If the header is optional, instead, we want to serialize it if it has been set by the user to the
+        // default value for that primitive type (e.g. `Some(false)` for an `Option<bool>` header).
+        // If a header is multivalued, we always want to serialize its primitive members, regardless of their
+        // values.
+        val serializePrimitiveValuesIfDefault = memberSymbol.isOptional() || (targetShape is CollectionShape)
+        ifSome(memberSymbol, ValueExpression.Reference("&input.$memberName")) { variableName ->
+            if (targetShape is CollectionShape) {
+                renderMultiValuedHeader(
+                    model,
+                    headerName,
+                    variableName,
+                    targetShape,
+                    timestampFormat,
+                    renderErrorMessage,
+                )
+            } else {
+                renderHeaderValue(
+                    headerName,
+                    variableName,
+                    targetShape,
+                    false,
+                    timestampFormat,
+                    renderErrorMessage,
+                    serializePrimitiveValuesIfDefault,
+                )
             }
         }
     }
@@ -609,6 +603,13 @@ class HttpBindingGenerator(
         }
     }
 
+    data class HeaderValueSerializationContext(
+        /** Expression representing the value to write to the JsonValueWriter */
+        var valueExpression: ValueExpression,
+        /** Path in the JSON to get here, used for errors */
+        val shape: Shape,
+    )
+
     private fun RustWriter.renderHeaderValue(
         headerName: String,
         value: ValueExpression,
@@ -618,9 +619,10 @@ class HttpBindingGenerator(
         renderErrorMessage: (String) -> Writable,
         serializeIfDefault: Boolean,
     ) {
+        val context = HeaderValueSerializationContext(value, shape)
         for (customization in customizations) {
             customization.section(
-                HttpBindingSection.BeforeRenderingHeaderValue(value, shape),
+                HttpBindingSection.BeforeRenderingHeaderValue(context),
             )(this)
         }
 
@@ -633,7 +635,7 @@ class HttpBindingGenerator(
                 this,
                 shape,
                 timestampFormat,
-                value.name,
+                context.valueExpression.name,
                 isMultiValuedHeader = isMultiValuedHeader,
             )
             val safeName = safeName("formatted")
@@ -652,9 +654,9 @@ class HttpBindingGenerator(
             )
         }
         if (serializeIfDefault) {
-            block(value)
+            block(context.valueExpression)
         } else {
-            ifNotDefault(shape, value, block)
+            ifNotDefault(context.shape, context.valueExpression, block)
         }
     }
 
