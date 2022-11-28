@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::convert::Infallible;
 use std::pin::Pin;
 use std::sync::mpsc;
 use std::task::{Context, Poll};
@@ -11,7 +10,7 @@ use std::task::{Context, Poll};
 use futures::{ready, Stream};
 use hyper::server::accept::Accept;
 use pin_project_lite::pin_project;
-use tls_listener::{AsyncAccept, AsyncTls, TlsListener};
+use tls_listener::{AsyncAccept, AsyncTls, Error as TlsListenerError, TlsListener};
 
 pin_project! {
     /// A wrapper around [TlsListener] that allows changing TLS config via a channel
@@ -39,7 +38,7 @@ where
     T: AsyncTls<A::Connection>,
 {
     type Conn = T::Stream;
-    type Error = Infallible;
+    type Error = A::Error;
 
     fn poll_accept(
         mut self: Pin<&mut Self>,
@@ -53,9 +52,12 @@ where
         loop {
             match ready!(self.as_mut().project().inner.poll_next(cx)) {
                 Some(Ok(conn)) => return Poll::Ready(Some(Ok(conn))),
-                Some(Err(err)) => {
-                    // Don't propogate errors to Hyper because it causes server to shutdown
-                    tracing::error!(error = ?err, "tls connection error");
+                Some(Err(TlsListenerError::ListenerError(err))) => {
+                    return Poll::Ready(Some(Err(err)))
+                }
+                Some(Err(TlsListenerError::TlsAcceptError(err))) => {
+                    // Don't propogate TLS handshake errors to Hyper because it causes server to shutdown
+                    tracing::debug!(error = ?err, "tls handshake error");
                 }
                 None => return Poll::Ready(None),
             }
