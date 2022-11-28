@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -39,12 +40,16 @@ const val baseModelString =
     structure TestInputOutput {
         constrainedString: ConstrainedString,
         constrainedInteger: ConstrainedInteger,
+        constrainedShort: ConstrainedShort,
         constrainedMap: ConstrainedMap,
         unconstrainedMap: TransitivelyConstrainedMap
     }
 
     @length(min: 1, max: 69)
     string ConstrainedString
+
+    @range(min: -2, max: 10)
+    integer ConstrainedShort
 
     @range(min: 10, max: 29)
     integer ConstrainedInteger
@@ -79,6 +84,7 @@ class ConstrainedShapeSymbolProviderTest {
         fun getConstrainedShapes(): Stream<Arguments> =
             Stream.of(
                 Arguments.of("ConstrainedInteger", { s: Shape -> s is IntegerShape }),
+                Arguments.of("ConstrainedShort", { s: Shape -> s is ShortShape }),
                 Arguments.of("ConstrainedString", { s: Shape -> s is StringShape }),
                 Arguments.of("ConstrainedMap", { s: Shape -> s is MapShape }),
             )

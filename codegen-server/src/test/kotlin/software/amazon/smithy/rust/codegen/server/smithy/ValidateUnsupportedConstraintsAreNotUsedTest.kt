@@ -199,10 +199,9 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """.asSmithyModel()
         val validationResult = validateModel(model)
 
-        validationResult.messages shouldHaveSize 3
+        validationResult.messages shouldHaveSize 2
         validationResult.messages[0].message shouldContain "The long shape `test#RangeLong` has the constraint trait `smithy.api#range` attached"
-        validationResult.messages[1].message shouldContain "The short shape `test#RangeShort` has the constraint trait `smithy.api#range` attached"
-        validationResult.messages[2].message shouldContain "The byte shape `test#RangeByte` has the constraint trait `smithy.api#range` attached"
+        validationResult.messages[1].message shouldContain "The byte shape `test#RangeByte` has the constraint trait `smithy.api#range` attached"
     }
 
     @Test
