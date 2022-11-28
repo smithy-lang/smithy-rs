@@ -157,7 +157,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             $baseModel
 
             structure TestInputOutput {
-                collection: LengthCollection,
                 blob: LengthBlob
             }
 
