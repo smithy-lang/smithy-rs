@@ -16,12 +16,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyLocation
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency.Companion.constrained
 import software.amazon.smithy.rust.codegen.core.rustlang.Local
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -256,13 +258,13 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             )
         }
 
+        fun ConstrainedTrait() = constrained().asType().member("Constrained")
+        fun MaybeConstrained() = constrained().asType().member("MaybeConstrained")
+
         fun ProtocolTestHelper(runtimeConfig: RuntimeConfig, func: String): RuntimeType =
             RuntimeType(
                 func, CargoDependency.smithyProtocolTestHelpers(runtimeConfig), "aws_smithy_protocol_test",
             )
-
-        fun ConstrainedTrait() = RuntimeType("Constrained", InlineDependency.constrained(), namespace = "crate::constrained")
-        fun MaybeConstrained() = RuntimeType("MaybeConstrained", InlineDependency.constrained(), namespace = "crate::constrained")
 
         val http = CargoDependency.Http.toType()
         fun Http(path: String): RuntimeType =
@@ -313,7 +315,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun forInlineFun(name: String, module: RustModule, func: Writable) = RuntimeType(
             name = name,
             dependency = InlineDependency(name, module, listOf(), func),
-            namespace = "crate::${module.name}",
+            namespace = module.fullyQualifiedPath(),
         )
 
         fun parseResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
