@@ -12,7 +12,9 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -76,6 +78,8 @@ class ConstrainedNumberGeneratorTest {
             when (shape) {
                 is IntegerShape -> ConstrainedIntegerGenerator(codegenContext, this, shape).render()
                 is ShortShape -> ConstrainedShortGenerator(codegenContext, this, shape).render()
+                is ByteShape -> ConstrainedByteGenerator(codegenContext, this, shape).render()
+                is LongShape -> ConstrainedLongGenerator(codegenContext, this, shape).render()
             }
 
             unitTest(
@@ -141,6 +145,8 @@ class ConstrainedNumberGeneratorTest {
         when (constrainedShape) {
             is IntegerShape -> ConstrainedIntegerGenerator(codegenContext, writer, constrainedShape).render()
             is ShortShape -> ConstrainedShortGenerator(codegenContext, writer, constrainedShape).render()
+            is ByteShape -> ConstrainedByteGenerator(codegenContext, writer, constrainedShape).render()
+            is LongShape -> ConstrainedLongGenerator(codegenContext, writer, constrainedShape).render()
         }
 
         // Check that the wrapped type is `pub(crate)`.
