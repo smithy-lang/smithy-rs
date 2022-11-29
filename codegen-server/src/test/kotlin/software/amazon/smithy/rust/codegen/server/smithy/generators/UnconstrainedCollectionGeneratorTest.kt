@@ -65,7 +65,6 @@ class UnconstrainedCollectionGeneratorTest {
                     UnconstrainedCollectionGenerator(
                         codegenContext,
                         this@unconstrainedModuleWriter,
-                        this@modelsModuleWriter,
                         it,
                     ).render()
 
