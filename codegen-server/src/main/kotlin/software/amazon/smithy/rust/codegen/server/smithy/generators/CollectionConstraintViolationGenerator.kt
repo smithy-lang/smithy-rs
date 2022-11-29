@@ -44,7 +44,7 @@ class CollectionConstraintViolationGenerator(
         val constraintViolationVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
 
         modelsModuleWriter.withInlineModule(constraintViolationSymbol.module()) {
-            var constraintViolationVariants = constraintsInfo.map { it.constraintViolationVariant }
+            val constraintViolationVariants = constraintsInfo.map { it.constraintViolationVariant }.toMutableList()
             if (isMemberConstrained) {
                 constraintViolationVariants += {
                     rustTemplate(
@@ -72,7 +72,7 @@ class CollectionConstraintViolationGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
-                var validationExceptionFields = constraintsInfo.map { it.asValidationExceptionField }
+                val validationExceptionFields = constraintsInfo.map { it.asValidationExceptionField }.toMutableList()
                 if (isMemberConstrained) {
                     validationExceptionFields += { rust("""Self::Member(index, member_constraint_violation) => member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string())""") }
                 }
