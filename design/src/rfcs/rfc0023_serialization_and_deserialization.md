@@ -99,15 +99,70 @@ The resulting size of the serialized data is smaller when tagged externally, as 
 
 For the reasons mentioned above, we implement enum is externally tagged.
 
+## Data Types to Ignore
+We are going to skip serialization and deserialization of fields that have the following datatypes.
+
+- `aws_smithy_http::byte_stream::ByteStream`
+- `aws_smithy_http::event_stream::Receiver<TranscriptResultStream, TranscriptResultStreamError>:`
+- `aws_smithy_http::event_stream::EventStreamSender<AudioStream, AudioStreamError>`
+
+Any fields with these data types are tagged with `#[serde(skip_serialization)]` and `#[serde(skip_deserialization)]`.
+
+Examples of data types that are affected by these decisions are, 
+`Struct aws_sdk_transcribestreaming::client::fluent_builders::StartMedicalStreamTranscription`  
+
+We considered accepting file paths when deserializing, where users can give a file path that contains the relevant data. How you save/handle data largely depends on various factors which are specific to the problem that users face.
+
+We conclude that there is no benefit to implementing a serialization/deserialization solution at an SDK level.
+We also believe that users will be able to have a more productive experience when they are left to implement their unique solution.
+
+Additionally, they are sometimes used as a data type to represent bi-directional data transfer, which does not happen during serialization/deserialization.
+
 # What users must know
 ## Sensitive Information
 Serialized data may involve sensitive information.  
 
-## 
+
+## `Serde` traits implemented on Builder of Output Types
+Output data, such as `aws_sdk_dynamodb::output::UpdateTableOutput` has builder types. 
+These builder types are available to users, however, no API requires users to build data types by themselves.  
+
+We considered removing traits from these data types, however, code-gen framework does not carry the necessary metadata to determine whether the data is the builder type of an output type or not.
+We conclude that benefit of avoiding the technical complexity/challenge is inevitable to bring this RFC to life.
+
+
+TODO: write things that users should know such as handling of sensitive information here
 
 ## Compile Time
-// TODO   
-// NOTE we could create a dynamically/statically linked binary
+We ran the following benchmark on C6a.2xlarge instance with 50gb of GP2 SSD.
+The commit hash of the code is a8e2e19129aead4fbc8cf0e3d34df0188a62de9f.
+
+- `aws-sdk-dynamodb`
+ 
+| command                                                     | real time | user time  | sys time  |
+| ----------------------------------------------------------- | --------- | ---------- | --------- |
+| cargo build                                                 | 0m35.728s | 2m24.243s  | 0m11.868s |
+| cargo build --release                                       | 0m52.040s | 5m0.841s   | 0m11.313s |
+| cargo build --features unstable-serde-serialize             | 0m38.079s | 2m26.082s  | 0m11.631s |
+| cargo build --release --features unstable-serde-serialize   | 0m53.153s | 5m4.069s   | 0m11.577s |
+| cargo build --features unstable-serde-deserialize           | 0m45.689s | 2m34.000s  | 0m11.978s |
+| cargo build --release --features unstable-serde-deserialize | 1m0.107s  | 5m10.231s  | 0m11.699s |
+| cargo build --all-features                                  | 0m48.959s | 2m45.688s  | 0m13.359s |
+| cargo build --release --all-features                        | 1m3.198s  | 5m26.076s  | 0m12.311s |
+
+- `aws-sdk-ec2`
+| command                                                     | real time | user time  | sys time  |
+| ----------------------------------------------------------- | --------- | ---------- | --------- |
+| cargo build                                                 | 1m20.041s | 2m14.592s  | 0m6.611s  |
+| cargo build --release                                       | 2m29.480s | 9m19.530s  | 0m15.957s |
+| cargo build --features unstable-serde-serialize             | 2m0.555s  | 4m24.881s  | 0m16.131s |
+| cargo build --release --features unstable-serde-serialize   | 2m45.002s | 9m43.098s  | 0m16.886s |
+| cargo build --features unstable-serde-deserialize           | 3m10.857s | 5m34.246s  | 0m18.844s |
+| cargo build --release --features unstable-serde-deserialize | 3m47.531s | 10m52.017s | 0m18.404s |
+| cargo build --all-features                                  | 3m31.473s | 6m1.052s   | 0m19.681s |
+| cargo build --release --all-features                        | 3m45.208s | 8m46.168s  | 0m10.211s |
+
+
 ## Misleading Results
 // TODO
 
@@ -130,6 +185,10 @@ For example, output and input types can have `unstable-output-serde-*` and `unst
 
 Complexity that this implementation introduces is significant as data types in Kotlin does not hold any meta data that determines which one of the category that data belongs too.
 Thus, we believe that benefit does not outweigh the cost of maintenance and implementation.
+
+## Future Directions (WIP) 
+TODO:// talk about things that we might want to see in future
+- Remove serde traits from Output Builder types
 
 
 Changes checklist
