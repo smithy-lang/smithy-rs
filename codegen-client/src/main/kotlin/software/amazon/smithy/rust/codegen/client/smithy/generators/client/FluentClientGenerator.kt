@@ -206,7 +206,8 @@ class FluentClientGenerator(
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                     """,
                 )
-                // operation level stuff
+                // NOTE: this define methods which creates fluent_builders for each operations
+                // if you try to add a method here, it throws an protocol error.
                 writer.rust(
                     """
                     pub fn ${
@@ -233,6 +234,7 @@ class FluentClientGenerator(
                 newlinePrefix = "//! ",
             )
             operations.forEach { operation ->
+                val name = symbolProvider.toSymbol(operation).name
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
@@ -269,6 +271,8 @@ class FluentClientGenerator(
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
 
+                    // NOTE: if you want to add a method to the fluent_builder which is created via method implemented on a client, 
+                    // make some changes to this string
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
                         """
@@ -307,7 +311,26 @@ class FluentClientGenerator(
                                 .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
                             self.handle.client.call(op).await
                         }
+
+                        /// This method replaces the existing parameter set on this data with the 2nd argument.  
+                        /// Existing parameters set on this data will be lost.  
+                        pub fn replace_parameter(&mut self, new_parameter: #{Inner}) {
+                            // memory swap is faster than assigning stuff
+                            std::mem::replace(&mut self.inner, new_parameter);
+                        }
+
+                        /// This method sends a request with given input.  
+                        /// Method ignores any data that can be found in the builder type held on this struct.
+                        pub async fn send_with_input(self, input: #{Inner}::OutputShape) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
+                            let op = input
+                                .make_operation(&self.handle.conf)
+                                .await
+                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
+                            self.handle.client.call(op).await
+                        }
+                        
                         """,
+                        "Inner" to input.builderSymbol(symbolProvider),
                         "ClassifyRetry" to runtimeConfig.smithyHttp().member("retry::ClassifyRetry"),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,

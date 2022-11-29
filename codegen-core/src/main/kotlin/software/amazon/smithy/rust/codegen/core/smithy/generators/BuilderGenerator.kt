@@ -86,6 +86,7 @@ class BuilderGenerator(
             false -> implBlockWriter.format(outputSymbol)
         }
         implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
+        implBlockWriter.writeInline("type OutputShape = ${implBlockWriter.format(outputSymbol)};")
         implBlockWriter.rustBlock("pub fn build(self) -> $returnType") {
             conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
                 // If a wrapper is specified, use the `::new` associated function to construct the wrapper
