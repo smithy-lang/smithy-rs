@@ -13,7 +13,7 @@ use std::{
 pub(super) fn normalize_uri_path(uri_path: &str) -> Cow<'_, str> {
     // If the absolute path is empty, use a forward slash (/).
     if uri_path.is_empty() {
-        return Cow::Owned("/".to_owned());
+        return Cow::Borrowed("/");
     }
 
     // The canonical URI is the URI-encoded version of the _absolute_ path component of the URI.
