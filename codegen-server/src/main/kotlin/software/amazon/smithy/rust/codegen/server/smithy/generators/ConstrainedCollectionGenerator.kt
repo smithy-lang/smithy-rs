@@ -32,13 +32,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
  * the constraints.
  *
  * The [`length`] and [`uniqueItems`] traits are the only constraint traits applicable to list shapes.
+ * TODO(https://github.com/awslabs/smithy-rs/issues/1401):
  * The [`uniqueItems`] trait has not been implemented yet.
  *
  * If [unconstrainedSymbol] is provided, the `MaybeConstrained` trait is implemented for the constrained type, using the
  * [unconstrainedSymbol]'s associated type as the associated type for the trait.
  *
  * [`length`]: https://smithy.io/2.0/spec/constraint-traits.html#length-trait
- * [`uniqueItem`]: https://smithy.io/2.0/spec/constraint-traits.html#smithy-api-uniqueitems-trait
+ * [`uniqueItems`]: https://smithy.io/2.0/spec/constraint-traits.html#smithy-api-uniqueitems-trait
  */
 class ConstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
