@@ -119,10 +119,10 @@ class ConstrainedNumberGeneratorTest {
     class NoStructuralConstructorTestProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             listOf(
-                Triple("integer", "ConstrainedInteger", "i32"),
-                Triple("short", "ConstrainedShort", "i16"),
-                Triple("long", "ConstrainedLong", "i64"),
                 Triple("byte", "ConstrainedByte", "i8"),
+                Triple("short", "ConstrainedShort", "i16"),
+                Triple("integer", "ConstrainedInteger", "i32"),
+                Triple("long", "ConstrainedLong", "i64"),
             ).map { Arguments.of(it) }.stream()
     }
 
