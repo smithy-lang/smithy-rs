@@ -39,8 +39,10 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
                 // To avoid conflicts with the `make_operation` and `presigned` functions on generated inputs
                 "make_operation" -> "make_operation_value"
                 "presigned" -> "presigned_value"
+                "customize" -> "customize_value"
                 else -> baseName
             }
+
             is UnionShape -> when (baseName) {
                 // Unions contain an `Unknown` variant. This exists to support parsing data returned from the server
                 // that represent union variants that have been added since this SDK was generated.
@@ -53,6 +55,7 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
                 "SelfValue" -> "SelfValue_"
                 else -> baseName
             }
+
             else -> error("unexpected container: $container")
         }
     }
@@ -78,6 +81,7 @@ class RustReservedWordSymbolProvider(private val base: RustSymbolProvider, priva
                     it.toBuilder().renamedFrom(previousName).build()
                 }
             }
+
             else -> base.toSymbol(shape)
         }
     }
@@ -150,7 +154,6 @@ object RustReservedWords : ReservedWords {
         "abstract",
         "become",
         "box",
-        "customize",
         "do",
         "final",
         "macro",
