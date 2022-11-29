@@ -74,7 +74,14 @@ class CollectionConstraintViolationGenerator(
             if (shape.isReachableFromOperationInput()) {
                 val validationExceptionFields = constraintsInfo.map { it.asValidationExceptionField }.toMutableList()
                 if (isMemberConstrained) {
-                    validationExceptionFields += { rust("""Self::Member(index, member_constraint_violation) => member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string())""") }
+                    validationExceptionFields += {
+                        rust(
+                            """
+                            Self::Member(index, member_constraint_violation) =>
+                                member_constraint_violation.as_validation_exception_field(path + "/" + &index.to_string())
+                            """,
+                        )
+                    }
                 }
 
                 rustTemplate(
