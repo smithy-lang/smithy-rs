@@ -175,7 +175,7 @@
 //! The [`Operation::upgrade`] will apply [`UpgradeLayer`] to `S` then apply the [`Layer`](tower::Layer) `L`. The
 //! service builder provided to the user will perform this composition on `build`.
 //!
-//! [Smithy operation]: https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation
+//! [Smithy operation]: https://smithy.io/2.0/spec/service-types.html#operation
 
 mod handler;
 mod operation_service;

@@ -151,8 +151,8 @@ ${operationImplementationStubs(operations)}
 ///
 /// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
 /// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
-/// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
-/// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
+/// [HTTP binding traits]: https://smithy.io/2.0/spec/http-bindings.html
+/// [operations]: https://smithy.io/2.0/spec/service-types.html#operation
 /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
 """,
             "Router" to ServerRuntimeType.Router(runtimeConfig),

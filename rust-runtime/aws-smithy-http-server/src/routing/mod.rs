@@ -5,7 +5,7 @@
 
 //! HTTP routing that adheres to the [Smithy specification].
 //!
-//! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+//! [Smithy specification]: https://smithy.io/2.0/spec/http-bindings.html
 
 use std::{
     convert::Infallible,
@@ -53,14 +53,14 @@ pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::
 /// You should not **instantiate** this router directly; it will be created for you from the
 /// code generated from your Smithy model by `smithy-rs`.
 ///
-/// [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
-/// [AwsJson specification]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#protocol-behaviors
-/// [Protocol]: https://awslabs.github.io/smithy/1.0/spec/aws/index.html#aws-protocols
-/// [restJson1]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-restjson1-protocol.html
-/// [restXml]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-restxml-protocol.html
-/// [awsJson1.0]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html
-/// [awsJson1.1]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html
-/// [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
+/// [Smithy specification]: https://smithy.io/2.0/spec/http-bindings.html
+/// [AwsJson specification]: https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html#protocol-behaviors
+/// [Protocol]: https://smithy.io/2.0/aws/protocols/index.html
+/// [restJson1]: https://smithy.io/2.0/aws/protocols/aws-restjson1-protocol.html
+/// [restXml]: https://smithy.io/2.0/aws/protocols/aws-restxml-protocol.html
+/// [awsJson1.0]: https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html
+/// [awsJson1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
+/// [endpoint trait]: https://smithy.io/2.0/spec/endpoint-traits.html
 #[derive(Debug)]
 pub struct Router<B = Body> {
     routes: Routes<B>,

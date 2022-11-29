@@ -46,7 +46,7 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerat
 }
 
 // This generator was implemented based on this spec:
-// https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
+// https://smithy.io/2.0/aws/aws-core.html#http-request-checksums
 class HttpResponseChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
@@ -91,7 +91,7 @@ class HttpResponseChecksumCustomization(
                         """
                         let response_algorithms = [$responseAlgorithms].as_slice();
                         let $validationModeName = properties.get::<#{ValidationModeShape}>();
-                        // Per [the spec](https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html##http-response-checksums),
+                        // Per [the spec](https://smithy.io/2.0/aws/aws-core.html#http-response-checksums),
                         // we check to see if it's the `ENABLED` variant
                         if matches!($validationModeName, Some(&#{ValidationModeShape}::Enabled)) {
                             if let Some((checksum_algorithm, precalculated_checksum)) =

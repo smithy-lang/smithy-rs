@@ -34,8 +34,8 @@ pub struct QueryMarker {
 /// println!("{uri}");
 /// ```
 ///
-/// [httpQuery trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait
-/// [httpQueryParams trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpqueryparams-trait
+/// [httpQuery trait]: https://smithy.io/2.0/spec/http-bindings.html#httpquery-trait
+/// [httpQueryParams trait]: https://smithy.io/2.0/spec/http-bindings.html#httpqueryparams-trait
 #[allow(missing_debug_implementations)]
 pub struct Query<'a, F> {
     query: &'a str,

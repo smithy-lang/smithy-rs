@@ -28,8 +28,8 @@ pub enum Error {
 
 /// A [`Router`] supporting [`AWS REST JSON 1.0`] and [`AWS REST XML`] protocols.
 ///
-/// [AWS REST JSON 1.0]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html
-/// [AWS REST XML]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html
+/// [AWS REST JSON 1.0]: https://smithy.io/2.0/aws/protocols/aws-restjson1-protocol.html
+/// [AWS REST XML]: https://smithy.io/2.0/aws/protocols/aws-restxml-protocol.html
 #[derive(Debug, Clone)]
 pub struct RestRouter<S> {
     routes: Vec<(RequestSpec, S)>,

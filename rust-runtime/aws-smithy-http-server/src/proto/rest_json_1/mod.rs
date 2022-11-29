@@ -5,5 +5,5 @@
 
 pub mod router;
 
-/// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
+/// [AWS REST JSON 1.0 Protocol](https://smithy.io/2.0/aws/protocols/aws-restjson1-protocol.html).
 pub struct RestJson1;

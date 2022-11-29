@@ -43,8 +43,8 @@ const ROUTE_CUTOFF: usize = 15;
 
 /// A [`Router`] supporting [`AWS JSON 1.0`] and [`AWS JSON 1.1`] protocols.
 ///
-/// [AWS JSON 1.0]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html
-/// [AWS JSON 1.1]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html
+/// [AWS JSON 1.0]: https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html
+/// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
     routes: TinyMap<String, S, ROUTE_CUTOFF>,

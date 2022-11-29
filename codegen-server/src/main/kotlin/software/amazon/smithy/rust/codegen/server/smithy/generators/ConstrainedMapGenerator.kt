@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
  * If [unconstrainedSymbol] is provided, the `MaybeConstrained` trait is implemented for the constrained type, using the
  * [unconstrainedSymbol]'s associated type as the associated type for the trait.
  *
- * [`length` trait]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
+ * [`length` trait]: https://smithy.io/2.0/spec/constraint-traits.html#length-trait
  */
 class ConstrainedMapGenerator(
     val codegenContext: ServerCodegenContext,
@@ -97,16 +97,16 @@ class ConstrainedMapGenerator(
                 pub fn inner(&self) -> &$inner {
                     &self.0
                 }
-                
+
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
             }
-            
+
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
-                
+
                 /// ${rustDocsTryFromMethod(name, inner)}
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
                     let length = value.len();
@@ -117,7 +117,7 @@ class ConstrainedMapGenerator(
                     }
                 }
             }
-            
+
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
                     value.into_inner()

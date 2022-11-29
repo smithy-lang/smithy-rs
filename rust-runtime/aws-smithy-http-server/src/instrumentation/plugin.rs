@@ -38,7 +38,7 @@ pub trait InstrumentExt<CurrentPlugins> {
     /// Applies an [`InstrumentLayer`] to all operations which respects the [@sensitive] trait given on the input and
     /// output models. See [`InstrumentOperation`](super::InstrumentOperation) for more information.
     ///
-    /// [@sensitive]: https://awslabs.github.io/smithy/2.0/spec/documentation-traits.html#sensitive-trait
+    /// [@sensitive]: https://smithy.io/2.0/spec/documentation-traits.html#sensitive-trait
     fn instrument(self) -> PluginPipeline<PluginStack<InstrumentPlugin, CurrentPlugins>>;
 }
 

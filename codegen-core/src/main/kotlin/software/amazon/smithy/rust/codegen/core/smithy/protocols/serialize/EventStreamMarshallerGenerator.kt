@@ -164,7 +164,7 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    // Event stream header types: https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html#eventheader-trait
+    // Event stream header types: https://smithy.io/2.0/spec/streaming.html#eventheader-trait
     // Note: there are no floating point header types for Event Stream.
     private fun headerValue(inputName: String, target: Shape): String = when (target) {
         is BooleanShape -> "Bool($inputName)"

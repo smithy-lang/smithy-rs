@@ -6,8 +6,8 @@
 //! The combination of [HTTP binding traits] and the [sensitive trait] require us to redact
 //! portions of the HTTP requests/responses during logging.
 //!
-//! [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
-//! [sensitive trait]: https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html?highlight=sensitive#sensitive-trait
+//! [HTTP binding traits]: https://smithy.io/2.0/spec/http-bindings.html
+//! [sensitive trait]: https://smithy.io/2.0/spec/documentation-traits.html#sensitive-trait
 
 pub mod headers;
 mod request;

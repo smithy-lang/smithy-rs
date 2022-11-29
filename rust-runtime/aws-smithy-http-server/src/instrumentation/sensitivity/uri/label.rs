@@ -26,7 +26,7 @@ use crate::instrumentation::{sensitivity::Sensitive, MakeFmt};
 /// println!("{uri}");
 /// ```
 ///
-/// [httpLabel trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait
+/// [httpLabel trait]: https://smithy.io/2.0/spec/http-bindings.html#httplabel-trait
 #[allow(missing_debug_implementations)]
 #[derive(Clone)]
 pub struct Label<'a, F> {

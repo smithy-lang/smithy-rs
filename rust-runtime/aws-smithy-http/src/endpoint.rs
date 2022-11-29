@@ -23,7 +23,7 @@ pub trait ResolveEndpoint<Params>: Send + Sync {
 /// API Endpoint
 ///
 /// This implements an API endpoint as specified in the
-/// [Smithy Endpoint Specification](https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html)
+/// [Smithy Endpoint Specification](https://smithy.io/2.0/spec/endpoint-traits.html)
 #[derive(Clone, Debug)]
 pub struct Endpoint {
     uri: http::Uri,
