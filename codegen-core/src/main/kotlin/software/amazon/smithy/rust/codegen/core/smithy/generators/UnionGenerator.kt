@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -22,6 +23,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -56,8 +59,12 @@ class UnionGenerator(
     fun render() {
         renderUnion()
         renderImplBlock()
-        if (shape.shouldRedact(model)) {
-            renderDebugImplForSensitiveUnion()
+        if (!unionSymbol.expectRustMetadata().derives.derives.contains(RuntimeType.Debug)) {
+            if (shape.hasTrait<SensitiveTrait>()) {
+                renderDebugImplForUnion()
+            } else {
+                renderDebugImplForUnionMemberWise()
+            }
         }
     }
 
@@ -102,7 +109,11 @@ class UnionGenerator(
                 if (sortedMembers.size == 1) {
                     Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
                 }
-                rust("/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner #D.", unionSymbol, memberSymbol)
+                rust(
+                    "/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner #D.",
+                    unionSymbol,
+                    memberSymbol,
+                )
                 rust("/// Returns `Err(&Self)` if it can't be converted.")
                 rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&#T, &Self>", memberSymbol) {
                     rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(val) } else { Err(self) }")
@@ -120,7 +131,8 @@ class UnionGenerator(
             }
         }
     }
-    private fun renderDebugImplForSensitiveUnion() {
+
+    private fun renderDebugImplForUnion() {
         writer.rustTemplate(
             """
             impl #{Debug} for ${unionSymbol.name} {
@@ -134,10 +146,31 @@ class UnionGenerator(
         )
     }
 
+    private fun renderDebugImplForUnionMemberWise() {
+        writer.rustBlock("impl #T for ${unionSymbol.name}", RuntimeType.Debug) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+                rustBlock("match self") {
+                    sortedMembers.forEach { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        if (member.shouldRedact(model)) {
+                            rust("${unionSymbol.name}::$memberName(_) => f.debug_tuple($REDACTION).finish(),")
+                        } else {
+                            rust("${unionSymbol.name}::$memberName(val) => f.debug_tuple(${memberName.dq()}).field(&val).finish(),")
+                        }
+                    }
+                    if (renderUnknownVariant) {
+                        rust("${unionSymbol.name}::$UnknownVariantName => f.debug_tuple(${UnknownVariantName.dq()}).finish(),")
+                    }
+                }
+            }
+        }
+    }
+
     companion object {
         const val UnknownVariantName = "Unknown"
     }
 }
+
 fun unknownVariantError(union: String) =
     "Cannot serialize `$union::${UnionGenerator.UnknownVariantName}` for the request. " +
         "The `Unknown` variant is intended for responses only. " +

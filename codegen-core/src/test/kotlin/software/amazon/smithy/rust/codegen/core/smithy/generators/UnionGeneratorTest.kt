@@ -165,6 +165,28 @@ class UnionGeneratorTest {
         )
     }
 
+    @Test
+    fun `impl debug for union should redact text for sensitive member target`() {
+        val writer = generateUnion(
+            """
+            @sensitive
+            string Bar
+
+            union MyUnion {
+                foo: PrimitiveInteger,
+                bar: Bar,
+            }
+            """,
+        )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), "Foo(3)");
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), $REDACTION);
+            """,
+        )
+    }
+
     private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion", unknownVariant: Boolean = true): RustWriter {
         val model = "namespace test\n$modelSmithy".asSmithyModel()
         val provider: SymbolProvider = testSymbolProvider(model)
