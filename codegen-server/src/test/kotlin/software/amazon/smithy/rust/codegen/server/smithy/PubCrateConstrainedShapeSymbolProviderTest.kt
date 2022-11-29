@@ -23,24 +23,30 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymb
 class PubCrateConstrainedShapeSymbolProviderTest {
     private val model = """
         $baseModelString
-        
+
+        structure NonTransitivelyConstrainedStructureShape {
+            constrainedString: ConstrainedString,
+            constrainedMap: ConstrainedMap,
+            unconstrainedMap: TransitivelyConstrainedMap
+        }
+
         list TransitivelyConstrainedCollection {
             member: Structure
         }
-        
+
         structure Structure {
             @required
             requiredMember: String
         }
-        
+
         structure StructureWithMemberTargetingAggregateShape {
             member: TransitivelyConstrainedCollection
         }
-        
+
         union Union {
             structure: Structure
         }
-        """.asSmithyModel()
+    """.asSmithyModel()
 
     private val serverTestSymbolProviders = serverTestSymbolProviders(model)
     private val symbolProvider = serverTestSymbolProviders.symbolProvider
@@ -97,7 +103,7 @@ class PubCrateConstrainedShapeSymbolProviderTest {
 
     @Test
     fun `it should delegate to the base symbol provider when provided with a structure shape`() {
-        val structureShape = model.lookup<StructureShape>("test#TestInputOutput")
+        val structureShape = model.lookup<StructureShape>("test#NonTransitivelyConstrainedStructureShape")
         val structureSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(structureShape)
 
         structureSymbol shouldBe symbolProvider.toSymbol(structureShape)

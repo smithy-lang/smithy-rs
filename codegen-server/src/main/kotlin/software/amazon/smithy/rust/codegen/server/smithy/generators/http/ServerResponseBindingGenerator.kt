@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
@@ -38,6 +39,9 @@ class ServerResponseBindingGenerator(
             ::builderSymbol,
             listOf(
                 ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(
+                    codegenContext,
+                ),
+                ServerResponseBeforeRenderingHeadersHttpBindingCustomization(
                     codegenContext,
                 ),
             ),
@@ -65,6 +69,36 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
                 rust("let ${section.variableName} = &${section.variableName}.0;")
             }
         }
-        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders -> emptySection
+
+        is HttpBindingSection.BeforeRenderingHeaderValue,
+        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        -> emptySection
+    }
+}
+
+/**
+ * A customization to, just before we render a _constrained_ member shape to an HTTP response header,
+ * unwrap the wrapper newtype and take a shared reference to the actual inner type within it.
+ */
+class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
+    HttpBindingCustomization() {
+    override fun section(section: HttpBindingSection): Writable = when (section) {
+        is HttpBindingSection.BeforeRenderingHeaderValue -> writable {
+            if (workingWithPublicConstrainedWrapperTupleType(
+                    section.context.shape,
+                    codegenContext.model,
+                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                )
+            ) {
+                if (section.context.shape.isIntegerShape) {
+                    section.context.valueExpression =
+                        ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
+                }
+            }
+        }
+
+        is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
+        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+        -> emptySection
     }
 }

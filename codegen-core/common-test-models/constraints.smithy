@@ -19,7 +19,6 @@ service ConstraintsService {
         // combination.
         QueryParamsTargetingLengthMapOperation,
         QueryParamsTargetingMapOfLengthStringOperation,
-        QueryParamsTargetingMapOfEnumStringOperation,
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
         QueryParamsTargetingMapOfLengthListOfPatternStringOperation,
@@ -31,6 +30,9 @@ service ConstraintsService {
         QueryParamsTargetingMapOfListOfLengthPatternStringOperation,
 
         HttpPrefixHeadersTargetingLengthMapOperation,
+
+        QueryParamsTargetingMapOfEnumStringOperation,
+        QueryParamsTargetingMapOfListOfEnumStringOperation,
         // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
         // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
@@ -48,7 +50,7 @@ operation ConstrainedShapesOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}/{enumStringLabel}", method: "POST")
+@http(uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{lengthStringLabel}/{enumStringLabel}", method: "POST")
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
@@ -183,15 +185,21 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @required
     @httpLabel
+    rangeIntegerLabel: RangeInteger,
+
+    @required
+    @httpLabel
     enumStringLabel: EnumString,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
-    // @required
-    @httpPrefixHeaders("X-Prefix-Headers-")
+    @required
+    @httpPrefixHeaders("X-Length-String-Prefix-Headers-")
     lengthStringHeaderMap: MapOfLengthString,
 
     @httpHeader("X-Length")
     lengthStringHeader: LengthString,
+
+    @httpHeader("X-Range-Integer")
+    rangeIntegerHeader: RangeInteger,
 
     // @httpHeader("X-Length-MediaType")
     // lengthStringHeaderWithMediaType: MediaTypeLengthString,
@@ -204,6 +212,14 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpHeader("X-Length-List")
     lengthStringListHeader: ListOfLengthString,
 
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpHeader("X-Range-Integer-Set")
+    // rangeIntegerSetHeader: SetOfRangeInteger,
+
+    @httpHeader("X-Range-Integer-List")
+    rangeIntegerListHeader: ListOfRangeInteger,
+
     // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
     // @httpHeader("X-Enum")
     //enumStringHeader: EnumString,
@@ -213,6 +229,9 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("lengthString")
     lengthStringQuery: LengthString,
+
+    @httpQuery("rangeInteger")
+    rangeIntegerQuery: RangeInteger,
 
     @httpQuery("enumString")
     enumStringQuery: EnumString,
@@ -224,6 +243,14 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // @httpQuery("lengthStringSet")
     // lengthStringSetQuery: SetOfLengthString,
+
+    @httpQuery("rangeIntegerList")
+    rangeIntegerListQuery: ListOfRangeInteger,
+
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpQuery("rangeIntegerSet")
+    // rangeIntegerSetQuery: SetOfRangeInteger,
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
@@ -345,6 +372,11 @@ structure ConA {
     maxLengthString: MaxLengthString,
     fixedLengthString: FixedLengthString,
 
+    rangeInteger: RangeInteger,
+    minRangeInteger: MinRangeInteger,
+    maxRangeInteger: MaxRangeInteger,
+    fixedValueInteger: FixedValueInteger,
+
     conBList: ConBList,
     conBList2: ConBList2,
 
@@ -365,7 +397,13 @@ structure ConA {
     // setOfLengthString: SetOfLengthString,
     mapOfLengthString: MapOfLengthString,
 
-    nonStreamingBlob: NonStreamingBlob,
+    listOfRangeInteger: ListOfRangeInteger,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfRangeInteger: SetOfRangeInteger,
+    mapOfRangeInteger: MapOfRangeInteger,
+
+    nonStreamingBlob: NonStreamingBlob
 
     patternString: PatternString,
     mapOfPatternString: MapOfPatternString,
@@ -385,6 +423,11 @@ structure ConA {
 map MapOfLengthString {
     key: LengthString,
     value: LengthString,
+}
+
+map MapOfRangeInteger {
+    key: String,
+    value: RangeInteger,
 }
 
 map MapOfEnumString {
@@ -425,6 +468,13 @@ map MapOfLengthListOfPatternString {
     value: LengthListOfPatternString
 }
 
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// map MapOfSetOfRangeInteger {
+//     key: LengthString,
+//     value: SetOfRangeInteger,
+// }
+
 @length(min: 2, max: 8)
 list LengthListOfLengthString {
     member: LengthString
@@ -436,7 +486,7 @@ string LengthString
 @length(min: 2)
 string MinLengthString
 
-@length(min: 69)
+@length(max: 69)
 string MaxLengthString
 
 @length(min: 69, max: 69)
@@ -452,6 +502,18 @@ string LengthPatternString
 @mediaType("video/quicktime")
 @length(min: 1, max: 69)
 string MediaTypeLengthString
+
+@range(min: -0, max: 69)
+integer RangeInteger
+
+@range(min: -10)
+integer MinRangeInteger
+
+@range(max: 69)
+integer MaxRangeInteger
+
+@range(min: 69, max: 69)
+integer FixedValueInteger
 
 /// A union with constrained members.
 union ConstrainedUnion {
@@ -496,6 +558,16 @@ set SetOfLengthPatternString {
 
 list ListOfLengthString {
     member: LengthString
+}
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// set SetOfRangeInteger {
+//     member: RangeInteger
+// }
+
+list ListOfRangeInteger {
+    member: RangeInteger
 }
 
 list ListOfEnumString {

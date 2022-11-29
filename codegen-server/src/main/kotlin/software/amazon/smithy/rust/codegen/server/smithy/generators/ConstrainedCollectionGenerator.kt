@@ -128,7 +128,7 @@ class ConstrainedCollectionGenerator(
             """,
             *codegenScope,
             "ConstraintChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
-            "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation) }.join("\n"),
+            "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation, inner) }.join("\n"),
         )
 
         if (!publicConstrainedTypes && isValueConstrained(shape, model, symbolProvider)) {
@@ -184,7 +184,7 @@ internal sealed class CollectionTraitInfo {
                         """,
                     )
                 },
-                validationFunctionDefinition = { constraintViolation ->
+                validationFunctionDefinition = { constraintViolation, _ ->
                     {
                         rustTemplate(
                             """
