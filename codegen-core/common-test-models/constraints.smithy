@@ -239,6 +239,9 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpQuery("lengthStringList")
     lengthStringListQuery: ListOfLengthString,
 
+    @httpQuery("lengthListPatternString")
+    lengthListPatternStringQuery: LengthListOfPatternString,
+
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // @httpQuery("lengthStringSet")
