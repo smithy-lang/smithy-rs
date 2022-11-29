@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 class UnconstrainedCollectionGenerator(
     val codegenContext: ServerCodegenContext,
     private val unconstrainedModuleWriter: RustWriter,
-    private val modelsModuleWriter: RustWriter,
     val shape: CollectionShape,
 ) {
     private val model = codegenContext.model

@@ -290,15 +290,12 @@ open class ServerCodegenVisitor(
 
         if (renderUnconstrainedList) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for collection shape $shape")
-            rustCrate.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
-                rustCrate.withModule(ModelsModule) modelsModuleWriter@{
-                    UnconstrainedCollectionGenerator(
-                        codegenContext,
-                        this@unconstrainedModuleWriter,
-                        this@modelsModuleWriter,
-                        shape,
-                    ).render()
-                }
+            rustCrate.withModule(UnconstrainedModule) {
+                UnconstrainedCollectionGenerator(
+                    codegenContext,
+                    this,
+                    shape,
+                ).render()
             }
 
             if (!isDirectlyConstrained) {
