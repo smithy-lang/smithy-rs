@@ -418,6 +418,11 @@ structure ConA {
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // setOfLengthPatternString: SetOfLengthPatternString,
+
+    lengthListOfPatternString: LengthListOfPatternString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // lengthSetOfPatternString: LengthSetOfPatternString,
 }
 
 map MapOfLengthString {
@@ -554,6 +559,11 @@ set SetOfPatternString {
 
 set SetOfLengthPatternString {
     member: LengthPatternString
+}
+
+@length(min: 5, max: 9)
+set LengthSetOfPatternString {
+    member: PatternString
 }
 
 list ListOfLengthString {
