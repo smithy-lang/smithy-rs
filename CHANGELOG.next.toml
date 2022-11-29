@@ -489,3 +489,15 @@ message = "Make generated enum `values()` functions callable in const contexts."
 references = ["smithy-rs#2011"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "lsr0"
+
+[[smithy-rs]]
+message = """
+All types that are exclusively relevant within the context of an AWS Lambda function are now gated behind the
+`aws-lambda` feature flag.
+
+This will reduce the number of dependencies (and improve build times) for users that are running their Smithy services
+in non-serverless environments (e.g. via `hyper`).
+"""
+references = ["smithy-rs#2035"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "LukeMathWalker"
