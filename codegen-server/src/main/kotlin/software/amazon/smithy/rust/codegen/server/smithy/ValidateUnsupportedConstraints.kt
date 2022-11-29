@@ -8,15 +8,18 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
@@ -240,12 +243,12 @@ fun validateUnsupportedConstraints(
         .map { UnsupportedLengthTraitOnCollectionOrOnBlobShape(it, it.expectTrait()) }
         .toSet()
 
-    // 5. Range trait used on a non-integer shape. It has not been implemented yet.
+    // 5. Range trait used on unsupported shapes.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
         .asSequence()
-        .filterNot { it is IntegerShape }
+        .filterNot { it is IntegerShape || it is ShortShape || it is LongShape || it is ByteShape }
         .filterMapShapesToTraits(setOf(RangeTrait::class.java))
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()

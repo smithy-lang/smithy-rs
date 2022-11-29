@@ -8,12 +8,15 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -96,7 +99,8 @@ class ConstrainedShapeSymbolProvider(
                     symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
                 }
             }
-            is StringShape, is IntegerShape -> {
+
+            is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
                     symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
@@ -104,6 +108,7 @@ class ConstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+
             else -> base.toSymbol(shape)
         }
     }

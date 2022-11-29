@@ -7,7 +7,7 @@ use std::{collections::HashMap, convert::Infallible, ops::Deref, process, thread
 
 use aws_smithy_http_server::{
     body::{Body, BoxBody},
-    routing::{IntoMakeService, LambdaHandler},
+    routing::IntoMakeService,
     AddExtensionLayer,
 };
 use http::{Request, Response};
@@ -422,7 +422,11 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///
     /// Unlike the `run_server`, `run_lambda_handler` does not spawns other processes,
     /// it starts the Lambda handler on the current process.
+    #[cfg(feature = "aws-lambda")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
     fn run_lambda_handler(&mut self, py: Python) -> PyResult<()> {
+        use aws_smithy_http_server::routing::LambdaHandler;
+
         let event_loop = self.configure_python_event_loop(py)?;
         let service = self.build_and_configure_service(py, event_loop)?;
         let rt = runtime::Builder::new_multi_thread()
