@@ -63,7 +63,7 @@ open class ServerServiceGenerator(
             renderOperationHandler(this, operations)
         }
         rustCrate.withModule(
-            RustModule(
+            RustModule.LeafModule(
                 "operation_registry",
                 RustMetadata(
                     visibility = Visibility.PUBLIC,
