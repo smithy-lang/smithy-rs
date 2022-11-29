@@ -67,7 +67,7 @@ pub enum PercentEncodingMode {
 /// Config value to specify whether URI path normalization should be performed when signing.
 /// <https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html>
 ///
-/// Uri path normalization is performed based on <https://www.rfc-editor.org/rfc/rfc3986>.
+/// URI path normalization is performed based on <https://www.rfc-editor.org/rfc/rfc3986>.
 /// The exception to this is that we do not normalize URI paths for requests to Amazon S3.
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
