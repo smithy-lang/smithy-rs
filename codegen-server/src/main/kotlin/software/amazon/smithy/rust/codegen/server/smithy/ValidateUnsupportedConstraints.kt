@@ -24,6 +24,7 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -224,9 +225,10 @@ fun validateUnsupportedConstraints(
     val unsupportedLengthTraitOnBlobShapeSet = walker
         .walkShapes(service)
         .asSequence()
-        .filter { it is BlobShape }
-        .filter { it.hasTrait<LengthTrait>() }
-        .map { UnsupportedLengthTraitOnBlobShape(it, it.expectTrait()) }
+        .filterIsInstance<BlobShape>()
+        .mapNotNull {
+            it.getTrait<LengthTrait>()?.let { trait -> UnsupportedLengthTraitOnBlobShape(it, trait) }
+        }
         .toSet()
 
     // 5. Range trait used on a non-integer shape. It has not been implemented yet.
