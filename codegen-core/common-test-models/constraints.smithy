@@ -209,8 +209,16 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     // @httpHeader("X-Length-Set")
     // lengthStringSetHeader: SetOfLengthString,
 
-    @httpHeader("X-Length-List")
-    lengthStringListHeader: ListOfLengthString,
+    @httpHeader("X-List-Length-String")
+    listLengthStringHeader: ListOfLengthString,
+
+    @httpHeader("X-Length-List-Pattern-String")
+    lengthListPatternStringHeader: LengthListOfPatternString,
+
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpHeader("X-Length-Set-Pattern-String")
+    // lengthSetPatternStringHeader: LengthSetOfPatternString,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
