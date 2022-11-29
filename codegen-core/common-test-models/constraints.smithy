@@ -582,7 +582,7 @@ list ListOfLengthPatternString {
     member: LengthPatternString
 }
 
-@length(min:12, max: 39)
+@length(min: 12, max: 39)
 list LengthListOfPatternString {
     member: PatternString
 }
