@@ -489,56 +489,79 @@ class ServerServiceGeneratorV2(
             """
             /// A fast and customizable Rust implementation of the $serviceName Smithy service.
             ///
+            /// ## Using the $serviceName
+            ///
             /// The primary export is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
             /// trait and therefore can be handed to [Hyper server] using [`$serviceName::into_make_service`] or used in Lambda using [`#{SmithyHttpServer}::routing::LambdaHandler`].
             /// The [`crate::${InputsModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputsModule.name}`], ${if (hasErrors) "and [`crate::${ErrorsModule.name}`]" else "" }
             /// modules provide the types used in each operation.
             ///
-            /// The primary export is [`$serviceName`]: it is the
-            /// [`$builderName`] is used to set your business logic to implement your [operations],
-            /// customize your [operations]'s behaviors by applying middleware,
-            /// and build your service.
-            ///
-            /// [`$builderName`] contains the [operations] modeled in your Smithy service.
-            /// You must set an implementation for all operations with the correct signature,
-            /// or your service will fail to be constructed at runtime and panic.
-            /// For each of the [operations] modeled in
-            /// your Smithy service, you need to provide an implementation in the
-            /// form of an async function that takes in the
-            /// operation's input as their first parameter, and returns the
-            /// operation's output. If your operation is fallible (i.e. it
-            /// contains the `errors` member in your Smithy model), the function
-            /// implementing the operation has to be fallible (i.e. return a [`Result`]).
-            /// The possible forms for your async functions are:
-            /// ```rust,no_run
-            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Result<Output, Error>
-            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Output
+            /// ###### Running on Hyper
+            /// ```no_run
+            /// ## let app = $serviceName::builder_without_plugins().build_unchecked();
+            /// let server = app.into_make_service();
+            /// hyper::Server::bind(&bind).serve(server).await.unwrap();
             /// ```
-            /// Both can take up to 8 extensions, or none:
-            /// ```rust,no_run
-            /// async fn handler_with_no_extensions(input: Input) -> ...;
-            /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}::Extension<T>) -> ...
-            /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}::Extension<T>, ext1: #{SmithyHttpServer}::Extension<T>) -> ...
-            /// ...
+            /// ###### Running on Lambda
+            /// ```no_run
+            /// ## let app = $serviceName::builder_without_plugins().build_unchecked();
+            /// let handler = #{SmithyHttpServer}::routing::LambdaHandler::new(app);
+            /// lambda_http::run(handler).await.unwrap();
             /// ```
-            /// For a full list of the possible extensions, see: [`#{SmithyHttpServer}::request`]. Any `T: Send + Sync + 'static` is also allowed.
             ///
-            /// To construct [`$serviceName`], you can use:
-            /// * [`$serviceName::builder_without_plugins`] which returns a [`$builderName`] without any service-wide middleware applied.
-            /// * [`$serviceName::builder_with_plugins`] which returns a [`$builderName`] that applies `plugins` to all your operations.
+            /// ## Building the $serviceName
+            ///
+            /// To construct [`$serviceName`] we use [`$builderName`] returned by [`$serviceName::builder_without_plugins`]
+            /// or [`$serviceName::builder_with_plugins`].
+            ///
+            /// #### Plugins
+            ///
+            /// The [`$serviceName::builder_with_plugins`] method, returning [`$builderName`], we saw earlier,
+            /// accepts a `plugin`. Plugins allow you to build middleware which is aware of the operation it is being applied to.
+            ///
+            /// ```rust,no_run
+            /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
+            /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
+            /// let plugins = PluginPipeline::new()
+            ///         .push(LoggingPlugin)
+            ///         .push(MetricsPlugin);
+            /// let builder = $serviceName::builder_with_plugins(plugins);
+            /// ```
             ///
             /// To know more about plugins, see: [`#{SmithyHttpServer}::plugin`].
             ///
-            /// When you have set all your operations, you can convert [`$serviceName`] into a tower [Service] calling:
-            /// * [`$serviceName::into_make_service`] that converts $serviceName into a type that implements [`tower::make::MakeService`], a _service factory_.
-            /// * [`$serviceName::into_make_service_with_connect_info`] that converts $serviceName into [`tower::make::MakeService`]
-            /// with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
-            /// You can write your implementations to be passed in the connection information, populated by the [Hyper server], as an [`#{SmithyHttpServer}::Extension`].
+            /// #### Handlers
             ///
-            /// You can feed this [Service] to a [Hyper server], and the
-            /// server will instantiate and [`serve`] your service.
+            /// For each operation it has an associated setters accepting an async function conforming to the Smithy model.
+            /// The async functions, or "handlers", contain the business logic of your application.
             ///
-            /// Here's a full example to get you started:
+            /// Every handler must take an `Input`, and optional [`extractor arguments`](#{SmithyHttpServer}::request), while return:
+            ///
+            /// * A `Result<Output, Error>` if your operation has modeled errors, or
+            /// * An `Output` otherwise.
+            ///
+            /// ```rust,ignore
+            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Result<Output, Error> { todo!() }
+            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Output { todo!() }
+            /// ```
+            ///
+            /// Handlers accept up to 8 extractors:
+            ///
+            /// ```rust,ignore
+            /// async fn handler_with_no_extensions(input: Input) -> ... { todo!() }
+            /// async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}::Extension<T>) -> ... { todo!() }
+            /// async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}::Extension<T>, ext1: #{SmithyHttpServer}::Extension<T>) -> ... { todo!() }
+            /// ...
+            /// ```
+            ///
+            /// #### Build
+            ///
+            /// When you have set all your operations, you can construct [`$serviceName`] using:
+            ///
+            /// * [`$builderName::build`]: a fallible constructor, returning an error describing the missing operations
+            /// * [`$builderName::build_unchecked`]: an infallible constructor, returning a 500 when requesting missing operations
+            ///
+            /// ## Example
             ///
             /// ```rust
             /// use std::net::SocketAddr;
