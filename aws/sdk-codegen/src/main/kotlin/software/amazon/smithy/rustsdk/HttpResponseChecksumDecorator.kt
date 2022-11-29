@@ -91,7 +91,7 @@ class HttpResponseChecksumCustomization(
                         """
                         let response_algorithms = [$responseAlgorithms].as_slice();
                         let $validationModeName = properties.get::<#{ValidationModeShape}>();
-                        // Per [the spec](https://smithy.io/2.0/aws/aws-core.html#http-response-checksums),
+                        // Per [the spec](https://smithy.io/2.0/aws/aws-core.html##http-response-checksums),
                         // we check to see if it's the `ENABLED` variant
                         if matches!($validationModeName, Some(&#{ValidationModeShape}::Enabled)) {
                             if let Some((checksum_algorithm, precalculated_checksum)) =
