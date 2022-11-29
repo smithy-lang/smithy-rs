@@ -54,8 +54,8 @@ class CargoTomlGenerator(
         if (features.isNotEmpty()) {
             cargoFeatures.add("default" to features.filter { it.default }.map { it.name })
             // add serde related features
-            cargoFeatures.add("unstable-serde-serialize" to listOf())
-            cargoFeatures.add("unstable-serde-deserialize" to listOf())
+            cargoFeatures.add("unstable-serde-serialize" to listOf("aws-smithy-types/unstable-serde-serialize"))
+            cargoFeatures.add("unstable-serde-deserialize" to listOf("aws-smithy-types/unstable-serde-deserialize"))
         }
 
         // add serde

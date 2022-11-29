@@ -60,39 +60,39 @@ impl serde::Serialize for DateTime {
     {
         match self.fmt(Format::DateTime) {
             Ok(val) => serializer.serialize_str(&val),
-            Err(e) => Err(serde::ser::Error::custom(e))
+            Err(e) => Err(serde::ser::Error::custom(e)),
         }
     }
 }
 
 #[cfg(feature = "unstable-serde-deserialize")]
 mod der {
-    use serde::Deserialize;
-    use serde::de::Visitor;
     use super::*;
+    use serde::de::Visitor;
+    use serde::Deserialize;
     struct DateTimeVisitor;
 
     impl<'de> Visitor<'de> for DateTimeVisitor {
         type Value = DateTime;
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("expecting RFC-3339 Date Time")
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("expected RFC-3339 Date Time")
         }
-    
+
         fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error, 
+        where
+            E: serde::de::Error,
         {
             match DateTime::from_str(v, Format::DateTime) {
                 Ok(e) => Ok(e),
-                Err(e) => Err(serde::de::Error::custom(e))
+                Err(e) => Err(serde::de::Error::custom(e)),
             }
         }
     }
-    
+
     impl<'de> Deserialize<'de> for DateTime {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de> 
+        where
+            D: serde::Deserializer<'de>,
         {
             deserializer.deserialize_str(DateTimeVisitor)
         }
@@ -378,11 +378,6 @@ mod test {
     use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
-
-    #[test]
-    fn test_json() {
-        
-    }
 
     #[test]
     fn test_fmt() {

@@ -158,6 +158,9 @@ class BuilderGenerator(
     // This function creates fluent builder
     private fun renderBuilder(writer: RustWriter) {
         val builderName = "Builder"
+        writer.writeInline("##[cfg(any(feature = \"unstable-serde-serialize\", feature = \"unstable-serde-deserialize\"))]")
+        writer.writeInline("/// This is the datatype that Builder of this module build itself into.\n")
+        writer.writeInline("pub type OutputShape = $structureSymbol;")
 
         writer.docs("A builder for #D.", structureSymbol)
         // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
