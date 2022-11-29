@@ -108,7 +108,7 @@ class PubCrateConstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 } else {
                     val targetSymbol = this.toSymbol(targetShape)
-                    // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                    // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
                     handleOptionality(
                         handleRustBoxing(targetSymbol, shape),
                         shape,

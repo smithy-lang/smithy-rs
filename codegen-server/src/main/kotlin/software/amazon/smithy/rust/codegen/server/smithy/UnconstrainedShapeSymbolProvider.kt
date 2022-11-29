@@ -162,7 +162,7 @@ class UnconstrainedShapeSymbolProvider(
                 if (shape.targetCanReachConstrainedShape(model, base)) {
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)
-                    // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                    // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
                     handleOptionality(
                         handleRustBoxing(targetSymbol, shape),
                         shape,
