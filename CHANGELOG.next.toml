@@ -243,7 +243,6 @@ message = """
 * The `length` trait on `string` shapes.
 * The `length` trait on `map` shapes.
 * The `length` trait on `list` shapes.
-* The `length` trait on `set` shapes.
 * The `range` trait on `integer` shapes.
 * The `pattern` trait on `string` shapes.
 
