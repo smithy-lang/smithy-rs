@@ -37,7 +37,7 @@ The user experience if this RFC is implemented
 
 ### In Smithy IDLv1 (the current implementation)
 
-SDKs built from IDLv1 smithy models intentionally omit values from a request if a field has a default and the
+SDKs built from IDLv1 Smithy models intentionally omit values from a request if a field has a default and the
 user-provided value is equal to that default:
 
 ```smithy
@@ -119,7 +119,7 @@ the _"one less than the size of the object being queried"_ behavior that the doc
 - If `start` is set and `end` is "unset", the object will be scanned from `start` to then end of the file.
 - If `end` is set and `start` is "unset", the last `N` bytes of the object will be read, where `N == end`.
 - If both fields are set, the object will be scanned from `start` to `end`
-- If both fields are "unset", an error will be returned because at least one must be set.
+- If both fields are "unset", S3 will respond with an error because at least one must be set.
 
 How to actually implement this RFC
 ----------------------------------
@@ -143,7 +143,7 @@ pub enum ScanRange {
         start: i64,
     },
     LastNBytesOfObject {
-      n_bytes: i64
+        n_bytes: i64
     }
 }
 
