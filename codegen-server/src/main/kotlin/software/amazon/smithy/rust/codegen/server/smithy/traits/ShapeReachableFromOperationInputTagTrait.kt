@@ -6,9 +6,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy.traits
 
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
@@ -33,7 +35,7 @@ class ShapeReachableFromOperationInputTagTrait : AnnotationTrait(ID, Node.object
 }
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
-    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape, is IntegerShape, is ShortShape -> {
+    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape -> {
         shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
     }
 
