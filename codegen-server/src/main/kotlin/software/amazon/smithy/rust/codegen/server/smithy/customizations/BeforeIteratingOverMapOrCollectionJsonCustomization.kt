@@ -5,8 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
+import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerSection
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstr
 class BeforeIteratingOverMapOrCollectionJsonCustomization(private val codegenContext: ServerCodegenContext) : JsonSerializerCustomization() {
     override fun section(section: JsonSerializerSection): Writable = when (section) {
         is JsonSerializerSection.BeforeIteratingOverMapOrCollection -> writable {
+            check(section.shape is CollectionShape || section.shape is MapShape)
             if (workingWithPublicConstrainedWrapperTupleType(
                     section.shape,
                     codegenContext.model,
