@@ -81,7 +81,14 @@ class BaseSymbolMetadataProvider(
     private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
     private fun containerDefault(shape: Shape): RustMetadata {
-        val setOfDerives = if (shape.hasTrait<SensitiveTrait>()) {
+        val isSensitive = shape.hasTrait<SensitiveTrait>() ||
+            // Checking the shape's direct members for the sensitive trait should suffice.
+            // Whether their descendants, i.e. a member's member, is sensitive does not
+            // affect the inclusion/exclusion of the derived Debug trait of _this_ container
+            // shape; any sensitive descendant should still be printed as redacted.
+            shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+
+        val setOfDerives = if (isSensitive) {
             defaultDerives.toSet() - RuntimeType.Debug
         } else {
             defaultDerives.toSet()
@@ -121,12 +128,7 @@ class BaseSymbolMetadataProvider(
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
-        // In the case of fields being sensitive, we cannot impl the derived Debug
-        // trait because they reveal the sensitive data. At a container level,
-        // however, we don't know if a structure has sensitive fields without
-        // further looking into them. We err on the side of caution and require
-        // that a structure implements a custom debug trait.
-        return containerDefault(structureShape).withoutDerives(RuntimeType.Debug)
+        return containerDefault(structureShape)
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {

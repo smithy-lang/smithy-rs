@@ -153,7 +153,9 @@ open class StructureGenerator(
         }
 
         renderStructureImpl()
-        renderDebugImpl()
+        if (!containerMeta.derives.derives.contains(RuntimeType.Debug)) {
+            renderDebugImpl()
+        }
     }
 
     protected fun RustWriter.forEachMember(

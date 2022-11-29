@@ -168,8 +168,8 @@ class ServerBuilderGenerator(
         // Matching derives to the main structure, - `PartialEq` (see class documentation for why), + `Default`
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = derives).render(writer)
+        val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
+        baseDerives.copy(derives = builderDerives).render(writer)
         writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate)" else "" } struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }
@@ -187,7 +187,9 @@ class ServerBuilderGenerator(
             renderBuildFn(this)
         }
 
-        renderImplDebugForBuilder(writer)
+        if (!builderDerives.contains(RuntimeType.Debug)) {
+            renderImplDebugForBuilder(writer)
+        }
     }
 
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
