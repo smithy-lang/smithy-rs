@@ -8,11 +8,14 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -86,7 +89,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
     is MapShape -> this.hasTrait<LengthTrait>()
     is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
     is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
-    is IntegerShape -> this.hasTrait<RangeTrait>()
+    is IntegerShape, is ShortShape, is LongShape, is ByteShape -> this.hasTrait<RangeTrait>()
     else -> false
 }
 
@@ -113,7 +116,7 @@ fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTy
     is CollectionShape -> publicConstrainedTypes && supportedCollectionConstraintTraits.any(this::hasTrait)
     is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
     is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
-    is IntegerShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
+    is IntegerShape, is ShortShape, is LongShape, is ByteShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
     else -> false
 }
