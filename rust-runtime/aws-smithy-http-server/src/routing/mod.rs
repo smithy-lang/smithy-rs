@@ -29,6 +29,8 @@ use tower_http::map_response_body::MapResponseBodyLayer;
 
 mod future;
 mod into_make_service;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 mod lambda_handler;
 
 #[doc(hidden)]
@@ -38,6 +40,8 @@ mod route;
 
 pub(crate) mod tiny_map;
 
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub use self::lambda_handler::LambdaHandler;
 pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
 
