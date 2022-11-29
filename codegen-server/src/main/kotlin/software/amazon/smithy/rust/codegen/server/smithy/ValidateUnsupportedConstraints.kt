@@ -86,7 +86,7 @@ private sealed class UnsupportedConstraintMessageKind {
                 ),
             )
 
-            is UnsupportedLengthTraitOnCollectionOrOnBlobShape -> LogMessage(
+            is UnsupportedLengthTraitOnBlobShape -> LogMessage(
                 level,
                 buildMessageShapeHasUnsupportedConstraintTrait(shape, lengthTrait, constraintTraitsUberIssue),
             )
@@ -117,7 +117,7 @@ private data class UnsupportedLengthTraitOnStreamingBlobShape(
     val streamingTrait: StreamingTrait,
 ) : UnsupportedConstraintMessageKind()
 
-private data class UnsupportedLengthTraitOnCollectionOrOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) :
+private data class UnsupportedLengthTraitOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) :
     UnsupportedConstraintMessageKind()
 
 private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) :
@@ -226,7 +226,7 @@ fun validateUnsupportedConstraints(
         .asSequence()
         .filter { it is BlobShape }
         .filter { it.hasTrait<LengthTrait>() }
-        .map { UnsupportedLengthTraitOnCollectionOrOnBlobShape(it, it.expectTrait()) }
+        .map { UnsupportedLengthTraitOnBlobShape(it, it.expectTrait()) }
         .toSet()
 
     // 5. Range trait used on a non-integer shape. It has not been implemented yet.
