@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.NumberShape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -31,15 +33,40 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
-/**
- * [ConstrainedIntegerGenerator] generates a wrapper newtype holding a constrained `i32`.
- * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy
- * the constraints.
- */
 class ConstrainedIntegerGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: IntegerShape,
+) {
+    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(32))
+
+    fun render() {
+        inner.render()
+    }
+}
+
+class ConstrainedShortGenerator(
+    val codegenContext: ServerCodegenContext,
+    val writer: RustWriter,
+    val shape: ShortShape,
+) {
+    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(16))
+
+    fun render() {
+        inner.render()
+    }
+}
+
+/**
+ * [ConstrainedNumberGenerator] generates a wrapper newtype holding a constrained number primitive.
+ * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy
+ * the constraints.
+ */
+class ConstrainedNumberGenerator(
+    val codegenContext: ServerCodegenContext,
+    val writer: RustWriter,
+    val shape: NumberShape,
+    private val unconstrainedType: RustType,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
@@ -58,7 +85,7 @@ class ConstrainedIntegerGenerator(
 
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val constrainedTypeName = symbol.name
-        val unconstrainedTypeName = RustType.Integer(32).render()
+        val unconstrainedTypeName = unconstrainedType.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintsInfo = listOf(Range(rangeTrait).toTraitInfo(unconstrainedTypeName))
 
@@ -171,7 +198,7 @@ private data class Range(val rangeTrait: RangeTrait) {
     fun toTraitInfo(unconstrainedTypeName: String): TraitInfo = TraitInfo(
         { rust("Self::check_range(value)?;") },
         {
-            docs("Error when an integer doesn't satisfy its `@range` requirements.")
+            docs("Error when a number doesn't satisfy its `@range` requirements.")
             rust("Range($unconstrainedTypeName)")
         },
         {
@@ -188,7 +215,7 @@ private data class Range(val rangeTrait: RangeTrait) {
     )
 
     /**
-     * Renders a `check_range` function to validate the integer matches the
+     * Renders a `check_range` function to validate that the value matches the
      * required range indicated by the `@range` trait.
      */
     private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {

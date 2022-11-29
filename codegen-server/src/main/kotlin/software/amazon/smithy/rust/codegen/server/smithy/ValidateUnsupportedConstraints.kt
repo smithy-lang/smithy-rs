@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
@@ -245,7 +246,7 @@ fun validateUnsupportedConstraints(
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
         .asSequence()
-        .filterNot { it is IntegerShape }
+        .filterNot { it is IntegerShape || it is ShortShape }
         .filterMapShapesToTraits(setOf(RangeTrait::class.java))
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()

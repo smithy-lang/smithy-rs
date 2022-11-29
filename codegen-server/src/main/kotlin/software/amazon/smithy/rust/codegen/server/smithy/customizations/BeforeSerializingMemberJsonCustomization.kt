@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerCustomization
@@ -27,7 +28,7 @@ class BeforeSerializingMemberJsonCustomization(private val codegenContext: Serve
                     codegenContext.settings.codegenConfig.publicConstrainedTypes,
                 )
             ) {
-                if (section.shape is IntegerShape) {
+                if (section.shape is IntegerShape || section.shape is ShortShape) {
                     section.context.valueExpression =
                         ValueExpression.Reference("&${section.context.valueExpression.name}.0")
                 }
