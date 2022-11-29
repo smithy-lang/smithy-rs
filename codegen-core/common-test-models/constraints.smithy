@@ -49,7 +49,10 @@ operation ConstrainedShapesOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{lengthStringLabel}/{enumStringLabel}", method: "POST")
+@http(
+    uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{rangeShortLabel}/{rangeLongLabel}/{rangeByteLabel}/{lengthStringLabel}/{enumStringLabel}",
+    method: "POST"
+)
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
@@ -181,6 +184,18 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @required
     @httpLabel
+    rangeShortLabel: RangeShort,
+
+    @required
+    @httpLabel
+    rangeLongLabel: RangeLong,
+
+    @required
+    @httpLabel
+    rangeByteLabel: RangeByte,
+
+    @required
+    @httpLabel
     enumStringLabel: EnumString,
 
     @required
@@ -192,6 +207,15 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpHeader("X-Range-Integer")
     rangeIntegerHeader: RangeInteger,
+
+    @httpHeader("X-Range-Short")
+    rangeShortHeader: RangeShort,
+
+    @httpHeader("X-Range-Long")
+    rangeLongHeader: RangeLong,
+
+    @httpHeader("X-Range-Byte")
+    rangeByteHeader: RangeByte,
 
     // @httpHeader("X-Length-MediaType")
     // lengthStringHeaderWithMediaType: MediaTypeLengthString,
@@ -208,9 +232,24 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // @httpHeader("X-Range-Integer-Set")
     // rangeIntegerSetHeader: SetOfRangeInteger,
+    // @httpHeader("X-Range-Short-Set")
+    // rangeShortSetHeader: SetOfShortInteger,
+    // @httpHeader("X-Range-Long-Set")
+    // rangeLongSetHeader: SetOfRangeLong,
+    // @httpHeader("X-Range-Byte-Set")
+    // rangeByteSetHeader: SetOfByteInteger,
 
     @httpHeader("X-Range-Integer-List")
     rangeIntegerListHeader: ListOfRangeInteger,
+
+    @httpHeader("X-Range-Short-List")
+    rangeShortListHeader: ListOfRangeShort,
+
+    @httpHeader("X-Range-Long-List")
+    rangeLongListHeader: ListOfRangeLong,
+
+    @httpHeader("X-Range-Byte-List")
+    rangeByteListHeader: ListOfRangeByte,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
     // @httpHeader("X-Enum")
@@ -224,6 +263,15 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("rangeInteger")
     rangeIntegerQuery: RangeInteger,
+
+    @httpQuery("rangeShort")
+    rangeShortQuery: RangeShort,
+
+    @httpQuery("rangeLong")
+    rangeLongQuery: RangeLong,
+
+    @httpQuery("rangeByte")
+    rangeByteQuery: RangeByte,
 
     @httpQuery("enumString")
     enumStringQuery: EnumString,
@@ -239,10 +287,25 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpQuery("rangeIntegerList")
     rangeIntegerListQuery: ListOfRangeInteger,
 
+    @httpQuery("rangeShortList")
+    rangeShortListQuery: ListOfRangeShort,
+
+    @httpQuery("rangeLongList")
+    rangeLongListQuery: ListOfRangeLong,
+
+    @httpQuery("rangeByteList")
+    rangeByteListQuery: ListOfRangeByte,
+
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // @httpQuery("rangeIntegerSet")
     // rangeIntegerSetQuery: SetOfRangeInteger,
+    // @httpQuery("rangeShortSet")
+    // rangeShortSetQuery: SetOfRangeShort,
+    // @httpQuery("rangeLongSet")
+    // rangeLongSetQuery: SetOfRangeLong,
+    // @httpQuery("rangeByteSet")
+    // rangeByteSetQuery: SetOfRangeByte,
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
@@ -364,6 +427,21 @@ structure ConA {
     maxRangeInteger: MaxRangeInteger,
     fixedValueInteger: FixedValueInteger,
 
+    rangeShort: RangeShort,
+    minRangeShort: MinRangeShort,
+    maxRangeShort: MaxRangeShort,
+    fixedValueShort: FixedValueShort,
+
+    rangeLong: RangeLong,
+    minRangeLong: MinRangeLong,
+    maxRangeLong: MaxRangeLong,
+    fixedValueLong: FixedValueLong,
+
+    rangeByte: RangeByte,
+    minRangeByte: MinRangeByte,
+    maxRangeByte: MaxRangeByte,
+    fixedValueByte: FixedValueByte,
+
     conBList: ConBList,
     conBList2: ConBList2,
 
@@ -390,6 +468,24 @@ structure ConA {
     // setOfRangeInteger: SetOfRangeInteger,
     mapOfRangeInteger: MapOfRangeInteger,
 
+    listOfRangeShort: ListOfRangeShort,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfRangeShort: SetOfRangeShort,
+    mapOfRangeShort: MapOfRangeShort,
+
+    listOfRangeLong: ListOfRangeLong,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfRangeLong: SetOfRangeLong,
+    mapOfRangeLong: MapOfRangeLong,
+
+    listOfRangeByte: ListOfRangeByte,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfRangeByte: SetOfRangeByte,
+    mapOfRangeByte: MapOfRangeByte,
+
     nonStreamingBlob: NonStreamingBlob
 
     patternString: PatternString,
@@ -415,6 +511,21 @@ map MapOfLengthString {
 map MapOfRangeInteger {
     key: String,
     value: RangeInteger,
+}
+
+map MapOfRangeShort {
+    key: String,
+    value: RangeShort,
+}
+
+map MapOfRangeLong {
+    key: String,
+    value: RangeLong,
+}
+
+map MapOfRangeByte {
+    key: String,
+    value: RangeByte,
 }
 
 map MapOfEnumString {
@@ -453,8 +564,29 @@ map MapOfSetOfLengthString {
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
 //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
 // map MapOfSetOfRangeInteger {
-//     key: LengthString,
+//     key: String,
 //     value: SetOfRangeInteger,
+// }
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// map MapOfSetOfRangeShort {
+//     key: String,
+//     value: SetOfRangeShort,
+// }
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// map MapOfSetOfRangeLong {
+//     key: String,
+//     value: SetOfRangeLong,
+// }
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// map MapOfSetOfRangeByte {
+//     key: String,
+//     value: SetOfRangeByte,
 // }
 
 @length(min: 2, max: 8)
@@ -496,6 +628,42 @@ integer MaxRangeInteger
 
 @range(min: 69, max: 69)
 integer FixedValueInteger
+
+@range(min: -0, max: 10)
+short RangeShort
+
+@range(min: -10)
+short MinRangeShort
+
+@range(max: 11)
+short MaxRangeShort
+
+@range(min: 10, max: 10)
+short FixedValueShort
+
+@range(min: -0, max: 10)
+long RangeLong
+
+@range(min: -10)
+long MinRangeLong
+
+@range(max: 11)
+long MaxRangeLong
+
+@range(min: 10, max: 10)
+long FixedValueLong
+
+@range(min: -0, max: 10)
+byte RangeByte
+
+@range(min: -10)
+byte MinRangeByte
+
+@range(max: 11)
+byte MaxRangeByte
+
+@range(min: 10, max: 10)
+byte FixedValueByte
 
 /// A union with constrained members.
 union ConstrainedUnion {
@@ -550,6 +718,36 @@ list ListOfLengthString {
 
 list ListOfRangeInteger {
     member: RangeInteger
+}
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// set SetOfRangeShort {
+//     member: RangeShort
+// }
+
+list ListOfRangeShort {
+    member: RangeShort
+}
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// set SetOfRangeLong {
+//     member: RangeLong
+// }
+
+list ListOfRangeLong {
+    member: RangeLong
+}
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// set SetOfRangeByte {
+//     member: RangeByte
+// }
+
+list ListOfRangeByte {
+    member: RangeByte
 }
 
 list ListOfEnumString {

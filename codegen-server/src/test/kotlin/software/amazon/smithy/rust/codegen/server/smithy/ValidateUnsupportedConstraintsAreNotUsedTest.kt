@@ -177,35 +177,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
-    fun `it should detect when the range trait is used on a shape we do not support`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                rangeByte: RangeByte
-                rangeShort: RangeShort
-                rangeLong: RangeLong
-            }
-
-            @range(min: 1)
-            byte RangeByte
-
-            @range(min: 1)
-            long RangeLong
-
-            @range(min: 1)
-            short RangeShort
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
-        validationResult.messages shouldHaveSize 3
-        validationResult.messages[0].message shouldContain "The long shape `test#RangeLong` has the constraint trait `smithy.api#range` attached"
-        validationResult.messages[1].message shouldContain "The short shape `test#RangeShort` has the constraint trait `smithy.api#range` attached"
-        validationResult.messages[2].message shouldContain "The byte shape `test#RangeByte` has the constraint trait `smithy.api#range` attached"
-    }
-
-    @Test
     fun `it should detect when the unique items trait is used`() {
         val model =
             """
