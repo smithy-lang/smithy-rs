@@ -49,6 +49,9 @@ class CollectionConstraintViolationGenerator(
                 constraintViolationVariants += {
                     rustTemplate(
                         """
+                        /// Constraint violation error when an element doesn't satisfy its own constraints.
+                        /// The first component of the tuple is the index in the collection where the
+                        /// first constraint violation was found.
                         ##[doc(hidden)]
                         Member(usize, #{MemberConstraintViolationSymbol})
                         """,
