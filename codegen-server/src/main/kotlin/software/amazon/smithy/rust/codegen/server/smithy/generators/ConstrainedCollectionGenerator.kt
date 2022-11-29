@@ -63,7 +63,7 @@ class ConstrainedCollectionGenerator(
 
     fun render() {
         check(constraintsInfo.isNotEmpty()) {
-            "`ConstrainedCollectionGenerator` can only be invoked for constrained collections, but this shape was unconstrained"
+            "`ConstrainedCollectionGenerator` can only be invoked for constrained collections, but this shape was not constrained"
         }
 
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
