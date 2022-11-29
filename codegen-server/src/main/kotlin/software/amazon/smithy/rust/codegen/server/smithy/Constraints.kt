@@ -22,8 +22,8 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
-import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -48,12 +48,12 @@ val allConstraintTraits = setOf(
     RequiredTrait::class.java,
 )
 
-val supportedStringConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait::class.java, PatternTrait::class.java)
+val supportedStringConstraintTraits = setOf(LengthTrait::class.java, PatternTrait::class.java)
 
 /**
  * Supported constraint traits for the `list` and `set` shapes.
  */
-val supportedCollectionConstraintTraits: List<Class<out Trait>> = listOf(
+val supportedCollectionConstraintTraits = setOf(
     LengthTrait::class.java,
     // TODO(https://github.com/awslabs/smithy-rs/issues/1670): Not yet supported.
     // UniqueItemsTrait::class.java
