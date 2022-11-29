@@ -261,10 +261,9 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 // everyone will run a Hyper-based server in their services).
 convert_to_request_rejection!(hyper::Error, HttpBody);
 
-// Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
-#[cfg(feature = "aws-lambda")]
-#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
-convert_to_request_rejection!(lambda_http::Error, HttpBody);
+// Useful in general, but it also required in order to accept Lambda HTTP requests using
+// `Router<lambda_http::Body>` since `lambda_http::Error` is a type alias for `Box<dyn Error + ..>`.
+convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, HttpBody);
 
 pub mod any_rejections {
     //! This module hosts enums, up to size 8, which implement [`IntoResponse`] when their variants implement
