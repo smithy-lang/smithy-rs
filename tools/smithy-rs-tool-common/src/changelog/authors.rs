@@ -38,7 +38,7 @@ impl Authors {
 
     // Checks whether the number of authors is 0 or any author has a empty name.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty() || self.iter().fold(false, |acc, x| x.is_empty() | acc)
+        self.0.is_empty() || self.iter().any(String::is_empty)
     }
 
     pub fn validate_usernames(&self) -> Result<()> {
