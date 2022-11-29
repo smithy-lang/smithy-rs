@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
@@ -92,7 +94,7 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
                     codegenContext.settings.codegenConfig.publicConstrainedTypes,
                 )
             ) {
-                if (section.context.shape is IntegerShape || section.context.shape is ShortShape) {
+                if (section.context.shape is IntegerShape || section.context.shape is ShortShape || section.context.shape is LongShape || section.context.shape is ByteShape) {
                     section.context.valueExpression =
                         ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
                 }
