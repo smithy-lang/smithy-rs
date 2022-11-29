@@ -262,6 +262,8 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 convert_to_request_rejection!(hyper::Error, HttpBody);
 
 // Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 convert_to_request_rejection!(lambda_http::Error, HttpBody);
 
 pub mod any_rejections {
