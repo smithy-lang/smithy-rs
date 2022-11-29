@@ -88,7 +88,7 @@ class ConstrainedShapeSymbolProvider(
             }
             is CollectionShape -> {
                 if (shape.isDirectlyConstrained(base)) {
-                    assert(constrainedCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
+                    check(constrainedCollectionCheck(shape)) { "Only the `length` constraint trait can be applied to lists" }
                     publicConstrainedSymbolForMapOrCollectionShape(shape)
                 } else {
                     val inner = this.toSymbol(shape.member)
@@ -111,8 +111,6 @@ class ConstrainedShapeSymbolProvider(
      * Checks that the collection:
      *  - Has at least 1 supported constraint applied to it, and
      *  - That it has no unsupported constraints applied.
-     *
-     * This check is relatively expensive, so we only run it on `assert`s.
      */
     private fun constrainedCollectionCheck(shape: CollectionShape): Boolean {
         val supportedConstraintTraits = supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()

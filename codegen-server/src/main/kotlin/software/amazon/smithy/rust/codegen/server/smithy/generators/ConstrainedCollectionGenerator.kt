@@ -61,7 +61,7 @@ class ConstrainedCollectionGenerator(
     private val symbolProvider = codegenContext.symbolProvider
 
     fun render() {
-        assert(constraintsInfo.isNotEmpty()) {
+        check(constraintsInfo.isNotEmpty()) {
             "`ConstrainedCollectionGenerator` can only be invoked for constrained collections, but this shape was unconstrained"
         }
 
