@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -32,9 +33,11 @@ class ShapeReachableFromOperationInputTagTrait : AnnotationTrait(ID, Node.object
 }
 
 private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
-    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape, is IntegerShape -> {
+    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape, is IntegerShape, is ShortShape -> {
         shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
-    } else -> PANIC("this method does not support shape type ${shape.type}")
+    }
+
+    else -> PANIC("this method does not support shape type ${shape.type}")
 }
 
 fun StringShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
