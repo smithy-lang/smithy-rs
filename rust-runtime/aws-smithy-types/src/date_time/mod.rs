@@ -380,9 +380,6 @@ mod test {
     use time::OffsetDateTime;
 
     #[test]
-    fn test_json() {}
-
-    #[test]
     fn test_fmt() {
         let date_time = DateTime::from_secs(1576540098);
         assert_eq!(
