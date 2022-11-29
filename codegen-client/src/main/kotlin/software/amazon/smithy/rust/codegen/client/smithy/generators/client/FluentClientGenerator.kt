@@ -234,7 +234,6 @@ class FluentClientGenerator(
                 newlinePrefix = "//! ",
             )
             operations.forEach { operation ->
-                val name = symbolProvider.toSymbol(operation).name
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
@@ -274,6 +273,11 @@ class FluentClientGenerator(
                     // NOTE: if you want to add a method to the fluent_builder which is created via method implemented on a client, 
                     // make some changes to this string
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
+
+                    
+                    // TODO: maybe improve? couldn't figure out a better way. 
+                    // it's supposed to provide a `path` that points to what builder type produces.
+                    val outputShapePath = input.builderSymbol(symbolProvider).toString().replace("::Builder", "::OutputShape")
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
@@ -314,14 +318,15 @@ class FluentClientGenerator(
 
                         /// This method replaces the existing parameter set on this data with the 2nd argument.  
                         /// Existing parameters set on this data will be lost.  
+                        ##[cfg(any(feature = "unstable-serde-serialize", feature = "unstable-serde-deserialize"))]
                         pub fn replace_parameter(&mut self, new_parameter: #{Inner}) {
-                            // memory swap is faster than assigning stuff
-                            std::mem::replace(&mut self.inner, new_parameter);
+                            let _ = std::mem::replace(&mut self.inner, new_parameter);
                         }
 
                         /// This method sends a request with given input.  
                         /// Method ignores any data that can be found in the builder type held on this struct.
-                        pub async fn send_with_input(self, input: #{Inner}::OutputShape) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
+                        ##[cfg(any(feature = "unstable-serde-serialize", feature = "unstable-serde-deserialize"))]
+                        pub async fn send_with_input(self, input: $outputShapePath) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
                             let op = input
                                 .make_operation(&self.handle.conf)
                                 .await
@@ -343,6 +348,7 @@ class FluentClientGenerator(
                             generics.toRustGenerics(),
                         ),
                     )
+                    
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)?.also { paginatorType ->
                         rustTemplate(
                             """
