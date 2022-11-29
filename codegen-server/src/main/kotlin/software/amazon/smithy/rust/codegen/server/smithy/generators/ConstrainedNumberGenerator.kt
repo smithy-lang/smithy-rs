@@ -28,60 +28,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
-
-class ConstrainedIntegerGenerator(
-    val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
-    val shape: IntegerShape,
-) {
-    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(32))
-
-    fun render() {
-        inner.render()
-    }
-}
-
-class ConstrainedShortGenerator(
-    val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
-    val shape: ShortShape,
-) {
-    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(16))
-
-    fun render() {
-        inner.render()
-    }
-}
-
-class ConstrainedLongGenerator(
-    val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
-    val shape: LongShape,
-) {
-    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(64))
-
-    fun render() {
-        inner.render()
-    }
-}
-
-class ConstrainedByteGenerator(
-    val codegenContext: ServerCodegenContext,
-    val writer: RustWriter,
-    val shape: ByteShape,
-) {
-    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(8))
-
-    fun render() {
-        inner.render()
-    }
-}
 
 /**
  * [ConstrainedNumberGenerator] generates a wrapper newtype holding a constrained number primitive.
@@ -92,11 +45,19 @@ class ConstrainedNumberGenerator(
     val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: NumberShape,
-    private val unconstrainedType: RustType,
 ) {
     val model = codegenContext.model
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+
+    private val unconstrainedType = when (shape) {
+        is ByteShape -> RustType.Integer(8)
+        is ShortShape -> RustType.Integer(16)
+        is IntegerShape -> RustType.Integer(32)
+        is LongShape -> RustType.Integer(64)
+        else -> UNREACHABLE("Trying to generate a constrained number for an unsupported Smithy number shape")
+    }
+
     private val constraintViolationSymbolProvider =
         with(codegenContext.constraintViolationSymbolProvider) {
             if (publicConstrainedTypes) {

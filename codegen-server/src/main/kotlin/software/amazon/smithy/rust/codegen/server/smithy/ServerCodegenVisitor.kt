@@ -46,11 +46,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedByteGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedIntegerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedLongGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedShortGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedNumberGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.MapConstraintViolationGenerator
@@ -362,7 +359,7 @@ open class ServerCodegenVisitor(
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained integer $shape")
             rustCrate.withModule(ModelsModule) {
-                ConstrainedIntegerGenerator(codegenContext, this, shape).render()
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
             }
         }
     }
@@ -371,7 +368,7 @@ open class ServerCodegenVisitor(
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained short $shape")
             rustCrate.withModule(ModelsModule) {
-                ConstrainedShortGenerator(codegenContext, this, shape).render()
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
             }
         }
     }
@@ -380,7 +377,7 @@ open class ServerCodegenVisitor(
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained long $shape")
             rustCrate.withModule(ModelsModule) {
-                ConstrainedLongGenerator(codegenContext, this, shape).render()
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
             }
         }
     }
@@ -389,7 +386,7 @@ open class ServerCodegenVisitor(
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained byte $shape")
             rustCrate.withModule(ModelsModule) {
-                ConstrainedByteGenerator(codegenContext, this, shape).render()
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
             }
         }
     }
