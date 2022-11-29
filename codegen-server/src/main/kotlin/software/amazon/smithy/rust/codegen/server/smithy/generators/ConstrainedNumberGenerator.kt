@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.traits.RangeTrait
@@ -51,6 +53,30 @@ class ConstrainedShortGenerator(
     val shape: ShortShape,
 ) {
     val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(16))
+
+    fun render() {
+        inner.render()
+    }
+}
+
+class ConstrainedLongGenerator(
+    val codegenContext: ServerCodegenContext,
+    val writer: RustWriter,
+    val shape: LongShape,
+) {
+    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(64))
+
+    fun render() {
+        inner.render()
+    }
+}
+
+class ConstrainedByteGenerator(
+    val codegenContext: ServerCodegenContext,
+    val writer: RustWriter,
+    val shape: ByteShape,
+) {
+    val inner = ConstrainedNumberGenerator(codegenContext, writer, shape, RustType.Integer(8))
 
     fun render() {
         inner.render()

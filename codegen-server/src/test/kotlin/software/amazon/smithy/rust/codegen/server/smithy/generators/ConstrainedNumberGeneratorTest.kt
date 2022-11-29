@@ -58,7 +58,8 @@ class ConstrainedNumberGeneratorTest {
         }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-            listOf("integer", "short").map { type -> testCases(type) }.flatten().map { Arguments.of(it) }.stream()
+            listOf("integer", "short", "long", "byte").map { type -> testCases(type) }.flatten()
+                .map { Arguments.of(it) }.stream()
     }
 
     @ParameterizedTest
@@ -116,6 +117,8 @@ class ConstrainedNumberGeneratorTest {
             listOf(
                 Triple("integer", "ConstrainedInteger", "i32"),
                 Triple("short", "ConstrainedShort", "i16"),
+                Triple("long", "ConstrainedLong", "i64"),
+                Triple("byte", "ConstrainedByte", "i8"),
             ).map { Arguments.of(it) }.stream()
     }
 
