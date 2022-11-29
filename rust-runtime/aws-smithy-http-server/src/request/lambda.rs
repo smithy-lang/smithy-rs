@@ -3,12 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! The [`lambda_http`] types included in [`http::Request`]s when [`LambdaHandler`] is used. Each are given a
+//! [`FromParts`] implementation for easy use within handlers.
+
 use lambda_http::request::RequestContext;
 pub use lambda_http::{
     aws_lambda_events::apigw::{ApiGatewayProxyRequestContext, ApiGatewayV2httpRequestContext},
     Context,
 };
 
+#[doc(inline)]
+pub use crate::routing::LambdaHandler;
 use crate::Extension;
 
 use super::{extension::MissingExtension, FromParts};
