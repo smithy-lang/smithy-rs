@@ -1000,13 +1000,9 @@ class ServerProtocolTestGenerator(
 
             // Tests involving using @range on bytes, shorts and longs.
             // See https://github.com/awslabs/smithy-rs/issues/1968
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShort_case0", TestType.MalformedRequest),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeShort_case1", TestType.MalformedRequest),
             FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeLong_case0", TestType.MalformedRequest),
             FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeLong_case1", TestType.MalformedRequest),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxShort", TestType.MalformedRequest),
             FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMaxLong", TestType.MalformedRequest),
-            FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinShort", TestType.MalformedRequest),
             FailingTest(MalformedRangeValidation, "RestJsonMalformedRangeMinLong", TestType.MalformedRequest),
 
             // See https://github.com/awslabs/smithy-rs/issues/1969

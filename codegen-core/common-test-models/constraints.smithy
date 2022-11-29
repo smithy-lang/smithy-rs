@@ -49,7 +49,10 @@ operation ConstrainedShapesOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{lengthStringLabel}/{enumStringLabel}", method: "POST")
+@http(
+    uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{rangeShortLabel}/{lengthStringLabel}/{enumStringLabel}",
+    method: "POST"
+)
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
@@ -181,6 +184,10 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @required
     @httpLabel
+    rangeShortLabel: RangeShort,
+
+    @required
+    @httpLabel
     enumStringLabel: EnumString,
 
     @required
@@ -192,6 +199,9 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpHeader("X-Range-Integer")
     rangeIntegerHeader: RangeInteger,
+
+    @httpHeader("X-Range-Short")
+    rangeShortHeader: RangeShort,
 
     // @httpHeader("X-Length-MediaType")
     // lengthStringHeaderWithMediaType: MediaTypeLengthString,
@@ -208,9 +218,14 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // @httpHeader("X-Range-Integer-Set")
     // rangeIntegerSetHeader: SetOfRangeInteger,
+    // @httpHeader("X-Range-Short-Set")
+    // rangeShortSetHeader: SetOfShortInteger,
 
     @httpHeader("X-Range-Integer-List")
     rangeIntegerListHeader: ListOfRangeInteger,
+
+    @httpHeader("X-Range-Short-List")
+    rangeShortListHeader: ListOfRangeShort,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
     // @httpHeader("X-Enum")
@@ -224,6 +239,9 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("rangeInteger")
     rangeIntegerQuery: RangeInteger,
+
+    @httpQuery("rangeShort")
+    rangeShortQuery: RangeShort,
 
     @httpQuery("enumString")
     enumStringQuery: EnumString,
@@ -239,10 +257,15 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpQuery("rangeIntegerList")
     rangeIntegerListQuery: ListOfRangeInteger,
 
+    @httpQuery("rangeShortList")
+    rangeShortListQuery: ListOfRangeShort,
+
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // @httpQuery("rangeIntegerSet")
     // rangeIntegerSetQuery: SetOfRangeInteger,
+    // @httpQuery("rangeShortSet")
+    // rangeShortSetQuery: SetOfRangeShort,
 
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
@@ -364,6 +387,11 @@ structure ConA {
     maxRangeInteger: MaxRangeInteger,
     fixedValueInteger: FixedValueInteger,
 
+    rangeShort: RangeShort,
+    minRangeShort: MinRangeShort,
+    maxRangeShort: MaxRangeShort,
+    fixedValueShort: FixedValueShort,
+
     conBList: ConBList,
     conBList2: ConBList2,
 
@@ -390,6 +418,12 @@ structure ConA {
     // setOfRangeInteger: SetOfRangeInteger,
     mapOfRangeInteger: MapOfRangeInteger,
 
+    listOfRangeShort: ListOfRangeShort,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfRangeShort: SetOfRangeShort,
+    mapOfRangeShort: MapOfRangeShort,
+
     nonStreamingBlob: NonStreamingBlob
 
     patternString: PatternString,
@@ -415,6 +449,11 @@ map MapOfLengthString {
 map MapOfRangeInteger {
     key: String,
     value: RangeInteger,
+}
+
+map MapOfRangeShort {
+    key: String,
+    value: RangeShort,
 }
 
 map MapOfEnumString {
@@ -453,8 +492,15 @@ map MapOfSetOfLengthString {
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
 //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
 // map MapOfSetOfRangeInteger {
-//     key: LengthString,
+//     key: String,
 //     value: SetOfRangeInteger,
+// }
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// map MapOfSetOfRangeShort {
+//     key: String,
+//     value: SetOfRangeShort,
 // }
 
 @length(min: 2, max: 8)
@@ -496,6 +542,18 @@ integer MaxRangeInteger
 
 @range(min: 69, max: 69)
 integer FixedValueInteger
+
+@range(min: -0, max: 10)
+short RangeShort
+
+@range(min: -10)
+short MinRangeShort
+
+@range(max: 11)
+short MaxRangeShort
+
+@range(min: 10, max: 10)
+short FixedValueShort
 
 /// A union with constrained members.
 union ConstrainedUnion {
@@ -550,6 +608,16 @@ list ListOfLengthString {
 
 list ListOfRangeInteger {
     member: RangeInteger
+}
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+//  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+// set SetOfRangeShort {
+//     member: RangeShort
+// }
+
+list ListOfRangeShort {
+    member: RangeShort
 }
 
 list ListOfEnumString {

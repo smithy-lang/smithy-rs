@@ -10,6 +10,7 @@ import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -51,7 +52,7 @@ object ShapesReachableFromOperationInputTagger {
 
         return ModelTransformer.create().mapShapes(model) { shape ->
             when (shape) {
-                is StructureShape, is UnionShape, is ListShape, is MapShape, is StringShape, is IntegerShape -> {
+                is StructureShape, is UnionShape, is ListShape, is MapShape, is StringShape, is IntegerShape, is ShortShape -> {
                     if (shapesReachableFromOperationInputs.contains(shape)) {
                         val builder = when (shape) {
                             is StructureShape -> shape.toBuilder()
@@ -60,6 +61,7 @@ object ShapesReachableFromOperationInputTagger {
                             is MapShape -> shape.toBuilder()
                             is StringShape -> shape.toBuilder()
                             is IntegerShape -> shape.toBuilder()
+                            is ShortShape -> shape.toBuilder()
                             else -> UNREACHABLE("the `when` is exhaustive")
                         }
                         builder.addTrait(ShapeReachableFromOperationInputTagTrait()).build()
