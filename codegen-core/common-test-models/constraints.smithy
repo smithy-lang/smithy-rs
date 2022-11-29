@@ -544,16 +544,16 @@ integer MaxRangeInteger
 integer FixedValueInteger
 
 @range(min: -0, max: 10)
-integer RangeShort
+short RangeShort
 
 @range(min: -10)
-integer MinRangeShort
+short MinRangeShort
 
 @range(max: 11)
-integer MaxRangeShort
+short MaxRangeShort
 
 @range(min: 10, max: 10)
-integer FixedValueShort
+short FixedValueShort
 
 /// A union with constrained members.
 union ConstrainedUnion {
