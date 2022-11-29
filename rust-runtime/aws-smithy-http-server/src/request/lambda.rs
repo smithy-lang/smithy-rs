@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The [`lambda_http`] types included in [`http::Request`]s when [`LambdaHandler`] is used. Each are given a
-//! [`FromParts`] implementation for easy use within handlers.
+//! The [`lambda_http`] types included in [`http::Request`]s when [`LambdaHandler`](crate::routing::LambdaHandler) is
+//! used. Each are given a [`FromParts`] implementation for easy use within handlers.
 
 use lambda_http::request::RequestContext;
 pub use lambda_http::{
@@ -12,11 +12,8 @@ pub use lambda_http::{
     Context,
 };
 
-#[doc(inline)]
-pub use crate::routing::LambdaHandler;
-use crate::Extension;
-
 use super::{extension::MissingExtension, FromParts};
+use crate::Extension;
 
 impl<P> FromParts<P> for Context {
     type Rejection = MissingExtension;
