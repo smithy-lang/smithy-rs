@@ -5,8 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
+import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerSection
@@ -15,22 +18,26 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
 /**
- * A customization to, just before we iterate over a _constrained_ map shape in a JSON serializer, unwrap the wrapper
- * newtype and take a shared reference to the actual `std::collections::HashMap` within it.
+ * A customization to, just before we serialize a _constrained_ shape in a JSON serializer, unwrap the wrapper
+ * newtype and take a shared reference to the actual unconstrained value within it.
  */
-class BeforeIteratingOverMapJsonCustomization(private val codegenContext: ServerCodegenContext) : JsonSerializerCustomization() {
+class BeforeSerializingMemberJsonCustomization(private val codegenContext: ServerCodegenContext) :
+    JsonSerializerCustomization() {
     override fun section(section: JsonSerializerSection): Writable = when (section) {
-        is JsonSerializerSection.BeforeIteratingOverMap -> writable {
+        is JsonSerializerSection.BeforeSerializingNonNullMember -> writable {
             if (workingWithPublicConstrainedWrapperTupleType(
                     section.shape,
                     codegenContext.model,
                     codegenContext.settings.codegenConfig.publicConstrainedTypes,
                 )
             ) {
-                section.context.valueExpression =
-                    ValueExpression.Reference("&${section.context.valueExpression.name}.0")
+                if (section.shape is IntegerShape || section.shape is ShortShape || section.shape is LongShape || section.shape is ByteShape) {
+                    section.context.valueExpression =
+                        ValueExpression.Reference("&${section.context.valueExpression.name}.0")
+                }
             }
         }
+
         else -> emptySection
     }
 }

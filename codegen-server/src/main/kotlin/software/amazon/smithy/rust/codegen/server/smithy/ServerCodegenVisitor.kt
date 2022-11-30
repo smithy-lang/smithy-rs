@@ -10,13 +10,17 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
@@ -43,6 +47,7 @@ import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedNumberGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.MapConstraintViolationGenerator
@@ -348,6 +353,42 @@ open class ServerCodegenVisitor(
         fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, writer: RustWriter, shape: StringShape) =
             ServerEnumGenerator(codegenContext, writer, shape)
         stringShape(shape, ::serverEnumGeneratorFactory)
+    }
+
+    override fun integerShape(shape: IntegerShape) {
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating a constrained integer $shape")
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
+            }
+        }
+    }
+
+    override fun shortShape(shape: ShortShape) {
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating a constrained short $shape")
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
+            }
+        }
+    }
+
+    override fun longShape(shape: LongShape) {
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating a constrained long $shape")
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
+            }
+        }
+    }
+
+    override fun byteShape(shape: ByteShape) {
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating a constrained byte $shape")
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedNumberGenerator(codegenContext, this, shape).render()
+            }
+        }
     }
 
     protected fun stringShape(

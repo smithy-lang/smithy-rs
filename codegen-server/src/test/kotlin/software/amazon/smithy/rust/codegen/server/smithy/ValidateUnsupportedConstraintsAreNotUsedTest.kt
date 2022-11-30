@@ -177,34 +177,15 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
-    fun `it should detect when the range trait is used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                rangeInteger: RangeInteger
-            }
-
-            @range(min: 1)
-            integer RangeInteger
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The integer shape `test#RangeInteger` has the constraint trait `smithy.api#range` attached"
-    }
-
-    @Test
     fun `it should detect when the unique items trait is used`() {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 uniqueItemsList: UniqueItemsList
             }
-            
+
             @uniqueItems
             list UniqueItemsList {
                 member: String
