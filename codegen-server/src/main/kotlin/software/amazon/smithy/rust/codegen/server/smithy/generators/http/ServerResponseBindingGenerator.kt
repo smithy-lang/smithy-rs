@@ -90,13 +90,15 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
     override fun section(section: HttpBindingSection): Writable = when (section) {
         is HttpBindingSection.BeforeRenderingHeaderValue -> writable {
             val isIntegral = section.context.shape is ByteShape || section.context.shape is ShortShape || section.context.shape is IntegerShape || section.context.shape is LongShape
+            val isCollection = section.context.shape is CollectionShape
+
             val workingWithPublicWrapper = workingWithPublicConstrainedWrapperTupleType(
                 section.context.shape,
                 codegenContext.model,
                 codegenContext.settings.codegenConfig.publicConstrainedTypes,
             )
 
-            if (workingWithPublicWrapper && (isIntegral || section.context.shape is CollectionShape)) {
+            if (workingWithPublicWrapper && (isIntegral || isCollection)) {
                 section.context.valueExpression =
                     ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
             }
