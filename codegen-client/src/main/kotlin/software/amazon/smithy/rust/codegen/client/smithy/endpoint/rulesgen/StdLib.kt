@@ -6,55 +6,29 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.CustomRuntimeFunction
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
- * StandardLibrary functions for native-smithy implementations
- *
- * Note: this does not include any `aws.*` functions
+ * Standard library functions available to all generated crates (e.g. not `aws.` specific / prefixed)
  */
-class NativeSmithyEndpointsStdLib : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
-    override val name: String = "NativeSmithyStandardLib"
-    override val order: Byte = 0
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean {
-        return clazz.isAssignableFrom(ClientCodegenContext::class.java)
-    }
-
-    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
-        return listOf(
-            object : EndpointCustomization {
-                override fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> {
-                    return NativeSmithyFunctions
-                }
-            },
-        )
-    }
-}
-
-internal val NativeSmithyFunctions: List<CustomRuntimeFunction> = listOf(
-    PureRuntimeFunction("substring", endpointsLib("substring").toType().member("substring")),
-    PureRuntimeFunction("isValidHostLabel", endpointsLib("host").toType().member("is_valid_host_label")),
-    PureRuntimeFunction(
+internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> = listOf(
+    SimpleRuntimeFunction("substring", endpointsLib("substring").toType().member("substring")),
+    SimpleRuntimeFunction("isValidHostLabel", endpointsLib("host").toType().member("is_valid_host_label")),
+    SimpleRuntimeFunction(
         "parseURL",
         endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url).toType().member("parse_url"),
     ),
-    PureRuntimeFunction(
+    SimpleRuntimeFunction(
         "uriEncode",
         endpointsLib("uri_encode", CargoDependency.PercentEncoding).toType().member("uri_encode"),
     ),
@@ -66,8 +40,8 @@ internal val NativeSmithyFunctions: List<CustomRuntimeFunction> = listOf(
  * This is defined in client-codegen to support running tests—it is not used when generating smithy-native services.
  */
 fun awsStandardLib(runtimeConfig: RuntimeConfig, partitionsDotJson: Node) = listOf(
-    PureRuntimeFunction("aws.parseArn", endpointsLib("arn").toType().member("parse_arn")),
-    PureRuntimeFunction(
+    SimpleRuntimeFunction("aws.parseArn", endpointsLib("arn").toType().member("parse_arn")),
+    SimpleRuntimeFunction(
         "aws.isVirtualHostableS3Bucket",
         endpointsLib(
             "s3",
@@ -126,9 +100,11 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
 }
 
 /**
- * A runtime function that doesn't need any support structures and can be invoked directly
+ * A runtime function that doesn't need any support structures and can be invoked directly.
+ *
+ * Currently, this is every runtime function other than `aws.partition`.
  */
-private class PureRuntimeFunction(override val id: String, private val runtimeType: RuntimeType) :
+private class SimpleRuntimeFunction(override val id: String, private val runtimeType: RuntimeType) :
     CustomRuntimeFunction() {
     override fun structFieldInit(): Writable? = null
 

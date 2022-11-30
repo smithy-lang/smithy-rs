@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.endpoint
+package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
@@ -16,11 +16,13 @@ import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
 import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsImpl
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -42,13 +44,16 @@ abstract class CustomRuntimeFunction {
     /** Initialize the struct field to a default value */
     abstract fun structFieldInit(): Writable?
 
-    /** The argument slot of the runtime function. MUST NOT include `,`
+    /** The argument slot of the runtime function. MUST NOT end with `,`
      * e.g `partition_data: &PartitionData`
      * */
     abstract fun additionalArgsSignature(): Writable?
 
     /**
-     * A writable that passes additional args from `self` into the function. Must match the order of additionalArgsSignature
+     * A writable that passes additional args from `self` into the function.
+     *
+     * - Must match the order of additionalArgsSignature
+     * - Must not end with `,`
      */
     abstract fun additionalArgsInvocation(self: String): Writable?
 
@@ -58,7 +63,14 @@ abstract class CustomRuntimeFunction {
     abstract fun structField(): Writable?
 
     /**
-     * Invoking the runtime function—(parens / args not needed) `$fn`
+     * Invoking the runtime function—(parens / args not needed): `$fn`
+     *
+     * e.g. `crate::endpoint_lib::uri_encode::uri_encode`
+     *
+     * The function signature must match the standard endpoints function signature:
+     * - arguments in the order matching the spec
+     * - additionalArgsInvocation (if needed)
+     * - &mut DiagnosticCollector
      */
     abstract fun usage(): Writable
 }
@@ -72,10 +84,16 @@ class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {
 }
 
 /**
- * Generate an endpoint resolver struct. The struct may contain extras resulting from the usage of functions e.g. partition function
+ * Generate an endpoint resolver struct. The struct may contain additional fields required by the usage of
+ * additional functions e.g. `aws.partition` requires a `PartitionResolver` to cache the parsed result of `partitions.json`
+ * and to facilitate loading additional partitions at runtime.
+ *
+ * Additionally, runtime functions will conditionally bring in:
  * 1. resolver configuration (e.g. a custom partitions.json)
  * 2. extra function arguments in the resolver
  * 3. the runtime type of the library function
+ *
+ * These dependencies are only brought in when the rules actually use these functions.
  *
  * ```rust
  * pub struct DefaultResolver {
@@ -103,9 +121,6 @@ class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {
 
 internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, runtimeConfig: RuntimeConfig) {
     private val registry: FunctionRegistry = FunctionRegistry(stdlib)
-    // first, make a custom RustWriter and generate the interior of the resolver into it.
-    // next, since we've now captured what runtime functions are required, generate the container
-
     private val types = Types(runtimeConfig)
     private val codegenScope = arrayOf(
         "endpoint" to types.smithyHttpEndpointModule,
@@ -123,8 +138,9 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
     /**
      * Generates the endpoint resolver struct
      *
-     * If the rules require a runtime function that has state (e.g., the partition resolver, the `[CustomRuntimeFunction.structField]`
-     * will insert the required fields into the resolver so that they can be used later.
+     * If the rules require a runtime function that has state (e.g., the partition resolver,
+     * the `[CustomRuntimeFunction.structField]`) will insert the required fields into the resolver so that they can
+     * be used later.
      */
     fun defaultEndpointResolver(endpointRuleSet: EndpointRuleSet): RuntimeType {
         check(endpointRuleSet.rules.isNotEmpty()) { "EndpointRuleset must contain at least one rule." }
@@ -177,7 +193,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
             rustTemplate(
                 """
                 pub(super) fn resolve_endpoint($ParamsName: &#{Params}, $DiagnosticCollector: &mut #{DiagnosticCollector}, #{additional_args}) -> #{endpoint}::Result {
-                 #{body:W}
+                  #{body:W}
                 }
 
                 """,
@@ -259,7 +275,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                 val next = generateRuleInternal(rule, rest)
                 when {
                     fn.type() is Type.Option ||
-                        // ReterminusCore bug: substring should return `Option<String>`: https://github.com/awslabs/smithy/pull/1504/files
+                        // TODO(https://github.com/awslabs/smithy/pull/1504): ReterminusCore bug: substring should return `Option<String>`:
                         (fn as Function).name == "substring" -> {
                         Attribute.AllowUnused.render(this)
                         rustTemplate(

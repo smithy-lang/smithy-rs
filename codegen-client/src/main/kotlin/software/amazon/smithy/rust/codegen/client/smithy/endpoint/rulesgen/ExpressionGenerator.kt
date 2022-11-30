@@ -14,7 +14,7 @@ import software.amazon.smithy.rulesengine.language.syntax.fn.FunctionDefinition
 import software.amazon.smithy.rulesengine.language.syntax.fn.GetAttr
 import software.amazon.smithy.rulesengine.language.visit.ExpressionVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointResolverGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
@@ -95,7 +95,12 @@ class ExpressionGenerator(
         }
 
         override fun visitLibraryFunction(fn: FunctionDefinition, args: MutableList<Expression>): Writable = writable {
-            val fnDefinition = context.functionRegistry.fnFor(fn.id) ?: PANIC("no runtime function for ${fn.id}")
+            val fnDefinition = context.functionRegistry.fnFor(fn.id)
+                ?: PANIC(
+                    "no runtime function for ${fn.id} " +
+                        "(hint: if this is a custom or aws-specific runtime function, ensure the relevant standard library has been loaded " +
+                        "on the classpath)",
+                )
             val expressionGenerator = ExpressionGenerator(Ownership.Borrowed, context)
             val argWritables = args.map { expressionGenerator.generate(it) }
             rustTemplate(

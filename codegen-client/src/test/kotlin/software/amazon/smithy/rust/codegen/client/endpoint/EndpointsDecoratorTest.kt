@@ -9,7 +9,6 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.NativeSmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
@@ -95,7 +94,7 @@ class EndpointsDecoratorTest {
     fun `set an endpoint in the property bag`() {
         val testDir = clientIntegrationTest(
             model,
-            addtionalDecorators = listOf(EndpointsDecorator(), NativeSmithyEndpointsStdLib()),
+            addtionalDecorators = listOf(EndpointsDecorator()),
             command = { "cargo check".runWithWarnings(it) },
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("endpoint_params_test") {

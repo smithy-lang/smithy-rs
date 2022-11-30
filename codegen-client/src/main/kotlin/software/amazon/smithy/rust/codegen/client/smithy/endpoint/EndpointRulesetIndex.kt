@@ -10,6 +10,7 @@ import software.amazon.smithy.model.knowledge.KnowledgeIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
+import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import java.util.concurrent.ConcurrentHashMap
 
@@ -23,6 +24,8 @@ internal class EndpointRulesetIndex : KnowledgeIndex {
     fun endpointRulesForService(serviceShape: ServiceShape) = ruleSets.computeIfAbsent(
         serviceShape,
     ) { serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typecheck() } }
+
+    fun endpointTests(serviceShape: ServiceShape) = serviceShape.getTrait<EndpointTestsTrait>()?.testCases ?: emptyList()
 
     companion object {
         fun of(model: Model): EndpointRulesetIndex {

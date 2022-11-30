@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Servi
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -75,11 +76,21 @@ internal class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization
             }
             ServiceConfig.BuilderImpl -> writable {
                 contextParams.forEach { param ->
-                    param.docs?.also { docs(it) }
+                    docsOrFallback(param.docs)
                     rust(
                         """
                         pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
                             self.${param.name} = Some(${param.name}.into());
+                            self
+                        }""",
+                        param.type,
+                    )
+
+                    docsOrFallback(param.docs)
+                    rust(
+                        """
+                        pub fn set_${param.name}(mut self, ${param.name}: Option<#T>) -> Self {
+                            self.${param.name} = ${param.name};
                             self
                         }
                         """,

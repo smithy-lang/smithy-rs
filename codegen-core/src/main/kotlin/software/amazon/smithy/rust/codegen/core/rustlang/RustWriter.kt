@@ -247,10 +247,18 @@ fun <T : AbstractCodeWriter<T>> T.documentShape(
 ): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
-    when (docTrait?.value?.isNotBlank()) {
+    return docsOrFallback(docTrait?.value, autoSuppressMissingDocs, note)
+}
+
+fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
+    docs: String? = null,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null,
+): T {
+    when (docs?.isNotBlank()) {
         // If docs are modeled, then place them on the code generated shape
         true -> {
-            this.docs(normalizeHtml(escape(docTrait.value)))
+            this.docs(normalizeHtml(escape(docs)))
             note?.also {
                 // Add a blank line between the docs and the note to visually differentiate
                 write("///")
@@ -646,7 +654,8 @@ class RustWriter private constructor(
 
                 is Function<*> -> {
                     @Suppress("UNCHECKED_CAST")
-                    val func = t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
+                    val func =
+                        t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
                     val innerWriter = RustWriter(filename, namespace, printWarning = false)
                     func(innerWriter)
                     innerWriter.dependencies.forEach { addDependency(it) }

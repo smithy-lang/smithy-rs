@@ -11,6 +11,7 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsStdLib
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency

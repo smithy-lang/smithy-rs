@@ -14,8 +14,9 @@ import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
 import software.amazon.smithy.rulesengine.language.syntax.expr.Template
+import software.amazon.smithy.rulesengine.language.syntax.fn.LibraryFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.FunctionRegistry
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -25,8 +26,19 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 internal class ExprGeneratorTest {
+    /**
+     * This works around a bug in smithy-endpoint-rules where the constructors on functions like `BooleanEquals`
+     * hit the wrong branch in the visitor (but when they get parsed, they hit the right branch).
+     */
     fun Expression.shoop() = Expression.fromNode(this.toNode())
     private val testContext = Context(FunctionRegistry(listOf()), TestRuntimeConfig)
+
+    @Test
+    fun `fail when smithy is fixed`() {
+        check(BooleanEquals.ofExpressions(Expression.of(true), Expression.of(true)) is LibraryFunction) {
+            "smithy has been fixed, shoop can be removed"
+        }
+    }
 
     @Test
     fun generateExprs() {

@@ -9,8 +9,8 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -32,12 +32,12 @@ class AwsEndpointsStdLib() : RustCodegenDecorator<ClientProtocolGenerator, Clien
         return clazz.isAssignableFrom(ClientCodegenContext::class.java)
     }
 
-    private fun partitionsDotjson(sdkSettings: SdkSettings): ObjectNode {
+    private fun partitionMetadata(sdkSettings: SdkSettings): ObjectNode {
         if (partitionsCache == null) {
-            val partitionsJson = when (val path = sdkSettings.partitionsDotJson) {
+            val partitionsJson = when (val path = sdkSettings.partitionsConfigPath) {
                 null -> (
                     javaClass.getResource("/default-partitions.json")
-                        ?: throw IllegalStateException("Failed to find default-default-partitions.json in the JAR")
+                        ?: throw IllegalStateException("Failed to find default-partitions.json in the JAR")
                     ).readText()
 
                 else -> path.readText()
@@ -52,7 +52,7 @@ class AwsEndpointsStdLib() : RustCodegenDecorator<ClientProtocolGenerator, Clien
             object : EndpointCustomization {
                 override fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> {
                     val sdkSettings = SdkSettings.from(codegenContext.settings)
-                    return awsStandardLib(codegenContext.runtimeConfig, partitionsDotjson(sdkSettings))
+                    return awsStandardLib(codegenContext.runtimeConfig, partitionMetadata(sdkSettings))
                 }
             },
         )

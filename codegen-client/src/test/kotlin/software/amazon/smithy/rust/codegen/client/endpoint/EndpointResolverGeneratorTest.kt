@@ -15,10 +15,10 @@ import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
 import software.amazon.smithy.rulesengine.testutil.TestDiscovery
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTestGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.NativeSmithyFunctions
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -51,7 +51,7 @@ class EndpointResolverGeneratorTest {
         suite.ruleSet().typecheck()
         project.lib {
             val ruleset = EndpointResolverGenerator(
-                NativeSmithyFunctions + awsStandardLib(TestRuntimeConfig, partitionsJson),
+                SmithyEndpointsStdLib + awsStandardLib(TestRuntimeConfig, partitionsJson),
                 TestRuntimeConfig,
             ).defaultEndpointResolver(suite.ruleSet())
             val testGenerator = EndpointTestGenerator(
@@ -76,7 +76,7 @@ class EndpointResolverGeneratorTest {
         suite.ruleSet().typecheck()
         project.lib {
             val ruleset = EndpointResolverGenerator(
-                NativeSmithyFunctions + awsStandardLib(TestRuntimeConfig, partitionsJson),
+                SmithyEndpointsStdLib + awsStandardLib(TestRuntimeConfig, partitionsJson),
                 TestRuntimeConfig,
             ).defaultEndpointResolver(suite.ruleSet())
             val testGenerator = EndpointTestGenerator(

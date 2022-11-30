@@ -14,9 +14,11 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTests
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -45,10 +47,10 @@ interface EndpointCustomization {
 /**
  * Decorator that injects endpoints 2.0 resolvers throughout the entire client.
  *
- * This _does not_ inject any standard library functions. For the standard library, ensure that
- * [NativeSmithyEndpointsStdLib] is included as a decorator on the classpath.
+ * This decorator installs the core standard library functions. It DOES NOT inject the AWS specific functions which
+ * must be injected separately.
  *
- * If the service _does not_ provide custom endpoint rules, this decorator is a no-op.
+ * If the service DOES NOT provide custom endpoint rules, this decorator is a no-op.
  */
 class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "Endpoints"
@@ -71,6 +73,16 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                 )
             },
         ) + baseCustomizations
+    }
+
+    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
+        return listOf(
+            object : EndpointCustomization {
+                override fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> {
+                    return SmithyEndpointsStdLib
+                }
+            },
+        )
     }
 
     override fun configCustomizations(

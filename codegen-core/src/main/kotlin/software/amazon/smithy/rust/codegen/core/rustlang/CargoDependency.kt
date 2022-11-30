@@ -187,7 +187,7 @@ data class CargoDependency(
     }
 
     companion object {
-        val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1"))
+        val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.16"))
         val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))

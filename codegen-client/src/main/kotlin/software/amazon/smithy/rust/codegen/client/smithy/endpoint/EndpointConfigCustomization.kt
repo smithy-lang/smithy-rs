@@ -75,10 +75,10 @@ internal class EndpointConfigCustomization(
                         /// impl endpoint::ResolveEndpoint<EndpointParams> for PrefixResolver {
                         ///   fn resolve_endpoint(&self, params: &EndpointParams) -> endpoint::Result {
                         ///        self.base_resolver
-                        ///         .resolve_endpoint(params)
+                        ///              .resolve_endpoint(params)
                         ///              .map(|ep|{
-                        ///                 let url = ep.url().to_string();
-                        ///                 ep.into_builder().url(format!("{}.{}", &self.prefix, url)).build()
+                        ///                   let url = ep.url().to_string();
+                        ///                   ep.into_builder().url(format!("{}.{}", &self.prefix, url)).build()
                         ///               })
                         ///   }
                         /// }

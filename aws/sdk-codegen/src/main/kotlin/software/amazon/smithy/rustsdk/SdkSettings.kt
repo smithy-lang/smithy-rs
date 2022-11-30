@@ -30,7 +30,7 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
             awsSdk?.getStringMember("endpointsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
 
     /** Path to the `default-partitions.json` configuration */
-    val partitionsDotJson: Path?
+    val partitionsConfigPath: Path?
         get() =
             awsSdk?.getStringMember("partitionsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
 
