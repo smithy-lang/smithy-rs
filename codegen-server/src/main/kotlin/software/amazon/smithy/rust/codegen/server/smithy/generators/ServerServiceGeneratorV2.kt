@@ -497,8 +497,9 @@ class ServerServiceGeneratorV2(
             /// modules provide the types used in each operation.
             ///
             /// ###### Running on Hyper
-            /// ```no_run
+            /// ```rust,no_run
             /// ## use $crateName::$serviceName;
+            /// ## use std::net::SocketAddr;
             /// ## ##[tokio::main]
             /// ## pub async fn main() {
             /// ## let app = $serviceName::builder_without_plugins().build_unchecked();
@@ -509,7 +510,7 @@ class ServerServiceGeneratorV2(
             /// ## }
             /// ```
             /// ###### Running on Lambda
-            /// ```no_run
+            /// ```rust,ignore
             /// ## use $crateName::$serviceName;
             /// ## ##[tokio::main]
             /// ## pub async fn main() {
@@ -530,7 +531,7 @@ class ServerServiceGeneratorV2(
             /// accepts a [`Plugin`](aws_smithy_http_server::plugin::Plugin).
             /// Plugins allow you to build middleware which is aware of the operation it is being applied to.
             ///
-            /// ```rust,no_run
+            /// ```rust,ignore
             /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
             /// ## use #{SmithyHttpServer}::plugin::PluginPipeline;
