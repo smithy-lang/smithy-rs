@@ -7,6 +7,7 @@
 //! used. Each are given a [`FromParts`] implementation for easy use within handlers.
 
 use lambda_http::request::RequestContext;
+#[doc(inline)]
 pub use lambda_http::{
     aws_lambda_events::apigw::{ApiGatewayProxyRequestContext, ApiGatewayV2httpRequestContext},
     Context,
