@@ -12,14 +12,31 @@
 //! and [`ConnectInfo`] with a service builder.
 
 use http::request::Parts;
+use thiserror::Error;
 
-use crate::Extension;
+use crate::{body::BoxBody, response::IntoResponse};
 
-use super::FromParts;
+use super::{internal_server_error, FromParts};
+
+/// The [`ConnectInfo`] was not found in the [`http::Request`] extensions.
+///
+/// Use [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo) to ensure it's present.
+#[non_exhaustive]
+#[derive(Debug, Error)]
+#[error(
+    "`ConnectInfo` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::IntoMakeServiceWithConnectInfo`"
+)]
+pub struct MissingConnectInfo;
+
+impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
+    fn into_response(self) -> http::Response<BoxBody> {
+        internal_server_error()
+    }
+}
 
 /// Extractor for getting connection information produced by a `Connected`.
 ///
-/// Note this extractor requires the existence of [`Extension<ConnectInfo<T>>`] in the [`http::Extensions`]. This is
+/// Note this extractor requires the existence of [`ConnectInfo<T>`] in the [`http::Extensions`]. This is
 /// automatically inserted by the [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 /// middleware, which can be applied using the `into_make_service_with_connect_info` method on your generated service.
 #[derive(Clone, Debug)]
@@ -29,10 +46,9 @@ impl<P, T> FromParts<P> for ConnectInfo<T>
 where
     T: Send + Sync + 'static,
 {
-    type Rejection = <Extension<Self> as FromParts<P>>::Rejection;
+    type Rejection = MissingConnectInfo;
 
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
-        let Extension(connect_info) = <Extension<Self> as FromParts<P>>::from_parts(parts)?;
-        Ok(connect_info)
+        parts.extensions.remove().ok_or(MissingConnectInfo)
     }
 }
