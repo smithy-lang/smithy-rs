@@ -138,6 +138,10 @@ impl From<AwsEndpointStageErrorKind> for AwsEndpointStageError {
 impl MapRequest for AwsEndpointStage {
     type Error = AwsEndpointStageError;
 
+    fn name(&self) -> Option<&'static str> {
+        Some("resolve_endpoint")
+    }
+
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
         request.augment(|mut http_req, props| {
             let endpoint_result = props

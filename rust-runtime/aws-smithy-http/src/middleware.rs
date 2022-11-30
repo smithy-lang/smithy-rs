@@ -33,6 +33,11 @@ pub trait AsyncMapRequest {
     type Error: Into<BoxError> + 'static;
     type Future: Future<Output = Result<operation::Request, Self::Error>> + Send + 'static;
 
+    /// Optionally returns the name of this map request operation for inclusion in a tracing span.
+    fn name(&self) -> Option<&'static str> {
+        None
+    }
+
     fn apply(&self, request: operation::Request) -> Self::Future;
 }
 
@@ -67,6 +72,11 @@ pub trait MapRequest {
     ///
     /// If this middleware never fails use [std::convert::Infallible] or similar.
     type Error: Into<BoxError>;
+
+    /// Optionally returns the name of this map request operation for inclusion in a tracing span.
+    fn name(&self) -> Option<&'static str> {
+        None
+    }
 
     /// Apply this middleware to a request.
     ///
