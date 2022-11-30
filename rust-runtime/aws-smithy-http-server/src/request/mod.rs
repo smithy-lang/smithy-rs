@@ -52,6 +52,9 @@ use crate::{rejection::any_rejections, response::IntoResponse};
 
 pub mod connect_info;
 pub mod extension;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
+pub mod lambda;
 
 #[doc(hidden)]
 #[derive(Debug)]
