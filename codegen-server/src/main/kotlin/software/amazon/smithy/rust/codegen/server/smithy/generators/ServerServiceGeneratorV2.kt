@@ -529,6 +529,7 @@ class ServerServiceGeneratorV2(
             /// ```rust,no_run
             /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
+            /// ## use #{SmithyHttpServer}::plugin::PluginPipeline;
             /// let plugins = PluginPipeline::new()
             ///         .push(LoggingPlugin)
             ///         .push(MetricsPlugin);
@@ -588,7 +589,7 @@ class ServerServiceGeneratorV2(
             ///
             ///    // Run your service!
             ///    if let Err(err) = server.await {
-            ///      eprintln!("server error: {}", err);
+            ///      eprintln!("server error: {:?}", err);
             ///    }
             /// }
             ///
