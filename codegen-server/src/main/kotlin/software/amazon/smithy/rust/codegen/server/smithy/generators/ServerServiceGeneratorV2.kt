@@ -16,14 +16,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -39,8 +39,11 @@ class ServerServiceGeneratorV2(
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    val crateName = codegenContext.settings.moduleName.toSnakeCase()
+    private val crateName = codegenContext.settings.moduleName.toSnakeCase()
 
+    private val typeInitializations = codegenContext.typesToInit
+        .map { typeSymbol -> writable { rust("$typeSymbol::compile_regex();") } }
+        .join("\n")
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
@@ -203,6 +206,7 @@ class ServerServiceGeneratorV2(
             /// unspecified route requested.
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
+                #{TypeInitializations:W}
                 let router = {
                     use #{SmithyHttpServer}::operation::OperationShape;
                     let mut $missingOperationsVariableName = std::collections::HashMap::new();
@@ -221,6 +225,7 @@ class ServerServiceGeneratorV2(
             }
             """,
             "Router" to protocol.routerType(),
+            "TypeInitializations" to typeInitializations,
             "NullabilityChecks" to nullabilityChecks,
             "RoutesArrayElements" to routesArrayElements,
             "SmithyHttpServer" to smithyHttpServer,

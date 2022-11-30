@@ -87,6 +87,8 @@ class ConstrainedStringGenerator(
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
+        codegenContext.typesToInit.add(symbol)
+
         writer.rust(
             """
             impl $name {
