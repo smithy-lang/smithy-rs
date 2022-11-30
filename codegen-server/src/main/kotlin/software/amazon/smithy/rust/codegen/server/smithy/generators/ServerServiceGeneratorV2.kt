@@ -499,15 +499,19 @@ class ServerServiceGeneratorV2(
             /// ###### Running on Hyper
             /// ```no_run
             /// ## use $crateName::$serviceName;
+            /// ## ##[tokio::main]
             /// ## pub async fn main() {
             /// ## let app = $serviceName::builder_without_plugins().build_unchecked();
             /// let server = app.into_make_service();
+            /// let bind: SocketAddr = "127.0.0.1:6969".parse()
+            ///     .expect("unable to parse the server bind address and port");
             /// hyper::Server::bind(&bind).serve(server).await.unwrap();
             /// ## }
             /// ```
             /// ###### Running on Lambda
             /// ```no_run
             /// ## use $crateName::$serviceName;
+            /// ## ##[tokio::main]
             /// ## pub async fn main() {
             /// ## let app = $serviceName::builder_without_plugins().build_unchecked();
             /// let handler = #{SmithyHttpServer}::routing::LambdaHandler::new(app);
