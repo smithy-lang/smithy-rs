@@ -21,6 +21,10 @@ use crate::{
 
 use super::FromParts;
 
+/// The [`ConnectInfo`] was not found in the [`http::Request`] extensions.
+///
+/// Use [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo) to ensure it's present.
+
 #[non_exhaustive]
 #[derive(Debug, Error)]
 #[error("the `ConnectInfo` is not present in the `http::Request` - consider using `IntoMakeServiceWithConnectInfo`")]
