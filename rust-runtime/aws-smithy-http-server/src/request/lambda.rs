@@ -22,7 +22,7 @@ use crate::{body::BoxBody, response::IntoResponse};
 /// Use [`LambdaHandler`](crate::routing::LambdaHandler) to ensure it's present.
 #[non_exhaustive]
 #[derive(Debug, Error)]
-#[error("`Context` is not present in the `http::Request` extensions - consider using `LambdaHandler`")]
+#[error("`Context` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::LambdaHandler`")]
 pub struct MissingContext;
 
 impl<Protocol> IntoResponse<Protocol> for MissingContext {
