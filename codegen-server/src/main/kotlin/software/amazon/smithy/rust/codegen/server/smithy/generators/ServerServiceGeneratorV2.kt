@@ -498,15 +498,21 @@ class ServerServiceGeneratorV2(
             ///
             /// ###### Running on Hyper
             /// ```no_run
+            /// ## use $crateName::$serviceName;
+            /// ## pub async fn main() {
             /// ## let app = $serviceName::builder_without_plugins().build_unchecked();
             /// let server = app.into_make_service();
             /// hyper::Server::bind(&bind).serve(server).await.unwrap();
+            /// ## }
             /// ```
             /// ###### Running on Lambda
             /// ```no_run
+            /// ## use $crateName::$serviceName;
+            /// ## pub async fn main() {
             /// ## let app = $serviceName::builder_without_plugins().build_unchecked();
             /// let handler = #{SmithyHttpServer}::routing::LambdaHandler::new(app);
             /// lambda_http::run(handler).await.unwrap();
+            /// ## }
             /// ```
             ///
             /// ## Building the $serviceName
@@ -526,7 +532,7 @@ class ServerServiceGeneratorV2(
             /// let plugins = PluginPipeline::new()
             ///         .push(LoggingPlugin)
             ///         .push(MetricsPlugin);
-            /// let builder = $serviceName::builder_with_plugins(plugins);
+            /// let builder = $crateName::$serviceName::builder_with_plugins(plugins);
             /// ```
             ///
             /// To know more about plugins, see: [`#{SmithyHttpServer}::plugin`].
@@ -577,7 +583,6 @@ class ServerServiceGeneratorV2(
             ///
             ///    let bind: SocketAddr = "127.0.0.1:6969".parse()
             ///        .expect("unable to parse the server bind address and port");
-            ///
             ///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
             ///    ## let server = async { Ok::<_, ()>(()) };
             ///
