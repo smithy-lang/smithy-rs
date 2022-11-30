@@ -1,10 +1,11 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! DateTime type for representing Smithy timestamps.
 
+use crate::date_time::format::DateTimeParseErrorKind;
 use num_integer::div_mod_floor;
 use num_integer::Integer;
 use std::convert::TryFrom;
@@ -209,7 +210,7 @@ impl DateTime {
             Format::DateTime => format::rfc3339::read(s)?,
             Format::HttpDate => format::http_date::read(s)?,
             Format::EpochSeconds => {
-                let split_point = s.find(delim).unwrap_or_else(|| s.len());
+                let split_point = s.find(delim).unwrap_or(s.len());
                 let (s, rest) = s.split_at(split_point);
                 (Self::from_str(s, format)?, rest)
             }
@@ -219,9 +220,7 @@ impl DateTime {
         } else if next.starts_with(delim) {
             Ok((inst, &next[1..]))
         } else {
-            Err(DateTimeParseError::Invalid(
-                "didn't find expected delimiter".into(),
-            ))
+            Err(DateTimeParseErrorKind::Invalid("didn't find expected delimiter".into()).into())
         }
     }
 
@@ -404,7 +403,7 @@ mod test {
 
     #[derive(Debug)]
     struct EpochMillisTestCase {
-        rfc3339: &'static str,
+        _rfc3339: &'static str,
         epoch_millis: i64,
         epoch_seconds: i64,
         epoch_subsec_nanos: u32,
@@ -419,25 +418,25 @@ mod test {
     // ```
     const EPOCH_MILLIS_TEST_CASES: &[EpochMillisTestCase] = &[
         EpochMillisTestCase {
-            rfc3339: "2021-07-30T21:20:04.123Z",
+            _rfc3339: "2021-07-30T21:20:04.123Z",
             epoch_millis: 1627680004123,
             epoch_seconds: 1627680004,
             epoch_subsec_nanos: 123000000,
         },
         EpochMillisTestCase {
-            rfc3339: "1918-06-04T02:39:55.877Z",
+            _rfc3339: "1918-06-04T02:39:55.877Z",
             epoch_millis: -1627680004123,
             epoch_seconds: -1627680005,
             epoch_subsec_nanos: 877000000,
         },
         EpochMillisTestCase {
-            rfc3339: "+292278994-08-17T07:12:55.807Z",
+            _rfc3339: "+292278994-08-17T07:12:55.807Z",
             epoch_millis: i64::MAX,
             epoch_seconds: 9223372036854775,
             epoch_subsec_nanos: 807000000,
         },
         EpochMillisTestCase {
-            rfc3339: "-292275055-05-16T16:47:04.192Z",
+            _rfc3339: "-292275055-05-16T16:47:04.192Z",
             epoch_millis: i64::MIN,
             epoch_seconds: -9223372036854776,
             epoch_subsec_nanos: 192000000,
@@ -526,6 +525,8 @@ mod test {
         assert!(DateTime::from_nanos(10_000_000_000_000_000_000_999_999_999_i128).is_err());
     }
 
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
+    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn system_time_conversions() {
         // Check agreement

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! This module holds convenient short-hands for the otherwise fairly extensive trait bounds
@@ -15,6 +15,8 @@
 //! [compiler limitations]: https://github.com/rust-lang/rust/issues/20671
 //! [do not need to be repeated]: https://github.com/rust-lang/rust/issues/20671#issuecomment-529752828
 
+use crate::erase::DynConnector;
+use crate::http_connector::HttpConnector;
 use crate::*;
 use aws_smithy_http::result::ConnectorError;
 
@@ -60,6 +62,17 @@ where
 {
     type Error = T::Error;
     type Future = T::Future;
+}
+
+impl<T, E, F> From<T> for HttpConnector
+where
+    E: Into<ConnectorError> + Send + Sync + 'static,
+    F: Send + 'static,
+    T: SmithyConnector<Error = E, Future = F, Response = http::Response<SdkBody>>,
+{
+    fn from(smithy_connector: T) -> Self {
+        HttpConnector::Prebuilt(Some(DynConnector::new(smithy_connector)))
+    }
 }
 
 /// A Smithy middleware service that adjusts [`aws_smithy_http::operation::Request`]s.
@@ -135,7 +148,7 @@ pub trait SmithyRetryPolicy<O, T, E, Retry>:
     /// Forwarding type to `Retry` for bound inference.
     ///
     /// See module-level docs for details.
-    type Retry: ClassifyResponse<SdkSuccess<T>, SdkError<Self::E>>;
+    type Retry: ClassifyRetry<SdkSuccess<T>, SdkError<Self::E>>;
 }
 
 impl<R, O, T, E, Retry> SmithyRetryPolicy<O, T, E, Retry> for R
@@ -143,7 +156,7 @@ where
     R: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone,
     O: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + Clone + 'static,
     E: Error,
-    Retry: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
+    Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
 {
     type O = O;
     type E = E;

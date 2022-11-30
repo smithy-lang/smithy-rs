@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use canary::{get_canaries_to_run, CanaryEnv};
@@ -54,10 +54,9 @@ async fn main() -> Result<(), Error> {
         .with(EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
         .with(
-            TeXRayLayer::new()
-                // by default, all metadata fields will be printed. If this is too noisy,
-                // filter only the fields you care about
-                //.only_show_fields(&["name", "operation", "service"]),
+            TeXRayLayer::new(), // by default, all metadata fields will be printed. If this is too noisy,
+                                // filter only the fields you care about
+                                //.only_show_fields(&["name", "operation", "service"]),
         );
     tracing::subscriber::set_global_default(subscriber).unwrap();
     let local = env::args().any(|arg| arg == "--local");

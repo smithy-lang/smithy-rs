@@ -1,19 +1,24 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+description = "Generates Rust code from Smithy models and runs the protocol tests"
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Test"
-
 extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.test"
 
 tasks["jar"].enabled = false
 
-plugins { id("software.amazon.smithy").version("0.5.3") }
+plugins {
+    id("software.amazon.smithy")
+}
 
 val smithyVersion: String by project
-val defaultRustFlags: String by project
 val defaultRustDocFlags: String by project
+val properties = PropertyRetriever(rootProject, project)
+
+val pluginName = "rust-server-codegen"
+val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
 
 buildscript {
     val smithyVersion: String by project
@@ -27,106 +32,85 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
 }
 
-data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
-
-val CodegenTests = listOf(
-    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-    CodegenTest("com.amazonaws.s3#AmazonS3", "s3")
-)
-
-/**
- * `includeFluentClient` must be set to `false` as we are not generating all the supporting
- * code for it.
- * TODO: Review how can we make this a default in the server so that customers don't
- *       have to specify it.
- */
-fun generateSmithyBuild(tests: List<CodegenTest>): String {
-    val projections =
-        tests.joinToString(",\n") {
-            """
-            "${it.module}": {
-                "plugins": {
-                    "rust-server-codegen": {
-                      "runtimeConfig": {
-                        "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"
-                      },
-                      "service": "${it.service}",
-                      "module": "${it.module}",
-                      "moduleVersion": "0.0.1",
-                      "moduleDescription": "test",
-                      "moduleAuthors": ["protocoltest@example.com"]
-                      ${it.extraConfig ?: ""}
-                 }
-               }
-            }
-            """.trimIndent()
-        }
-    return """
-    {
-        "version": "1.0",
-        "projections": { $projections }
-    }
-    """
+val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
+    listOf(
+        CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
+        CodegenTest(
+            "naming_obs_structs#NamingObstacleCourseStructs",
+            "naming_test_structs",
+            imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
+        ),
+        CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService", "constraints_without_public_constrained_types",
+            imports = listOf("$commonModels/constraints.smithy"),
+            extraConfig = """, "codegen": { "publicConstrainedTypes": false } """,
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints",
+            imports = listOf("$commonModels/constraints.smithy"),
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJson",
+            "rest_json",
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJsonExtras",
+            "rest_json_extras",
+            imports = listOf("$commonModels/rest-json-extras.smithy"),
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation",
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.extras.restjson.validation#MalformedRangeValidation", "malformed_range_extras",
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+            imports = listOf("$commonModels/malformed-range-extras.smithy"),
+        ),
+        CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocol",
+            "json_rpc11",
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest(
+            "aws.protocoltests.misc#MiscService",
+            "misc",
+            imports = listOf("$commonModels/misc.smithy"),
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) `@uniqueItems` is used.
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest(
+            "com.amazonaws.ebs#Ebs", "ebs",
+            imports = listOf("$commonModels/ebs.json"),
+            extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
+        ),
+        CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
+        CodegenTest(
+            "com.aws.example.rust#PokemonService",
+            "pokemon-service-server-sdk",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+        ),
+    )
 }
 
-task("generateSmithyBuild") {
-    description = "generate smithy-build.json"
-    doFirst { projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests)) }
-}
-
-fun generateCargoWorkspace(tests: List<CodegenTest>): String {
-    return """
-    [workspace]
-    members = [
-        ${tests.joinToString(",") { "\"${it.module}/rust-server-codegen\"" }}
-    ]
-    """.trimIndent()
-}
-
-task("generateCargoWorkspace") {
-    description = "generate Cargo.toml workspace file"
-    doFirst {
-        buildDir.resolve("smithyprojections/codegen-server-test/Cargo.toml")
-            .writeText(generateCargoWorkspace(CodegenTests))
-    }
-}
+project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
+project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
+project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-tasks["assemble"].dependsOn("smithyBuildJar")
-tasks["assemble"].finalizedBy("generateCargoWorkspace")
+tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
-tasks.register<Exec>("cargoCheck") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "check")
-    dependsOn("assemble")
-}
+project.registerModifyMtimeTask()
+project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
 
-tasks.register<Exec>("cargoTest") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "test")
-    dependsOn("assemble")
-}
-
-tasks.register<Exec>("cargoDocs") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    environment("RUSTDOCFLAGS", defaultRustDocFlags)
-    commandLine("cargo", "doc", "--no-deps")
-    dependsOn("assemble")
-}
-
-tasks.register<Exec>("cargoClippy") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "clippy")
-    dependsOn("assemble")
-}
-
-tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
+tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 
 tasks["clean"].doFirst { delete("smithy-build.json") }

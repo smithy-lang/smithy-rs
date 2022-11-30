@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::environment::app_name::EnvironmentVariableAppNameProvider;
@@ -18,7 +18,7 @@ pub fn default_provider() -> Builder {
 }
 
 /// Default provider builder for [`AppName`]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     env_provider: EnvironmentVariableAppNameProvider,
     profile_file: app_name::Builder,

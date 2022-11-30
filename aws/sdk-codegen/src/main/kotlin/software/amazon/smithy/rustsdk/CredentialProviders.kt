@@ -1,52 +1,56 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
-class CredentialsProviderDecorator : RustCodegenDecorator {
+class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "CredentialsProvider"
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + CredentialProviderConfig(codegenContext.runtimeConfig)
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + CredentialsProviderFeature(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**
@@ -55,17 +59,25 @@ class CredentialsProviderDecorator : RustCodegenDecorator {
 class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val defaultProvider = defaultProvider()
     private val codegenScope = arrayOf(
-        "credentials" to awsTypes(runtimeConfig).asType().member("credentials"),
-        "DefaultProvider" to defaultProvider
+        "credentials" to awsTypes(runtimeConfig).toType().member("credentials"),
+        "DefaultProvider" to defaultProvider,
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
                 """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
-                *codegenScope
+                *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> rustTemplate(
+                """
+                /// Returns the credentials provider.
+                pub fn credentials_provider(&self) -> #{credentials}::SharedCredentialsProvider {
+                    self.credentials_provider.clone()
+                }
+                """,
+                *codegenScope,
+            )
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,", *codegenScope)
             ServiceConfig.BuilderImpl -> {
@@ -86,9 +98,10 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                     *codegenScope,
                 )
             }
+
             ServiceConfig.BuilderBuild -> rustTemplate(
                 "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -102,9 +115,10 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
                     """
                     #T(&mut ${section.request}.properties_mut(), ${section.config}.credentials_provider.clone());
                     """,
-                    setProvider(runtimeConfig)
+                    setProvider(runtimeConfig),
                 )
             }
+
             else -> emptySection
         }
     }
@@ -113,7 +127,13 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
 class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::Credentials;", awsTypes(runtimeConfig).asType()) }
+            is LibRsSection.Body -> writable {
+                rust(
+                    "pub use #T::Credentials;",
+                    awsTypes(runtimeConfig).toType(),
+                )
+            }
+
             else -> emptySection
         }
     }

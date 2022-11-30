@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use std::sync::Mutex;
@@ -82,6 +82,15 @@ impl IdempotencyTokenProvider {
     pub fn fixed(token: &'static str) -> Self {
         Self {
             inner: Inner::Static(token),
+        }
+    }
+}
+
+impl Clone for IdempotencyTokenProvider {
+    fn clone(&self) -> Self {
+        match &self.inner {
+            Inner::Static(token) => IdempotencyTokenProvider::fixed(token),
+            Inner::Random(_) => IdempotencyTokenProvider::random(),
         }
     }
 }

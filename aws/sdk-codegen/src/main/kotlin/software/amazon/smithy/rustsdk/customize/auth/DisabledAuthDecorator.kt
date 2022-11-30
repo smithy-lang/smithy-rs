@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk.customize.auth
@@ -11,11 +11,15 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 
 private fun String.shapeId() = ShapeId.from(this)
+
 // / STS (and possibly other services) need to have auth manually set to []
-class DisabledAuthDecorator : RustCodegenDecorator {
+class DisabledAuthDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "OptionalAuth"
     override val order: Byte = 0
 
@@ -24,8 +28,8 @@ class DisabledAuthDecorator : RustCodegenDecorator {
             "com.amazonaws.sts#AWSSecurityTokenServiceV20110615".shapeId() to
                 setOf(
                     "com.amazonaws.sts#AssumeRoleWithSAML".shapeId(),
-                    "com.amazonaws.sts#AssumeRoleWithWebIdentity".shapeId()
-                )
+                    "com.amazonaws.sts#AssumeRoleWithWebIdentity".shapeId(),
+                ),
         )
 
     private fun applies(service: ServiceShape) =
@@ -44,4 +48,7 @@ class DisabledAuthDecorator : RustCodegenDecorator {
             }
         }
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

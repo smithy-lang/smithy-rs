@@ -1,10 +1,11 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package aws.sdk
 
+import CrateSet
 import org.gradle.api.Project
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
@@ -13,7 +14,12 @@ import software.amazon.smithy.model.traits.TitleTrait
 import java.io.File
 import kotlin.streams.toList
 
-class AwsServices(private val project: Project, services: List<AwsService>) {
+class AwsServices(
+    private val project: Project,
+    services: List<AwsService>,
+    val endpointsConfigPath: File,
+    val defaultConfigPath: File,
+) {
     val services: List<AwsService>
     val moduleNames: Set<String> by lazy { services.map { it.module }.toSortedSet() }
 
@@ -56,8 +62,9 @@ class AwsServices(private val project: Project, services: List<AwsService>) {
  * Since this function parses all models, it is relatively expensive to call. The result should be cached in a property
  * during build.
  */
-fun Project.discoverServices(serviceMembership: Membership): AwsServices {
-    val models = project.file("aws-models")
+fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membership): AwsServices {
+    val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
+    logger.info("Using model path: $models")
     val baseServices = fileTree(models)
         .sortedBy { file -> file.name }
         .mapNotNull { file ->
@@ -90,23 +97,28 @@ fun Project.discoverServices(serviceMembership: Membership): AwsServices {
                     module = sdkId,
                     moduleDescription = "AWS SDK for $title",
                     modelFile = file,
-                    extraFiles = extras,
-                    humanName = title
+                    // Order is important for the versions.toml model hash calculation
+                    extraFiles = extras.sorted(),
+                    humanName = title,
                 )
             }
         }
     val baseModules = baseServices.map { it.module }.toSet()
+    logger.info("Discovered base service modules to generate: $baseModules")
 
-    // validate the full exclusion list hits
-    serviceMembership.exclusions.forEach { disabledService ->
-        check(baseModules.contains(disabledService)) {
-            "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
-            baseModules.joinToString(
-                "\n "
-            )
-            }"
+    // validate the full exclusion list hits if the models directory is set
+    if (awsModelsPath != null) {
+        serviceMembership.exclusions.forEach { disabledService ->
+            check(baseModules.contains(disabledService)) {
+                "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
+                baseModules.joinToString(
+                    "\n ",
+                )
+                }"
+            }
         }
     }
+
     // validate inclusion list hits
     serviceMembership.inclusions.forEach { service ->
         check(baseModules.contains(service)) { "Service $service was in explicit inclusion list but not generated!" }
@@ -115,7 +127,12 @@ fun Project.discoverServices(serviceMembership: Membership): AwsServices {
         this,
         baseServices.filter {
             serviceMembership.isMember(it.module)
-        }
+        }.also { services ->
+            val moduleNames = services.map { it.module }
+            logger.info("Final service module list: $moduleNames")
+        },
+        models.resolve("sdk-endpoints.json"),
+        models.resolve("sdk-default-configuration.json"),
     )
 }
 
@@ -128,10 +145,11 @@ data class AwsService(
     val modelFile: File,
     val extraConfig: String? = null,
     val extraFiles: List<File>,
-    val humanName: String
+    val humanName: String,
 ) {
-    fun files(): List<File> = listOf(modelFile) + extraFiles
+    fun modelFiles(): List<File> = listOf(modelFile) + extraFiles
     fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
+
     /**
      * Generate a link to the examples for a given service
      */

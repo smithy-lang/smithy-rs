@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! SSO Credentials Provider
@@ -17,6 +17,7 @@ use crate::provider_config::ProviderConfig;
 use aws_sdk_sso::middleware::DefaultMiddleware as SsoMiddleware;
 use aws_sdk_sso::model::RoleCredentials;
 use aws_smithy_client::erase::DynConnector;
+use aws_smithy_json::deserialize::Token;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
 use aws_types::credentials::{CredentialsError, ProvideCredentials};
@@ -38,12 +39,12 @@ impl crate::provider_config::ProviderConfig {
         &self,
     ) -> aws_smithy_client::Client<aws_smithy_client::erase::DynConnector, SsoMiddleware> {
         use crate::connector::expect_connector;
-        use aws_smithy_client::http_connector::HttpSettings;
 
-        aws_smithy_client::Builder::<(), SsoMiddleware>::new()
-            .connector(expect_connector(self.connector(&HttpSettings::default())))
-            .sleep_impl(self.sleep())
-            .build()
+        let mut client_builder = aws_smithy_client::Client::builder()
+            .connector(expect_connector(self.connector(&Default::default())))
+            .middleware(SsoMiddleware::default());
+        client_builder.set_sleep_impl(self.sleep());
+        client_builder.build()
     }
 }
 
@@ -289,12 +290,23 @@ fn parse_token_json(input: &[u8]) -> Result<SsoToken, InvalidJsonCredentials> {
     let mut expires_at = None;
     let mut region = None;
     let mut start_url = None;
-    json_parse_loop(input, |key, value| match key {
-        key if key.eq_ignore_ascii_case("accessToken") => acccess_token = Some(value.to_string()),
-        key if key.eq_ignore_ascii_case("expiresAt") => expires_at = Some(value),
-        key if key.eq_ignore_ascii_case("region") => region = Some(value.to_string()),
-        key if key.eq_ignore_ascii_case("startUrl") => start_url = Some(value.to_string()),
-        _other => {} // ignored
+    json_parse_loop(input, |key, value| {
+        match (key, value) {
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("accessToken") => {
+                acccess_token = Some(value.to_unescaped()?.to_string())
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("expiresAt") => {
+                expires_at = Some(value.to_unescaped()?)
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("region") => {
+                region = Some(value.to_unescaped()?.to_string())
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("startUrl") => {
+                start_url = Some(value.to_unescaped()?.to_string())
+            }
+            _other => {} // ignored
+        };
+        Ok(())
     })?;
     let access_token =
         Zeroizing::new(acccess_token.ok_or(InvalidJsonCredentials::MissingField("accessToken"))?);

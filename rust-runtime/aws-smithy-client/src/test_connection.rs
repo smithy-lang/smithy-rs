@@ -1,27 +1,27 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 //! Module with client connectors useful for testing.
 
 // TODO(docs)
 #![allow(missing_docs)]
 
-use http::header::{HeaderName, CONTENT_TYPE};
-use http::Request;
-
-use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
-
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
 use std::future::Ready;
-
 use std::ops::Deref;
-
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
+use http::header::{HeaderName, CONTENT_TYPE};
+use http::Request;
 use tokio::sync::oneshot;
+
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::result::ConnectorError;
+use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
+
+#[doc(inline)]
+pub use crate::never;
 
 /// Test Connection to capture a single request
 #[derive(Debug, Clone)]
@@ -44,9 +44,6 @@ impl CaptureRequestReceiver {
         self.receiver.try_recv().expect("no request was received")
     }
 }
-
-#[doc(inline)]
-pub use crate::never;
 
 impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
     type Response = http::Response<SdkBody>;
@@ -79,7 +76,10 @@ impl tower::Service<http::Request<SdkBody>> for CaptureRequestHandler {
 /// Example:
 /// ```rust,compile_fail
 /// let (server, request) = capture_request(None);
-/// let client = aws_sdk_sts::Client::from_conf_conn(conf, server);
+/// let conf = aws_sdk_sts::Config::builder()
+///     .http_connector(server)
+///     .build();
+/// let client = aws_sdk_sts::Client::from_conf(conf);
 /// let _ = client.assume_role_with_saml().send().await;
 /// // web identity should be unsigned
 /// assert_eq!(
@@ -153,7 +153,7 @@ impl ValidateRequest {
 /// TestConnection for use with a [`Client`](crate::Client).
 ///
 /// A basic test connection. It will:
-/// - Response to requests with a preloaded series of responses
+/// - Respond to requests with a preloaded series of responses
 /// - Record requests for future examination
 ///
 /// The generic parameter `B` is the type of the response body.
@@ -256,12 +256,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use hyper::service::Service;
+
+    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::result::ConnectorError;
+
     use crate::bounds::SmithyConnector;
     use crate::test_connection::{capture_request, never::NeverService, TestConnection};
     use crate::Client;
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::result::ConnectorError;
-    use hyper::service::Service;
 
     fn is_send_sync<T: Send + Sync>(_: T) {}
 
@@ -277,6 +279,7 @@ mod tests {
         T: SmithyConnector,
     {
     }
+
     fn quacks_like_a_connector<T>(_: &T)
     where
         T: Service<http::Request<SdkBody>, Response = http::Response<SdkBody>>

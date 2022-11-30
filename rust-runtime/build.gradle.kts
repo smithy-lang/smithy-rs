@@ -1,11 +1,12 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 description = "Rust Runtime"
 plugins {
     kotlin("jvm")
+    `maven-publish`
 }
 
 group = "software.amazon.rustruntime"
@@ -39,20 +40,30 @@ tasks.register<Copy>("copyRuntimeCrates") {
     into(runtimeOutputDir)
 }
 
-task("fixRuntimeCrateVersions") {
+tasks.register("fixRuntimeCrateVersions") {
     dependsOn("copyRuntimeCrates")
     doLast {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(runtimeOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteSmithyRsCrateVersion(properties, line)
+                rewriteRuntimeCrateVersion(properties, line)
             }
         }
     }
 }
 
-tasks.register<Exec>("fixManifests") {
+tasks.register<ExecRustBuildTool>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the runtime crates"
-    workingDir(rootProject.projectDir.resolve("tools/publisher"))
-    commandLine("cargo", "run", "--", "fix-manifests", "--location", runtimeOutputDir.absolutePath)
+    toolPath = rootProject.projectDir.resolve("tools/publisher")
+    binaryName = "publisher"
+    arguments = listOf("fix-manifests", "--location", runtimeOutputDir.absolutePath)
     dependsOn("fixRuntimeCrateVersions")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("default") {
+            from(components["java"])
+        }
+    }
+    repositories { maven { url = uri("$buildDir/repository") } }
 }

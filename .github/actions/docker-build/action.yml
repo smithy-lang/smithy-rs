@@ -1,0 +1,68 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Use this action to execute the action scripts in tools/ci-build/scripts within the Docker build image.
+name: smithy-rs Docker Build
+description: Run Docker build command for smithy-rs
+inputs:
+  # The name of the script in tools/ci-build/scripts to run
+  action:
+    description: What action to run in the Docker build
+    required: true
+  action-arguments:
+    description: Arguments to pass to the action
+    required: false
+runs:
+  using: composite
+  steps:
+  - uses: actions/cache@v3
+    name: Gradle Cache
+    with:
+      path: |
+        gradle/caches
+        gradle/wrapper
+      key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
+      restore-keys: |
+        ${{ runner.os }}-gradle-
+    # Pinned to the commit hash of v2.1.0
+  - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
+    with:
+      shared-key: ${{ runner.os }}-${{ github.job }}
+      workspaces: |
+        . smithy-rs-target
+  - name: Download all artifacts
+    uses: ./smithy-rs/.github/actions/download-all-artifacts
+  - name: Prepare build image
+    shell: bash
+    run: |
+      set -x
+
+      # Check the build artifacts to see if a prior step built a new Docker build image.
+      # If smithy-rs-base-image was included in the downloaded build artifacts, then load
+      # it and tag it as the base image to use for this action. This will prevent acquire-build-image
+      # from attempting to download an image from ECR since it will already exist,
+      # which enables testing build image modifications as part of the pull request.
+      if [[ -d smithy-rs-base-image ]]; then
+        IMAGE_TAG="$(./smithy-rs/tools/ci-build/tools-hash)"
+        docker load -i smithy-rs-base-image/smithy-rs-base-image
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "smithy-rs-base-image:local"
+      fi
+
+      # For this step, we want images to come from build artifacts (built as part a prior step),
+      # or from ECR. We disable building the image from scratch so that any mistakes in the CI
+      # configuration won't cause each individual action to build its own image, which would
+      # drastically increase the total CI time. Fail fast!
+      ALLOW_LOCAL_BUILD=false ./smithy-rs/tools/ci-build/acquire-build-image
+    # This runs the commands from the matrix strategy
+  - name: Run ${{ inputs.action }}
+    shell: bash
+    run: |
+      ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }} ${{ inputs.action-arguments}}
+      tar cfz artifacts-${{ inputs.action }}.tar.gz -C artifacts .
+  - name: Upload artifacts
+    uses: actions/upload-artifact@v3
+    with:
+      name: artifacts-${{ inputs.action }}
+      path: artifacts-${{ inputs.action }}.tar.gz
+      if-no-files-found: error
+      retention-days: 3

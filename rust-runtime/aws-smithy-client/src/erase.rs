@@ -1,21 +1,24 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Type-erased variants of [`Client`] and friends.
+
+use std::fmt;
+
+use tower::{Layer, Service, ServiceExt};
+
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::result::ConnectorError;
+use boxclone::*;
+
+use crate::{bounds, retry, Client};
 
 // These types are technically public in that they're reachable from the public trait impls on
 // DynMiddleware, but no-one should ever look at them or use them.
 #[doc(hidden)]
 pub mod boxclone;
-use boxclone::*;
-
-use crate::{bounds, retry, Client};
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
-use std::fmt;
-use tower::{Layer, Service, ServiceExt};
 
 /// A [`Client`] whose connector and middleware types have been erased.
 ///
@@ -56,7 +59,7 @@ where
             connector: self.connector,
             middleware: DynMiddleware::new(self.middleware),
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -96,7 +99,7 @@ where
             connector: DynConnector::new(self.connector),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
-            timeout_config: self.timeout_config,
+            operation_timeout_config: self.operation_timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -187,13 +190,19 @@ impl Service<http::Request<SdkBody>> for DynConnector {
 /// to matter in all but the highest-performance settings.
 #[non_exhaustive]
 pub struct DynMiddleware<C>(
-    BoxCloneLayer<
+    ArcCloneLayer<
         aws_smithy_http_tower::dispatch::DispatchService<C>,
         aws_smithy_http::operation::Request,
         aws_smithy_http::operation::Response,
         aws_smithy_http_tower::SendOperationError,
     >,
 );
+
+impl<C> Clone for DynMiddleware<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<C> fmt::Debug for DynMiddleware<C> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -204,7 +213,7 @@ impl<C> fmt::Debug for DynMiddleware<C> {
 impl<C> DynMiddleware<C> {
     /// Construct a new dynamically-dispatched Smithy middleware.
     pub fn new<M: bounds::SmithyMiddleware<C> + Send + Sync + 'static>(middleware: M) -> Self {
-        Self(BoxCloneLayer::new(middleware))
+        Self(ArcCloneLayer::new(middleware))
     }
 }
 

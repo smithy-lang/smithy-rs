@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 use crate::lint::LintError;
 use crate::{Check, Lint, VCS_FILES};
@@ -11,12 +11,7 @@ use std::path::{Path, PathBuf};
 // All "TODOs" must include (...) that gives them context
 pub(crate) struct TodosHaveContext;
 
-const IGNORE_DIRS: &[&str] = &[
-    "codegen-server",
-    "codegen-server-test",
-    "rust-runtime/aws-smithy-http-server",
-    "tools/sdk-lints/src/todos.rs",
-];
+const IGNORE_DIRS: &[&str] = &["tools/sdk-lints/src/todos.rs"];
 
 impl Lint for TodosHaveContext {
     fn name(&self) -> &str {
@@ -37,7 +32,7 @@ impl Lint for TodosHaveContext {
             .iter()
             .filter(|path| !IGNORE_DIRS.iter().any(|dir| path.starts_with(dir)))
             .filter(|f| validate_todos(f.extension()))
-            .map(|t| t.clone())
+            .cloned()
             .collect())
     }
 }

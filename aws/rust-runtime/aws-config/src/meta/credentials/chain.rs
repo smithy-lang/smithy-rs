@@ -1,11 +1,11 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::borrow::Cow;
-
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
+use std::borrow::Cow;
 use tracing::Instrument;
 
 /// Credentials provider that checks a series of inner providers
@@ -79,15 +79,15 @@ impl CredentialsProviderChain {
             let span = tracing::debug_span!("load_credentials", provider = %name);
             match provider.provide_credentials().instrument(span).await {
                 Ok(credentials) => {
-                    tracing::info!(provider = %name, "loaded credentials");
+                    tracing::debug!(provider = %name, "loaded credentials");
                     return Ok(credentials);
                 }
-                Err(CredentialsError::CredentialsNotLoaded { context, .. }) => {
-                    tracing::info!(provider = %name, context = %context, "provider in chain did not provide credentials");
+                Err(err @ CredentialsError::CredentialsNotLoaded(_)) => {
+                    tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide credentials");
                 }
-                Err(e) => {
-                    tracing::warn!(provider = %name, error = %e, "provider failed to provide credentials");
-                    return Err(e);
+                Err(err) => {
+                    tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide credentials");
+                    return Err(err);
                 }
             }
         }
@@ -98,7 +98,7 @@ impl CredentialsProviderChain {
 }
 
 impl ProvideCredentials for CredentialsProviderChain {
-    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'_>
     where
         Self: 'a,
     {

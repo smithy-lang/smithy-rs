@@ -1,23 +1,27 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::error::Error;
+use crate::error::{Error, ErrorKind};
 use crate::frame::{Header, HeaderValue, Message};
 use crate::str_bytes::StrBytes;
 use aws_smithy_types::{Blob, DateTime};
 
 macro_rules! expect_shape_fn {
     (fn $fn_name:ident[$val_typ:ident] -> $result_typ:ident { $val_name:ident -> $val_expr:expr }) => {
+        #[doc = "Expects that `header` is a `"]
+        #[doc = stringify!($result_typ)]
+        #[doc = "`."]
         pub fn $fn_name(header: &Header) -> Result<$result_typ, Error> {
             match header.value() {
                 HeaderValue::$val_typ($val_name) => Ok($val_expr),
-                _ => Err(Error::Unmarshalling(format!(
+                _ => Err(ErrorKind::Unmarshalling(format!(
                     "expected '{}' header value to be {}",
                     header.name().as_str(),
                     stringify!($val_typ)
-                ))),
+                ))
+                .into()),
             }
         }
     };
@@ -32,14 +36,32 @@ expect_shape_fn!(fn expect_byte_array[ByteArray] -> Blob { bytes -> Blob::new(by
 expect_shape_fn!(fn expect_string[String] -> String { value -> value.as_str().into() });
 expect_shape_fn!(fn expect_timestamp[Timestamp] -> DateTime { value -> *value });
 
+/// Structured header data from a [`Message`]
 #[derive(Debug)]
 pub struct ResponseHeaders<'a> {
+    /// Content Type of the message
+    ///
+    /// This can be a number of things depending on the protocol. For example, if the protocol is
+    /// AwsJson1, then this could be `application/json`, or `application/xml` for RestXml.
+    ///
+    /// It will be `application/octet-stream` if there is a Blob payload shape, and `text/plain` if
+    /// there is a String payload shape.
     pub content_type: Option<&'a StrBytes>,
+
+    /// Message Type field
+    ///
+    /// This field is used to distinguish between events where the value is `event` and errors where
+    /// the value is `exception`
     pub message_type: &'a StrBytes,
+
+    /// Smithy Type field
+    ///
+    /// This field is used to determine which of the possible union variants that this message represents
     pub smithy_type: &'a StrBytes,
 }
 
 impl<'a> ResponseHeaders<'a> {
+    /// Content-Type for this message
     pub fn content_type(&self) -> Option<&str> {
         self.content_type.map(|ct| ct.as_str())
     }
@@ -51,19 +73,24 @@ fn expect_header_str_value<'a>(
 ) -> Result<&'a StrBytes, Error> {
     match header {
         Some(header) => Ok(header.value().as_string().map_err(|value| {
-            Error::Unmarshalling(format!(
+            Error::from(ErrorKind::Unmarshalling(format!(
                 "expected response {} header to be string, received {:?}",
                 name, value
-            ))
+            )))
         })?),
-        None => Err(Error::Unmarshalling(format!(
+        None => Err(ErrorKind::Unmarshalling(format!(
             "expected response to include {} header, but it was missing",
             name
-        ))),
+        ))
+        .into()),
     }
 }
 
-pub fn parse_response_headers(message: &Message) -> Result<ResponseHeaders, Error> {
+/// Parse headers from [`Message`]
+///
+/// `:content-type`, `:message-type`, `:event-type`, and `:exception-type` headers will be parsed.
+/// If any headers are invalid or missing, an error will be returned.
+pub fn parse_response_headers(message: &Message) -> Result<ResponseHeaders<'_>, Error> {
     let (mut content_type, mut message_type, mut event_type, mut exception_type) =
         (None, None, None, None);
     for header in message.headers() {
@@ -86,10 +113,11 @@ pub fn parse_response_headers(message: &Message) -> Result<ResponseHeaders, Erro
         } else if message_type.as_str() == "exception" {
             expect_header_str_value(exception_type, ":exception-type")?
         } else {
-            return Err(Error::Unmarshalling(format!(
+            return Err(ErrorKind::Unmarshalling(format!(
                 "unrecognized `:message-type`: {}",
                 message_type.as_str()
-            )));
+            ))
+            .into());
         },
     })
 }

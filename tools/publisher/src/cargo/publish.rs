@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::package::PackageHandle;
@@ -33,10 +33,10 @@ impl ShellOperation for Publish {
         let mut command = Command::new(self.program);
         command
             .current_dir(&self.package_path)
-            .env("CARGO_INCREMENTAL", "0") // Disable incremental compilation to reduce disk space used
             .arg("publish")
             .arg("--jobs")
-            .arg("1");
+            .arg("1")
+            .arg("--no-verify"); // The crates have already been built in previous CI steps
         let output = command.output()?;
         if !output.status.success() {
             let (stdout, stderr) = output_text(&output);
@@ -71,7 +71,7 @@ mod tests {
                 "aws-sdk-dynamodb",
                 Version::parse("0.0.22-alpha").unwrap(),
             ),
-            package_path: env::current_dir().unwrap().into(),
+            package_path: env::current_dir().unwrap(),
         }
         .spawn()
         .await
@@ -86,7 +86,7 @@ mod tests {
                 "something",
                 Version::parse("0.0.22-alpha").unwrap(),
             ),
-            package_path: env::current_dir().unwrap().into(),
+            package_path: env::current_dir().unwrap(),
         }
         .spawn()
         .await;
@@ -108,7 +108,7 @@ mod tests {
                 "aws-sdk-dynamodb",
                 Version::parse("0.0.22-alpha").unwrap(),
             ),
-            package_path: env::current_dir().unwrap().into(),
+            package_path: env::current_dir().unwrap(),
         }
         .spawn()
         .await

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // This code was copied and then modified from Tokio.
@@ -42,7 +42,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+/// Error returned when [`Timeout`] times out
+#[derive(Debug)]
 pub struct TimedOutError;
 
 impl Error for TimedOutError {}
@@ -54,6 +55,7 @@ impl fmt::Display for TimedOutError {
 }
 
 pin_project! {
+    /// Timeout Future
     #[non_exhaustive]
     #[must_use = "futures do nothing unless you `.await` or poll them"]
     #[derive(Debug)]
@@ -66,6 +68,9 @@ pin_project! {
 }
 
 impl<T, S> Timeout<T, S> {
+    /// Create a new future that will race `value` and `sleep`.
+    ///
+    /// If `sleep` resolves first, a timeout error is returned. Otherwise, the value is returned.
     pub fn new(value: T, sleep: S) -> Timeout<T, S> {
         Timeout { value, sleep }
     }
@@ -101,28 +106,31 @@ mod tests {
 
     #[tokio::test]
     async fn success() {
-        assert_eq!(
-            Ok(Ok(5)),
-            Timeout::new(async { Ok::<isize, isize>(5) }, Never).await
-        );
+        assert!(matches!(
+            Timeout::new(async { Ok::<isize, isize>(5) }, Never).await,
+            Ok(Ok(5))
+        ));
     }
 
     #[tokio::test]
     async fn failure() {
-        assert_eq!(
-            Ok(Err(0)),
-            Timeout::new(async { Err::<isize, isize>(0) }, Never).await
-        );
+        assert!(matches!(
+            Timeout::new(async { Err::<isize, isize>(0) }, Never).await,
+            Ok(Err(0))
+        ));
     }
 
     #[tokio::test]
     async fn timeout() {
-        assert_eq!(Err(TimedOutError), Timeout::new(Never, async {}).await);
+        assert!(matches!(
+            Timeout::new(Never, async {}).await,
+            Err(TimedOutError)
+        ));
     }
 
     // If the value is available at the same time as the timeout, then return the value
     #[tokio::test]
     async fn prefer_value_to_timeout() {
-        assert_eq!(Ok(5), Timeout::new(async { 5 }, async {}).await);
+        assert!(matches!(Timeout::new(async { 5 }, async {}).await, Ok(5)));
     }
 }

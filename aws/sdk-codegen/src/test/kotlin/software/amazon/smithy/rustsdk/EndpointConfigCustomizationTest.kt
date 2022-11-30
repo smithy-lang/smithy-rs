@@ -1,39 +1,59 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.testutil.stubConfigProject
-import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.testutil.unitTest
-import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
-import software.amazon.smithy.rust.codegen.util.lookup
+import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import java.io.File
 
 internal class EndpointConfigCustomizationTest {
+    private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().toType().member("Params")
+    private val codegenScope = arrayOf(
+        "http" to CargoDependency.Http.toType(),
+        "PlaceholderParams" to placeholderEndpointParams,
+        "aws_types" to awsTypes(AwsTestRuntimeConfig).toType(),
+    )
 
     private val model = """
         namespace test
+        use aws.protocols#restJson1
+
+        @title("test")
+        @restJson1
         @aws.api#service(sdkId: "Test", endpointPrefix: "service-with-prefix")
         service TestService {
-            version: "123"
+            version: "123",
+            operations: [Nop]
+        }
+
+        @http(uri: "/foo", method: "GET")
+        operation Nop {
         }
 
         @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
+        @title("test")
+        @restJson1
         service NoRegions {
-            version: "123"
+            version: "123",
+            operations: [Nop]
         }
 
         @aws.api#service(sdkId: "Test")
+        @title("test")
+        @restJson1
         service NoEndpointPrefix {
-            version: "123"
+            version: "123",
+            operations: [Nop]
         }
     """.asSmithyModel()
 
@@ -97,76 +117,83 @@ internal class EndpointConfigCustomizationTest {
         }
     """.let { ObjectNode.parse(it).expectObjectNode() }
 
-    fun endpointCustomization(service: String) =
-        EndpointConfigCustomization(
-            testCodegenContext(
-                model,
-                model.lookup(service)
-            ).copy(runtimeConfig = AwsTestRuntimeConfig),
-            endpointConfig
-        )
+    private fun validateEndpointCustomizationForService(service: String, test: ((RustCrate) -> Unit)? = null) {
+        val endpointsFile = File.createTempFile("endpoints", ".json")
+        endpointsFile.writeText(Node.printJson(endpointConfig))
+        clientIntegrationTest(
+            model,
+            listOf(),
+            service = service,
+            runtimeConfig = AwsTestRuntimeConfig,
+            additionalSettings = ObjectNode.builder()
+                .withMember(
+                    "customizationConfig",
+                    ObjectNode.builder()
+                        .withMember(
+                            "awsSdk",
+                            ObjectNode.builder()
+                                .withMember("integrationTestPath", "../sdk/integration-tests")
+                                .withMember("endpointsConfigPath", endpointsFile.absolutePath)
+                                .build(),
+                        ).build(),
+                )
+                .withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
+        ) { _, rustCrate ->
+            if (test != null) {
+                test(rustCrate)
+            }
+        }
+    }
 
     @Test
     fun `generates valid code`() {
-        validateConfigCustomizations(endpointCustomization("test#TestService"))
+        validateEndpointCustomizationForService("test#TestService")
     }
 
     @Test
     fun `generates valid code when no endpoint prefix is provided`() {
-        validateConfigCustomizations(endpointCustomization("test#NoEndpointPrefix"))
+        validateEndpointCustomizationForService("test#NoEndpointPrefix")
     }
 
     @Test
     fun `support region-specific endpoint overrides`() {
-        val project =
-            stubConfigProject(endpointCustomization("test#TestService"), TestWorkspace.testProject())
-        project.lib {
-            it.addDependency(awsTypes(AwsTestRuntimeConfig))
-            it.addDependency(CargoDependency.Http)
-            it.unitTest(
-                "region_override",
-                """
-                use aws_types::region::Region;
-                use http::Uri;
-                let conf = crate::config::Config::builder().build();
-                let endpoint = conf.endpoint_resolver
-                    .resolve_endpoint(&Region::new("fips-ca-central-1")).expect("default resolver produces a valid endpoint");
-                let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
-                assert_eq!(uri, Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
-                """
-            )
+        validateEndpointCustomizationForService("test#TestService") { crate ->
+            crate.lib {
+                unitTest("region_override") {
+                    rustTemplate(
+                        """
+                        let conf = crate::config::Config::builder().build();
+                        let endpoint = conf.endpoint_resolver
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("fips-ca-central-1")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://access-analyzer-fips.ca-central-1.amazonaws.com/");
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
         }
-        project.compileAndTest()
     }
 
     @Test
     fun `support region-agnostic services`() {
-        val project =
-            stubConfigProject(endpointCustomization("test#NoRegions"), TestWorkspace.testProject())
-        project.lib {
-            it.addDependency(awsTypes(AwsTestRuntimeConfig))
-            it.addDependency(CargoDependency.Http)
-            it.unitTest(
-                "global_services",
-                """
-                use aws_types::region::Region;
-                use http::Uri;
-                let conf = crate::config::Config::builder().build();
-                let endpoint = conf.endpoint_resolver
-                    .resolve_endpoint(&Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
-                let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
-                assert_eq!(uri, Uri::from_static("https://iam.amazonaws.com/?k=v"));
+        validateEndpointCustomizationForService("test#NoRegions") { crate ->
+            crate.lib {
+                unitTest("global_services") {
+                    rustTemplate(
+                        """
+                        let conf = crate::config::Config::builder().build();
+                        let endpoint = conf.endpoint_resolver
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("us-east-1")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://iam.amazonaws.com/");
 
-                let endpoint = conf.endpoint_resolver
-                    .resolve_endpoint(&Region::new("iam-fips")).expect("default resolver produces a valid endpoint");
-                let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
-                assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
-                """
-            )
+                        let endpoint = conf.endpoint_resolver
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("iam-fips")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://iam-fips.amazonaws.com/");
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
         }
-        project.compileAndTest()
     }
 }

@@ -1,12 +1,13 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 //! This module provides types useful for static tests.
 #![allow(missing_docs, missing_debug_implementations)]
 
 use crate::{Builder, Error, Operation, ParseHttpResponse, ProvideErrorKind};
 use aws_smithy_http::operation;
+use aws_smithy_http::retry::DefaultResponseRetryClassifier;
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -40,7 +41,7 @@ impl ParseHttpResponse for TestOperation {
         unreachable!("only used for static tests")
     }
 }
-pub type ValidTestOperation = Operation<TestOperation, ()>;
+pub type ValidTestOperation = Operation<TestOperation, DefaultResponseRetryClassifier>;
 
 // Statically check that a standard retry can actually be used to build a Client.
 #[allow(dead_code)]

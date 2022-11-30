@@ -1,17 +1,16 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #![no_main]
 
-use arbitrary::Arbitrary;
 use aws_smithy_eventstream::frame::{Header, HeaderValue, Message};
 use bytes::{Buf, BufMut};
 use crc32fast::Hasher as Crc;
 use libfuzzer_sys::fuzz_target;
 
-#[derive(Arbitrary, Debug)]
+#[derive(derive_arbitrary::Arbitrary, Debug)]
 struct Input {
     total_len: u32,
     header_len: u32,

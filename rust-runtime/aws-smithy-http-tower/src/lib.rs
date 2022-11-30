@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 pub mod dispatch;
@@ -42,10 +42,10 @@ impl<E> From<SendOperationError> for SdkError<E> {
     fn from(err: SendOperationError) -> Self {
         match err {
             SendOperationError::RequestDispatchError(e) => {
-                aws_smithy_http::result::SdkError::DispatchFailure(e)
+                aws_smithy_http::result::SdkError::dispatch_failure(e)
             }
             SendOperationError::RequestConstructionError(e) => {
-                aws_smithy_http::result::SdkError::ConstructionFailure(e)
+                aws_smithy_http::result::SdkError::construction_failure(e)
             }
         }
     }
@@ -62,6 +62,7 @@ mod tests {
     use aws_smithy_http::operation::{Operation, Request};
     use aws_smithy_http::response::ParseStrictResponse;
     use aws_smithy_http::result::ConnectorError;
+    use aws_smithy_http::retry::DefaultResponseRetryClassifier;
     use bytes::Bytes;
     use http::Response;
     use std::convert::{Infallible, TryInto};
@@ -102,7 +103,10 @@ mod tests {
         });
 
         let mut svc = ServiceBuilder::new()
-            .layer(ParseResponseLayer::<TestParseResponse, ()>::new())
+            .layer(ParseResponseLayer::<
+                TestParseResponse,
+                DefaultResponseRetryClassifier,
+            >::new())
             .layer(MapRequestLayer::for_mapper(AddHeader))
             .layer(DispatchLayer)
             .service(http_layer);

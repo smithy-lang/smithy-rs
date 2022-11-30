@@ -1,17 +1,18 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Packages, package discovery, and package batching logic.
 
 use crate::fs::Fs;
 use crate::sort::dependency_order;
+use crate::{RUST_SDK_CI_OWNER, RUST_SDK_OWNER, SMITHY_RS_SERVER_OWNER};
 use anyhow::{Context, Result};
 use cargo_toml::{Dependency, DepsSet, Manifest};
 use semver::Version;
 use smithy_rs_tool_common::package::PackageCategory;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::error::Error as StdError;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -85,6 +86,26 @@ impl Package {
     /// Returns `true` if this package depends on `other`
     pub fn locally_depends_on(&self, other: &PackageHandle) -> bool {
         self.local_dependencies.contains(other)
+    }
+
+    /// Returns the expected owners of the crate.
+    pub fn expected_owners(&self) -> HashSet<String> {
+        let mut ret = HashSet::new();
+
+        // Crate ownership for SDK crates. Crates.io requires that at least one owner
+        // is an individual rather than a team, so we use the automation user for that.
+        ret.insert(String::from(RUST_SDK_CI_OWNER));
+
+        if self.category.is_sdk() {
+            ret.insert(String::from(RUST_SDK_OWNER));
+        } else if self.handle.name.starts_with("aws-smithy-http-server") {
+            ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
+        } else {
+            ret.insert(String::from(RUST_SDK_OWNER));
+            ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
+        }
+
+        ret
     }
 }
 
@@ -258,7 +279,7 @@ fn validate_packages(packages: &[Package]) -> Result<()> {
     Ok(())
 }
 
-async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Package>> {
+pub async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Package>> {
     let mut result = Vec::new();
     for path in &manifest_paths {
         let contents: Vec<u8> = fs.read_file(path).await?;
@@ -365,7 +386,7 @@ mod tests {
 
         let error = format!(
             "{}",
-            read_package(&path, manifest).err().expect("should fail")
+            read_package(&path, manifest).expect_err("should fail")
         );
         assert!(
             error.contains("Invalid crate version"),
@@ -496,11 +517,58 @@ mod tests {
                 &[("C", "1.2.0"), ("D", "1.3.0"), ("F", "1.4.0")],
             ),
         ])
-        .err()
-        .expect("fail");
+        .expect_err("fail");
         assert_eq!(
             "crate A has multiple versions: 1.1.0 and 1.0.0",
             format!("{}", error)
+        );
+    }
+
+    #[test]
+    fn test_expected_package_owners_server_crate() {
+        let server_packages = vec![
+            package("aws-smithy-http-server", &[]),
+            package("aws-smithy-http-server-python", &[]),
+        ];
+        for pkg in server_packages {
+            assert_eq!(
+                [
+                    String::from("github:awslabs:smithy-rs-server"),
+                    String::from("aws-sdk-rust-ci")
+                ]
+                .into_iter()
+                .collect::<HashSet<String>>(),
+                pkg.expected_owners()
+            );
+        }
+    }
+
+    #[test]
+    fn test_expected_package_owners_sdk_crate() {
+        let sdk_package = package("aws-types", &[]);
+        assert_eq!(
+            [
+                String::from("github:awslabs:rust-sdk-owners"),
+                String::from("aws-sdk-rust-ci")
+            ]
+            .into_iter()
+            .collect::<HashSet<String>>(),
+            sdk_package.expected_owners()
+        );
+    }
+
+    #[test]
+    fn test_expected_package_owners_smithy_runtime_crate() {
+        let smithy_runtime_package = package("aws-smithy-types", &[]);
+        assert_eq!(
+            [
+                String::from("github:awslabs:smithy-rs-server"),
+                String::from("github:awslabs:rust-sdk-owners"),
+                String::from("aws-sdk-rust-ci")
+            ]
+            .into_iter()
+            .collect::<HashSet<String>>(),
+            smithy_runtime_package.expected_owners()
         );
     }
 }

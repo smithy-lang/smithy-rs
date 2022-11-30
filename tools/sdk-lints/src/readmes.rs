@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::{all_runtime_crates, anchor, Check, Fix, Lint, LintError};
@@ -24,7 +24,7 @@ impl Check for ReadmesExist {
         if !path.as_ref().join("README.md").exists() {
             return Ok(vec![LintError::new("Crate is missing a README")]);
         }
-        return Ok(vec![]);
+        Ok(vec![])
     }
 }
 

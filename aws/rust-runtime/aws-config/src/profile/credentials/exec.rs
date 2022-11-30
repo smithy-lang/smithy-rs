@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use std::sync::Arc;
@@ -11,6 +11,7 @@ use aws_types::region::Region;
 
 use super::repr::{self, BaseProvider};
 
+use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
 use crate::sso::{SsoConfig, SsoCredentialsProvider};
@@ -23,20 +24,20 @@ use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
 use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct AssumeRoleProvider {
+pub(super) struct AssumeRoleProvider {
     role_arn: String,
     external_id: Option<String>,
     session_name: Option<String>,
 }
 
 #[derive(Debug)]
-pub struct ClientConfiguration {
-    pub(crate) sts_client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
-    pub(crate) region: Option<Region>,
+pub(super) struct ClientConfiguration {
+    pub(super) sts_client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
+    pub(super) region: Option<Region>,
 }
 
 impl AssumeRoleProvider {
-    pub async fn credentials(
+    pub(super) async fn credentials(
         &self,
         input_credentials: Credentials,
         client_config: &ClientConfiguration,
@@ -76,19 +77,19 @@ pub(super) struct ProviderChain {
 }
 
 impl ProviderChain {
-    pub fn base(&self) -> &dyn ProvideCredentials {
+    pub(crate) fn base(&self) -> &dyn ProvideCredentials {
         self.base.as_ref()
     }
 
-    pub fn chain(&self) -> &[AssumeRoleProvider] {
+    pub(crate) fn chain(&self) -> &[AssumeRoleProvider] {
         self.chain.as_slice()
     }
 }
 
 impl ProviderChain {
-    pub fn from_repr(
+    pub(super) fn from_repr(
         provider_config: &ProviderConfig,
-        repr: repr::ProfileChain,
+        repr: repr::ProfileChain<'_>,
         factory: &named::NamedProviderFactory,
     ) -> Result<Self, ProfileFileError> {
         let base = match repr.base() {
@@ -100,6 +101,9 @@ impl ProviderChain {
                     })?
             }
             BaseProvider::AccessKey(key) => Arc::new(key.clone()),
+            BaseProvider::CredentialProcess(credential_process) => Arc::new(
+                CredentialProcessProvider::new(credential_process.unredacted().into()),
+            ),
             BaseProvider::WebIdentityTokenRole {
                 role_arn,
                 web_identity_token_file,
@@ -149,7 +153,7 @@ impl ProviderChain {
     }
 }
 
-pub mod named {
+pub(super) mod named {
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -157,19 +161,21 @@ pub mod named {
     use std::borrow::Cow;
 
     #[derive(Debug)]
-    pub struct NamedProviderFactory {
+    pub(crate) struct NamedProviderFactory {
         providers: HashMap<Cow<'static, str>, Arc<dyn ProvideCredentials>>,
     }
 
-    fn lower_cow(mut inp: Cow<str>) -> Cow<str> {
-        if !inp.chars().all(|c| c.is_ascii_lowercase()) {
-            inp.to_mut().make_ascii_lowercase();
+    fn lower_cow(mut input: Cow<'_, str>) -> Cow<'_, str> {
+        if !input.chars().all(|c| c.is_ascii_lowercase()) {
+            input.to_mut().make_ascii_lowercase();
         }
-        inp
+        input
     }
 
     impl NamedProviderFactory {
-        pub fn new(providers: HashMap<Cow<'static, str>, Arc<dyn ProvideCredentials>>) -> Self {
+        pub(crate) fn new(
+            providers: HashMap<Cow<'static, str>, Arc<dyn ProvideCredentials>>,
+        ) -> Self {
             let providers = providers
                 .into_iter()
                 .map(|(k, v)| (lower_cow(k), v))
@@ -177,7 +183,7 @@ pub mod named {
             Self { providers }
         }
 
-        pub fn provider(&self, name: &str) -> Option<Arc<dyn ProvideCredentials>> {
+        pub(crate) fn provider(&self, name: &str) -> Option<Arc<dyn ProvideCredentials>> {
             self.providers.get(&lower_cow(Cow::Borrowed(name))).cloned()
         }
     }

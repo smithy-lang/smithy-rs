@@ -1,8 +1,9 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
 
@@ -32,7 +33,7 @@ impl EnvironmentVariableAppNameProvider {
             match AppName::new(name) {
                 Ok(name) => Some(name),
                 Err(err) => {
-                    tracing::warn!(err = %err, "`AWS_SDK_UA_APP_ID` environment variable value was invalid");
+                    tracing::warn!(err = %DisplayErrorContext(&err), "`AWS_SDK_UA_APP_ID` environment variable value was invalid");
                     None
                 }
             }

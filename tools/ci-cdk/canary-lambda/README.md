@@ -13,8 +13,21 @@ the previous version of the SDK continues to work after the deployment
 of the new version.
 
 
-Building locally for Lambda
----------------------------
+Building locally for Lambda from Amazon Linux 2
+-----------------------------------------------
+
+1. Build a code bundle:
+
+```
+$ cd smithy-rs/tools/ci-cdk/canary-runner
+$ cargo run -- build-bundle --canary-path ../canary-lambda --sdk-release-tag <release-tag> --musl
+```
+
+This will place a zip file in `smithy-rs/target/release` that can be uploaded and tested against Lambda.
+
+
+Building locally for Lambda from non Amazon Linux 2 system
+----------------------------------------------------------
 
 1. Make sure the `musl-gcc` wrapper is installed.
 2. Add the musl target for Rust:
@@ -26,7 +39,8 @@ $ rustup target add x86_64-unknown-linux-musl
 3. Build a code bundle:
 
 ```
-$ ./build-bundle.sh
+$ cd smithy-rs/tools/ci-cdk/canary-runner
+$ cargo run -- build-bundle --canary-path ../canary-lambda --sdk-release-tag <release-tag> --musl
 ```
 
 This will place a zip file in `smithy-rs/target/x86_64-unknown-linux-musl/release` that can be

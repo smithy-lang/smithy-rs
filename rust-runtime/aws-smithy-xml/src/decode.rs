@@ -1,12 +1,13 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::unescape::unescape;
 use std::borrow::Cow;
 use std::convert::TryFrom;
-use thiserror::Error;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use xmlparser::{ElementEnd, Token, Tokenizer};
 
 pub type Depth = usize;
@@ -14,23 +15,65 @@ pub type Depth = usize;
 // in general, these errors are just for reporting what happened, there isn't
 // much value in lots of different match variants
 
-#[derive(Debug, Error)]
-pub enum XmlError {
-    #[error("XML Parse Error")]
-    InvalidXml(#[from] xmlparser::Error),
-
-    #[error("Invalid XML Escape: {esc}")]
+#[derive(Debug)]
+enum XmlDecodeErrorKind {
+    InvalidXml(xmlparser::Error),
     InvalidEscape { esc: String },
-
-    #[error("Error parsing XML: {0}")]
     Custom(Cow<'static, str>),
-    #[error("Encountered another error parsing XML: {0}")]
-    Unhandled(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl XmlError {
+#[derive(Debug)]
+pub struct XmlDecodeError {
+    kind: XmlDecodeErrorKind,
+}
+
+impl From<xmlparser::Error> for XmlDecodeError {
+    fn from(error: xmlparser::Error) -> Self {
+        Self {
+            kind: XmlDecodeErrorKind::InvalidXml(error),
+        }
+    }
+}
+
+impl Display for XmlDecodeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            XmlDecodeErrorKind::InvalidXml(_) => write!(f, "XML parse error"),
+            XmlDecodeErrorKind::InvalidEscape { esc } => write!(f, "invalid XML escape: {}", esc),
+            XmlDecodeErrorKind::Custom(msg) => write!(f, "error parsing XML: {}", msg),
+            XmlDecodeErrorKind::Unhandled(_) => write!(f, "error parsing XML"),
+        }
+    }
+}
+
+impl Error for XmlDecodeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.kind {
+            XmlDecodeErrorKind::InvalidXml(source) => Some(source as _),
+            XmlDecodeErrorKind::Unhandled(source) => Some(source.as_ref() as _),
+            XmlDecodeErrorKind::InvalidEscape { .. } | XmlDecodeErrorKind::Custom(..) => None,
+        }
+    }
+}
+
+impl XmlDecodeError {
+    pub(crate) fn invalid_escape(esc: impl Into<String>) -> Self {
+        Self {
+            kind: XmlDecodeErrorKind::InvalidEscape { esc: esc.into() },
+        }
+    }
+
     pub fn custom(msg: impl Into<Cow<'static, str>>) -> Self {
-        XmlError::Custom(msg.into())
+        Self {
+            kind: XmlDecodeErrorKind::Custom(msg.into()),
+        }
+    }
+
+    pub fn unhandled(error: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self {
+            kind: XmlDecodeErrorKind::Unhandled(error.into()),
+        }
     }
 }
 
@@ -151,11 +194,11 @@ pub struct Document<'a> {
 }
 
 impl<'a> TryFrom<&'a [u8]> for Document<'a> {
-    type Error = XmlError;
+    type Error = XmlDecodeError;
 
     fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
         Ok(Document::new(
-            std::str::from_utf8(value).map_err(|err| XmlError::Unhandled(Box::new(err)))?,
+            std::str::from_utf8(value).map_err(XmlDecodeError::unhandled)?,
         ))
     }
 }
@@ -188,10 +231,10 @@ impl<'inp> Document<'inp> {
     }
 
     /// A scoped reader for the entire document
-    pub fn root_element<'a>(&'a mut self) -> Result<ScopedDecoder<'inp, 'a>, XmlError> {
+    pub fn root_element<'a>(&'a mut self) -> Result<ScopedDecoder<'inp, 'a>, XmlDecodeError> {
         let start_el = self
             .next_start_element()
-            .ok_or_else(|| XmlError::custom("no root element"))?;
+            .ok_or_else(|| XmlDecodeError::custom("no root element"))?;
         Ok(ScopedDecoder {
             doc: self,
             start_el,
@@ -224,8 +267,8 @@ impl<'inp> Document<'inp> {
 /// </a> <- endel depth 0
 /// ```
 impl<'inp> Iterator for Document<'inp> {
-    type Item = Result<(Token<'inp>, Depth), XmlError>;
-    fn next<'a>(&'a mut self) -> Option<Result<(Token<'inp>, Depth), XmlError>> {
+    type Item = Result<(Token<'inp>, Depth), XmlDecodeError>;
+    fn next<'a>(&'a mut self) -> Option<Result<(Token<'inp>, Depth), XmlDecodeError>> {
         let tok = self.tokenizer.next()?;
         let tok = match tok {
             Err(e) => return Some(Err(e.into())),
@@ -300,7 +343,7 @@ impl<'inp> ScopedDecoder<'inp, '_> {
 
     fn nested_decoder<'a>(&'a mut self, start_el: StartEl<'inp>) -> ScopedDecoder<'inp, 'a> {
         ScopedDecoder {
-            doc: &mut self.doc,
+            doc: self.doc,
             start_el,
             terminated: false,
         }
@@ -308,7 +351,7 @@ impl<'inp> ScopedDecoder<'inp, '_> {
 }
 
 impl<'inp, 'a> Iterator for ScopedDecoder<'inp, 'a> {
-    type Item = Result<(Token<'inp>, Depth), XmlError>;
+    type Item = Result<(Token<'inp>, Depth), XmlDecodeError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.start_el.closed {
@@ -335,7 +378,7 @@ impl<'inp, 'a> Iterator for ScopedDecoder<'inp, 'a> {
 
 /// Load the next start element out of a depth-tagged token iterator
 fn next_start_element<'a, 'inp>(
-    tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlError>>,
+    tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlDecodeError>>,
 ) -> Option<StartEl<'inp>> {
     let mut out = StartEl::new("", "", 0);
     loop {
@@ -388,15 +431,15 @@ fn next_start_element<'a, 'inp>(
 /// If the current position is not a data element (and is instead a <startelement>) an error
 /// will be returned
 pub fn try_data<'a, 'inp>(
-    tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlError>>,
-) -> Result<Cow<'inp, str>, XmlError> {
+    tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlDecodeError>>,
+) -> Result<Cow<'inp, str>, XmlDecodeError> {
     loop {
         match tokens.next().map(|opt| opt.map(|opt| opt.0)) {
             None => return Ok(Cow::Borrowed("")),
             Some(Ok(Token::Text { text })) => return unescape(text.as_str()),
             Some(Ok(e @ Token::ElementStart { .. })) => {
-                return Err(XmlError::custom(format!(
-                    "Looking for a data element, found: {:?}",
+                return Err(XmlDecodeError::custom(format!(
+                    "looking for a data element, found: {:?}",
                     e
                 )))
             }
@@ -446,7 +489,7 @@ mod test {
         let xml = r#"<Response/>"#;
         let mut doc = Document::new(xml);
         let mut scoped = doc.root_element().expect("valid doc");
-        assert_eq!(scoped.start_el.closed, true);
+        assert!(scoped.start_el.closed);
         assert!(scoped.next_tag().is_none())
     }
 
@@ -514,8 +557,8 @@ mod test {
             root.start_el().attributes,
             vec![Attr {
                 name: Name {
-                    prefix: "xsi".into(),
-                    local: "type".into()
+                    prefix: "xsi",
+                    local: "type"
                 },
                 value: "CanonicalUser".into()
             }]
@@ -523,7 +566,7 @@ mod test {
     }
 
     #[test]
-    fn escape_data() {
+    fn unescape_data() {
         let xml = r#"<Response key="&quot;hey&quot;>">&gt;</Response>"#;
         let mut doc = Document::new(xml);
         let mut root = doc.root_element().unwrap();

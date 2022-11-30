@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -e
+
+if [[ ! -d smithy-rs ]]; then
+  echo "A fresh copy of smithy-rs must be checked out from the path this script is executed from." >&2
+  exit 1
+fi
+
+START_PATH="$(realpath "$(pwd)")"
+rm -rf "${START_PATH}/artifacts"
+mkdir -p "${START_PATH}/gradle"
+
+SCRIPT_PATH="$(realpath "$(dirname "$0")")"
+cd "${SCRIPT_PATH}"
+
+ACTION_PATH="$(mktemp -d -t smithy-rs-build.XXXXXX)"
+
+cp build.docker-compose.yml "${ACTION_PATH}/"
+mkdir -p "${ACTION_PATH}/workspace/artifacts"
+
+# Copy scripts into workspace
+cp -r "${SCRIPT_PATH}/scripts" "${ACTION_PATH}/workspace/"
+
+# Copy inputs into workspace
+for input_name in \
+    "aws-doc-sdk-examples" \
+    "aws-sdk-rust" \
+    "aws-sdk" \
+    "aws-sdk-smoketest" \
+    "smithy-rs";
+do
+    input_path="${START_PATH}/${input_name}"
+    if [[ ! -d "${input_path}" ]]; then
+        # In local dev, the artifacts aren't extracted into the workspace path, but rather,
+        # remain in the `artifacts/` path. So look there too.
+        input_path="${START_PATH}/artifacts/${input_name}"
+    fi
+    if [[ -d "${input_path}" ]]; then
+        if [[ -d "${input_path}/.git" ]]; then
+            # Copy the inputs across while excluding .gitignore'd files
+            EXCLUDES_FILE="${ACTION_PATH}/.excludes"
+            git -C "${input_path}" ls-files --exclude-standard -oi --directory >"${EXCLUDES_FILE}"
+            rsync -ra \
+                "${input_path}/" \
+                "${ACTION_PATH}/workspace/$(basename "${input_path}")" \
+                --exclude-from="${EXCLUDES_FILE}"
+            rm "${EXCLUDES_FILE}"
+        else
+            cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename "${input_path}")"
+        fi
+    fi
+done
+
+if [[ -d "${START_PATH}/smithy-rs-target" ]]; then
+    mv "${START_PATH}/smithy-rs-target" "${ACTION_PATH}/workspace/smithy-rs/target"
+fi
+
+# Output path to workspace
+echo "${ACTION_PATH}"

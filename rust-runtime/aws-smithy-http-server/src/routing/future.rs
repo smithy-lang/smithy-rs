@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // This code was copied and then modified from Tokio's Axum.
@@ -33,29 +33,13 @@
  */
 
 //! Future types.
-use crate::body::BoxBody;
-use futures_util::future::Either;
-use http::{Request, Response};
-use std::{convert::Infallible, future::ready};
-use tower::util::Oneshot;
 
+use crate::routers::RoutingFuture;
+
+use super::Route;
 pub use super::{into_make_service::IntoMakeService, route::RouteFuture};
-
-type OneshotRoute<B> = Oneshot<super::Route<B>, Request<B>>;
-type ReadyResponse = std::future::Ready<Result<Response<BoxBody>, Infallible>>;
 
 opaque_future! {
     /// Response future for [`Router`](super::Router).
-    pub type RouterFuture<B> =
-        futures_util::future::Either<OneshotRoute<B>, ReadyResponse>;
-}
-
-impl<B> RouterFuture<B> {
-    pub(super) fn from_oneshot(future: Oneshot<super::Route<B>, Request<B>>) -> Self {
-        Self::new(Either::Left(future))
-    }
-
-    pub(super) fn from_response(response: Response<BoxBody>) -> Self {
-        Self::new(Either::Right(ready(Ok(response))))
-    }
+    pub type RouterFuture<B> = RoutingFuture<Route<B>, B>;
 }

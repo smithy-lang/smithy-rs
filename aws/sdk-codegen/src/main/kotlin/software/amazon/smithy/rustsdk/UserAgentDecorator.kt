@@ -1,47 +1,48 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 /**
  * Inserts a UserAgent configuration into the operation
  */
-class UserAgentDecorator : RustCodegenDecorator {
+class UserAgentDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "UserAgent"
     override val order: Byte = 10
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + AppNameCustomization(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         // We are generating an AWS SDK, the service needs to have the AWS service trait
         val serviceTrait = codegenContext.serviceShape.expectTrait<ServiceTrait>()
@@ -49,12 +50,15 @@ class UserAgentDecorator : RustCodegenDecorator {
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**
@@ -62,13 +66,13 @@ class UserAgentDecorator : RustCodegenDecorator {
  */
 private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serviceTrait: ServiceTrait) :
     LibRsCustomization() {
-    private val serviceId = serviceTrait.sdkId.toLowerCase().replace(" ", "")
+    private val serviceId = serviceTrait.sdkId.lowercase().replace(" ", "")
     override fun section(section: LibRsSection): Writable = when (section) {
         is LibRsSection.Body -> writable {
             // PKG_VERSION comes from CrateVersionGenerator
             rust(
                 "static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);",
-                runtimeConfig.userAgentModule()
+                runtimeConfig.userAgentModule(),
             )
 
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
@@ -78,7 +82,7 @@ private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serv
     }
 }
 
-private fun RuntimeConfig.userAgentModule() = awsHttp().asType().member("user_agent")
+private fun RuntimeConfig.userAgentModule() = awsHttp().toType().member("user_agent")
 private fun RuntimeConfig.env(): RuntimeType = RuntimeType("Env", awsTypes(), "aws_types::os_shim_internal")
 private fun RuntimeConfig.appName(): RuntimeType = RuntimeType("AppName", awsTypes(this), "aws_types::app_name")
 
@@ -133,7 +137,7 @@ private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomi
                         self
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             is ServiceConfig.BuilderBuild -> writable {
@@ -153,7 +157,7 @@ private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomi
                         self.app_name.as_ref()
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             else -> emptySection

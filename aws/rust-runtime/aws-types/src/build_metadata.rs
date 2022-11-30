@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Metadata type used by all service SDKs to provide information about the environment the SDK was compiled for.
@@ -41,7 +41,7 @@ pub enum OsFamily {
 /// is set to a specific value. This macro simplifies checking the current OS family.
 ///
 /// Usage:
-/// ```rust
+/// ```ignore
 /// let os = get_os_family!(target_os: ("linux", OsFamily::Windows), ("android", OsFamily::Android));
 /// ```
 macro_rules! get_os_family {

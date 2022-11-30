@@ -1,16 +1,17 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::query_writer::QueryWriter;
-use super::{Error, PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::date_time::{format_date, format_date_time};
+use crate::http_request::error::CanonicalRequestError;
+use crate::http_request::query_writer::QueryWriter;
 use crate::http_request::sign::SignableRequest;
 use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
+use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::sign::sha256_hex_string;
-use http::header::{HeaderName, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT};
+use http::header::{HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -40,6 +41,7 @@ pub(crate) mod param {
 pub(crate) const HMAC_256: &str = "AWS4-HMAC-SHA256";
 
 const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
+const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD-TRAILER";
 
 #[derive(Debug, PartialEq)]
 pub(super) struct HeaderValues<'a> {
@@ -123,7 +125,7 @@ impl<'a> CanonicalRequest<'a> {
     pub(super) fn from<'b>(
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
-    ) -> Result<CanonicalRequest<'b>, Error> {
+    ) -> Result<CanonicalRequest<'b>, CanonicalRequestError> {
         // Path encoding: if specified, re-encode % as %25
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
@@ -181,7 +183,7 @@ impl<'a> CanonicalRequest<'a> {
         params: &SigningParams<'_>,
         payload_hash: &str,
         date_time: &str,
-    ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), Error> {
+    ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), CanonicalRequestError> {
         // Header computation:
         // The canonical request will include headers not present in the input. We need to clone and
         // normalize the headers from the original request and add:
@@ -195,7 +197,7 @@ impl<'a> CanonicalRequest<'a> {
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
-                normalize_header_value(value),
+                normalize_header_value(value)?,
             );
         }
 
@@ -218,16 +220,13 @@ impl<'a> CanonicalRequest<'a> {
 
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
         for (name, _) in &canonical_headers {
-            // The user agent header should not be signed because it may be altered by proxies
-            if name == USER_AGENT {
-                continue;
-            }
-            if params.settings.signature_location == SignatureLocation::QueryParams {
-                // Exclude content-length and content-type for query param signatures since the
-                // body is unsigned for these use-cases, and the size is not known up-front.
-                if name == CONTENT_LENGTH || name == CONTENT_TYPE {
+            if let Some(excluded_headers) = params.settings.excluded_headers.as_ref() {
+                if excluded_headers.contains(name) {
                     continue;
                 }
+            }
+
+            if params.settings.signature_location == SignatureLocation::QueryParams {
                 // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
                 if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
                     continue;
@@ -246,10 +245,15 @@ impl<'a> CanonicalRequest<'a> {
         // - compute a hash
         // - use the precomputed hash
         // - use `UnsignedPayload`
+        // - use `UnsignedPayload` for streaming requests
+        // - use `StreamingUnsignedPayloadTrailer` for streaming requests with trailers
         match body {
             SignableBody::Bytes(data) => Cow::Owned(sha256_hex_string(data)),
             SignableBody::Precomputed(digest) => Cow::Borrowed(digest.as_str()),
             SignableBody::UnsignedPayload => Cow::Borrowed(UNSIGNED_PAYLOAD),
+            SignableBody::StreamingUnsignedPayloadTrailer => {
+                Cow::Borrowed(STREAMING_UNSIGNED_PAYLOAD_TRAILER)
+            }
         }
     }
 
@@ -370,11 +374,17 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
     &bytes[starting_index..ending_index]
 }
 
-/// Works just like [trim_all] but acts on HeaderValues instead of bytes
-fn normalize_header_value(header_value: &HeaderValue) -> HeaderValue {
+/// Works just like [trim_all] but acts on HeaderValues instead of bytes.
+/// Will ensure that the underlying bytes are valid UTF-8.
+fn normalize_header_value(
+    header_value: &HeaderValue,
+) -> Result<HeaderValue, CanonicalRequestError> {
     let trimmed_value = trim_all(header_value.as_bytes());
-    // This can't fail because we started with a valid HeaderValue and then only trimmed spaces
-    HeaderValue::from_bytes(&trimmed_value).unwrap()
+    HeaderValue::from_str(
+        std::str::from_utf8(&trimmed_value)
+            .map_err(CanonicalRequestError::invalid_utf8_in_header_value)?,
+    )
+    .map_err(CanonicalRequestError::from)
 }
 
 #[derive(Debug, PartialEq, Default)]
@@ -485,7 +495,7 @@ impl<'a> fmt::Display for StringToSign<'a> {
             "{}\n{}\n{}\n{}",
             HMAC_256,
             format_date_time(self.time),
-            self.scope.to_string(),
+            self.scope,
             self.hashed_creq
         )
     }
@@ -504,10 +514,10 @@ mod tests {
     };
     use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
-    use http::HeaderValue;
     use http::Uri;
+    use http::{header::HeaderName, HeaderValue};
     use pretty_assertions::assert_eq;
-    use proptest::proptest;
+    use proptest::{prelude::*, proptest};
     use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
@@ -594,7 +604,7 @@ mod tests {
             region: "us-east-1",
             service: "iam",
         };
-        assert_eq!(format!("{}\n", scope.to_string()), expected);
+        assert_eq!(format!("{}\n", scope), expected);
     }
 
     #[test]
@@ -675,7 +685,7 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    // It should exclude user-agent, content-type, content-length, and x-amz-user-agent headers from presigning
+    // It should exclude user-agent and x-amz-user-agent headers from presigning
     #[test]
     fn presigning_header_exclusion() {
         let request = http::Request::builder()
@@ -688,15 +698,61 @@ mod tests {
             .unwrap();
         let request = SignableRequest::from(&request);
 
-        let mut settings = SigningSettings::default();
-        settings.signature_location = SignatureLocation::QueryParams;
-        settings.expires_in = Some(Duration::from_secs(30));
+        let settings = SigningSettings {
+            signature_location: SignatureLocation::QueryParams,
+            expires_in: Some(Duration::from_secs(30)),
+            ..Default::default()
+        };
 
         let signing_params = signing_params(settings);
         let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
         let values = canonical.values.into_query_params().unwrap();
-        assert_eq!("host", values.signed_headers.as_str());
+        assert_eq!(
+            "content-length;content-type;host",
+            values.signed_headers.as_str()
+        );
+    }
+
+    proptest! {
+       #[test]
+       fn presigning_header_exclusion_with_explicit_exclusion_list_specified(
+           excluded_headers in prop::collection::vec("[a-z]{1,20}", 1..10),
+       ) {
+            let mut request_builder = http::Request::builder()
+                .uri("https://some-endpoint.some-region.amazonaws.com")
+                .header("content-type", "application/xml")
+                .header("content-length", "0");
+            for key in &excluded_headers {
+                request_builder = request_builder.header(key, "value");
+            }
+            let request = request_builder.body("").unwrap();
+
+            let request = SignableRequest::from(&request);
+
+            let settings = SigningSettings {
+                signature_location: SignatureLocation::QueryParams,
+                expires_in: Some(Duration::from_secs(30)),
+                excluded_headers: Some(
+                    excluded_headers
+                        .into_iter()
+                        .map(|header_string| {
+                            HeaderName::from_static(Box::leak(header_string.into_boxed_str()))
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            };
+
+            let signing_params = signing_params(settings);
+            let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
+
+            let values = canonical.values.into_query_params().unwrap();
+            assert_eq!(
+                "content-length;content-type;host",
+                values.signed_headers.as_str()
+            );
+        }
     }
 
     #[test]
@@ -730,9 +786,9 @@ mod tests {
         }
 
         #[test]
-        fn test_normalize_header_value_doesnt_panic(v in (".*")) {
+        fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
             if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
-                let _ = normalize_header_value(&header_value);
+                assert!(normalize_header_value(&header_value).is_ok());
             }
         }
 
@@ -740,5 +796,11 @@ mod tests {
         fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
             assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
+    }
+
+    #[test]
+    fn test_normalize_header_value_returns_expected_error_on_invalid_utf8() {
+        let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
+        assert!(normalize_header_value(&header_value).is_err());
     }
 }

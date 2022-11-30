@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Profile file parsing
@@ -19,13 +19,13 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
 /// A set of profiles that still carries a reference to the underlying data
-pub type RawProfileSet<'a> = HashMap<&'a str, HashMap<&'a str, Cow<'a, str>>>;
+pub(super) type RawProfileSet<'a> = HashMap<&'a str, HashMap<&'a str, Cow<'a, str>>>;
 
 /// Characters considered to be whitespace by the spec
 ///
 /// Profile parsing is actually quite strict about what is and is not whitespace, so use this instead
 /// of `.is_whitespace()` / `.trim()`
-pub const WHITESPACE: &[char] = &[' ', '\t'];
+pub(super) const WHITESPACE: &[char] = &[' ', '\t'];
 const COMMENT: &[char] = &['#', ';'];
 
 /// Location for use during error reporting
@@ -36,7 +36,7 @@ struct Location {
 }
 
 /// An error encountered while parsing a profile
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ProfileParseError {
     /// Location where this error occurred
     location: Location,
@@ -104,13 +104,13 @@ enum State<'a> {
 }
 
 /// Parse `file` into a `RawProfileSet`
-pub fn parse_profile_file(file: &File) -> Result<RawProfileSet, ProfileParseError> {
+pub(super) fn parse_profile_file(file: &File) -> Result<RawProfileSet<'_>, ProfileParseError> {
     let mut parser = Parser {
         data: HashMap::new(),
         state: State::Starting,
         location: Location {
             line_number: 0,
-            path: file.path.to_string(),
+            path: file.path.clone().unwrap_or_default(),
         },
     };
     parser.parse_profile(&file.contents)?;
@@ -290,6 +290,7 @@ mod test {
     use super::{parse_profile_file, prepare_line, Location};
     use crate::profile::parser::parse::{parse_property_line, PropertyError};
     use crate::profile::parser::source::File;
+    use crate::profile::profile_file::ProfileFileKind;
 
     // most test cases covered by the JSON test suite
 
@@ -330,7 +331,8 @@ mod test {
     #[test]
     fn error_line_numbers() {
         let file = File {
-            path: "~/.aws/config".into(),
+            kind: ProfileFileKind::Config,
+            path: Some("~/.aws/config".into()),
             contents: "[default\nk=v".into(),
         };
         let err = parse_profile_file(&file).expect_err("parsing should fail");

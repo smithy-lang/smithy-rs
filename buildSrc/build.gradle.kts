@@ -1,8 +1,9 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import java.util.Properties
 
 plugins {
@@ -10,7 +11,8 @@ plugins {
     jacoco
 }
 repositories {
-    maven("https://plugins.gradle.org/m2")
+    mavenCentral()
+    google()
 }
 
 // Load properties manually to avoid hard coding smithy version
@@ -20,12 +22,6 @@ val props = Properties().apply {
 
 val smithyVersion = props["smithyVersion"]
 
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-}
-
 dependencies {
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     implementation("software.amazon.smithy:smithy-utils:$smithyVersion")
@@ -34,6 +30,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
     implementation(gradleApi())
+    implementation("com.moandjiezana.toml:toml4j:0.7.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
 }
 
@@ -41,6 +38,10 @@ tasks.test {
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")
+        exceptionFormat = TestExceptionFormat.FULL
+        showCauses = true
+        showExceptions = true
+        showStackTraces = true
         showStandardStreams = true
     }
 }
@@ -48,9 +49,9 @@ tasks.test {
 // Configure jacoco (code coverage) to generate an HTML report
 tasks.jacocoTestReport {
     reports {
-        xml.isEnabled = false
-        csv.isEnabled = false
-        html.destination = file("$buildDir/reports/jacoco")
+        xml.required.set(false)
+        csv.required.set(false)
+        html.outputLocation.set(file("$buildDir/reports/jacoco"))
     }
 }
 

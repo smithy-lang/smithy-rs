@@ -1,7 +1,9 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
+
+//! Providers that load configuration from environment variables
 
 /// Load app name from the environment
 pub mod app_name;
@@ -18,7 +20,3 @@ pub use region::EnvironmentVariableRegionProvider;
 /// Load retry behavior configuration from the environment
 pub mod retry_config;
 pub use retry_config::EnvironmentVariableRetryConfigProvider;
-
-/// Load timeout configuration from the environment
-pub mod timeout_config;
-pub use timeout_config::EnvironmentVariableTimeoutConfigProvider;

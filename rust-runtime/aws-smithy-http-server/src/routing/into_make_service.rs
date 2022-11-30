@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // This code was copied and then modified from Tokio's Axum.
@@ -48,7 +48,7 @@ pub struct IntoMakeService<S> {
 }
 
 impl<S> IntoMakeService<S> {
-    pub(super) fn new(service: S) -> Self {
+    pub fn new(service: S) -> Self {
         Self { service }
     }
 }

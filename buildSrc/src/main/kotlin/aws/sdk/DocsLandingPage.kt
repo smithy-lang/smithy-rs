@@ -1,12 +1,12 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package aws.sdk
 
 import org.gradle.api.Project
-import software.amazon.smithy.utils.CodeWriter
+import software.amazon.smithy.utils.SimpleCodeWriter
 import java.io.File
 
 /**
@@ -17,13 +17,13 @@ import java.io.File
  */
 fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
     val project = this
-    val writer = CodeWriter()
+    val writer = SimpleCodeWriter()
     with(writer) {
         write("# AWS SDK for Rust")
         write(
             "The AWS SDK for Rust contains one crate for each AWS service, as well as ${cratesIo("aws-config")} " +
                 "${docsRs("aws-config")}, a crate implementing configuration loading such as credential providers. " +
-                "For usage documentation see the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html)."
+                "For usage documentation see the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html).",
         )
 
         writer.write("## AWS Services")
@@ -34,7 +34,7 @@ fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
         awsServices.services.sortedBy { it.humanName }.forEach {
             val items = listOfNotNull(cratesIo(it), docsRs(it), examplesLink(it, project)).joinToString(" ")
             writer.write(
-                "| ${it.humanName} | $items |"
+                "| ${it.humanName} | $items |",
             )
         }
     }

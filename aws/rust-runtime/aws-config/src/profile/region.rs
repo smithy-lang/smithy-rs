@@ -1,21 +1,24 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Load a region from an AWS profile
 
 use crate::meta::region::{future, ProvideRegion};
+use crate::profile::profile_file::ProfileFiles;
+use crate::profile::ProfileSet;
 use crate::provider_config::ProviderConfig;
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
-
-use super::ProfileSet;
 
 /// Load a region from a profile file
 ///
 /// This provider will attempt to load AWS shared configuration, then read the `region` property
 /// from the active profile.
+///
+#[doc = include_str!("location_of_profile_files.md")]
 ///
 /// # Examples
 ///
@@ -39,13 +42,15 @@ pub struct ProfileFileRegionProvider {
     fs: Fs,
     env: Env,
     profile_override: Option<String>,
+    profile_files: ProfileFiles,
 }
 
 /// Builder for [ProfileFileRegionProvider]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     config: Option<ProviderConfig>,
     profile_override: Option<String>,
+    profile_files: Option<ProfileFiles>,
 }
 
 impl Builder {
@@ -55,9 +60,15 @@ impl Builder {
         self
     }
 
-    /// Override the profile name used by the [ProfileFileRegionProvider]
+    /// Override the profile name used by the [`ProfileFileRegionProvider`]
     pub fn profile_name(mut self, profile_name: impl Into<String>) -> Self {
         self.profile_override = Some(profile_name.into());
+        self
+    }
+
+    /// Set the profile file that should be used by the [`ProfileFileRegionProvider`]
+    pub fn profile_files(mut self, profile_files: ProfileFiles) -> Self {
+        self.profile_files = Some(profile_files);
         self
     }
 
@@ -68,6 +79,7 @@ impl Builder {
             env: conf.env(),
             fs: conf.fs(),
             profile_override: self.profile_override,
+            profile_files: self.profile_files.unwrap_or_default(),
         }
     }
 }
@@ -81,6 +93,7 @@ impl ProfileFileRegionProvider {
             fs: Fs::real(),
             env: Env::real(),
             profile_override: None,
+            profile_files: ProfileFiles::default(),
         }
     }
 
@@ -90,9 +103,11 @@ impl ProfileFileRegionProvider {
     }
 
     async fn region(&self) -> Option<Region> {
-        let profile_set = super::parser::load(&self.fs, &self.env)
+        let profile_set = super::parser::load(&self.fs, &self.env, &self.profile_files)
             .await
-            .map_err(|err| tracing::warn!(err = %err, "failed to parse profile"))
+            .map_err(
+                |err| tracing::warn!(err = %DisplayErrorContext(&err), "failed to parse profile"),
+            )
             .ok()?;
 
         resolve_profile_chain_for_region(&profile_set, self.profile_override.as_deref())
@@ -149,7 +164,7 @@ fn resolve_profile_chain_for_region(
 }
 
 impl ProvideRegion for ProfileFileRegionProvider {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::new(self.region())
     }
 }

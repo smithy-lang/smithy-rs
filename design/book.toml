@@ -1,6 +1,12 @@
 [book]
-authors = ["Russell Cohen"]
+authors = ["Russell Cohen", "aws-sdk-rust@amazon.com"]
 language = "en"
 multilingual = false
 src = "src"
 title = "AWS Rust SDK Design"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+additional-js = ["static/mermaid.min.js", "static/mermaid-init.js"]

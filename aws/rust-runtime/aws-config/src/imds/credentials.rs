@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! IMDSv2 Credentials Provider
@@ -8,15 +8,34 @@
 //! # Important
 //! This credential provider will NOT fallback to IMDSv1. Ensure that IMDSv2 is enabled on your instances.
 
+use super::client::error::ImdsError;
 use crate::imds;
-use crate::imds::client::{ImdsError, LazyClient};
-use crate::json_credentials::{parse_json_credentials, JsonCredentials};
+use crate::imds::client::LazyClient;
+use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
-use aws_smithy_client::SdkError;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Env;
 use aws_types::{credentials, Credentials};
 use std::borrow::Cow;
+use std::error::Error as StdError;
+use std::fmt;
+
+#[derive(Debug)]
+struct ImdsCommunicationError {
+    source: Box<dyn StdError + Send + Sync + 'static>,
+}
+
+impl fmt::Display for ImdsCommunicationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "could not communicate with IMDS")
+    }
+}
+
+impl StdError for ImdsCommunicationError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        Some(self.source.as_ref())
+    }
+}
 
 /// IMDSv2 Credentials Provider
 ///
@@ -46,7 +65,7 @@ impl Builder {
     /// Override the [instance profile](instance-profile) used for this provider.
     ///
     /// When retrieving IMDS credentials, a call must first be made to
-    /// `<IMDS_BASE_URL>/latest/meta-data/iam/security-credentials`. This returns the instance
+    /// `<IMDS_BASE_URL>/latest/meta-data/iam/security-credentials/`. This returns the instance
     /// profile used. By setting this parameter, retrieving the profile is skipped
     /// and the provided value is used instead.
     ///
@@ -63,9 +82,6 @@ impl Builder {
     ///
     /// For more information about IMDS client configuration loading see [`imds::Client`]
     pub fn imds_client(mut self, client: imds::Client) -> Self {
-        if self.provider_config.is_some() {
-            tracing::warn!("provider config override by a full client override");
-        }
         self.imds_override = Some(client);
         self
     }
@@ -129,20 +145,24 @@ impl ImdsCredentialsProvider {
         match self
             .client()
             .await?
-            .get("/latest/meta-data/iam/security-credentials")
+            .get("/latest/meta-data/iam/security-credentials/")
             .await
         {
             Ok(profile) => Ok(profile),
-            Err(ImdsError::ErrorResponse { response, .. }) if response.status().as_u16() == 404 => {
+            Err(ImdsError::ErrorResponse(context))
+                if context.response().status().as_u16() == 404 =>
+            {
                 tracing::info!(
                     "received 404 from IMDS when loading profile information. \
-                Hint: This instance may not have an IAM role associated."
+                    Hint: This instance may not have an IAM role associated."
                 );
                 Err(CredentialsError::not_loaded("received 404 from IMDS"))
             }
-            Err(ImdsError::FailedToLoadToken(SdkError::DispatchFailure(err))) => Err(
-                CredentialsError::not_loaded(format!("could not communicate with imds: {}", err)),
-            ),
+            Err(ImdsError::FailedToLoadToken(context)) if context.is_dispatch_failure() => {
+                Err(CredentialsError::not_loaded(ImdsCommunicationError {
+                    source: context.into_source().into(),
+                }))
+            }
             Err(other) => Err(CredentialsError::provider_error(other)),
         }
     }
@@ -155,7 +175,7 @@ impl ImdsCredentialsProvider {
             ));
         }
         tracing::debug!("loading credentials from IMDS");
-        let profile: Cow<str> = match &self.profile {
+        let profile: Cow<'_, str> = match &self.profile {
             Some(profile) => profile.into(),
             None => self.get_profile_uncached().await?.into(),
         };
@@ -170,13 +190,13 @@ impl ImdsCredentialsProvider {
             .await
             .map_err(CredentialsError::provider_error)?;
         match parse_json_credentials(&credentials) {
-            Ok(JsonCredentials::RefreshableCredentials {
+            Ok(JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id,
                 secret_access_key,
                 session_token,
                 expiration,
                 ..
-            }) => Ok(Credentials::new(
+            })) => Ok(Credentials::new(
                 access_key_id,
                 secret_access_key,
                 Some(session_token.to_string()),
@@ -223,7 +243,7 @@ mod test {
                     token_response(21600, TOKEN_A),
                 ),
                 (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                     imds_response(r#"profile-name"#),
                 ),
                 (
@@ -231,7 +251,7 @@ mod test {
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
                 (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                     imds_response(r#"different-profile"#),
                 ),
                 (

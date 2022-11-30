@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::anchor::replace_anchor;
@@ -53,7 +53,7 @@ struct Metadata {
 
 const RUST_SDK_TEAM: &str = "AWS Rust SDK Team <aws-sdk-rust@amazon.com>";
 const SERVER_TEAM: &str = "Smithy Rust Server <smithy-rs-server@amazon.com>";
-const SERVER_CRATES: &[&str] = &["aws-smithy-http-server"];
+const SERVER_CRATES: &[&str] = &["aws-smithy-http-server", "aws-smithy-http-server-python"];
 
 /// Check crate licensing
 ///
@@ -127,7 +127,7 @@ where
     let parsed = Manifest::from_path_with_metadata(path).context("failed to parse Cargo.toml")?;
     match parsed.package {
         Some(package) => Ok(Ok(package)),
-        None => return Ok(Err(vec![LintError::new("missing `[package]` section")])),
+        None => Ok(Err(vec![LintError::new("missing `[package]` section")])),
     }
 }
 

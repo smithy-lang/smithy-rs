@@ -1,20 +1,20 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Raw IMDSv2 Client
 //!
 //! Client for direct access to IMDSv2.
 
-use std::borrow::Cow;
-use std::convert::TryFrom;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
-use std::time::Duration;
-
+use crate::connector::expect_connector;
+use crate::imds::client::error::{BuildError, ImdsError, InnerImdsError, InvalidEndpointMode};
+use crate::imds::client::token::TokenMiddleware;
+use crate::provider_config::ProviderConfig;
+use crate::{profile, PKG_VERSION};
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
+use aws_sdk_sso::config::timeout::TimeoutConfig;
+use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_client::{erase::DynConnector, SdkSuccess};
 use aws_smithy_client::{retry, SdkError};
 use aws_smithy_http::body::SdkBody;
@@ -22,33 +22,30 @@ use aws_smithy_http::endpoint::Endpoint;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::{Metadata, Operation};
 use aws_smithy_http::response::ParseStrictResponse;
-use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_http_tower::map_request::{
     AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
 };
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::os_shim_internal::{Env, Fs};
-
 use bytes::Bytes;
-use http::uri::InvalidUri;
 use http::{Response, Uri};
+use std::borrow::Cow;
+use std::error::Error;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::OnceCell;
 
-use crate::connector::expect_connector;
-use crate::imds::client::token::TokenMiddleware;
-use crate::profile::ProfileParseError;
-use crate::provider_config::ProviderConfig;
-use crate::{profile, PKG_VERSION};
-use aws_smithy_client::http_connector::HttpSettings;
-
+pub mod error;
 mod token;
 
 // 6 hours
 const DEFAULT_TOKEN_TTL: Duration = Duration::from_secs(21_600);
 const DEFAULT_ATTEMPTS: u32 = 4;
-const DEFAULT_CONNECT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
-const DEFAULT_READ_TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
 
 fn user_agent() -> AwsUserAgent {
     AwsUserAgent::new_from_environment(Env::real(), ApiMetadata::new("imds", PKG_VERSION))
@@ -62,6 +59,16 @@ fn user_agent() -> AwsUserAgent {
 /// _Note: This client ONLY supports IMDSv2. It will not fallback to IMDSv1. See
 /// [transitioning to IMDSv2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html#instance-metadata-transition-to-version-2)
 /// for more information._
+///
+/// **Note**: When running in a Docker container, all network requests will incur an additional hop. When combined with the default IMDS hop limit of 1, this will cause requests to IMDS to timeout! To fix this issue, you'll need to set the following instance metadata settings :
+/// ```txt
+/// amazonec2-metadata-token=required
+/// amazonec2-metadata-token-response-hop-limit=2
+/// ```
+///
+/// On an instance that is already running, these can be set with [ModifyInstanceMetadataOptions](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ModifyInstanceMetadataOptions.html). On a new instance, these can be set with the `MetadataOptions` field on [RunInstances](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_RunInstances.html).
+///
+/// For more information about IMDSv2 vs. IMDSv1 see [this guide](https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/configuring-instance-metadata-service.html)
 ///
 /// # Client Configuration
 /// The IMDS client can load configuration explicitly, via environment variables, or via
@@ -114,10 +121,15 @@ fn user_agent() -> AwsUserAgent {
 ///
 /// 7. The default value of `http://169.254.169.254` will be used.
 ///
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Client {
+    inner: Arc<ClientInner>,
+}
+
+#[derive(Debug)]
+struct ClientInner {
     endpoint: Endpoint,
-    inner: aws_smithy_client::Client<DynConnector, ImdsMiddleware>,
+    smithy_client: aws_smithy_client::Client<DynConnector, ImdsMiddleware>,
 }
 
 /// Client where build is sync, but usage is async
@@ -132,7 +144,7 @@ pub(super) struct LazyClient {
 }
 
 impl LazyClient {
-    pub fn from_ready_client(client: Client) -> Self {
+    pub(super) fn from_ready_client(client: Client) -> Self {
         Self {
             client: OnceCell::from(Ok(client)),
             // the builder will never be used in this case
@@ -147,7 +159,7 @@ impl LazyClient {
             .get_or_init(|| async {
                 let client = builder.clone().build().await;
                 if let Err(err) = &client {
-                    tracing::warn!(err = % err, "failed to create IMDS client")
+                    tracing::warn!(err = %DisplayErrorContext(err), "failed to create IMDS client")
                 }
                 client
             })
@@ -184,25 +196,32 @@ impl Client {
     /// ```
     pub async fn get(&self, path: &str) -> Result<String, ImdsError> {
         let operation = self.make_operation(path)?;
-        self.inner.call(operation).await.map_err(|err| match err {
-            SdkError::ConstructionFailure(err) => match err.downcast::<ImdsError>() {
-                Ok(token_failure) => *token_failure,
-                Err(other) => ImdsError::Unexpected(other),
-            },
-            SdkError::TimeoutError(err) => ImdsError::IoError(err),
-            SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
-            SdkError::ResponseError { err, .. } => ImdsError::IoError(err),
-            SdkError::ServiceError {
-                err: InnerImdsError::BadStatus,
-                raw,
-            } => ImdsError::ErrorResponse {
-                response: raw.into_parts().0,
-            },
-            SdkError::ServiceError {
-                err: InnerImdsError::InvalidUtf8,
-                ..
-            } => ImdsError::Unexpected("IMDS returned invalid UTF-8".into()),
-        })
+        self.inner
+            .smithy_client
+            .call(operation)
+            .await
+            .map_err(|err| match err {
+                SdkError::ConstructionFailure(_) if err.source().is_some() => {
+                    match err.into_source().map(|e| e.downcast::<ImdsError>()) {
+                        Ok(Ok(token_failure)) => *token_failure,
+                        Ok(Err(err)) => ImdsError::unexpected(err),
+                        Err(err) => ImdsError::unexpected(err),
+                    }
+                }
+                SdkError::ConstructionFailure(_) => ImdsError::unexpected(err),
+                SdkError::ServiceError(context) => match context.err() {
+                    InnerImdsError::InvalidUtf8 => {
+                        ImdsError::unexpected("IMDS returned invalid UTF-8")
+                    }
+                    InnerImdsError::BadStatus => {
+                        ImdsError::error_response(context.into_raw().into_parts().0)
+                    }
+                },
+                SdkError::TimeoutError(_)
+                | SdkError::DispatchFailure(_)
+                | SdkError::ResponseError(_) => ImdsError::io_error(err),
+                _ => ImdsError::unexpected(err),
+            })
     }
 
     /// Creates a aws_smithy_http Operation to for `path`
@@ -212,9 +231,14 @@ impl Client {
     fn make_operation(
         &self,
         path: &str,
-    ) -> Result<Operation<ImdsGetResponseHandler, ImdsErrorPolicy>, ImdsError> {
-        let mut base_uri: Uri = path.parse().map_err(|_| ImdsError::InvalidPath)?;
-        self.endpoint.set_endpoint(&mut base_uri, None);
+    ) -> Result<Operation<ImdsGetResponseHandler, ImdsResponseRetryClassifier>, ImdsError> {
+        let mut base_uri: Uri = path.parse().map_err(|_| {
+            ImdsError::unexpected("IMDS path was not a valid URI. Hint: does it begin with `/`?")
+        })?;
+        self.inner
+            .endpoint
+            .set_endpoint(&mut base_uri, None)
+            .map_err(ImdsError::unexpected)?;
         let request = http::Request::builder()
             .uri(base_uri)
             .body(SdkBody::empty())
@@ -223,75 +247,7 @@ impl Client {
         request.properties_mut().insert(user_agent());
         Ok(Operation::new(request, ImdsGetResponseHandler)
             .with_metadata(Metadata::new("get", "imds"))
-            .with_retry_policy(ImdsErrorPolicy))
-    }
-}
-
-/// An error retrieving metadata from IMDS
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum ImdsError {
-    /// An IMDSv2 Token could not be loaded
-    ///
-    /// Requests to IMDS must be accompanied by a token obtained via a `PUT` request. This is handled
-    /// transparently by the [`Client`].
-    FailedToLoadToken(SdkError<TokenError>),
-
-    /// The `path` was invalid for an IMDS request
-    ///
-    /// The `path` parameter must be a valid URI path segment, and it must begin with `/`.
-    InvalidPath,
-
-    /// An error response was returned from IMDS
-    #[non_exhaustive]
-    ErrorResponse {
-        /// The returned raw response
-        response: http::Response<SdkBody>,
-    },
-
-    /// IO Error
-    ///
-    /// An error occurred communication with IMDS
-    IoError(Box<dyn Error + Send + Sync + 'static>),
-
-    /// An unexpected error occurred communicating with IMDS
-    Unexpected(Box<dyn Error + Send + Sync + 'static>),
-}
-
-impl Display for ImdsError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ImdsError::FailedToLoadToken(inner) => {
-                write!(f, "Failed to load session token: {}", inner)
-            }
-            ImdsError::InvalidPath => write!(
-                f,
-                "IMDS path was not a valid URI. Hint: Does it begin with `/`?"
-            ),
-            ImdsError::ErrorResponse { response } => write!(
-                f,
-                "Error response from IMDS (code: {}). {:?}",
-                response.status().as_u16(),
-                response
-            ),
-            ImdsError::IoError(err) => {
-                write!(f, "An IO error occurred communicating with IMDS: {}", err)
-            }
-            ImdsError::Unexpected(err) => write!(
-                f,
-                "An unexpected error occurred communicating with IMDS: {}",
-                err
-            ),
-        }
-    }
-}
-
-impl Error for ImdsError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self {
-            ImdsError::FailedToLoadToken(inner) => Some(inner),
-            _ => None,
-        }
+            .with_retry_classifier(ImdsResponseRetryClassifier))
     }
 }
 
@@ -314,23 +270,6 @@ impl<S> tower::Layer<S> for ImdsMiddleware {
 
 #[derive(Copy, Clone)]
 struct ImdsGetResponseHandler;
-
-#[derive(Debug)]
-enum InnerImdsError {
-    BadStatus,
-    InvalidUtf8,
-}
-
-impl Display for InnerImdsError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            InnerImdsError::BadStatus => write!(f, "failing status code returned from IMDS"),
-            InnerImdsError::InvalidUtf8 => write!(f, "IMDS did not return valid UTF-8"),
-        }
-    }
-}
-
-impl Error for InnerImdsError {}
 
 impl ParseStrictResponse for ImdsGetResponseHandler {
     type Output = Result<String, InnerImdsError>;
@@ -362,22 +301,6 @@ pub enum EndpointMode {
     IpV6,
 }
 
-/// Invalid Endpoint Mode
-#[derive(Debug, Clone)]
-pub struct InvalidEndpointMode(String);
-
-impl Display for InvalidEndpointMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "`{}` is not a valid endpoint mode. Valid values are [`IPv4`, `IPv6`]",
-            &self.0
-        )
-    }
-}
-
-impl Error for InvalidEndpointMode {}
-
 impl FromStr for EndpointMode {
     type Err = InvalidEndpointMode;
 
@@ -385,7 +308,7 @@ impl FromStr for EndpointMode {
         match value {
             _ if value.eq_ignore_ascii_case("ipv4") => Ok(EndpointMode::IpV4),
             _ if value.eq_ignore_ascii_case("ipv6") => Ok(EndpointMode::IpV6),
-            other => Err(InvalidEndpointMode(other.to_owned())),
+            other => Err(InvalidEndpointMode::new(other.to_owned())),
         }
     }
 }
@@ -410,40 +333,6 @@ pub struct Builder {
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
     config: Option<ProviderConfig>,
-}
-
-/// Error constructing IMDSv2 Client
-#[derive(Debug)]
-pub enum BuildError {
-    /// The endpoint mode was invalid
-    InvalidEndpointMode(InvalidEndpointMode),
-
-    /// The AWS Profile (e.g. `~/.aws/config`) was invalid
-    InvalidProfile(ProfileParseError),
-
-    /// The specified endpoint was not a valid URI
-    InvalidEndpointUri(InvalidUri),
-}
-
-impl Display for BuildError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to build IMDS client: ")?;
-        match self {
-            BuildError::InvalidEndpointMode(e) => write!(f, "{}", e),
-            BuildError::InvalidProfile(e) => write!(f, "{}", e),
-            BuildError::InvalidEndpointUri(e) => write!(f, "{}", e),
-        }
-    }
-}
-
-impl Error for BuildError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            BuildError::InvalidEndpointMode(e) => Some(e),
-            BuildError::InvalidProfile(e) => Some(e),
-            BuildError::InvalidEndpointUri(e) => Some(e),
-        }
-    }
 }
 
 impl Builder {
@@ -535,19 +424,19 @@ impl Builder {
     /// Build an IMDSv2 Client
     pub async fn build(self) -> Result<Client, BuildError> {
         let config = self.config.unwrap_or_default();
-        let timeout_config = TimeoutConfig::new()
-            .with_connect_timeout(self.connect_timeout.or(DEFAULT_CONNECT_TIMEOUT))
-            .with_read_timeout(self.read_timeout.or(DEFAULT_READ_TIMEOUT));
-        let http_settings = HttpSettings::default().with_timeout_config(timeout_config);
-        let connector = expect_connector(config.connector(&http_settings));
+        let timeout_config = TimeoutConfig::builder()
+            .connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
+            .read_timeout(self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT))
+            .build();
+        let connector_settings = ConnectorSettings::from_timeout_config(&timeout_config);
+        let connector = expect_connector(config.connector(&connector_settings));
         let endpoint_source = self
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
         let endpoint = endpoint_source.endpoint(self.mode_override).await?;
-        let endpoint = Endpoint::immutable(endpoint);
+        let endpoint = Endpoint::immutable_uri(endpoint)?;
         let retry_config = retry::Config::default()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
-        let timeout_config = TimeoutConfig::default();
         let token_loader = token::TokenMiddleware::new(
             connector.clone(),
             config.time_source(),
@@ -558,30 +447,32 @@ impl Builder {
             config.sleep(),
         );
         let middleware = ImdsMiddleware { token_loader };
-        let inner_client = aws_smithy_client::Builder::new()
+        let mut smithy_builder = aws_smithy_client::Client::builder()
             .connector(connector.clone())
             .middleware(middleware)
-            .sleep_impl(config.sleep())
-            .build()
-            .with_retry_config(retry_config)
-            .with_timeout_config(timeout_config);
+            .retry_config(retry_config)
+            .operation_timeout_config(timeout_config.into());
+        smithy_builder.set_sleep_impl(config.sleep());
+        let smithy_client = smithy_builder.build();
 
         let client = Client {
-            endpoint,
-            inner: inner_client,
+            inner: Arc::new(ClientInner {
+                endpoint,
+                smithy_client,
+            }),
         };
         Ok(client)
     }
 }
 
 mod env {
-    pub const ENDPOINT: &str = "AWS_EC2_METADATA_SERVICE_ENDPOINT";
-    pub const ENDPOINT_MODE: &str = "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE";
+    pub(super) const ENDPOINT: &str = "AWS_EC2_METADATA_SERVICE_ENDPOINT";
+    pub(super) const ENDPOINT_MODE: &str = "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE";
 }
 
 mod profile_keys {
-    pub const ENDPOINT: &str = "ec2_metadata_service_endpoint";
-    pub const ENDPOINT_MODE: &str = "ec2_metadata_service_endpoint_mode";
+    pub(super) const ENDPOINT: &str = "ec2_metadata_service_endpoint";
+    pub(super) const ENDPOINT_MODE: &str = "ec2_metadata_service_endpoint_mode";
 }
 
 /// Endpoint Configuration Abstraction
@@ -604,16 +495,16 @@ impl EndpointSource {
             }
             EndpointSource::Env(env, fs) => {
                 // load an endpoint override from the environment
-                let profile = profile::load(fs, env)
+                let profile = profile::load(fs, env, &Default::default())
                     .await
-                    .map_err(BuildError::InvalidProfile)?;
+                    .map_err(BuildError::invalid_profile)?;
                 let uri_override = if let Ok(uri) = env.get(env::ENDPOINT) {
                     Some(Cow::Owned(uri))
                 } else {
                     profile.get(profile_keys::ENDPOINT).map(Cow::Borrowed)
                 };
                 if let Some(uri) = uri_override {
-                    return Uri::try_from(uri.as_ref()).map_err(BuildError::InvalidEndpointUri);
+                    return Uri::try_from(uri.as_ref()).map_err(BuildError::invalid_endpoint_uri);
                 }
 
                 // if not, load a endpoint mode from the environment
@@ -621,10 +512,10 @@ impl EndpointSource {
                     mode
                 } else if let Ok(mode) = env.get(env::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
-                        .map_err(BuildError::InvalidEndpointMode)?
+                        .map_err(BuildError::invalid_endpoint_mode)?
                 } else if let Some(mode) = profile.get(profile_keys::ENDPOINT_MODE) {
                     mode.parse::<EndpointMode>()
-                        .map_err(BuildError::InvalidEndpointMode)?
+                        .map_err(BuildError::invalid_endpoint_mode)?
                 } else {
                     EndpointMode::IpV4
                 };
@@ -635,70 +526,23 @@ impl EndpointSource {
     }
 }
 
-/// Error retrieving token from IMDS
-#[derive(Debug)]
-pub enum TokenError {
-    /// The token was invalid
-    ///
-    /// Because tokens must be eventually sent as a header, the token must be a valid header value.
-    InvalidToken,
-
-    /// No TTL was sent
-    ///
-    /// The token response must include a time-to-live indicating the lifespan of the token.
-    NoTtl,
-
-    /// The TTL was invalid
-    ///
-    /// The TTL must be a valid positive integer.
-    InvalidTtl,
-
-    /// Invalid Parameters
-    ///
-    /// The request to load a token was malformed. This indicates an SDK bug.
-    InvalidParameters,
-
-    /// Forbidden
-    ///
-    /// IMDS is disabled or has been disallowed via permissions.
-    Forbidden,
-}
-
-impl Display for TokenError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TokenError::InvalidToken => write!(f, "Invalid Token"),
-            TokenError::NoTtl => write!(f, "Token response did not contain a TTL header"),
-            TokenError::InvalidTtl => write!(f, "The returned TTL was invalid"),
-            TokenError::InvalidParameters => {
-                write!(f, "Invalid request parameters. This indicates an SDK bug.")
-            }
-            TokenError::Forbidden => write!(
-                f,
-                "Request forbidden: IMDS is disabled or the caller has insufficient permissions."
-            ),
-        }
-    }
-}
-
-impl Error for TokenError {}
-
 #[derive(Clone)]
-struct ImdsErrorPolicy;
+struct ImdsResponseRetryClassifier;
 
-impl ImdsErrorPolicy {
+impl ImdsResponseRetryClassifier {
     fn classify(response: &operation::Response) -> RetryKind {
         let status = response.http().status();
         match status {
             _ if status.is_server_error() => RetryKind::Error(ErrorKind::ServerError),
             // 401 indicates that the token has expired, this is retryable
             _ if status.as_u16() == 401 => RetryKind::Error(ErrorKind::ServerError),
-            _ => RetryKind::NotRetryable,
+            // This catch-all includes successful responses that fail to parse. These should not be retried.
+            _ => RetryKind::UnretryableFailure,
         }
     }
 }
 
-/// IMDS Retry Policy
+/// IMDS Response Retry Classifier
 ///
 /// Possible status codes:
 /// - 200 (OK)
@@ -707,36 +551,52 @@ impl ImdsErrorPolicy {
 /// - 403 (IMDS disabled): **Not Retryable**
 /// - 404 (Not found): **Not Retryable**
 /// - >=500 (server error): **Retryable**
-impl<T, E> ClassifyResponse<SdkSuccess<T>, SdkError<E>> for ImdsErrorPolicy {
-    fn classify(&self, response: Result<&SdkSuccess<T>, &SdkError<E>>) -> RetryKind {
+impl<T, E> ClassifyRetry<SdkSuccess<T>, SdkError<E>> for ImdsResponseRetryClassifier {
+    fn classify_retry(&self, response: Result<&SdkSuccess<T>, &SdkError<E>>) -> RetryKind {
         match response {
-            Ok(_) => RetryKind::NotRetryable,
-            Err(SdkError::ResponseError { raw, .. }) | Err(SdkError::ServiceError { raw, .. }) => {
-                ImdsErrorPolicy::classify(raw)
-            }
-            _ => RetryKind::NotRetryable,
+            Ok(_) => RetryKind::Unnecessary,
+            Err(SdkError::ResponseError(context)) => Self::classify(context.raw()),
+            Err(SdkError::ServiceError(context)) => Self::classify(context.raw()),
+            _ => RetryKind::UnretryableFailure,
         }
     }
 }
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::collections::HashMap;
-    use std::error::Error;
-    use std::time::{Duration, UNIX_EPOCH};
-
+    use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
+    use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
+    use aws_smithy_client::{SdkError, SdkSuccess};
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::operation;
+    use aws_smithy_types::retry::RetryKind;
     use aws_types::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
+    use http::header::USER_AGENT;
     use http::Uri;
     use serde::Deserialize;
+    use std::collections::HashMap;
+    use std::error::Error;
+    use std::io;
+    use std::time::{Duration, UNIX_EPOCH};
     use tracing_test::traced_test;
 
-    use crate::imds::client::{Client, EndpointMode};
-    use crate::provider_config::ProviderConfig;
-    use http::header::USER_AGENT;
+    macro_rules! assert_full_error_contains {
+        ($err:expr, $contains:expr) => {
+            let err = $err;
+            let message = format!(
+                "{}",
+                aws_smithy_types::error::display::DisplayErrorContext(&err)
+            );
+            assert!(
+                message.contains($contains),
+                "Error message '{message}' didn't contain text '{}'",
+                $contains
+            );
+        };
+    }
 
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
@@ -891,6 +751,7 @@ pub(crate) mod test {
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
+                    .with_sleep(TokioSleep::new())
                     .with_http_connector(DynConnector::new(connection.clone()))
                     .with_time_source(TimeSource::manual(&time_source)),
             )
@@ -963,6 +824,33 @@ pub(crate) mod test {
         connection.assert_requests_match(&[]);
     }
 
+    /// 401 error during metadata retrieval must be retried
+    #[tokio::test]
+    #[traced_test]
+    async fn retry_metadata_401() {
+        let connection = TestConnection::new(vec![
+            (
+                token_request("http://169.254.169.254", 21600),
+                token_response(0, TOKEN_A),
+            ),
+            (
+                imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
+                http::Response::builder().status(401).body("").unwrap(),
+            ),
+            (
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, TOKEN_B),
+            ),
+            (
+                imds_request("http://169.254.169.254/latest/metadata", TOKEN_B),
+                imds_response("ok"),
+            ),
+        ]);
+        let client = make_client(&connection).await;
+        assert_eq!(client.get("/latest/metadata").await.expect("success"), "ok");
+        connection.assert_requests_match(&[]);
+    }
+
     /// 403 responses from IMDS during token acquisition MUST NOT be retried
     #[tokio::test]
     #[traced_test]
@@ -973,8 +861,37 @@ pub(crate) mod test {
         )]);
         let client = make_client(&connection).await;
         let err = client.get("/latest/metadata").await.expect_err("no token");
-        assert!(format!("{}", err).contains("forbidden"), "{}", err);
+        assert_full_error_contains!(err, "forbidden");
         connection.assert_requests_match(&[]);
+    }
+
+    /// Successful responses should classify as `RetryKind::Unnecessary`
+    #[test]
+    fn successful_response_properly_classified() {
+        use aws_smithy_http::retry::ClassifyRetry;
+
+        let classifier = ImdsResponseRetryClassifier;
+        fn response_200() -> operation::Response {
+            operation::Response::new(imds_response("").map(|_| SdkBody::empty()))
+        }
+        let success = SdkSuccess {
+            raw: response_200(),
+            parsed: (),
+        };
+        assert_eq!(
+            RetryKind::Unnecessary,
+            classifier.classify_retry(Ok::<_, &SdkError<()>>(&success))
+        );
+
+        // Emulate a failure to parse the response body (using an io error since it's easy to construct in a test)
+        let failure = SdkError::<()>::response_error(
+            io::Error::new(io::ErrorKind::BrokenPipe, "fail to parse"),
+            response_200(),
+        );
+        assert_eq!(
+            RetryKind::UnretryableFailure,
+            classifier.classify_retry(Err::<&SdkSuccess<()>, _>(&failure))
+        );
     }
 
     // since tokens are sent as headers, the tokens need to be valid header values
@@ -986,7 +903,7 @@ pub(crate) mod test {
         )]);
         let client = make_client(&connection).await;
         let err = client.get("/latest/metadata").await.expect_err("no token");
-        assert!(format!("{}", err).contains("Invalid Token"), "{}", err);
+        assert_full_error_contains!(err, "invalid token");
         connection.assert_requests_match(&[]);
     }
 
@@ -1007,7 +924,7 @@ pub(crate) mod test {
         ]);
         let client = make_client(&connection).await;
         let err = client.get("/latest/metadata").await.expect_err("no token");
-        assert!(format!("{}", err).contains("invalid UTF-8"), "{}", err);
+        assert_full_error_contains!(err, "invalid UTF-8");
         connection.assert_requests_match(&[]);
     }
 
@@ -1016,6 +933,7 @@ pub(crate) mod test {
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     async fn one_second_connect_timeout() {
         use crate::imds::client::ImdsError;
+        use aws_smithy_types::error::display::DisplayErrorContext;
         use std::time::SystemTime;
 
         let client = Client::builder()
@@ -1041,7 +959,8 @@ pub(crate) mod test {
             time_elapsed
         );
         match resp {
-            ImdsError::FailedToLoadToken(err) if format!("{}", err).contains("timeout") => {} // ok,
+            err @ ImdsError::FailedToLoadToken(_)
+                if format!("{}", DisplayErrorContext(&err)).contains("timeout") => {} // ok,
             other => panic!(
                 "wrong error, expected construction failure with TimedOutError inside: {}",
                 other
@@ -1078,6 +997,7 @@ pub(crate) mod test {
     async fn check(test_case: ImdsConfigTest) {
         let (server, watcher) = capture_request(None);
         let provider_config = ProviderConfig::no_configuration()
+            .with_sleep(TokioSleep::new())
             .with_env(Env::from(test_case.env))
             .with_fs(Fs::from_map(test_case.fs))
             .with_http_connector(DynConnector::new(server));
@@ -1098,12 +1018,7 @@ pub(crate) mod test {
                 test, test_case.docs
             ),
             (Err(substr), Err(err)) => {
-                assert!(
-                    format!("{}", err).contains(substr),
-                    "`{}` did not contain `{}`",
-                    err,
-                    substr
-                );
+                assert_full_error_contains!(err, substr);
                 return;
             }
             (Ok(_uri), Err(e)) => panic!(

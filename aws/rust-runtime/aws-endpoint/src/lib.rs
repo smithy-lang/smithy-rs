@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #[doc(hidden)]
@@ -10,142 +10,81 @@ pub mod partition;
 pub use partition::Partition;
 #[doc(hidden)]
 pub use partition::PartitionResolver;
+use std::collections::HashMap;
 
-use aws_smithy_http::endpoint::{Endpoint, EndpointPrefix};
+use aws_smithy_http::endpoint::error::ResolveEndpointError;
+use aws_smithy_http::endpoint::{apply_endpoint, EndpointPrefix, ResolveEndpoint};
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
-use aws_smithy_http::property_bag::PropertyBag;
+use aws_smithy_types::endpoint::Endpoint as SmithyEndpoint;
+use aws_smithy_types::Document;
 use aws_types::region::{Region, SigningRegion};
 use aws_types::SigningService;
+use http::header::HeaderName;
+use http::{HeaderValue, Uri};
 use std::error::Error;
 use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
 
-/// Endpoint to connect to an AWS Service
-///
-/// An `AwsEndpoint` captures all necessary information needed to connect to an AWS service, including:
-/// - The URI of the endpoint (needed to actually send the request)
-/// - The name of the service (needed downstream for signing)
-/// - The signing region (which may differ from the actual region)
-#[derive(Clone, Debug)]
-pub struct AwsEndpoint {
-    endpoint: Endpoint,
-    credential_scope: CredentialScope,
+pub use aws_types::endpoint::{AwsEndpoint, BoxError, CredentialScope, ResolveAwsEndpoint};
+
+#[doc(hidden)]
+pub struct Params {
+    region: Option<Region>,
 }
 
-impl AwsEndpoint {
-    pub fn set_endpoint(&self, mut uri: &mut http::Uri, endpoint_prefix: Option<&EndpointPrefix>) {
-        self.endpoint.set_endpoint(&mut uri, endpoint_prefix);
+impl Params {
+    pub fn new(region: Option<Region>) -> Self {
+        Self { region }
     }
 }
 
-pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
+#[doc(hidden)]
+pub struct EndpointShim(Arc<dyn ResolveAwsEndpoint>);
+impl EndpointShim {
+    pub fn from_resolver(resolver: impl ResolveAwsEndpoint + 'static) -> Self {
+        Self(Arc::new(resolver))
+    }
 
-/// Resolve the AWS Endpoint for a given region
-///
-/// To provide a static endpoint, [`Endpoint`](aws_smithy_http::endpoint::Endpoint) implements this trait.
-/// Example usage:
-/// ```rust
-/// # mod dynamodb {
-/// # use aws_endpoint::ResolveAwsEndpoint;
-/// # pub struct ConfigBuilder;
-/// # impl ConfigBuilder {
-/// #     pub fn endpoint(&mut self, resolver: impl ResolveAwsEndpoint + 'static) {
-/// #         // ...
-/// #     }
-/// # }
-/// # pub struct Config;
-/// # impl Config {
-/// #     pub fn builder() -> ConfigBuilder {
-/// #         ConfigBuilder
-/// #     }
-/// # }
-/// # }
-/// use aws_smithy_http::endpoint::Endpoint;
-/// use http::Uri;
-/// let config = dynamodb::Config::builder()
-///     .endpoint(
-///         Endpoint::immutable(Uri::from_static("http://localhost:8080"))
-///     );
-/// ```
-/// In the future, each AWS service will generate their own implementation of `ResolveAwsEndpoint`. This implementation
-/// may use endpoint discovery. The list of supported regions for a given service
-/// will be codegenerated from `endpoints.json`.
-pub trait ResolveAwsEndpoint: Send + Sync {
-    // TODO(https://github.com/awslabs/smithy-rs/issues/866): Create `ResolveEndpointError`
-    fn resolve_endpoint(&self, region: &Region) -> Result<AwsEndpoint, BoxError>;
-}
-
-#[derive(Clone, Default, Debug)]
-pub struct CredentialScope {
-    region: Option<SigningRegion>,
-    service: Option<SigningService>,
-}
-
-impl CredentialScope {
-    pub fn builder() -> credential_scope::Builder {
-        credential_scope::Builder::default()
+    pub fn from_arc(arc: Arc<dyn ResolveAwsEndpoint>) -> Self {
+        Self(arc)
     }
 }
 
-pub mod credential_scope {
-    use crate::CredentialScope;
-    use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
-
-    #[derive(Debug, Default)]
-    pub struct Builder {
-        region: Option<SigningRegion>,
-        service: Option<SigningService>,
-    }
-
-    impl Builder {
-        pub fn region(mut self, region: &'static str) -> Self {
-            self.region = Some(SigningRegion::from_static(region));
-            self
+impl ResolveEndpoint<Params> for EndpointShim {
+    fn resolve_endpoint(&self, params: &Params) -> Result<SmithyEndpoint, ResolveEndpointError> {
+        let aws_endpoint = self
+            .0
+            .resolve_endpoint(
+                params
+                    .region
+                    .as_ref()
+                    .ok_or_else(|| ResolveEndpointError::message("no region in params"))?,
+            )
+            .map_err(|err| {
+                ResolveEndpointError::message("failure resolving endpoint").with_source(err)
+            })?;
+        let uri = aws_endpoint.endpoint().uri();
+        let mut auth_scheme =
+            HashMap::from([("name".to_string(), Document::String("sigv4".into()))]);
+        if let Some(region) = aws_endpoint.credential_scope().region() {
+            auth_scheme.insert(
+                "signingRegion".to_string(),
+                region.as_ref().to_string().into(),
+            );
         }
-
-        pub fn service(mut self, service: &'static str) -> Self {
-            self.service = Some(SigningService::from_static(service));
-            self
+        if let Some(service) = aws_endpoint.credential_scope().service() {
+            auth_scheme.insert(
+                "signingName".to_string(),
+                service.as_ref().to_string().into(),
+            );
         }
-
-        pub fn build(self) -> CredentialScope {
-            CredentialScope {
-                region: self.region,
-                service: self.service,
-            }
-        }
+        Ok(SmithyEndpoint::builder()
+            .url(uri.to_string())
+            .property("authSchemes", vec![Document::Object(auth_scheme)])
+            .build())
     }
-}
-
-impl CredentialScope {
-    pub fn merge(&self, other: &CredentialScope) -> CredentialScope {
-        CredentialScope {
-            region: self.region.clone().or_else(|| other.region.clone()),
-            service: self.service.clone().or_else(|| other.service.clone()),
-        }
-    }
-}
-
-/// An `Endpoint` can be its own resolver to support static endpoints
-impl ResolveAwsEndpoint for Endpoint {
-    fn resolve_endpoint(&self, _region: &Region) -> Result<AwsEndpoint, BoxError> {
-        Ok(AwsEndpoint {
-            endpoint: self.clone(),
-            credential_scope: Default::default(),
-        })
-    }
-}
-
-type AwsEndpointResolver = Arc<dyn ResolveAwsEndpoint>;
-pub fn get_endpoint_resolver(properties: &PropertyBag) -> Option<&AwsEndpointResolver> {
-    properties.get()
-}
-
-pub fn set_endpoint_resolver(properties: &mut PropertyBag, provider: AwsEndpointResolver) {
-    properties.insert(provider);
 }
 
 /// Middleware Stage to Add an Endpoint to a Request
@@ -160,47 +99,130 @@ pub fn set_endpoint_resolver(properties: &mut PropertyBag, provider: AwsEndpoint
 pub struct AwsEndpointStage;
 
 #[derive(Debug)]
-pub enum AwsEndpointStageError {
+enum AwsEndpointStageErrorKind {
     NoEndpointResolver,
-    NoRegion,
     EndpointResolutionError(BoxError),
 }
 
-impl Display for AwsEndpointStageError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        Debug::fmt(self, f)
+#[derive(Debug)]
+pub struct AwsEndpointStageError {
+    kind: AwsEndpointStageErrorKind,
+}
+
+impl fmt::Display for AwsEndpointStageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use AwsEndpointStageErrorKind::*;
+        match &self.kind {
+            NoEndpointResolver => write!(f, "endpoint resolution failed: no endpoint resolver"),
+            EndpointResolutionError(_) => write!(f, "endpoint resolution failed"),
+        }
     }
 }
-impl Error for AwsEndpointStageError {}
+
+impl Error for AwsEndpointStageError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        use AwsEndpointStageErrorKind::*;
+        match &self.kind {
+            EndpointResolutionError(source) => Some(source.as_ref() as _),
+            NoEndpointResolver => None,
+        }
+    }
+}
+
+impl From<AwsEndpointStageErrorKind> for AwsEndpointStageError {
+    fn from(kind: AwsEndpointStageErrorKind) -> Self {
+        Self { kind }
+    }
+}
 
 impl MapRequest for AwsEndpointStage {
     type Error = AwsEndpointStageError;
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
         request.augment(|mut http_req, props| {
-            let provider =
-                get_endpoint_resolver(props).ok_or(AwsEndpointStageError::NoEndpointResolver)?;
-            let region = props
-                .get::<Region>()
-                .ok_or(AwsEndpointStageError::NoRegion)?;
-            let endpoint = provider
-                .resolve_endpoint(region)
-                .map_err(AwsEndpointStageError::EndpointResolutionError)?;
-            tracing::debug!(endpoint = ?endpoint, base_region = ?region, "resolved endpoint");
-            let signing_region = endpoint
-                .credential_scope
-                .region
-                .unwrap_or_else(|| region.clone().into());
-            props.insert::<SigningRegion>(signing_region);
-            if let Some(signing_service) = endpoint.credential_scope.service {
-                props.insert::<SigningService>(signing_service);
+            let endpoint_result = props
+                .get_mut::<aws_smithy_http::endpoint::Result>()
+                .ok_or(AwsEndpointStageErrorKind::NoEndpointResolver)?;
+            let endpoint = match endpoint_result {
+                // downgrade the mut ref to a shared ref
+                Ok(_endpoint) => props.get::<aws_smithy_http::endpoint::Result>()
+                    .expect("unreachable (prevalidated that the endpoint is in the bag)")
+                    .as_ref()
+                    .expect("unreachable (prevalidated that this is OK)"),
+                Err(e) => {
+                    // We need to own the error to return it, so take it and leave a stub error in
+                    // its place
+                    return Err(AwsEndpointStageErrorKind::EndpointResolutionError(std::mem::replace(
+                        e,
+                        ResolveEndpointError::message("the original error was directly returned")
+                    ).into()).into());
+                }
+            };
+            let (uri, signing_scope_override, signing_service_override) = smithy_to_aws(endpoint)
+                .map_err(|err| AwsEndpointStageErrorKind::EndpointResolutionError(err))?;
+            tracing::debug!(endpoint = ?endpoint, base_region = ?signing_scope_override, "resolved endpoint");
+            apply_endpoint(http_req.uri_mut(), &uri, props.get::<EndpointPrefix>())
+                .map_err(|err| AwsEndpointStageErrorKind::EndpointResolutionError(err.into()))?;
+            for (header_name, header_values) in endpoint.headers() {
+                http_req.headers_mut().remove(header_name);
+                for value in header_values {
+                    http_req.headers_mut().insert(
+                        HeaderName::from_str(header_name)
+                            .map_err(|err| AwsEndpointStageErrorKind::EndpointResolutionError(err.into()))?,
+                        HeaderValue::from_str(value)
+                            .map_err(|err| AwsEndpointStageErrorKind::EndpointResolutionError(err.into()))?,
+                    );
+                }
             }
-            endpoint
-                .endpoint
-                .set_endpoint(http_req.uri_mut(), props.get::<EndpointPrefix>());
+
+            if let Some(signing_scope) = signing_scope_override {
+                props.insert(signing_scope);
+            }
+            if let Some(signing_service) = signing_service_override {
+                props.insert(signing_service);
+            }
             Ok(http_req)
         })
     }
+}
+
+type EndpointMetadata = (Uri, Option<SigningRegion>, Option<SigningService>);
+
+fn smithy_to_aws(value: &SmithyEndpoint) -> Result<EndpointMetadata, Box<dyn Error + Send + Sync>> {
+    let uri: Uri = value.url().parse()?;
+    // look for v4 as an auth scheme
+    let auth_schemes = match value
+        .properties()
+        .get("authSchemes")
+        .ok_or("no auth schemes in metadata")?
+    {
+        Document::Array(schemes) => schemes,
+        _other => return Err("expected an array for authSchemes".into()),
+    };
+    let v4 = auth_schemes
+        .iter()
+        .flat_map(|doc| match doc {
+            Document::Object(map)
+                if map.get("name") == Some(&Document::String("sigv4".to_string())) =>
+            {
+                Some(map)
+            }
+            _ => None,
+        })
+        .next()
+        .ok_or("could not find v4 as an acceptable auth scheme")?;
+
+    let signing_scope = match v4.get("signingRegion") {
+        Some(Document::String(s)) => Some(SigningRegion::from(Region::new(s.clone()))),
+        None => None,
+        _ => return Err("unexpected type".into()),
+    };
+    let signing_service = match v4.get("signingName") {
+        Some(Document::String(s)) => Some(SigningService::from(s.to_string())),
+        None => None,
+        _ => return Err("unexpected type".into()),
+    };
+    Ok((uri, signing_scope, signing_service))
 }
 
 #[cfg(test)]
@@ -211,13 +233,15 @@ mod test {
     use http::Uri;
 
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::endpoint::ResolveEndpoint;
     use aws_smithy_http::middleware::MapRequest;
     use aws_smithy_http::operation;
+    use aws_types::endpoint::CredentialScope;
     use aws_types::region::{Region, SigningRegion};
     use aws_types::SigningService;
 
     use crate::partition::endpoint::{Metadata, Protocol, SignatureVersion};
-    use crate::{set_endpoint_resolver, AwsEndpointStage, CredentialScope};
+    use crate::{AwsEndpointStage, EndpointShim, Params};
 
     #[test]
     fn default_endpoint_updates_request() {
@@ -234,7 +258,10 @@ mod test {
             let mut props = req.properties_mut();
             props.insert(region.clone());
             props.insert(SigningService::from_static("kinesis"));
-            set_endpoint_resolver(&mut props, provider);
+            props.insert(
+                EndpointShim::from_arc(provider)
+                    .resolve_endpoint(&Params::new(Some(region.clone()))),
+            );
         };
         let req = AwsEndpointStage.apply(req).expect("should succeed");
         assert_eq!(req.properties().get(), Some(&SigningRegion::from(region)));
@@ -243,12 +270,18 @@ mod test {
             Some(&SigningService::from_static("kinesis"))
         );
 
-        let (req, _conf) = req.into_parts();
+        let (req, conf) = req.into_parts();
         assert_eq!(
             req.uri(),
             &Uri::from_static("https://kinesis.us-east-1.amazonaws.com")
         );
         assert!(req.headers().get(HOST).is_none());
+        assert!(
+            conf.acquire()
+                .get::<aws_smithy_http::endpoint::Result>()
+                .is_some(),
+            "Endpoint middleware MUST leave the result in the bag"
+        );
     }
 
     #[test]
@@ -257,8 +290,8 @@ mod test {
             uri_template: "www.service.com",
             protocol: Protocol::Http,
             credential_scope: CredentialScope::builder()
-                .service("qldb-override")
-                .region("us-east-override")
+                .service(SigningService::from_static("qldb-override"))
+                .region(SigningRegion::from_static("us-east-override"))
                 .build(),
             signature_versions: SignatureVersion::V4,
         });
@@ -267,9 +300,11 @@ mod test {
         let mut req = operation::Request::new(req);
         {
             let mut props = req.properties_mut();
-            props.insert(region);
-            props.insert(SigningService::from_static("kinesis"));
-            set_endpoint_resolver(&mut props, provider);
+            props.insert(region.clone());
+            props.insert(SigningService::from_static("qldb"));
+            props.insert(
+                EndpointShim::from_arc(provider).resolve_endpoint(&Params::new(Some(region))),
+            );
         };
         let req = AwsEndpointStage.apply(req).expect("should succeed");
         assert_eq!(
@@ -279,6 +314,36 @@ mod test {
         assert_eq!(
             req.properties().get(),
             Some(&SigningService::from_static("qldb-override"))
+        );
+    }
+
+    #[test]
+    fn supports_fallback_when_scope_is_unset() {
+        let provider = Arc::new(Metadata {
+            uri_template: "www.service.com",
+            protocol: Protocol::Http,
+            credential_scope: CredentialScope::builder().build(),
+            signature_versions: SignatureVersion::V4,
+        });
+        let req = http::Request::new(SdkBody::from(""));
+        let region = Region::new("us-east-1");
+        let mut req = operation::Request::new(req);
+        {
+            let mut props = req.properties_mut();
+            props.insert(region.clone());
+            props.insert(SigningService::from_static("qldb"));
+            props.insert(
+                EndpointShim::from_arc(provider).resolve_endpoint(&Params::new(Some(region))),
+            );
+        };
+        let req = AwsEndpointStage.apply(req).expect("should succeed");
+        assert_eq!(
+            req.properties().get(),
+            Some(&SigningRegion::from(Region::new("us-east-1")))
+        );
+        assert_eq!(
+            req.properties().get(),
+            Some(&SigningService::from_static("qldb"))
         );
     }
 }

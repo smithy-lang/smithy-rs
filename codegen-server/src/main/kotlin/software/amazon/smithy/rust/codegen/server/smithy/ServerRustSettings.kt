@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy
@@ -8,76 +8,101 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.CODEGEN_SETTINGS
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
+import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import java.util.Optional
 
 /**
- * Configuration of codegen settings
+ * [ServerRustSettings] and [ServerCodegenConfig] classes.
  *
- * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
- * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to false
- *   and generates its own client)
+ * These classes are entirely analogous to [ClientRustSettings] and [ClientCodegenConfig]. Refer to the documentation
+ * for those.
  *
- * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
- * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
+ * These classes have to live in the `codegen` subproject because they are referenced in [ServerCodegenContext],
+ * which is used in common generators to both client and server.
  */
-data class ServerCodegenConfig(
-    val renameExceptions: Boolean = false,
-    val includeFluentClient: Boolean = false,
-    val addMessageToErrors: Boolean = false,
-    val formatTimeoutSeconds: Int = 20,
-    // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
-    val eventStreamAllowList: Set<String> = emptySet(),
+
+/**
+ * Settings used by [RustCodegenServerPlugin].
+ */
+data class ServerRustSettings(
+    override val service: ShapeId,
+    override val moduleName: String,
+    override val moduleVersion: String,
+    override val moduleAuthors: List<String>,
+    override val moduleDescription: String?,
+    override val moduleRepository: String?,
+    override val runtimeConfig: RuntimeConfig,
+    override val codegenConfig: ServerCodegenConfig,
+    override val license: String?,
+    override val examplesUri: String?,
+    override val customizationConfig: ObjectNode?,
+) : CoreRustSettings(
+    service,
+    moduleName,
+    moduleVersion,
+    moduleAuthors,
+    moduleDescription,
+    moduleRepository,
+    runtimeConfig,
+    codegenConfig,
+    license,
+    examplesUri,
+    customizationConfig,
 ) {
     companion object {
-        fun fromNode(node: Optional<ObjectNode>): CodegenConfig {
-            return if (node.isPresent) {
-                CodegenConfig.fromNode(node)
-            } else {
-                CodegenConfig(
-                    false,
-                    false,
-                    false,
-                    20,
-                    emptySet()
-                )
-            }
+        fun from(model: Model, config: ObjectNode): ServerRustSettings {
+            val coreRustSettings = CoreRustSettings.from(model, config)
+            val codegenSettingsNode = config.getObjectMember(CODEGEN_SETTINGS)
+            val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettingsNode)
+            return ServerRustSettings(
+                service = coreRustSettings.service,
+                moduleName = coreRustSettings.moduleName,
+                moduleVersion = coreRustSettings.moduleVersion,
+                moduleAuthors = coreRustSettings.moduleAuthors,
+                moduleDescription = coreRustSettings.moduleDescription,
+                moduleRepository = coreRustSettings.moduleRepository,
+                runtimeConfig = coreRustSettings.runtimeConfig,
+                codegenConfig = ServerCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, codegenSettingsNode),
+                license = coreRustSettings.license,
+                examplesUri = coreRustSettings.examplesUri,
+                customizationConfig = coreRustSettings.customizationConfig,
+            )
         }
     }
 }
 
 /**
- * Settings used by [RustCodegenPlugin]
+ * [publicConstrainedTypes]: Generate constrained wrapper newtypes for constrained shapes
+ * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
  */
-class ServerRustSettings(
-    val service: ShapeId,
-    val moduleName: String,
-    val moduleVersion: String,
-    val moduleAuthors: List<String>,
-    val moduleDescription: String?,
-    val moduleRepository: String?,
-    val runtimeConfig: RuntimeConfig,
-    val codegenConfig: CodegenConfig,
-    val license: String?,
-    val examplesUri: String? = null,
-    private val model: Model
+data class ServerCodegenConfig(
+    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    override val debugMode: Boolean = defaultDebugMode,
+    val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
+    val ignoreUnsupportedConstraints: Boolean = defaultIgnoreUnsupportedConstraints,
+) : CoreCodegenConfig(
+    formatTimeoutSeconds, debugMode,
 ) {
     companion object {
-        /**
-         * Create settings from a configuration object node.
-         *
-         * @param model Model to infer the service from (if not explicitly set in config)
-         * @param config Config object to load
-         * @throws software.amazon.smithy.model.node.ExpectationNotMetException
-         * @return Returns the extracted settings
-         */
-        fun from(model: Model, config: ObjectNode): RustSettings {
-            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
-            val codegenConfig = ServerCodegenConfig.fromNode(codegenSettings)
-            return RustSettings.fromCodegenConfig(model, config, codegenConfig)
-        }
+        private const val defaultPublicConstrainedTypes = true
+        private const val defaultIgnoreUnsupportedConstraints = false
+
+        fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
+            if (node.isPresent) {
+                ServerCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                    publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
+                    ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", defaultIgnoreUnsupportedConstraints),
+                )
+            } else {
+                ServerCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                )
+            }
     }
 }

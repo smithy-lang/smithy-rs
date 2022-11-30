@@ -1,9 +1,10 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 buildscript {
     repositories {
+        mavenCentral()
         google()
     }
 
@@ -15,7 +16,7 @@ buildscript {
 
 plugins {
     kotlin("jvm") version "1.3.72" apply false
-    id("org.jetbrains.dokka") version "0.10.0"
+    id("org.jetbrains.dokka") version "1.7.10"
 }
 
 allprojects {
@@ -26,62 +27,52 @@ allprojects {
     }
 }
 
-apply(from = rootProject.file("gradle/maincodecoverage.gradle"))
+allprojects.forEach {
+    it.apply(plugin = "jacoco")
 
-val ktlint by configurations.creating
+    it.the<JacocoPluginExtension>().apply {
+        toolVersion = "0.8.8"
+        reportsDirectory.set(file("${buildDir}/jacoco-reports"))
+    }
+}
+
+val ktlint by configurations.creating {
+    // https://github.com/pinterest/ktlint/issues/1114#issuecomment-805793163
+    attributes {
+        attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
+    }
+}
 val ktlintVersion: String by project
 
 dependencies {
     ktlint("com.pinterest:ktlint:$ktlintVersion")
+    ktlint("com.pinterest.ktlint:ktlint-ruleset-standard:$ktlintVersion")
 }
 
 val lintPaths = listOf(
-    "codegen/src/**/*.kt"
+    "**/*.kt",
+    // Exclude build output directories
+    "!**/build/**",
+    "!**/node_modules/**",
+    "!**/target/**",
 )
 
 tasks.register<JavaExec>("ktlint") {
     description = "Check Kotlin code style."
     group = "Verification"
     classpath = configurations.getByName("ktlint")
-    main = "com.pinterest.ktlint.Main"
-    args = lintPaths
+    mainClass.set("com.pinterest.ktlint.Main")
+    args = listOf("--verbose", "--relative", "--") + lintPaths
+    // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
 
 tasks.register<JavaExec>("ktlintFormat") {
     description = "Auto fix Kotlin code style violations"
     group = "formatting"
     classpath = configurations.getByName("ktlint")
-    main = "com.pinterest.ktlint.Main"
-    args = listOf("-F") + lintPaths
-}
-
-@Suppress("UnstableApiUsage")
-task<JacocoMerge>("jacocoMerge") {
-    group = LifecycleBasePlugin.VERIFICATION_GROUP
-    description = "Merge the JaCoCo data files from all subprojects into one"
-    afterEvaluate {
-        // An empty FileCollection
-        val execFiles = objects.fileCollection()
-        val projectList = subprojects + project
-        projectList.forEach { subProject: Project ->
-            if (subProject.pluginManager.hasPlugin("jacoco")) {
-                val testTasks = subProject.tasks.withType<Test>()
-                // ensure that .exec files are actually present
-                dependsOn(testTasks)
-
-                testTasks.forEach { task: Test ->
-                    // The JacocoTaskExtension is the source of truth for the location of the .exec file.
-                    val extension = task.extensions.findByType(JacocoTaskExtension::class.java)
-                    extension?.let {
-                        execFiles.from(it.destinationFile)
-                    }
-                }
-            }
-        }
-        executionData = execFiles
-    }
-    doFirst {
-        // .exec files might be missing if a project has no tests. Filter in execution phase.
-        executionData = executionData.filter { it.canRead() }
-    }
+    mainClass.set("com.pinterest.ktlint.Main")
+    args = listOf("--verbose", "--relative", "--format", "--") + lintPaths
+    // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }

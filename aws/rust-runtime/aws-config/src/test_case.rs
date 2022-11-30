@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::provider_config::ProviderConfig;
@@ -8,13 +8,13 @@ use crate::provider_config::ProviderConfig;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::http_connector::HttpSettings;
 use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 
 use serde::Deserialize;
 
 use crate::connector::default_connector;
+use aws_smithy_types::error::display::DisplayErrorContext;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
@@ -64,7 +64,7 @@ impl From<aws_types::Credentials> for Credentials {
 /// - an `env.json` file containing environment variables
 /// - an  `http-traffic.json` file containing an http traffic log from [`dvr`](aws_smithy_client::dvr)
 /// - a `test-case.json` file defining the expected output of the test
-pub struct TestEnvironment {
+pub(crate) struct TestEnvironment {
     env: Env,
     fs: Fs,
     network_traffic: NetworkTraffic,
@@ -73,7 +73,7 @@ pub struct TestEnvironment {
 }
 
 /// Connector which expects no traffic
-pub fn no_traffic_connector() -> DynConnector {
+pub(crate) fn no_traffic_connector() -> DynConnector {
     DynConnector::new(ReplayingConnection::new(vec![]))
 }
 
@@ -86,7 +86,7 @@ impl AsyncSleep for InstantSleep {
 }
 
 #[derive(Deserialize)]
-pub enum GenericTestResult<T> {
+pub(crate) enum GenericTestResult<T> {
     Ok(T),
     ErrorContains(String),
 }
@@ -95,18 +95,17 @@ impl<T> GenericTestResult<T>
 where
     T: PartialEq + Debug,
 {
-    pub fn assert_matches(&self, result: Result<impl Into<T>, impl Error>) {
+    pub(crate) fn assert_matches(&self, result: Result<impl Into<T>, impl Error>) {
         match (result, &self) {
             (Ok(actual), GenericTestResult::Ok(expected)) => {
                 assert_eq!(expected, &actual.into(), "incorrect result was returned")
             }
             (Err(err), GenericTestResult::ErrorContains(substr)) => {
+                let message = format!("{}", DisplayErrorContext(&err));
                 assert!(
-                    format!("{}", err).contains(substr),
-                    "`{}` did not contain `{}`",
-                    err,
-                    substr
-                )
+                    message.contains(substr),
+                    "`{message}` did not contain `{substr}`"
+                );
             }
             (Err(actual_error), GenericTestResult::Ok(expected_creds)) => panic!(
                 "expected credentials ({:?}) but an error was returned: {}",
@@ -124,14 +123,14 @@ where
 type TestResult = GenericTestResult<Credentials>;
 
 #[derive(Deserialize)]
-pub struct Metadata {
+pub(crate) struct Metadata {
     result: TestResult,
     docs: String,
     name: String,
 }
 
 impl TestEnvironment {
-    pub fn from_dir(dir: impl AsRef<Path>) -> Result<TestEnvironment, Box<dyn Error>> {
+    pub(crate) fn from_dir(dir: impl AsRef<Path>) -> Result<TestEnvironment, Box<dyn Error>> {
         let dir = dir.as_ref();
         let env = std::fs::read_to_string(dir.join("env.json"))
             .map_err(|e| format!("failed to load env: {}", e))?;
@@ -156,7 +155,7 @@ impl TestEnvironment {
         })
     }
 
-    pub async fn provider_config(&self) -> (ReplayingConnection, ProviderConfig) {
+    pub(crate) async fn provider_config(&self) -> (ReplayingConnection, ProviderConfig) {
         let connector = ReplayingConnection::new(self.network_traffic.events().clone());
         (
             connector.clone(),
@@ -174,15 +173,16 @@ impl TestEnvironment {
     /// Record a test case from live (remote) HTTPS traffic
     ///
     /// The `default_connector()` from the crate will be used
-    pub async fn execute_from_live_traffic<F, P>(&self, make_provider: impl Fn(ProviderConfig) -> F)
-    where
+    pub(crate) async fn execute_from_live_traffic<F, P>(
+        &self,
+        make_provider: impl Fn(ProviderConfig) -> F,
+    ) where
         F: Future<Output = P>,
         P: ProvideCredentials,
     {
         // swap out the connector generated from `http-traffic.json` for a real connector:
-        let settings = HttpSettings::default();
         let (_test_connector, config) = self.provider_config().await;
-        let live_connector = default_connector(&settings, config.sleep()).unwrap();
+        let live_connector = default_connector(&Default::default(), config.sleep()).unwrap();
         let live_connector = RecordingConnection::new(live_connector);
         let config = config.with_http_connector(DynConnector::new(live_connector.clone()));
         let provider = make_provider(config).await;
@@ -200,7 +200,7 @@ impl TestEnvironment {
     ///
     /// A connector will be created with the factory, then request traffic will be recorded.
     /// Response are generated from the existing http-traffic.json.
-    pub async fn execute_and_update<F, P>(&self, make_provider: impl Fn(ProviderConfig) -> F)
+    pub(crate) async fn execute_and_update<F, P>(&self, make_provider: impl Fn(ProviderConfig) -> F)
     where
         F: Future<Output = P>,
         P: ProvideCredentials,
@@ -223,7 +223,7 @@ impl TestEnvironment {
     }
 
     /// Execute a test case. Failures lead to panics.
-    pub async fn execute<F, P>(&self, make_provider: impl Fn(ProviderConfig) -> F)
+    pub(crate) async fn execute<F, P>(&self, make_provider: impl Fn(ProviderConfig) -> F)
     where
         F: Future<Output = P>,
         P: ProvideCredentials,

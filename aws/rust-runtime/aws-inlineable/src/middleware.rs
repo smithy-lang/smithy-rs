@@ -1,11 +1,9 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Base Middleware Stack
-
-pub use aws_smithy_client::retry::Config as RetryConfig;
 
 use aws_endpoint::AwsEndpointStage;
 use aws_http::auth::CredentialsStage;

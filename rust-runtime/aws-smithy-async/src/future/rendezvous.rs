@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Rendezvous channel implementation
@@ -38,6 +38,7 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     )
 }
 
+#[derive(Debug)]
 /// Sender-half of a channel
 pub struct Sender<T> {
     semaphore: Arc<Semaphore>,
@@ -64,6 +65,7 @@ impl<T> Sender<T> {
     }
 }
 
+#[derive(Debug)]
 /// Receiver half of the rendezvous channel
 pub struct Receiver<T> {
     semaphore: Arc<Semaphore>,

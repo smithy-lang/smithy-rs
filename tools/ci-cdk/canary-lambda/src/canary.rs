@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::paginator_canary;
@@ -20,7 +20,7 @@ macro_rules! mk_canary {
         pub(crate) fn mk_canary(
             clients: &Clients,
             env: &CanaryEnv,
-        ) -> Option<(&'static str, crate::canary::CanaryFuture)> {
+        ) -> Option<(&'static str, $crate::canary::CanaryFuture)> {
             Some(($name, Box::pin($run_canary(clients, env))))
         }
     };

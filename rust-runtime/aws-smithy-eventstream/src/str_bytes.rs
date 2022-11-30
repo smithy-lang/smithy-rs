@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! UTF-8 string byte buffer representation with validation amortization.
@@ -151,7 +151,7 @@ mod tests {
         let str_bytes: StrBytes = valid_utf8.into();
         assert_eq!(valid_utf8.as_bytes(), str_bytes.as_bytes());
         assert_eq!(valid_utf8, str_bytes.as_str());
-        assert_eq!(valid_utf8, str_bytes.clone().as_str());
+        assert_eq!(valid_utf8, str_bytes.as_str());
     }
 
     #[test]

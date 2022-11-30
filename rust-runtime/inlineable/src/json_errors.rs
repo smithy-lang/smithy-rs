@@ -1,10 +1,10 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use aws_smithy_json::deserialize::token::skip_value;
-use aws_smithy_json::deserialize::{json_token_iter, Error as DeserializeError, Token};
+use aws_smithy_json::deserialize::{error::DeserializeError, json_token_iter, Token};
 use aws_smithy_types::Error as SmithyError;
 use bytes::Bytes;
 use http::header::ToStrError;
@@ -97,8 +97,8 @@ pub fn parse_generic_error(
     let mut err_builder = SmithyError::builder();
     if let Some(code) = error_type_from_header(headers)
         .map_err(|_| DeserializeError::custom("X-Amzn-Errortype header was not valid UTF-8"))?
-        .or_else(|| code.as_deref())
-        .map(|c| sanitize_error_code(c))
+        .or(code.as_deref())
+        .map(sanitize_error_code)
     {
         err_builder.code(code);
     }

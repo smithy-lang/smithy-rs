@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! This modules defines the core, framework agnostic, HTTP middleware interface
@@ -10,11 +10,11 @@
 
 use crate::body::SdkBody;
 use crate::operation;
-use crate::pin_mut;
 use crate::response::ParseHttpResponse;
 use crate::result::{SdkError, SdkSuccess};
 use bytes::{Buf, Bytes};
 use http_body::Body;
+use pin_utils::pin_mut;
 use std::error::Error;
 use std::future::Future;
 use tracing::trace;
@@ -100,13 +100,13 @@ where
     let body = match read_body(body).await {
         Ok(body) => body,
         Err(err) => {
-            return Err(SdkError::ResponseError {
-                raw: operation::Response::from_parts(
+            return Err(SdkError::response_error(
+                err,
+                operation::Response::from_parts(
                     http::Response::from_parts(parts, SdkBody::taken()),
                     properties,
                 ),
-                err,
-            });
+            ));
         }
     };
 
@@ -139,6 +139,6 @@ fn sdk_result<T, E>(
 ) -> Result<SdkSuccess<T>, SdkError<E>> {
     match parsed {
         Ok(parsed) => Ok(SdkSuccess { raw, parsed }),
-        Err(err) => Err(SdkError::ServiceError { raw, err }),
+        Err(err) => Err(SdkError::service_error(err, raw)),
     }
 }

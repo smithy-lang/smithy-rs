@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::recursion_detection::env::TRACE_ID;
@@ -160,7 +160,7 @@ mod test {
             )
         }
         assert_ok(validate_headers(
-            &augmented_req.http().headers(),
+            augmented_req.http().headers(),
             test_case.request_headers_after(),
         ))
     }

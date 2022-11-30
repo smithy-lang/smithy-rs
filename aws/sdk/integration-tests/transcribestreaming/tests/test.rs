@@ -1,11 +1,11 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use async_stream::stream;
 use aws_sdk_transcribestreaming::error::{
-    StartStreamTranscriptionError, StartStreamTranscriptionErrorKind,
+    AudioStreamError, TranscriptResultStreamError, TranscriptResultStreamErrorKind,
 };
 use aws_sdk_transcribestreaming::model::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
@@ -15,7 +15,6 @@ use aws_sdk_transcribestreaming::types::{Blob, SdkError};
 use aws_sdk_transcribestreaming::{Client, Config, Credentials, Region};
 use aws_smithy_client::dvr::{Event, ReplayingConnection};
 use aws_smithy_eventstream::frame::{DecodedFrame, HeaderValue, Message, MessageFrameDecoder};
-use aws_smithy_http::event_stream::BoxError;
 use bytes::BufMut;
 use futures_core::Stream;
 use std::collections::{BTreeMap, BTreeSet};
@@ -39,7 +38,7 @@ async fn test_success() {
         match event {
             TranscriptResultStream::TranscriptEvent(transcript_event) => {
                 let transcript = transcript_event.transcript.unwrap();
-                for result in transcript.results.unwrap_or_else(|| Vec::new()) {
+                for result in transcript.results.unwrap_or_else(Vec::new) {
                     if !result.is_partial {
                         let first_alternative = &result.alternatives.as_ref().unwrap()[0];
                         full_message += first_alternative.transcript.as_ref().unwrap();
@@ -76,19 +75,18 @@ async fn test_error() {
         start_request("us-east-1", include_str!("error.json"), input_stream).await;
 
     match output.transcript_result_stream.recv().await {
-        Err(SdkError::ServiceError {
-            err:
-                StartStreamTranscriptionError {
-                    kind: StartStreamTranscriptionErrorKind::BadRequestException(err),
-                    ..
-                },
-            ..
-        }) => {
-            assert_eq!(
-                Some("A complete signal was sent without the preceding empty frame."),
-                err.message()
-            );
-        }
+        Err(SdkError::ServiceError(context)) => match context.err() {
+            TranscriptResultStreamError {
+                kind: TranscriptResultStreamErrorKind::BadRequestException(err),
+                ..
+            } => {
+                assert_eq!(
+                    Some("A complete signal was sent without the preceding empty frame."),
+                    err.message()
+                );
+            }
+            otherwise => panic!("Expected BadRequestException, got: {:?}", otherwise),
+        },
         otherwise => panic!("Expected BadRequestException, got: {:?}", otherwise),
     }
 
@@ -102,7 +100,7 @@ async fn test_error() {
 async fn start_request(
     region: &'static str,
     events_json: &str,
-    input_stream: impl Stream<Item = Result<AudioStream, BoxError>> + Send + Sync + 'static,
+    input_stream: impl Stream<Item = Result<AudioStream, AudioStreamError>> + Send + Sync + 'static,
 ) -> (ReplayingConnection, StartStreamTranscriptionOutput) {
     let events: Vec<Event> = serde_json::from_str(events_json).unwrap();
     let replayer = ReplayingConnection::new(events);
@@ -111,9 +109,10 @@ async fn start_request(
     let credentials = Credentials::new("test", "test", None, None, "test");
     let config = Config::builder()
         .region(region)
+        .http_connector(replayer.clone())
         .credentials_provider(credentials)
         .build();
-    let client = Client::from_conf_conn(config, replayer.clone());
+    let client = Client::from_conf(config);
 
     let output = client
         .start_stream_transcription()

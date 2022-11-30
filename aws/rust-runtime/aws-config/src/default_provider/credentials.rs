@@ -1,12 +1,12 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_types::credentials;
 use std::borrow::Cow;
+use std::time::Duration;
 
-use aws_types::credentials::{future, ProvideCredentials};
+use aws_types::credentials::{self, future, ProvideCredentials};
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
@@ -70,7 +70,7 @@ impl DefaultCredentialsChain {
     async fn credentials(&self) -> credentials::Result {
         self.0
             .provide_credentials()
-            .instrument(tracing::info_span!("provide_credentials", provider = %"default_chain"))
+            .instrument(tracing::debug_span!("provide_credentials", provider = %"default_chain"))
             .await
     }
 }
@@ -85,7 +85,7 @@ impl ProvideCredentials for DefaultCredentialsChain {
 }
 
 /// Builder for [`DefaultCredentialsChain`](DefaultCredentialsChain)
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     profile_file_builder: crate::profile::credentials::Builder,
     web_identity_builder: crate::web_identity_token::Builder,
@@ -111,6 +111,71 @@ impl Builder {
     /// When unset, the default region resolver chain will be used.
     pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
         self.region_override = region.map(|provider| Box::new(provider) as _);
+        self
+    }
+
+    /// Timeout for the entire credential loading chain.
+    ///
+    /// Defaults to 5 seconds.
+    pub fn load_timeout(mut self, timeout: Duration) -> Self {
+        self.set_load_timeout(Some(timeout));
+        self
+    }
+
+    /// Timeout for the entire credential loading chain.
+    ///
+    /// Defaults to 5 seconds.
+    pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.credential_cache.set_load_timeout(timeout);
+        self
+    }
+
+    /// Amount of time before the actual credential expiration time
+    /// where credentials are considered expired.
+    ///
+    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
+    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
+    ///
+    /// Defaults to 10 seconds.
+    pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
+        self.set_buffer_time(Some(buffer_time));
+        self
+    }
+
+    /// Amount of time before the actual credential expiration time
+    /// where credentials are considered expired.
+    ///
+    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
+    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
+    ///
+    /// Defaults to 10 seconds.
+    pub fn set_buffer_time(&mut self, buffer_time: Option<Duration>) -> &mut Self {
+        self.credential_cache.set_buffer_time(buffer_time);
+        self
+    }
+
+    /// Default expiration time to set on credentials if they don't have an expiration time.
+    ///
+    /// This is only used if the given [`ProvideCredentials`] returns
+    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+    /// This must be at least 15 minutes.
+    ///
+    /// Defaults to 15 minutes.
+    pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
+        self.set_default_credential_expiration(Some(duration));
+        self
+    }
+
+    /// Default expiration time to set on credentials if they don't have an expiration time.
+    ///
+    /// This is only used if the given [`ProvideCredentials`] returns
+    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+    /// This must be at least 15 minutes.
+    ///
+    /// Defaults to 15 minutes.
+    pub fn set_default_credential_expiration(&mut self, duration: Option<Duration>) -> &mut Self {
+        self.credential_cache
+            .set_default_credential_expiration(duration);
         self
     }
 
@@ -144,6 +209,14 @@ impl Builder {
     pub fn profile_name(mut self, name: &str) -> Self {
         self.profile_file_builder = self.profile_file_builder.profile_name(name);
         self.region_chain = self.region_chain.profile_name(name);
+        self
+    }
+
+    /// Override the IMDS client used for this provider
+    ///
+    /// When unset, the default IMDS client will be used.
+    pub fn imds_client(mut self, client: crate::imds::Client) -> Self {
+        self.imds_builder = self.imds_builder.imds_client(client);
         self
     }
 
@@ -255,6 +328,7 @@ mod test {
     make_test!(web_identity_token_profile);
     make_test!(profile_name);
     make_test!(profile_overrides_web_identity);
+    make_test!(environment_variables_blank);
     make_test!(imds_token_fail);
 
     make_test!(imds_no_iam_role);
@@ -267,6 +341,7 @@ mod test {
 
     make_test!(ecs_assume_role);
     make_test!(ecs_credentials);
+    make_test!(ecs_credentials_invalid_profile);
 
     make_test!(sso_assume_role);
     make_test!(sso_no_token_file);
@@ -292,6 +367,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::boxclone::BoxCloneService;
@@ -331,7 +407,7 @@ mod test {
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new();
+        let expected_retry_config = RetryConfig::standard();
 
         assert_eq!(actual_retry_config, expected_retry_config);
         // This is redundant but it's really important to make sure that
@@ -352,7 +428,7 @@ mod test {
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new();
+        let expected_retry_config = RetryConfig::standard();
 
         assert_eq!(actual_retry_config, expected_retry_config)
     }
@@ -379,9 +455,7 @@ retry_mode = standard
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new()
-            .with_max_attempts(1)
-            .with_retry_mode(RetryMode::Standard);
+        let expected_retry_config = RetryConfig::standard().with_max_attempts(1);
 
         assert_eq!(actual_retry_config, expected_retry_config)
     }
@@ -412,9 +486,7 @@ retry_mode = standard
             .retry_config()
             .await;
 
-        let expected_retry_config = RetryConfig::new()
-            .with_max_attempts(42)
-            .with_retry_mode(RetryMode::Standard);
+        let expected_retry_config = RetryConfig::standard().with_max_attempts(42);
 
         assert_eq!(actual_retry_config, expected_retry_config)
     }

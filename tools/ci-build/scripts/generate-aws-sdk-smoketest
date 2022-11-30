@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+cd smithy-rs
+
+./gradlew aws:sdk:assemble
+python3 aws/sdk/test-services.py > aws/sdk/build/aws-sdk/services-with-tests
+mv aws/sdk/build/aws-sdk ../artifacts/aws-sdk-smoketest

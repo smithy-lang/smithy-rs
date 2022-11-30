@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Logic for topological sorting packages by dependencies.
@@ -120,7 +120,7 @@ mod tests {
             package("C", &["B"]),
         ];
 
-        let error = dependency_order(packages).err().expect("cycle");
+        let error = dependency_order(packages).expect_err("cycle");
         assert_eq!("dependency cycle detected", format!("{}", error));
     }
 

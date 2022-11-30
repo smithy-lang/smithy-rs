@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Presigned request types and configuration.
@@ -50,10 +50,8 @@ pub mod config {
         }
     }
 
-    /// `PresigningConfig` build errors.
-    #[non_exhaustive]
     #[derive(Debug)]
-    pub enum Error {
+    enum ErrorKind {
         /// Presigned requests cannot be valid for longer than one week.
         ExpiresInDurationTooLong,
 
@@ -61,16 +59,28 @@ pub mod config {
         ExpiresInRequired,
     }
 
+    /// `PresigningConfig` build errors.
+    #[derive(Debug)]
+    pub struct Error {
+        kind: ErrorKind,
+    }
+
     impl std::error::Error for Error {}
 
     impl fmt::Display for Error {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                Error::ExpiresInDurationTooLong => {
+            match self.kind {
+                ErrorKind::ExpiresInDurationTooLong => {
                     write!(f, "`expires_in` must be no longer than one week")
                 }
-                Error::ExpiresInRequired => write!(f, "`expires_in` is required"),
+                ErrorKind::ExpiresInRequired => write!(f, "`expires_in` is required"),
             }
+        }
+    }
+
+    impl From<ErrorKind> for Error {
+        fn from(kind: ErrorKind) -> Self {
+            Self { kind }
         }
     }
 
@@ -134,9 +144,9 @@ pub mod config {
         /// Builds the `PresigningConfig`. This will error if `expires_in` is not
         /// given, or if it's longer than one week.
         pub fn build(self) -> Result<PresigningConfig, Error> {
-            let expires_in = self.expires_in.ok_or(Error::ExpiresInRequired)?;
+            let expires_in = self.expires_in.ok_or(ErrorKind::ExpiresInRequired)?;
             if expires_in > ONE_WEEK {
-                return Err(Error::ExpiresInDurationTooLong);
+                return Err(ErrorKind::ExpiresInDurationTooLong.into());
             }
             Ok(PresigningConfig {
                 start_time: self.start_time.unwrap_or_else(SystemTime::now),
@@ -219,7 +229,7 @@ pub mod request {
 pub(crate) mod service {
     use crate::presigning::request::PresignedRequest;
     use aws_smithy_http::operation;
-    use http::header::{CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT};
+    use http::header::USER_AGENT;
     use std::future::{ready, Ready};
     use std::marker::PhantomData;
     use std::task::{Context, Poll};
@@ -261,12 +271,6 @@ pub(crate) mod service {
 
         fn call(&mut self, req: operation::Request) -> Self::Future {
             let (mut req, _) = req.into_parts();
-
-            // Remove headers from input serialization that shouldn't be part of the presigned
-            // request since the request body is unsigned and left up to the person making the final
-            // HTTP request.
-            req.headers_mut().remove(CONTENT_LENGTH);
-            req.headers_mut().remove(CONTENT_TYPE);
 
             // Remove user agent headers since the request will not be executed by the AWS Rust SDK.
             req.headers_mut().remove(USER_AGENT);
