@@ -50,7 +50,6 @@ enum MissingGatewayContextTypeV1 {
 /// The [`RequestContext::ApiGatewayV1`] was not found in the [`http::Request`] extensions.
 ///
 /// Use [`LambdaHandler`](crate::routing::LambdaHandler) to ensure it's present and ensure that you're using "ApiGatewayV1".
-#[non_exhaustive]
 #[derive(Debug, Error)]
 #[error("{inner}")]
 pub struct MissingGatewayContextV1 {
@@ -91,7 +90,6 @@ enum MissingGatewayContextTypeV2 {
 /// The [`RequestContext::ApiGatewayV2`] was not found in the [`http::Request`] extensions.
 ///
 /// Use [`LambdaHandler`](crate::routing::LambdaHandler) to ensure it's present and ensure that you're using "ApiGatewayV2".
-#[non_exhaustive]
 #[derive(Debug, Error)]
 #[error("{inner}")]
 pub struct MissingGatewayContextV2 {
