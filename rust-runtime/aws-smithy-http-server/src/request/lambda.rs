@@ -41,9 +41,9 @@ impl<P> FromParts<P> for Context {
 
 #[derive(Debug, Error)]
 enum MissingGatewayContextTypeV1 {
-    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `LambdaHandler`")]
+    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::LambdaHandler`")]
     MissingRequestContext,
-    #[error("`RequestContext::ApiGatewayV2` is present in the `http::Request` extensions - consider using the `ApiGatewayV2httpRequestContext` extractor")]
+    #[error("`RequestContext::ApiGatewayV2` is present in the `http::Request` extensions - consider using the `aws_smithy_http_server::request::lambda::ApiGatewayV2httpRequestContext` extractor")]
     VersionMismatch,
 }
 
@@ -81,9 +81,9 @@ impl<P> FromParts<P> for ApiGatewayProxyRequestContext {
 
 #[derive(Debug, Error)]
 enum MissingGatewayContextTypeV2 {
-    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `LambdaHandler`")]
+    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::LambdaHandler`")]
     MissingRequestContext,
-    #[error("`RequestContext::ApiGatewayV1` is present in the `http::Request` extensions - consider using the `ApiGatewayProxyRequestContext` extractor")]
+    #[error("`RequestContext::ApiGatewayV1` is present in the `http::Request` extensions - consider using the `aws_smithy_http_server::request::lambda::ApiGatewayProxyRequestContext` extractor")]
     VersionMismatch,
 }
 
