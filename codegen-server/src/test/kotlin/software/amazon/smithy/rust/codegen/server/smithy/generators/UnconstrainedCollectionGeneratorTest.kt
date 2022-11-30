@@ -65,9 +65,10 @@ class UnconstrainedCollectionGeneratorTest {
                     UnconstrainedCollectionGenerator(
                         codegenContext,
                         this@unconstrainedModuleWriter,
-                        this@modelsModuleWriter,
                         it,
                     ).render()
+
+                    CollectionConstraintViolationGenerator(codegenContext, this@modelsModuleWriter, it, listOf()).render()
                 }
 
                 this@unconstrainedModuleWriter.unitTest(
@@ -79,7 +80,7 @@ class UnconstrainedCollectionGeneratorTest {
                         let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                         let expected_err =
-                            crate::model::list_a::ConstraintViolation(0, crate::model::list_b::ConstraintViolation(
+                            crate::model::list_a::ConstraintViolation::Member(0, crate::model::list_b::ConstraintViolation::Member(
                                 0, crate::model::structure_c::ConstraintViolation::MissingString,
                             ));
 
