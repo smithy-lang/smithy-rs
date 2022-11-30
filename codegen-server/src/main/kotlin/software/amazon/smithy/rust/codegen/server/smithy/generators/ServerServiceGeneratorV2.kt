@@ -541,7 +541,7 @@ class ServerServiceGeneratorV2(
             /// let builder = $crateName::$serviceName::builder_with_plugins(plugins);
             /// ```
             ///
-            /// To know more about plugins, see: [`#{SmithyHttpServer}::plugin`].
+            /// Check out [`#{SmithyHttpServer}::plugin`] to learn more about plugins.
             ///
             /// #### Handlers
             ///
