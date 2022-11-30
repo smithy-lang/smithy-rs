@@ -489,10 +489,10 @@ class ServerServiceGeneratorV2(
             """
             /// A fast and customizable Rust implementation of the $serviceName Smithy service.
             ///
-            /// ## Using the $serviceName
+            /// ## Using $serviceName
             ///
-            /// The primary export is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
-            /// trait and therefore can be handed to [Hyper server] using [`$serviceName::into_make_service`] or used in Lambda using [`#{SmithyHttpServer}::routing::LambdaHandler`].
+            /// The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
+            /// trait and therefore can be handed to a [`hyper` server] via [`$serviceName::into_make_service`] or used in Lambda via [`#{SmithyHttpServer}::routing::LambdaHandler`].
             /// The [`crate::${InputsModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputsModule.name}`], ${if (hasErrors) "and [`crate::${ErrorsModule.name}`]" else "" }
             /// modules provide the types used in each operation.
             ///
@@ -546,7 +546,7 @@ class ServerServiceGeneratorV2(
             /// #### Handlers
             ///
             /// For each operation [`$builderName`] has an associated setter accepting an async function conforming to the Smithy model.
-            /// The async functions, or "handlers", contain the business logic of your application.
+            /// We call these async functions **handlers**. This is where your application business logic lives.
             ///
             /// Every handler must take an `Input`, and optional [`extractor arguments`](#{SmithyHttpServer}::request), while returning:
             ///
@@ -554,8 +554,8 @@ class ServerServiceGeneratorV2(
             /// * An `Output` otherwise.
             ///
             /// ```rust,ignore
-            /// async fn handler_fallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Result<Output, Error> { todo!() }
-            /// async fn handler_infallible(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Output { todo!() }
+            /// async fn fallible_handler(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Result<Output, Error> { todo!() }
+            /// async fn infallible_handler(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Output { todo!() }
             /// ```
             ///
             /// Handlers accept up to 8 extractors:
@@ -569,10 +569,10 @@ class ServerServiceGeneratorV2(
             ///
             /// #### Build
             ///
-            /// When you have set all your operations, you can construct [`$serviceName`] using:
+            /// When you have set all the operations you want to serve, you can construct [`$serviceName`] using:
             ///
-            /// * [`$builderName::build`]: a fallible constructor, returning an error describing the missing operations
-            /// * [`$builderName::build_unchecked`]: an infallible constructor, returning a 500 when requesting missing operations
+            /// * [`$builderName::build`]: a fallible constructor, returning an error describing the missing operations from all possible ones in the Smithy model
+            /// * [`$builderName::build_unchecked`]: an infallible constructor, returning a 500 when requesting missing, unset operations
             ///
             /// ## Example
             ///
@@ -606,7 +606,7 @@ class ServerServiceGeneratorV2(
             /// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
             /// [HTTP binding traits]: https://smithy.io/2.0/spec/http-bindings.html
             /// [operations]: https://smithy.io/2.0/spec/service-types.html##operation
-            /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
+            /// [hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
             /// [Service]: https://docs.rs/tower-service/latest/tower_service/trait.Service.html
 
             #{Builder:W}
