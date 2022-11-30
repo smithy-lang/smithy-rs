@@ -30,7 +30,7 @@ pub async fn main() {
         .check_health(check_health)
         .build()
         .expect("failed to build an instance of PokemonService")
-        // Setup shared state and middlewares.
+        // Set up shared state and middlewares.
         .layer(&AddExtensionLayer::new(Arc::new(State::default())));
 
     let handler = LambdaHandler::new(app);

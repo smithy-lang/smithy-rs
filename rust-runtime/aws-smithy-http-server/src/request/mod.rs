@@ -59,7 +59,7 @@ pub mod lambda;
 #[doc(hidden)]
 #[deprecated(
     since = "0.52.0",
-    note = "This is no used by the new service builder. We use the http::Parts struct directly."
+    note = "This is not used by the new service builder. We use the `http::Parts` struct directly."
 )]
 #[derive(Debug)]
 pub struct RequestParts<B> {

@@ -76,7 +76,7 @@ pub use self::{
 #[derive(Debug)]
 #[deprecated(
     since = "0.52.0",
-    note = "OperationRegistry is part of the deprecated service builder API. This type no longer appears in the public API."
+    note = "`OperationRegistry` is part of the deprecated service builder API. This type no longer appears in the public API."
 )]
 pub struct Router<B = Body> {
     routes: Routes<B>,

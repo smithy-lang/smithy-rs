@@ -44,7 +44,7 @@ pub use super::{into_make_service::IntoMakeService, route::RouteFuture};
 opaque_future! {
     #[deprecated(
         since = "0.52.0",
-        note = "OperationRegistry is part of the deprecated service builder API. This type no longer appears in the public API."
+        note = "`OperationRegistry` is part of the deprecated service builder API. This type no longer appears in the public API."
     )]
     /// Response future for [`Router`](super::Router).
     pub type RouterFuture<B> = RoutingFuture<Route<B>, B>;

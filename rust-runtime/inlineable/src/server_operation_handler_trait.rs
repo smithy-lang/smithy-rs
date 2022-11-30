@@ -16,7 +16,7 @@ use tower::Service;
 /// Smithy operation.
 #[deprecated(
     since = "0.52.0",
-    note = "OperationHandler is part of the older service builder API. This type no longer appears in the public API."
+    note = "`OperationHandler` is part of the older service builder API. This type no longer appears in the public API."
 )]
 pub struct OperationHandler<H, B, R, I> {
     handler: H,
@@ -41,7 +41,7 @@ where
 #[allow(deprecated)]
 #[deprecated(
     since = "0.52.0",
-    note = "OperationHandler is part of the older service builder API. This type no longer appears in the public API."
+    note = "`OperationHandler` is part of the older service builder API. This type no longer appears in the public API."
 )]
 pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
     OperationHandler {
@@ -93,7 +93,7 @@ pub(crate) mod sealed {
 
 #[deprecated(
     since = "0.52.0",
-    note = "The inlineable Handler is part of the deprecated service builder API. This type no longer appears in the public API."
+    note = "The inlineable `Handler` is part of the deprecated service builder API. This type no longer appears in the public API."
 )]
 #[async_trait]
 pub trait Handler<B, T, Fut>: Clone + Send + Sized + 'static {
