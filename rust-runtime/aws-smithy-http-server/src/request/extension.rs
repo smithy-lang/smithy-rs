@@ -50,14 +50,11 @@
 
 use std::ops::Deref;
 
-use http::StatusCode;
 use thiserror::Error;
 
-use crate::{
-    body::{empty, BoxBody},
-    request::FromParts,
-    response::IntoResponse,
-};
+use crate::{body::BoxBody, request::FromParts, response::IntoResponse};
+
+use super::internal_server_error;
 
 /// Generic extension type stored in and extracted from [request extensions].
 ///
@@ -86,9 +83,7 @@ pub struct MissingExtension;
 
 impl<Protocol> IntoResponse<Protocol> for MissingExtension {
     fn into_response(self) -> http::Response<BoxBody> {
-        let mut response = http::Response::new(empty());
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        response
+        internal_server_error()
     }
 }
 

@@ -11,15 +11,12 @@
 //! example illustrates the use of [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 //! and [`ConnectInfo`] with a service builder.
 
-use http::{request::Parts, StatusCode};
+use http::request::Parts;
 use thiserror::Error;
 
-use crate::{
-    body::{empty, BoxBody},
-    response::IntoResponse,
-};
+use crate::{body::BoxBody, response::IntoResponse};
 
-use super::FromParts;
+use super::{internal_server_error, FromParts};
 
 /// The [`ConnectInfo`] was not found in the [`http::Request`] extensions.
 ///
@@ -34,9 +31,7 @@ pub struct MissingConnectInfo;
 
 impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
     fn into_response(self) -> http::Response<BoxBody> {
-        let mut response = http::Response::new(empty());
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        response
+        internal_server_error()
     }
 }
 

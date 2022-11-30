@@ -6,7 +6,6 @@
 //! The [`lambda_http`] types included in [`http::Request`]s when [`LambdaHandler`](crate::routing::LambdaHandler) is
 //! used. Each are given a [`FromParts`] implementation for easy use within handlers.
 
-use http::StatusCode;
 use lambda_http::request::RequestContext;
 #[doc(inline)]
 pub use lambda_http::{
@@ -15,11 +14,8 @@ pub use lambda_http::{
 };
 use thiserror::Error;
 
-use super::FromParts;
-use crate::{
-    body::{empty, BoxBody},
-    response::IntoResponse,
-};
+use super::{internal_server_error, FromParts};
+use crate::{body::BoxBody, response::IntoResponse};
 
 /// The [`Context`] was not found in the [`http::Request`] extensions.
 ///
@@ -31,9 +27,7 @@ pub struct MissingContext;
 
 impl<Protocol> IntoResponse<Protocol> for MissingContext {
     fn into_response(self) -> http::Response<BoxBody> {
-        let mut response = http::Response::new(empty());
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        response
+        internal_server_error()
     }
 }
 
@@ -65,9 +59,7 @@ pub struct MissingGatewayContextV1 {
 
 impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV1 {
     fn into_response(self) -> http::Response<BoxBody> {
-        let mut response = http::Response::new(empty());
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        response
+        internal_server_error()
     }
 }
 
@@ -108,9 +100,7 @@ pub struct MissingGatewayContextV2 {
 
 impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV2 {
     fn into_response(self) -> http::Response<BoxBody> {
-        let mut response = http::Response::new(empty());
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        response
+        internal_server_error()
     }
 }
 
