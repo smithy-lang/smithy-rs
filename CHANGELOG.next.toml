@@ -489,5 +489,5 @@ author = "lsr0"
 [[aws-sdk-rust]]
 message = "Normalize URI paths per RFC3986 when constructing canonical requests, except for S3."
 references = ["smithy-rs#2018"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
