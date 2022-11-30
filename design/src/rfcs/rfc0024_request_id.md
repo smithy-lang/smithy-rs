@@ -124,7 +124,7 @@ where
 
 The string representation of a generated ID will be valid for this regex:
 * For `ServerRequestId`: `/^[A-Za-z0-9_-]{,48}$/`
-* For `ClientRequestId`: `/^[ -~]$/` (printable ASCII characters)
+* For `ClientRequestId`: see [the spec](https://httpwg.org/specs/rfc9110.html#rfc.section.5.5)
 
 Although the generated ID is opaque, this will give guarantees to customers as to what they can expect, if the server ID is ever updated to a different format.
 
