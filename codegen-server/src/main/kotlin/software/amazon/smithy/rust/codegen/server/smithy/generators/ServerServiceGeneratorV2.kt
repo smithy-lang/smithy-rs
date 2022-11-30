@@ -569,10 +569,12 @@ class ServerServiceGeneratorV2(
             ///
             /// #### Build
             ///
-            /// When you have set all the operations you want to serve, you can construct [`$serviceName`] using:
+            /// You can convert [`$builderName`] into [`$serviceName`] using either [`$builderName::build`] or [`$builderName::build_unchecked`].  
             ///
-            /// * [`$builderName::build`]: a fallible constructor, returning an error describing the missing operations from all possible ones in the Smithy model
-            /// * [`$builderName::build_unchecked`]: an infallible constructor, returning a 500 when requesting missing, unset operations
+            /// [`$builderName::build`] requires you to provide a handler for every single operation in your Smithy model. It will return an error if that is not the case.  
+            ///
+            /// [`$builderName::build_unchecked`], instead, does not require exhaustiveness. The server will automatically return 500s to all requests for operations that do not have a registered handler.  
+            /// [`$builderName::build_unchecked`] is particularly useful if you are deploying your Smithy service as a collection of Lambda functions, where each Lambda is only responsible for a subset of the operations in the Smithy service (or even a single one!).
             ///
             /// ## Example
             ///
