@@ -89,16 +89,16 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
     HttpBindingCustomization() {
     override fun section(section: HttpBindingSection): Writable = when (section) {
         is HttpBindingSection.BeforeRenderingHeaderValue -> writable {
-            if (workingWithPublicConstrainedWrapperTupleType(
-                    section.context.shape,
-                    codegenContext.model,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
-                )
-            ) {
-                if (section.context.shape is IntegerShape || section.context.shape is ShortShape || section.context.shape is LongShape || section.context.shape is ByteShape || section.context.shape is CollectionShape) {
-                    section.context.valueExpression =
-                        ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
-                }
+            val isIntegral = section.context.shape is ByteShape || section.context.shape is ShortShape || section.context.shape is IntegerShape || section.context.shape is LongShape
+            val workingWithPublicWrapper = workingWithPublicConstrainedWrapperTupleType(
+                section.context.shape,
+                codegenContext.model,
+                codegenContext.settings.codegenConfig.publicConstrainedTypes,
+            )
+
+            if (workingWithPublicWrapper && (isIntegral || section.context.shape is CollectionShape)) {
+                section.context.valueExpression =
+                    ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
             }
         }
 
