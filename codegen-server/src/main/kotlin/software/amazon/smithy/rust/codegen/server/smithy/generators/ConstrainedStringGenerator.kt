@@ -270,6 +270,8 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                     }
                 }
 
+                /// Attempts to compile the regex for this constrained type's `@pattern`.
+                /// This can fail if the specified regex is not supported by the #{Regex} crate.
                 pub fn compile_regex() -> &'static #{Regex}::Regex {
                     static REGEX: #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##));
 
