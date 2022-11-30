@@ -79,6 +79,7 @@ impl<T> Deref for Extension<T> {
 }
 
 /// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
+#[non_exhaustive]
 #[derive(Debug, Error)]
 #[error("the `Extension` is not present in the `http::Request`")]
 pub struct MissingExtension;
