@@ -516,8 +516,9 @@ class ServerServiceGeneratorV2(
             ///
             /// #### Plugins
             ///
-            /// The [`$serviceName::builder_with_plugins`] method, returning [`$builderName`], we saw earlier,
-            /// accepts a `plugin`. Plugins allow you to build middleware which is aware of the operation it is being applied to.
+            /// The [`$serviceName::builder_with_plugins`] method, returning [`$builderName`],
+            /// accepts a [`Plugin`](aws_smithy_http_server::plugin::Plugin).
+            /// Plugins allow you to build middleware which is aware of the operation it is being applied to.
             ///
             /// ```rust,no_run
             /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
@@ -532,10 +533,10 @@ class ServerServiceGeneratorV2(
             ///
             /// #### Handlers
             ///
-            /// For each operation it has an associated setters accepting an async function conforming to the Smithy model.
+            /// For each operation [`$builderName`] has an associated setter accepting an async function conforming to the Smithy model.
             /// The async functions, or "handlers", contain the business logic of your application.
             ///
-            /// Every handler must take an `Input`, and optional [`extractor arguments`](#{SmithyHttpServer}::request), while return:
+            /// Every handler must take an `Input`, and optional [`extractor arguments`](#{SmithyHttpServer}::request), while returning:
             ///
             /// * A `Result<Output, Error>` if your operation has modeled errors, or
             /// * An `Output` otherwise.
