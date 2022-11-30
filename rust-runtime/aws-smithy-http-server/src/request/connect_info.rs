@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Extractor for getting connection information from a client in the form of [`ConnectInfo`].
+//! The [`ConnectInfo`] struct is included in [`http::Request`]s when
+//! [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo) is used. [`ConnectInfo`]'s
+//! [`FromParts`] implementation allows it to be extracted from the [`http::Request`].
 
 use http::request::Parts;
 
