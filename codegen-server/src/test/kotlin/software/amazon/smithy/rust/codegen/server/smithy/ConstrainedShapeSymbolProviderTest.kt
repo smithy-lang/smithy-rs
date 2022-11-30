@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -51,6 +53,12 @@ const val baseModelString =
     @range(min: -2, max: 10)
     short ConstrainedShort
 
+    @range(min: -2, max: 1000)
+    long ConstrainedLong
+
+    @range(min: -2, max: 10)
+    byte ConstrainedByte
+
     @range(min: 10, max: 29)
     integer ConstrainedInteger
 
@@ -85,6 +93,8 @@ class ConstrainedShapeSymbolProviderTest {
             Stream.of(
                 Arguments.of("ConstrainedInteger", { s: Shape -> s is IntegerShape }),
                 Arguments.of("ConstrainedShort", { s: Shape -> s is ShortShape }),
+                Arguments.of("ConstrainedLong", { s: Shape -> s is LongShape }),
+                Arguments.of("ConstrainedByte", { s: Shape -> s is ByteShape }),
                 Arguments.of("ConstrainedString", { s: Shape -> s is StringShape }),
                 Arguments.of("ConstrainedMap", { s: Shape -> s is MapShape }),
             )

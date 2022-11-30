@@ -12,9 +12,7 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.NumberShape
-import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -58,7 +56,8 @@ class ConstrainedNumberGeneratorTest {
         }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-            listOf("integer", "short").map { type -> testCases(type) }.flatten().map { Arguments.of(it) }.stream()
+            listOf("integer", "short", "long", "byte").map { type -> testCases(type) }.flatten()
+                .map { Arguments.of(it) }.stream()
     }
 
     @ParameterizedTest
@@ -72,10 +71,7 @@ class ConstrainedNumberGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ModelsModule) {
-            when (shape) {
-                is IntegerShape -> ConstrainedIntegerGenerator(codegenContext, this, shape).render()
-                is ShortShape -> ConstrainedShortGenerator(codegenContext, this, shape).render()
-            }
+            ConstrainedNumberGenerator(codegenContext, this, shape).render()
 
             unitTest(
                 name = "try_from_success",
@@ -114,8 +110,10 @@ class ConstrainedNumberGeneratorTest {
     class NoStructuralConstructorTestProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             listOf(
-                Triple("integer", "ConstrainedInteger", "i32"),
+                Triple("byte", "ConstrainedByte", "i8"),
                 Triple("short", "ConstrainedShort", "i16"),
+                Triple("integer", "ConstrainedInteger", "i32"),
+                Triple("long", "ConstrainedLong", "i64"),
             ).map { Arguments.of(it) }.stream()
     }
 
@@ -134,11 +132,7 @@ class ConstrainedNumberGeneratorTest {
         val codegenContext = serverTestCodegenContext(model)
 
         val writer = RustWriter.forModule(ModelsModule.name)
-
-        when (constrainedShape) {
-            is IntegerShape -> ConstrainedIntegerGenerator(codegenContext, writer, constrainedShape).render()
-            is ShortShape -> ConstrainedShortGenerator(codegenContext, writer, constrainedShape).render()
-        }
+        ConstrainedNumberGenerator(codegenContext, writer, constrainedShape).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct $shapeName(pub(crate) $rustType);"
