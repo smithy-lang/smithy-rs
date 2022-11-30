@@ -58,19 +58,7 @@ class ConstrainedMapGenerator(
         val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
-            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
-        } else if (lengthTrait.min.isPresent) {
-            "${lengthTrait.min.get()} <= length"
-        } else {
-            "length <= ${lengthTrait.max.get()}"
-        }
-
-        val constrainedTypeVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
+        val constrainedTypeVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
         val constrainedTypeMetadata = RustMetadata(
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq)),
             visibility = constrainedTypeVisibility,
@@ -97,27 +85,27 @@ class ConstrainedMapGenerator(
                 pub fn inner(&self) -> &$inner {
                     &self.0
                 }
-                
+
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
             }
-            
+
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
-                
+
                 /// ${rustDocsTryFromMethod(name, inner)}
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
                     let length = value.len();
-                    if $condition {
+                    if ${lengthTrait.rustCondition("length")} {
                         Ok(Self(value))
                     } else {
                         Err(#{ConstraintViolation}::Length(length))
                     }
                 }
             }
-            
+
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
                     value.into_inner()

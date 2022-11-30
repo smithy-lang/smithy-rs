@@ -8,8 +8,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -29,7 +29,7 @@ class UnconstrainedUnionGeneratorTest {
             union Union {
                 structure: Structure
             }
-            
+
             structure Structure {
                 @required
                 requiredMember: String
@@ -42,14 +42,14 @@ class UnconstrainedUnionGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(RustModule.public("model")) {
+        project.withModule(ModelsModule) {
             model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(model, symbolProvider, this)
         }
 
         project.withModule(ModelsModule) {
             UnionGenerator(model, symbolProvider, this, unionShape, renderUnknownVariant = false).render()
         }
-        project.withModule(RustModule.private("unconstrained")) unconstrainedModuleWriter@{
+        project.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
             project.withModule(ModelsModule) modelsModuleWriter@{
                 UnconstrainedUnionGenerator(codegenContext, this@unconstrainedModuleWriter, this@modelsModuleWriter, unionShape).render()
 
@@ -67,7 +67,7 @@ class UnconstrainedUnionGeneratorTest {
                             expected_err,
                             crate::model::Union::try_from(union_unconstrained).unwrap_err()
                         );
-                        """,
+                    """,
                 )
 
                 this@unconstrainedModuleWriter.unitTest(
@@ -82,7 +82,7 @@ class UnconstrainedUnionGeneratorTest {
                         let actual: crate::model::Union = crate::model::Union::try_from(union_unconstrained).unwrap();
 
                         assert_eq!(expected, actual);
-                        """,
+                    """,
                 )
 
                 this@unconstrainedModuleWriter.unitTest(
@@ -93,10 +93,10 @@ class UnconstrainedUnionGeneratorTest {
 
                         let _union: crate::constrained::MaybeConstrained<crate::model::Union> =
                             union_unconstrained.into();
-                        """,
+                    """,
                 )
-                project.compileAndTest()
             }
         }
+        project.compileAndTest()
     }
 }

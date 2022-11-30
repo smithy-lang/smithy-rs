@@ -30,6 +30,8 @@ use tower_http::map_response_body::MapResponseBodyLayer;
 mod future;
 mod into_make_service;
 mod into_make_service_with_connect_info;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 mod lambda_handler;
 
 #[doc(hidden)]
@@ -39,10 +41,14 @@ mod route;
 
 pub(crate) mod tiny_map;
 
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub use self::lambda_handler::LambdaHandler;
 pub use self::{
-    future::RouterFuture, into_make_service::IntoMakeService, into_make_service_with_connect_info::ConnectInfo,
-    into_make_service_with_connect_info::IntoMakeServiceWithConnectInfo, route::Route,
+    future::RouterFuture,
+    into_make_service::IntoMakeService,
+    into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
+    route::Route,
 };
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
@@ -118,18 +124,6 @@ where
     /// [`MakeService`]: tower::make::MakeService
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
-    }
-
-    /// Convert this router into a [`MakeService`], that is a [`Service`] whose
-    /// response is another service, and provides a [`ConnectInfo`] object to service handlers.
-    ///
-    /// This is useful when running your application with hyper's
-    /// [`Server`].
-    ///
-    /// [`Server`]: hyper::server::Server
-    /// [`MakeService`]: tower::make::MakeService
-    pub fn into_make_service_with_connect_info<C>(self) -> IntoMakeServiceWithConnectInfo<Self, C> {
-        IntoMakeServiceWithConnectInfo::new(self)
     }
 
     /// Apply a [`tower::Layer`] to the router.

@@ -197,6 +197,27 @@ references = ["smithy-rs#1935"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
+[[aws-sdk-rust]]
+message = """
+It was possible in some cases to send some S3 requests without a required upload ID, causing a risk of unintended data
+deletion and modification. Now, when an operation has query parameters that are marked as required, the omission of
+those query parameters will cause a BuildError, preventing the invalid operation from being sent.
+"""
+references = ["smithy-rs#1957"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+It was previously possible to send requests without setting query parameters modeled as required. Doing this may cause a
+service to interpret a request incorrectly instead of just sending back a 400 error. Now, when an operation has query
+parameters that are marked as required, the omission of those query parameters will cause a BuildError, preventing the
+invalid operation from being sent.
+"""
+references = ["smithy-rs#1957"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "Velfi"
+
 [[smithy-rs]]
 message = "Upgrade to Smithy 1.26.2"
 references = ["smithy-rs#1972"]
@@ -221,12 +242,18 @@ message = """
 
 * The `length` trait on `string` shapes.
 * The `length` trait on `map` shapes.
+* The `length` trait on `list` shapes.
+* The `range` trait on `byte` shapes.
+* The `range` trait on `short` shapes.
+* The `range` trait on `integer` shapes.
+* The `range` trait on `long` shapes.
+* The `pattern` trait on `string` shapes.
 
 Upon receiving a request that violates the modeled constraints, the server SDK will reject it with a message indicating why.
 
 Unsupported (constraint trait, target shape) combinations will now fail at code generation time, whereas previously they were just ignored. This is a breaking change to raise awareness in service owners of their server SDKs behaving differently than what was modeled. To continue generating a server SDK with unsupported constraint traits, set `codegenConfig.ignoreUnsupportedConstraints` to `true` in your `smithy-build.json`.
 """
-references = ["smithy-rs#1199", "smithy-rs#1342", "smithy-rs#1401"]
+references = ["smithy-rs#1199", "smithy-rs#1342", "smithy-rs#1401", "smithy-rs#1998", "smithy-rs#2005", "smithy-rs#2028", "smithy-rs#2034", "smithy-rs#2036"]
 meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "server" }
 author = "david-perez"
 
@@ -457,6 +484,24 @@ x-amzn-errortype: com.example.service#InvalidRequestException
 references = ["smithy-rs#1982"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = "Make generated enum `values()` functions callable in const contexts."
+references = ["smithy-rs#2011"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "lsr0"
+
+[[smithy-rs]]
+message = """
+All types that are exclusively relevant within the context of an AWS Lambda function are now gated behind the
+`aws-lambda` feature flag.
+
+This will reduce the number of dependencies (and improve build times) for users that are running their Smithy services
+in non-serverless environments (e.g. via `hyper`).
+"""
+references = ["smithy-rs#2035"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "LukeMathWalker"
 
 [[aws-sdk-rust]]
 message = "The Unit type for a Union member is no longer rendered."

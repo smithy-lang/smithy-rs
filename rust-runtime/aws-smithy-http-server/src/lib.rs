@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! HTTP server runtime and utilities, loosely based on [axum].
 //!
 //! [axum]: https://docs.rs/axum/latest/axum/
-
 #[macro_use]
 pub(crate) mod macros;
 
@@ -36,7 +37,7 @@ pub mod routers;
 
 #[doc(inline)]
 pub(crate) use self::error::Error;
-pub use self::extension::Extension;
+pub use self::request::extension::Extension;
 #[doc(inline)]
 pub use self::routing::Router;
 #[doc(inline)]

@@ -67,7 +67,7 @@ fun testRustSettings(
 
 private const val SmithyVersion = "1.0"
 fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion): Model {
-    val processed = letIf(!this.startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
+    val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
     return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
         .unwrap()
 }
@@ -117,7 +117,7 @@ fun StructureShape.renderWithModelBuilder(
 val TokioWithTestMacros = CargoDependency(
     "tokio",
     CratesIo("1"),
-    features = setOf("macros", "test-util", "rt"),
+    features = setOf("macros", "test-util", "rt", "rt-multi-thread"),
     scope = DependencyScope.Dev,
 )
 

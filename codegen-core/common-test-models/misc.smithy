@@ -255,6 +255,7 @@ list HeaderList {
     member: String
 }
 
-set HeaderSet {
+@uniqueItems
+list HeaderSet {
     member: String
 }

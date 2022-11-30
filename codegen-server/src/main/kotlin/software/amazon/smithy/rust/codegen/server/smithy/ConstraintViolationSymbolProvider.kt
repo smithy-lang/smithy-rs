@@ -7,19 +7,27 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.smithy.Models
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
@@ -60,27 +68,32 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilde
 class ConstraintViolationSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
-    private val serviceShape: ServiceShape,
     private val publicConstrainedTypes: Boolean,
+    private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
     private val constraintViolationName = "ConstraintViolation"
+    private val visibility = when (publicConstrainedTypes) {
+        true -> Visibility.PUBLIC
+        false -> Visibility.PUBCRATE
+    }
+
+    private fun Shape.shapeModule() = RustModule.new(
+        // need to use the context name so we get the correct name for maps
+        name = RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase(),
+        visibility = visibility,
+        parent = ModelsModule,
+        inline = true,
+    )
 
     private fun constraintViolationSymbolForCollectionOrMapOrUnionShape(shape: Shape): Symbol {
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
-        val symbol = base.toSymbol(shape)
-        val constraintViolationNamespace =
-            "${symbol.namespace.let { it.ifEmpty { "crate::${Models.namespace}" } }}::${
-            RustReservedWords.escapeIfNeeded(
-                shape.contextName(serviceShape).toSnakeCase(),
-            )
-            }"
-        val rustType = RustType.Opaque(constraintViolationName, constraintViolationNamespace)
+        val module = shape.shapeModule()
+        val rustType = RustType.Opaque(constraintViolationName, module.fullyQualifiedPath())
         return Symbol.builder()
             .rustType(rustType)
             .name(rustType.name)
-            .namespace(rustType.namespace, "::")
-            .definitionFile(symbol.definitionFile)
+            .locatedIn(module)
             .build()
     }
 
@@ -91,32 +104,29 @@ class ConstraintViolationSymbolProvider(
             is MapShape, is CollectionShape, is UnionShape -> {
                 constraintViolationSymbolForCollectionOrMapOrUnionShape(shape)
             }
+
             is StructureShape -> {
                 val builderSymbol = shape.serverBuilderSymbol(base, pubCrate = !publicConstrainedTypes)
 
-                val namespace = builderSymbol.namespace
-                val rustType = RustType.Opaque(constraintViolationName, namespace)
+                val module = builderSymbol.module()
+                val rustType = RustType.Opaque(constraintViolationName, module.fullyQualifiedPath())
                 Symbol.builder()
                     .rustType(rustType)
                     .name(rustType.name)
-                    .namespace(rustType.namespace, "::")
-                    .definitionFile(builderSymbol.definitionFile)
+                    .locatedIn(module)
                     .build()
             }
-            is StringShape -> {
-                val namespace = "crate::${Models.namespace}::${
-                RustReservedWords.escapeIfNeeded(
-                    shape.contextName(serviceShape).toSnakeCase(),
-                )
-                }"
-                val rustType = RustType.Opaque(constraintViolationName, namespace)
+
+            is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape -> {
+                val module = shape.shapeModule()
+                val rustType = RustType.Opaque(constraintViolationName, module.fullyQualifiedPath())
                 Symbol.builder()
                     .rustType(rustType)
                     .name(rustType.name)
-                    .namespace(rustType.namespace, "::")
-                    .definitionFile(Models.filename)
+                    .locatedIn(module)
                     .build()
             }
+
             else -> TODO("Constraint traits on other shapes not implemented yet: $shape")
         }
     }

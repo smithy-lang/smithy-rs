@@ -32,6 +32,11 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+//! Types and traits for extracting data from requests.
+//!
+//! See [Accessing Un-modelled data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
+//! a comprehensive overview.
+
 use std::{
     convert::Infallible,
     future::{ready, Future, Ready},
@@ -43,7 +48,13 @@ use futures_util::{
 };
 use http::{request::Parts, Extensions, HeaderMap, Request, Uri};
 
-use crate::{rejection::EitherRejection, response::IntoResponse};
+use crate::{rejection::any_rejections, response::IntoResponse};
+
+pub mod connect_info;
+pub mod extension;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
+pub mod lambda;
 
 #[doc(hidden)]
 #[derive(Debug)]
@@ -111,8 +122,8 @@ impl<B> RequestParts<B> {
     }
 }
 
-/// Provides a protocol aware extraction from a [`Request`]. This borrows the
-/// [`Parts`], in contrast to [`FromRequest`].
+// NOTE: We cannot reference `FromRequest` here, as a point of contrast, as it's `doc(hidden)`.
+/// Provides a protocol aware extraction from a requests [`Parts`].
 pub trait FromParts<Protocol>: Sized {
     type Rejection: IntoResponse<Protocol>;
 
@@ -139,19 +150,31 @@ where
     }
 }
 
-impl<P, T1, T2> FromParts<P> for (T1, T2)
-where
-    T1: FromParts<P>,
-    T2: FromParts<P>,
-{
-    type Rejection = EitherRejection<T1::Rejection, T2::Rejection>;
+macro_rules! impl_from_parts {
+    ($error_name:ident, $($var:ident),+) => (
+        impl<P, $($var,)*> FromParts<P> for ($($var),*)
+        where
+            $($var: FromParts<P>,)*
+        {
+            type Rejection = any_rejections::$error_name<$($var::Rejection),*>;
 
-    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
-        let t1 = T1::from_parts(parts).map_err(EitherRejection::Left)?;
-        let t2 = T2::from_parts(parts).map_err(EitherRejection::Right)?;
-        Ok((t1, t2))
-    }
+            fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+                let tuple = (
+                    $($var::from_parts(parts).map_err(any_rejections::$error_name::$var)?,)*
+                );
+                Ok(tuple)
+            }
+        }
+    )
 }
+
+impl_from_parts!(Two, A, B);
+impl_from_parts!(Three, A, B, C);
+impl_from_parts!(Four, A, B, C, D);
+impl_from_parts!(Five, A, B, C, D, E);
+impl_from_parts!(Six, A, B, C, D, E, F);
+impl_from_parts!(Seven, A, B, C, D, E, F, G);
+impl_from_parts!(Eight, A, B, C, D, E, F, G, H);
 
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
 /// [`Request`], in contrast to [`FromParts`].
@@ -180,14 +203,14 @@ where
     T1: FromRequest<P, B>,
     T2: FromParts<P>,
 {
-    type Rejection = EitherRejection<T1::Rejection, T2::Rejection>;
+    type Rejection = any_rejections::Two<T1::Rejection, T2::Rejection>;
     type Future = TryJoin<MapErr<T1::Future, fn(T1::Rejection) -> Self::Rejection>, Ready<Result<T2, Self::Rejection>>>;
 
     fn from_request(request: Request<B>) -> Self::Future {
         let (mut parts, body) = request.into_parts();
-        let t2_result = T2::from_parts(&mut parts).map_err(EitherRejection::Right);
+        let t2_result = T2::from_parts(&mut parts).map_err(any_rejections::Two::B);
         try_join(
-            T1::from_request(Request::from_parts(parts, body)).map_err(EitherRejection::Left),
+            T1::from_request(Request::from_parts(parts, body)).map_err(any_rejections::Two::A),
             ready(t2_result),
         )
     }

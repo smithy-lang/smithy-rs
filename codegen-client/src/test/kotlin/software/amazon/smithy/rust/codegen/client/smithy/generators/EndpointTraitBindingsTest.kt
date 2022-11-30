@@ -12,7 +12,6 @@ import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
@@ -59,7 +58,7 @@ internal class EndpointTraitBindingsTest {
             operationShape.expectTrait(EndpointTrait::class.java),
         )
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.default("test", visibility = Visibility.PRIVATE)) {
+        project.withModule(RustModule.private("test")) {
             rust(
                 """
                 struct GetStatusInput {
