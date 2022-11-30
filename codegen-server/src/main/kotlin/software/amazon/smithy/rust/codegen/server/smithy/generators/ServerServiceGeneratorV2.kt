@@ -558,7 +558,7 @@ class ServerServiceGeneratorV2(
             /// async fn infallible_handler(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Output { todo!() }
             /// ```
             ///
-            /// Handlers accept up to 8 extractors:
+            /// Handlers can accept up to 8 extractors:
             ///
             /// ```rust,ignore
             /// async fn handler_with_no_extensions(input: Input) -> ... { todo!() }
