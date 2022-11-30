@@ -545,7 +545,7 @@ class ServerServiceGeneratorV2(
             ///
             /// #### Handlers
             ///
-            /// For each operation [`$builderName`] has an associated setter accepting an async function conforming to the Smithy model.
+            /// [`$builderName`] provides a setter method for each operation in your Smithy model. The setter methods expect an async function as input, matching the signature for the corresponding operation in your Smithy model.
             /// We call these async functions **handlers**. This is where your application business logic lives.
             ///
             /// Every handler must take an `Input`, and optional [`extractor arguments`](#{SmithyHttpServer}::request), while returning:
