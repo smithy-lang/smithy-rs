@@ -34,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ofTypeUnit
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -44,6 +43,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
@@ -313,7 +313,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
-                        if (member.ofTypeUnit()) {
+                        if (member.isTargetUnit()) {
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
                                 serializeMember(MemberContext.unionMember(context.copy(writerExpression = "writer"), "", member))
                             }

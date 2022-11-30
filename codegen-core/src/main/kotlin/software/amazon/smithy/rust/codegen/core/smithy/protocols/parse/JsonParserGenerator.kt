@@ -43,7 +43,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGen
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ofTypeUnit
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -55,6 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
@@ -512,7 +512,7 @@ class JsonParserGenerator(
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
-                                        if (member.ofTypeUnit()) {
+                                        if (member.isTargetUnit()) {
                                             rustTemplate(
                                                 """
                                                 #{skip_value}(tokens)?;

@@ -50,6 +50,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
@@ -258,7 +259,7 @@ open class Instantiator(
         val member = shape.expectMember(memberName)
         writer.rust("#T::${symbolProvider.toMemberName(member)}", unionSymbol)
         // Unions should specify exactly one member.
-        if (!member.ofTypeUnit()) {
+        if (!member.isTargetUnit()) {
             writer.withBlock("(", ")") {
                 renderMember(this, member, variant.second, ctx)
             }

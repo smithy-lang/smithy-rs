@@ -36,7 +36,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGen
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ofTypeUnit
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -48,6 +47,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -416,7 +416,7 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("object").also { objectName ->
-            if (context.shape.ofTypeUnit()) {
+            if (context.shape.isTargetUnit()) {
                 rust("let $objectName = ${context.writerExpression}.start_object();")
                 rust("$objectName.finish();")
             } else {
@@ -459,7 +459,7 @@ class JsonSerializerGenerator(
                     for (member in context.shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
 
-                        if (member.ofTypeUnit()) {
+                        if (member.isTargetUnit()) {
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
                                 serializeMember(MemberContext.unionMember(context, "", member, jsonName))
                             }

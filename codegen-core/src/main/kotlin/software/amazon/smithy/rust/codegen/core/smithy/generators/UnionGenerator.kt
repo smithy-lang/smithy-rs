@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -21,17 +20,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 fun CodegenTarget.renderUnknownVariant() = when (this) {
     CodegenTarget.SERVER -> false
     CodegenTarget.CLIENT -> true
-}
-
-private val unitShapeId = ShapeId.from("smithy.api#Unit")
-
-internal fun MemberShape.ofTypeUnit(): Boolean {
-    return this.target == unitShapeId
 }
 
 /**
@@ -130,7 +124,7 @@ fun unknownVariantError(union: String) =
         "It occurs when an outdated client is used after a new enum variant was added on the server side."
 
 private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: MemberShape, memberSymbol: Symbol) {
-    if (member.ofTypeUnit()) {
+    if (member.isTargetUnit()) {
         write("${symbolProvider.toMemberName(member)},")
     } else {
         write("${symbolProvider.toMemberName(member)}(#T),", memberSymbol)
@@ -144,7 +138,7 @@ private fun RustWriter.renderAsVariant(
     unionSymbol: Symbol,
     memberSymbol: Symbol,
 ) {
-    if (member.ofTypeUnit()) {
+    if (member.isTargetUnit()) {
         rust(
             "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
         )
