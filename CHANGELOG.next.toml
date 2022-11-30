@@ -557,7 +557,7 @@ broadened to any struct which implements the
 The trait is publicly exported and therefore provides customers with the ability to extend the domain of the handlers.
 
 As noted, a ubiqutious example of a struct that implements `FromParts` is the `Extension` struct, which extracts state
-from the `Extensions` typemap of a `http::Request`. A new example is the `ConnectInfo` struct which allows handlers to
+from the `Extensions` typemap of a [`http::Request`](https://docs.rs/http/latest/http/request/struct.Request.html). A new example is the `ConnectInfo` struct which allows handlers to
 access the connection data. See the
 `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/bin/pokemon-service-connect-info.rs` example.
 
