@@ -445,7 +445,7 @@ pub ConstraintViolations<T>(pub(crate) Vec<T>);
 impl<T> IntoIterator<Item = T> for ConstraintViolations<T> { ... }
 
 impl std::convert::TryFrom<std::string::String> for LengthPatternString {
-    type Error = ConstraintViolations<crate::model::length_patterh_string::ConstraintViolation>;
+    type Error = ConstraintViolations<crate::model::length_pattern_string::ConstraintViolation>;
 
     fn try_from(value: std::string::String) -> Result<Self, Self::Error> {
         // Check constraints and collect violations.
