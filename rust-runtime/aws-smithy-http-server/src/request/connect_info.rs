@@ -27,7 +27,9 @@ use super::FromParts;
 
 #[non_exhaustive]
 #[derive(Debug, Error)]
-#[error("the `ConnectInfo` is not present in the `http::Request` - consider using `IntoMakeServiceWithConnectInfo`")]
+#[error(
+    "`ConnectInfo` is not present in the `http::Request` extensions - consider using `IntoMakeServiceWithConnectInfo`"
+)]
 pub struct MissingConnectInfo;
 
 impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
@@ -40,7 +42,7 @@ impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
 
 /// Extractor for getting connection information produced by a `Connected`.
 ///
-/// Note this extractor requires the existence of [`Extension<ConnectInfo<T>>`] in the [`http::Extensions`]. This is
+/// Note this extractor requires the existence of [`ConnectInfo<T>`] in the [`http::Extensions`]. This is
 /// automatically inserted by the [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 /// middleware, which can be applied using the `into_make_service_with_connect_info` method on your generated service.
 #[derive(Clone, Debug)]
