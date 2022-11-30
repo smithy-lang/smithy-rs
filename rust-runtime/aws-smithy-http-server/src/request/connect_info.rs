@@ -21,7 +21,6 @@ use super::{internal_server_error, FromParts};
 /// The [`ConnectInfo`] was not found in the [`http::Request`] extensions.
 ///
 /// Use [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo) to ensure it's present.
-
 #[non_exhaustive]
 #[derive(Debug, Error)]
 #[error(
