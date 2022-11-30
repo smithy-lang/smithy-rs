@@ -151,19 +151,13 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
-    fun `it should detect when the length trait on collection shapes or on blob shapes is used`() {
+    fun `it should detect when the length trait on blob shapes is used`() {
         val model =
             """
             $baseModel
 
             structure TestInputOutput {
-                collection: LengthCollection,
                 blob: LengthBlob
-            }
-
-            @length(min: 1)
-            list LengthCollection {
-                member: String
             }
 
             @length(min: 1)
@@ -171,28 +165,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """.asSmithyModel()
         val validationResult = validateModel(model)
 
-        validationResult.messages shouldHaveSize 2
-        validationResult.messages.forSome { it.message shouldContain "The list shape `test#LengthCollection` has the constraint trait `smithy.api#length` attached" }
-        validationResult.messages.forSome { it.message shouldContain "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached" }
-    }
-
-    @Test
-    fun `it should detect when the range trait is used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                rangeInteger: RangeInteger
-            }
-
-            @range(min: 1)
-            integer RangeInteger
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
         validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The integer shape `test#RangeInteger` has the constraint trait `smithy.api#range` attached"
+        validationResult.messages[0].message shouldContain "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached"
     }
 
     @Test
@@ -200,11 +174,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val model =
             """
             $baseModel
-            
+
             structure TestInputOutput {
                 uniqueItemsList: UniqueItemsList
             }
-            
+
             @uniqueItems
             list UniqueItemsList {
                 member: String

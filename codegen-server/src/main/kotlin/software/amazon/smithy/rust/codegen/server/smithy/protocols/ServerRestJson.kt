@@ -13,7 +13,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldNa
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapJsonCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapOrCollectionJsonCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeSerializingMemberJsonCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
 
 /**
@@ -50,6 +51,9 @@ class ServerRestJsonSerializerGenerator(
             codegenContext,
             httpBindingResolver,
             ::restJsonFieldName,
-            customizations = listOf(BeforeIteratingOverMapJsonCustomization(codegenContext)),
+            customizations = listOf(
+                BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext),
+                BeforeSerializingMemberJsonCustomization(codegenContext),
+            ),
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator

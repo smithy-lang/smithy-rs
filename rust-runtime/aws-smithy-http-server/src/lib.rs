@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! HTTP server runtime and utilities, loosely based on [axum].
 //!
 //! [axum]: https://docs.rs/axum/latest/axum/
-
 #[macro_use]
 pub(crate) mod macros;
 

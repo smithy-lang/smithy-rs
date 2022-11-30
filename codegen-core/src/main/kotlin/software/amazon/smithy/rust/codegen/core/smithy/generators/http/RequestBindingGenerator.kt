@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -193,8 +194,12 @@ class RequestBindingGenerator(
                 val memberName = symbolProvider.toMemberName(memberShape)
                 val targetShape = model.expectShape(memberShape.target, MapShape::class.java)
                 val stringFormatter = RuntimeType.QueryFormat(runtimeConfig, "fmt_string")
-                ifSet(model.expectShape(param.member.target), memberSymbol, "&_input.$memberName") { field ->
-                    rustBlock("for (k, v) in $field") {
+                ifSet(
+                    model.expectShape(param.member.target),
+                    memberSymbol,
+                    ValueExpression.Reference("&_input.$memberName"),
+                ) { value ->
+                    rustBlock("for (k, v) in ${value.asRef()}") {
                         // if v is a list, generate another level of iteration
                         listForEach(model.expectShape(targetShape.value.target), "v") { innerField, _ ->
                             rustBlock("if !protected_params.contains(&k.as_str())") {
@@ -236,9 +241,9 @@ class RequestBindingGenerator(
 
                     paramList(target, derefName, param, writer, memberShape)
                 } else {
-                    ifSet(target, memberSymbol, "&_input.$memberName") { field ->
+                    ifSet(target, memberSymbol, ValueExpression.Reference("&_input.$memberName")) { field ->
                         // if `param` is a list, generate another level of iteration
-                        paramList(target, field, param, writer, memberShape)
+                        paramList(target, field.name, param, writer, memberShape)
                     }
                 }
             }

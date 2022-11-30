@@ -29,6 +29,9 @@ use tower_http::map_response_body::MapResponseBodyLayer;
 
 mod future;
 mod into_make_service;
+mod into_make_service_with_connect_info;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 mod lambda_handler;
 
 #[doc(hidden)]
@@ -38,10 +41,17 @@ mod route;
 
 pub(crate) mod tiny_map;
 
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub use self::lambda_handler::LambdaHandler;
 
 #[allow(deprecated)]
-pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
+pub use self::{
+    future::RouterFuture,
+    into_make_service::IntoMakeService,
+    into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
+    route::Route,
+};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.

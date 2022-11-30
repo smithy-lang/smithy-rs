@@ -3,6 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::fmt::Write as FmtWrite;
+use std::fs;
+use std::io::Write as IoWrite;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::str::FromStr;
+
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use lazy_static::lazy_static;
@@ -11,12 +18,6 @@ use smithy_rs_tool_common::here;
 use smithy_rs_tool_common::release_tag::ReleaseTag;
 use smithy_rs_tool_common::shell::handle_failure;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
-use std::fmt::Write as FmtWrite;
-use std::fs;
-use std::io::Write as IoWrite;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::str::FromStr;
 
 const BASE_MANIFEST: &str = r#"
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -251,11 +252,13 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::Args;
     use clap::Parser;
     use smithy_rs_tool_common::package::PackageCategory;
     use smithy_rs_tool_common::versions_manifest::CrateVersion;
+
+    use crate::Args;
+
+    use super::*;
 
     #[test]
     fn test_arg_parsing() {

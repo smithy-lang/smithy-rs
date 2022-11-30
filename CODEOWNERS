@@ -3,8 +3,12 @@
 # Server
 /codegen-server-test/                           @awslabs/smithy-rs-server
 /codegen-server/                                @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-http-server-python/    @awslabs/smithy-rs-server
 /rust-runtime/aws-smithy-http-server/           @awslabs/smithy-rs-server
+
+# Python Server
+/codegen-server-test/python/                    @awslabs/smithy-rs-python-server @awslabs/smithy-rs-server
+/codegen-server/python/                         @awslabs/smithy-rs-python-server @awslabs/smithy-rs-server
+/rust-runtime/aws-smithy-http-server-python/    @awslabs/smithy-rs-python-server @awslabs/smithy-rs-server
 
 # Shared ownership
 /.github/                                       @awslabs/rust-sdk-owners @awslabs/smithy-rs-server

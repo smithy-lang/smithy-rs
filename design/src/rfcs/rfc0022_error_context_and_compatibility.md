@@ -185,7 +185,7 @@ What could be improved:
 
 ### Hyper 1.0
 
-Hyper is has outlined [some problems they want to address with errors](https://github.com/hyperium/hyper/blob/bd7928f3dd6a8461f0f0fdf7ee0fd95c2f156f88/docs/ROADMAP.md#errors)
+Hyper has outlined [some problems they want to address with errors](https://github.com/hyperium/hyper/blob/bd7928f3dd6a8461f0f0fdf7ee0fd95c2f156f88/docs/ROADMAP.md#errors)
 for the coming 1.0 release. To summarize:
 
 - It's difficult to match on specific errors (Hyper 0.x's `Error` relies
