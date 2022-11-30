@@ -32,10 +32,10 @@ pub(super) fn normalize_uri_path(uri_path: &str) -> Cow<'_, str> {
 // The function assumes that `uri_path` is an absolute path,
 // starting with a forward slash.
 fn normalize_path_segment(uri_path: &str) -> String {
-    let segments = uri_path.split("/");
-    let mut normalized: Vec<&str> = Vec::new();
+    let number_of_slashes = uri_path.matches('/').count();
+    let mut normalized: Vec<&str> = Vec::with_capacity(number_of_slashes + 1);
 
-    for segment in segments {
+    for segment in uri_path.split('/') {
         match segment {
             "." => {}
             ".." => {
