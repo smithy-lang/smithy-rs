@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{
-    borrow::Cow,
-    path::{Component, Path},
-};
+use std::borrow::Cow;
 
 // Normalize `uri_path` according to
 // https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
@@ -23,7 +20,7 @@ pub(super) fn normalize_uri_path(uri_path: &str) -> Cow<'_, str> {
         Cow::Owned(format!("/{uri_path}"))
     };
 
-    if !result.contains('.') && !result.contains("..") {
+    if !result.contains('.') {
         return result;
     }
 
@@ -31,33 +28,37 @@ pub(super) fn normalize_uri_path(uri_path: &str) -> Cow<'_, str> {
 }
 
 // Implement 5.2.4. Remove Dot Segments in https://www.rfc-editor.org/rfc/rfc3986
+//
+// The function assumes that `uri_path` is an absolute path,
+// starting with a forward slash.
 fn normalize_path_segment(uri_path: &str) -> String {
-    let path = Path::new(uri_path);
-    let mut result: Vec<String> = Vec::new();
+    let segments = uri_path.split("/");
+    let mut normalized: Vec<&str> = Vec::new();
 
-    for component in path.components() {
-        match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {}
-            Component::CurDir => {}
-            Component::ParentDir => {
-                result.pop();
+    for segment in segments {
+        match segment {
+            "." => {}
+            ".." => {
+                normalized.pop();
             }
-            Component::Normal(c) => {
-                result.push(
-                    c.to_str()
-                        .expect("component in URI path should be valid Unicode")
-                        .to_owned(),
-                );
-            }
+            otherwise => normalized.push(otherwise),
         }
     }
 
-    let mut result = result.join("/");
-    if uri_path.starts_with('/') {
+    let mut result = normalized.join("/");
+
+    // Even though `uri_path` starts with a `/`, that may not be the case for `result`.
+    // An example of this is `uri_path` being "/../foo" where the corresponding `result`
+    // will be "foo".
+    if !result.starts_with('/') {
         result.insert(0, '/');
     }
-    if ends_with_slash(uri_path) && result != "/" {
+
+    // If `uri_path` is "/foo/bar/.", normalizing it should be "/foo/bar/". However,
+    // the logic so far only makes `result` "/foo/bar", without the trailing slash.
+    // The condition below ensures that the trailing slash is appended to `result`
+    // if `uri_path` ends with a slash (per the RFC) but `result` does not.
+    if ends_with_slash(uri_path) && !result.ends_with('/') {
         result.push('/');
     }
 
