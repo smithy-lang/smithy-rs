@@ -255,8 +255,11 @@ value into the wrapper tuple struct, except for these differences:
 --------------
 
 We will enforce the length constraint by calling `len()` on Rust's `Vec`
-(`list` and `set` shapes), `HashMap` (`map` shapes), `String` (`string`
-shapes), and our [`aws_smithy_types::Blob`] (`bytes` shapes).
+(`list` and `set` shapes), `HashMap` (`map` shapes) and our
+[`aws_smithy_types::Blob`] (`bytes` shapes).
+
+We will enforce the length constraint trait on `String` (`string` shapes) by
+calling `.chars().count()`.
 
 `pattern` trait
 ---------------
@@ -279,10 +282,7 @@ If the list shape is `sparse`, more than one `null` value violates this
 constraint.
 
 We will enforce this by copying _references_ to the `Vec`'s elements into a
-`HashSet` and checking that the sizes of both containers coincide. Smithy
-allows you to apply `uniqueItems` to _any_ list, [even if its members are not
-equipped with an equivalence relation], so we would have to manually check that
-the list's members are all [`Eq`].
+`HashSet` and checking that the sizes of both containers coincide.
 
 [`Eq`]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
 [even if its members are not equipped with an equivalence relation]: https://github.com/awslabs/smithy/issues/1093
