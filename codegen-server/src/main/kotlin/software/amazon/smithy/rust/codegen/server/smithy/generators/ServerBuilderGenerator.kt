@@ -12,8 +12,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -38,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -120,7 +119,6 @@ class ServerBuilderGenerator(
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
-    private val moduleName = builderSymbol.namespace.split(builderSymbol.namespaceDelimiter).last()
     private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
@@ -135,7 +133,7 @@ class ServerBuilderGenerator(
 
     fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
-        writer.withModule(RustModule(moduleName, RustMetadata(visibility = visibility))) {
+        writer.withInlineModule(builderSymbol.module()) {
             renderBuilder(this)
         }
     }
@@ -396,7 +394,7 @@ class ServerBuilderGenerator(
             """
             impl #{TryFrom}<Builder> for #{Structure} {
                 type Error = ConstraintViolation;
-                
+
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
                     builder.build()
                 }
@@ -487,7 +485,7 @@ class ServerBuilderGenerator(
                                     #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
                                     #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                                 })
-                                .map(|res| 
+                                .map(|res|
                                     res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
                                        .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
                                 )
@@ -502,7 +500,7 @@ class ServerBuilderGenerator(
                                     #{MaybeConstrained}::Constrained(x) => Ok(x),
                                     #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                                 })
-                                .map(|res| 
+                                .map(|res|
                                     res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
                                        .map_err(ConstraintViolation::${constraintViolation.name()})
                                 )

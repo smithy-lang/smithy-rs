@@ -7,16 +7,14 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -66,22 +64,21 @@ class UnconstrainedMapGenerator(
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val keySymbol = unconstrainedShapeSymbolProvider.toSymbol(keyShape)
         val valueSymbol = unconstrainedShapeSymbolProvider.toSymbol(valueShape)
 
-        unconstrainedModuleWriter.withModule(RustModule(module, RustMetadata(visibility = Visibility.PUBCRATE))) {
+        unconstrainedModuleWriter.withInlineModule(symbol.module()) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
-                
+
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
                         Self::Unconstrained(value)
                     }
                 }
-                
+
                 """,
                 "KeySymbol" to keySymbol,
                 "ValueSymbol" to valueSymbol,
@@ -185,7 +182,7 @@ class UnconstrainedMapGenerator(
                         // ```
                         rustTemplate(
                             """
-                            let hm: std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}> = 
+                            let hm: std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}> =
                                 hm.into_iter().map(|(k, v)| (k, v.into())).collect();
                             """,
                             "KeySymbol" to symbolProvider.toSymbol(keyShape),
