@@ -41,8 +41,8 @@ was made are recommended prior reading to understand this RFC.
     4. an [`intEnum` shape]; or
     5. a [`structure` shape] with at least one `required` member shape.
 - **Constrained type**: the Rust type a constrained shape gets rendered as. For
-  shapes that are not `structure`, `union`, or `enum` shapes, these are wrapper
-  [newtype]s.
+  shapes that are not `structure`, `union`, `enum` or `intEnum` shapes, these
+  are wrapper [newtype]s.
 
 [`required` trait]: https://smithy.io/2.0/spec/type-refinement-traits.html#required-trait
 [`enum` shape]: https://smithy.io/2.0/spec/simple-types.html#enum
