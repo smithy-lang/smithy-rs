@@ -9,7 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
-import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
@@ -21,15 +20,14 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -92,7 +90,7 @@ private sealed class UnsupportedConstraintMessageKind {
                 ),
             )
 
-            is UnsupportedLengthTraitOnCollectionOrOnBlobShape -> LogMessage(
+            is UnsupportedLengthTraitOnBlobShape -> LogMessage(
                 level,
                 buildMessageShapeHasUnsupportedConstraintTrait(shape, lengthTrait, constraintTraitsUberIssue),
             )
@@ -123,7 +121,7 @@ private data class UnsupportedLengthTraitOnStreamingBlobShape(
     val streamingTrait: StreamingTrait,
 ) : UnsupportedConstraintMessageKind()
 
-private data class UnsupportedLengthTraitOnCollectionOrOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) :
+private data class UnsupportedLengthTraitOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) :
     UnsupportedConstraintMessageKind()
 
 private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) :
@@ -135,14 +133,6 @@ private data class UnsupportedUniqueItemsTraitOnShape(val shape: Shape, val uniq
 data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>)
 
-private val allConstraintTraits = setOf(
-    LengthTrait::class.java,
-    PatternTrait::class.java,
-    RangeTrait::class.java,
-    UniqueItemsTrait::class.java,
-    EnumTrait::class.java,
-    RequiredTrait::class.java,
-)
 private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
 
 fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
@@ -233,14 +223,15 @@ fun validateUnsupportedConstraints(
         .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
         .toSet()
 
-    // 4. Length trait on collection shapes or on blob shapes is used. It has not been implemented yet for these target types.
+    // 4. Length trait on blob shapes is used. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
-    val unsupportedLengthTraitOnCollectionOrOnBlobShapeSet = walker
+    val unsupportedLengthTraitOnBlobShapeSet = walker
         .walkShapes(service)
         .asSequence()
-        .filter { it is CollectionShape || it is BlobShape }
-        .filter { it.hasTrait<LengthTrait>() }
-        .map { UnsupportedLengthTraitOnCollectionOrOnBlobShape(it, it.expectTrait()) }
+        .filterIsInstance<BlobShape>()
+        .mapNotNull {
+            it.getTrait<LengthTrait>()?.let { trait -> UnsupportedLengthTraitOnBlobShape(it, trait) }
+        }
         .toSet()
 
     // 5. Range trait used on unsupported shapes.
@@ -271,7 +262,7 @@ fun validateUnsupportedConstraints(
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedConstraintOnShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedLengthTraitOnCollectionOrOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedLengthTraitOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedUniqueItemsTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 

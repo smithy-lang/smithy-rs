@@ -25,8 +25,8 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
-import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -40,14 +40,27 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * we support it or not_.
  */
 fun Shape.hasConstraintTrait() =
-    hasTrait<LengthTrait>() ||
-        hasTrait<EnumTrait>() ||
-        hasTrait<UniqueItemsTrait>() ||
-        hasTrait<PatternTrait>() ||
-        hasTrait<RangeTrait>() ||
-        hasTrait<RequiredTrait>()
+    allConstraintTraits.any(this::hasTrait)
 
-val supportedStringConstraintTraits: List<Class<out Trait>> = listOf(LengthTrait::class.java, PatternTrait::class.java)
+val allConstraintTraits = setOf(
+    LengthTrait::class.java,
+    PatternTrait::class.java,
+    RangeTrait::class.java,
+    UniqueItemsTrait::class.java,
+    EnumTrait::class.java,
+    RequiredTrait::class.java,
+)
+
+val supportedStringConstraintTraits = setOf(LengthTrait::class.java, PatternTrait::class.java)
+
+/**
+ * Supported constraint traits for the `list` and `set` shapes.
+ */
+val supportedCollectionConstraintTraits = setOf(
+    LengthTrait::class.java,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1670): Not yet supported.
+    // UniqueItemsTrait::class.java
+)
 
 /**
  * We say a shape is _directly_ constrained if:
@@ -75,6 +88,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
 
     is MapShape -> this.hasTrait<LengthTrait>()
     is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
+    is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> this.hasTrait<RangeTrait>()
     else -> false
 }
@@ -99,6 +113,7 @@ fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: Sym
     model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
 
 fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTypes: Boolean): Boolean = when (this) {
+    is CollectionShape -> publicConstrainedTypes && supportedCollectionConstraintTraits.any(this::hasTrait)
     is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
     is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()

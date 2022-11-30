@@ -46,12 +46,25 @@ use futures_util::{
     future::{try_join, MapErr, MapOk, TryJoin},
     TryFutureExt,
 };
-use http::{request::Parts, Extensions, HeaderMap, Request, Uri};
+use http::{request::Parts, Extensions, HeaderMap, Request, StatusCode, Uri};
 
-use crate::{rejection::any_rejections, response::IntoResponse};
+use crate::{
+    body::{empty, BoxBody},
+    rejection::any_rejections,
+    response::IntoResponse,
+};
 
 pub mod connect_info;
 pub mod extension;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
+pub mod lambda;
+
+fn internal_server_error() -> http::Response<BoxBody> {
+    let mut response = http::Response::new(empty());
+    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    response
+}
 
 #[doc(hidden)]
 #[derive(Debug)]

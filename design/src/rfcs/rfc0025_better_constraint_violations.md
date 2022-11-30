@@ -214,13 +214,13 @@ pub(crate) mod length_map_of_length_strings_unconstrained {
         type Error = crate::model::length_map_of_length_strings::ConstraintViolation;
         fn try_from(value: LengthMapOfLengthStringsUnconstrained) -> Result<Self, Self::Error> {
             let res: Result<
-                std::collections::HashMap<crate::model::LengthString, std::string::String>,
+                std::collections::HashMap<std::string::String, crate::model::LengthString>,
                 Self::Error,
             > = value
                 .0
                 .into_iter()
                 .map(|(k, v)| {
-                    let k: crate::model::LengthString = k.try_into().map_err(Self::Error::Key)?;
+                    let v: crate::model::LengthString = k.try_into().map_err(Self::Error::Key)?;
 
                     Ok((k, v))
                 })
@@ -492,6 +492,8 @@ the `@pattern` trait, and only _after_ is the `@length` trait checked. This
 means that if a client sends a request with `n >>> 3` list members, the
 expensive check runs `n` times, when a constant-time check inspecting the
 length of the input vector would have sufficed to reject the request.
+Additionally, we may want to avoid serializing `n` `ValidationExceptionField`s
+due to performance concerns.
 
 - A possibility to circumvent this is making the `@length` validator special,
   having it bound the other validators via effectively permuting the order of
