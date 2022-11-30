@@ -190,7 +190,7 @@ internal sealed class CollectionTraitInfo {
                         rustTemplate(
                             """
                             fn check_length(length: usize) -> Result<(), #{ConstraintViolation}> {
-                                if ${lengthTrait.rustCondition()} {
+                                if ${lengthTrait.rustCondition("length")} {
                                     Ok(())
                                 } else {
                                     Err(#{ConstraintViolation}::Length(length))

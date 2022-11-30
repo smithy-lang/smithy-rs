@@ -7,13 +7,13 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.traits.LengthTrait
 
-fun LengthTrait.rustCondition(): String {
+fun LengthTrait.rustCondition(lengthVariable: String): String {
     val condition = if (min.isPresent && max.isPresent) {
-        "(${min.get()}..=${max.get()}).contains(&length)"
+        "(${min.get()}..=${max.get()}).contains(&$lengthVariable)"
     } else if (min.isPresent) {
-        "${min.get()} <= length"
+        "${min.get()} <= $lengthVariable"
     } else {
-        "length <= ${max.get()}"
+        "$lengthVariable <= ${max.get()}"
     }
 
     return condition

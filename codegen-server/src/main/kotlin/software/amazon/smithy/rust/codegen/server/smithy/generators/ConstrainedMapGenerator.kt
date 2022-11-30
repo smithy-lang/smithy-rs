@@ -98,7 +98,7 @@ class ConstrainedMapGenerator(
                 /// ${rustDocsTryFromMethod(name, inner)}
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
                     let length = value.len();
-                    if ${lengthTrait.rustCondition()} {
+                    if ${lengthTrait.rustCondition("length")} {
                         Ok(Self(value))
                     } else {
                         Err(#{ConstraintViolation}::Length(length))
