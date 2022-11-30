@@ -9,7 +9,6 @@
 
         <!-- Custom HTML head -->
         
-        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
@@ -35,13 +34,13 @@
     </head>
     <body>
         <!-- Provide site root to javascript -->
-        <script type="text/javascript">
+        <script>
             var path_to_root = "";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
-        <script type="text/javascript">
+        <script>
             try {
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
@@ -57,7 +56,7 @@
         </script>
 
         <!-- Set the theme before any content is loaded, prevents flash -->
-        <script type="text/javascript">
+        <script>
             var theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
@@ -69,7 +68,7 @@
         </script>
 
         <!-- Hide / unhide sidebar before it is displayed -->
-        <script type="text/javascript">
+        <script>
             var html = document.querySelector('html');
             var sidebar = 'hidden';
             if (document.body.clientWidth >= 1080) {
@@ -82,7 +81,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="server/code_generation.html"><strong aria-hidden="true">6.1.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="server/pokemon_service.html"><strong aria-hidden="true">6.2.</strong> Generating the Pokémon Service</a></li><li class="chapter-item expanded "><a href="server/instrumentation.html"><strong aria-hidden="true">6.3.</strong> Instrumentation</a></li></ol></li><li class="chapter-item expanded "><a href="rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li></ol></li><li class="chapter-item expanded "><a href="contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="server/code_generation.html"><strong aria-hidden="true">6.1.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="server/pokemon_service.html"><strong aria-hidden="true">6.2.</strong> Generating the Pokémon Service</a></li><li class="chapter-item expanded "><a href="server/instrumentation.html"><strong aria-hidden="true">6.3.</strong> Instrumentation</a></li></ol></li><li class="chapter-item expanded "><a href="rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0024_request_id.html"><strong aria-hidden="true">7.24.</strong> RFC-0024: RequestID</a></li></ol></li><li class="chapter-item expanded "><a href="contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -100,7 +99,7 @@
                             <i class="fa fa-paint-brush"></i>
                         </button>
                         <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
@@ -133,7 +132,7 @@
                 </div>
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
-                <script type="text/javascript">
+                <script>
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
                     document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
                     Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
@@ -161,8 +160,7 @@ async fn main() {
         .limit(10)
         .send()
         .await.expect(&quot;failed to load tables&quot;);
-}
-</code></pre></pre>
+}</code></pre></pre>
 <ol start="2">
 <li>The &quot;low-level&quot; API: It is also possible for customers to assemble the pieces themselves. This offers more control over operation construction &amp; dispatch semantics:</li>
 </ol>
@@ -175,8 +173,7 @@ async fn main() {
         .build(&amp;conf)
         .expect(&quot;invalid operation&quot;);
     let tables = conn.call(operation).await.expect(&quot;failed to list tables&quot;);
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>The Fluent API is implemented as a thin wrapper around the core API to improve ergonomics.</p>
 <h2 id="internals"><a class="header" href="#internals">Internals</a></h2>
 <p>The Rust SDK is built on Tower Middleware, Tokio &amp; Hyper. We're continuing to iterate on the internals to enable running the AWS SDK in other executors &amp; HTTP stacks. As an example, you can see a demo of adding <code>reqwest</code> as a custom HTTP stack to gain access to its HTTP Proxy support!</p>
@@ -288,8 +285,7 @@ pub struct Request {
     inner: http::Request&lt;SdkBody&gt;,
     properties: PropertyBag,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>For most requests, <code>.build()</code> will NOT consume the input. A user can call <code>.build()</code> multiple times to produce multiple operations from the same input.</p>
 <p>By using a property bag, we can define the <code>Operation</code> in Smithy core. AWS specific configuration can be added later in the stack.</p>
 <h3 id="operation-construction"><a class="header" href="#operation-construction">Operation Construction</a></h3>
@@ -310,8 +306,7 @@ pub fn build(self, config: &amp;dynamodb::config::Config) -&gt; Operation&lt;Bat
     props.insert_endpoint_resolver(config.endpoint_resolver.clone());
     Operation::new(req)
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="operation-dispatch-and-middleware"><a class="header" href="#operation-dispatch-and-middleware">Operation Dispatch and Middleware</a></h3>
 <p>The Rust SDK endeavors to behave as predictably as possible. This means that if at all possible we will not dispatch extra HTTP requests during the dispatch of normal operation. Making this work is covered in more detail in the design of credentials providers &amp; endpoint resolution.</p>
 <p>The upshot is that we will always prefer a design where the user has explicit control of when credentials are loaded and endpoints are resolved. This doesn't mean that users can't use easy-to-use options (We will provide an automatically refreshing credentials provider), however, the credential provider won't load requests during the dispatch of an individual request.</p>
@@ -348,8 +343,7 @@ pub fn build(self, config: &amp;dynamodb::config::Config) -&gt; Operation&lt;Bat
    field1: u32,
    field2: String
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>
 <p>Generators: A Generator, e.g. <code>StructureGenerator</code>, <code>UnionGenerator</code> generates more complex Rust code from a Smithy model. Protocol generators pull these individual tools together to generate code for an entire service / protocol.</p>
@@ -379,8 +373,7 @@ pub fn build(self, config: &amp;dynamodb::config::Config) -&gt; Operation&lt;Bat
 </span><span class="boring">fn main() {
 </span>pub struct BigInteger(String);
 pub struct BigDecimal(String);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This will enable us to add helpers over time as requested. Users will also be able to define their own conversions into their preferred large-number libraries.</p>
 <p>As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked <a href="https://github.com/awslabs/smithy-rs/issues/312">here</a>.</p>
 <h3 id="timestamps"><a class="header" href="#timestamps">Timestamps</a></h3>
@@ -415,8 +408,7 @@ pub struct DateTime {
     subsecond_nanos: u32,
 }
 
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Functions in the <code>aws-smithy-types-convert</code> crate provide conversions to other crates, such as <code>time</code> or <code>chrono</code>.</p>
 <h3 id="strings"><a class="header" href="#strings">Strings</a></h3>
 <p>Rust has two different String representations:</p>
@@ -493,8 +485,7 @@ pub enum Number {
     Float(f64),
 }
 
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Individual protocols define their own document serialization behavior, with some protocols such as AWS and EC2 Query not supporting document types.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursive-shapes"><a class="header" href="#recursive-shapes">Recursive Shapes</a></h1>
 <blockquote>
@@ -510,8 +501,7 @@ pub enum Number {
 struct IntermediateStructure {
     top: Option&lt;TopStructure&gt;
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <pre><code class="language-text">  |
 3 | struct TopStructure {
   | ^^^^^^^^^^^^^^^^^^^ recursive type has infinite size
@@ -538,8 +528,7 @@ struct IntermediateStructure {
 struct IntermediateStructure {
     top: Box&lt;Option&lt;TopStructure&gt;&gt;
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p><strong>Backwards Compatibility Note!</strong></p>
 <p>Box<T> is not generally compatible with T in Rust. There are several unlikely but valid model changes that will cause the SDK to produce code that may break customers. If these are problematic, all are avoidable with customizations.</p>
 <ol>
@@ -586,8 +575,7 @@ struct IntermediateStructure {
 </span><span class="boring">fn main() {
 </span>let out = dynamo::ListTablesOutput::new();
 out.some_field.unwrap(); // &lt;- partial move, impossible with an accessor
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>Builders are generated for structs that provide ergonomic and backwards compatible constructors. A builder for a struct is always available via the convenience method <code>SomeStruct::builder()</code></li>
 <li>Structures manually implement debug: In order to support the <a href="https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait">sensitive trait</a>, a <code>Debug</code> implementation for structures is manually generated.</li>
@@ -671,8 +659,7 @@ impl IoUsage {
         crate::model::io_usage::Builder::default()
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="union"><a class="header" href="#union">Union</a></h2>
 <p>Smithy <code>Union</code> is modeled as <code>enum</code> in Rust.</p>
 <ol>
@@ -744,8 +731,7 @@ impl AttributeValue {
         self.as_string().is_some()
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="endpoint-resolution"><a class="header" href="#endpoint-resolution">Endpoint Resolution</a></h1>
 <h2 id="requirements"><a class="header" href="#requirements">Requirements</a></h2>
 <p>The core codegen generates HTTP requests that do not contain an authority, scheme or post. These properties must be set later based on configuration. Existing AWS services have a number of requirements that increase the complexity:</p>
@@ -756,8 +742,7 @@ impl AttributeValue {
 </span><span class="boring">fn main() {
 </span>let config = dynamodb::Config::builder()
     .endpoint(StaticEndpoint::for_uri(&quot;http://localhost:8000&quot;))
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>When a user specifies a custom endpoint URI, <em>typically</em> they will want to avoid having this URI mutated by other endpoint discovery machinery.</p>
 <ol start="2">
 <li>
@@ -795,8 +780,7 @@ if tx.needs(endpoint_req) {
     tx.send(new_endpoint)
 }
 let rsp = client.call(req).await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>We believe that this design results in an SDK that both offers customers more control &amp; reduces the likelihood of bugs from nested operation dispatch. Endpoint resolution is currently extremely rare in AWS services so this design may remain a prototype while we solidify other behaviors.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="backwards-compatibility"><a class="header" href="#backwards-compatibility">Backwards Compatibility</a></h1>
 <p>AWS SDKs require that clients can evolve in a backwards compatible way as new fields and operations are added. The types
@@ -856,8 +840,7 @@ following patterns:</p>
 </span><span class="boring">fn foo() {
 </span>let ip_addr = IpAddress { addr: &quot;192.168.1.1&quot; };
 <span class="boring">}
-</span><span class="boring">}
-</span></code></pre></pre>
+</span><span class="boring">}</span></code></pre></pre>
 <p>If a new member <code>is_local: boolean</code> was added to the IpAddress structure, this code would not compile. To enable
 users to still construct
 our structures while maintaining backwards compatibility, all structures expose a builder, accessible
@@ -867,8 +850,7 @@ at <code>SomeStruct::Builder</code>:</p>
 </span><span class="boring">fn foo() {
 </span>let ip_addr = IpAddress::builder().addr(&quot;192.168.1.1&quot;).build();
 <span class="boring">}
-</span><span class="boring">}
-</span></code></pre></pre>
+</span><span class="boring">}</span></code></pre></pre>
 </li>
 <li>
 <p>Structure destructuring:</p>
@@ -877,8 +859,7 @@ at <code>SomeStruct::Builder</code>:</p>
 </span><span class="boring">fn foo() {
 </span>let IpAddress { addr } = some_ip_addr();
 <span class="boring">}
-</span><span class="boring">}
-</span></code></pre></pre>
+</span><span class="boring">}</span></code></pre></pre>
 <p>This will also fail to compile if a new member is added, however, by adding <code>#[non_exhaustive]</code>, the <code>..</code> multifield
 wildcard MUST be added to support new fields being added in the future:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -886,8 +867,7 @@ wildcard MUST be added to support new fields being added in the future:</p>
 </span><span class="boring">fn foo() {
 </span>let IpAddress { addr, .. } = some_ip_addr();
 <span class="boring">}
-</span><span class="boring">}
-</span></code></pre></pre>
+</span><span class="boring">}</span></code></pre></pre>
 </li>
 </ol>
 <h3 id="validation--required-members"><a class="header" href="#validation--required-members">Validation &amp; Required Members</a></h3>
@@ -926,8 +906,7 @@ pub enum AttributeValue {
     #[non_exhaustive]
     Unknown,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="smithy-server"><a class="header" href="#smithy-server">Smithy Server</a></h1>
 <p>Smithy Rust provides the ability to generate a server whose operations are provided by the customer.</p>
 <ul>
@@ -1013,8 +992,7 @@ operations: [GetServerStatistics, EmptyOperation, CapturePokemonOperation, Healt
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>let app: Router = OperationRegistryBuilder::default()
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p><code>OperationRegistryBuilder</code> is a struct, generated <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt#L1">here</a>,
 used by service implementors to register, for each operation, the operation's implementation logic, input and output.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1028,8 +1006,7 @@ used by service implementors to register, for each operation, the operation's im
     health_check_operation: Op5,
     _phantom: std::marker::PhantomData&lt;(B, In0, In1, In2, In3, In4, In5)&gt;,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The builder is constructed by a <code>OperationRegistryBuilder</code>; if an operation is not passed to the builder, it will return an error.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -1043,8 +1020,7 @@ used by service implementors to register, for each operation, the operation's im
     .build()
     .expect(&quot;Unable to build operation registry&quot;)
     .into();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Each of these operations is a function that can take any of these signatures.</p>
 <ol>
 <li>
@@ -1052,8 +1028,7 @@ used by service implementors to register, for each operation, the operation's im
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -&gt; output::HealthCheckOperationOutput {...}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>
 <p>If the operation is fallible and does not share any state:</p>
@@ -1062,8 +1037,7 @@ used by service implementors to register, for each operation, the operation's im
 </span>pub async fn capture_pokemon(
     mut input: input::CapturePokemonOperationInput,
 ) -&gt; Result&lt;output::CapturePokemonOperationOutput, error::CapturePokemonOperationError&gt; {...}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>
 <p>If the operation is not fallible and shares some state:</p>
@@ -1073,8 +1047,7 @@ used by service implementors to register, for each operation, the operation's im
     _input: input::GetServerStatisticsInput,
     state: Extension&lt;Arc&lt;State&gt;&gt;,
 ) -&gt; output::GetServerStatisticsOutput {...}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>
 <p>If the operation is fallible and shares some state:</p>
@@ -1084,8 +1057,7 @@ used by service implementors to register, for each operation, the operation's im
     input: input::GetStorageInput,
     _state: Extension&lt;Arc&lt;State&gt;&gt;,
 ) -&gt; Result&lt;output::GetStorageOutput, error::GetStorageError&gt; {...}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 </ol>
 <p>All of these are operations which implementors define; they are the business logic of the application. The rest is code generated.</p>
@@ -1111,8 +1083,7 @@ where
         registry: OperationRegistry&lt;B, Op0, In0, Op1, In1, Op2, In2, Op3, In3, Op4, In4, Op5, In5&gt;,
     ) -&gt; Self {...}
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>For each operation, it registers a route; the specifics depend on the <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/protocols/Protocol.kt#L81">protocol</a>.
 The PokemonService uses <a href="https://awslabs.github.io/smithy/1.0/spec/aws/aws-restjson1-protocol.html">restJson1</a> as its protocol, an operation like the <code>HealthCheckOperation</code> will be rendered as:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1126,8 +1097,7 @@ The PokemonService uses <a href="https://awslabs.github.io/smithy/1.0/spec/aws/a
                 aws_smithy_http_server::routing::request_spec::PathSegment::Label,
             ]),
             aws_smithy_http_server::routing::request_spec::QuerySpec::from_vector_unchecked(vec![]))),);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>because the URI is <code>/capture-pokemon-event/{region}</code>, with method <code>POST</code> and <code>region</code> a <code>Label</code> (then passed to the operation with its <code>CapturePokemonOperationInput</code> input struct).</p>
 <p>Finally, it creates a RestJSON <code>Router</code>, because that is the service's protocol.
 You will have noticed, each operation is implemented as a <code>pub async fn</code>. Each operation is wrapped into an <code>OperationHandler</code>, generated <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt#L30">here</a>.
@@ -1140,8 +1110,7 @@ the business logic is written as protocol-agnostic and clients request a service
         let svc = crate::server_operation_handler_trait::operation(
             registry.capture_pokemon_operation,
         );
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>At this level, logging might be prohibited by the <a href="https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait"><code>@sensitive</code></a> trait. If there are no <code>@sensitive</code> shapes, the generated code looks like:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -1153,8 +1122,7 @@ let svc = aws_smithy_http_server::instrumentation::InstrumentOperation::new(
 )
 .request_fmt(request_fmt)
 .response_fmt(response_fmt);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Accessing the Pokédex is modeled as a restricted operation: a passcode is needed by the Pokémon trainer.
 To not log the passcode, the code will be generated <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerHttpSensitivityGenerator.kt#L58">here</a> as:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1173,15 +1141,13 @@ To not log the passcode, the code will be generated <a href="https://github.com/
     })
     .label(|index: usize| matches!(index, 1));
 let response_fmt = aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Each route is a pair, <a href="https://docs.rs/tower/latest/tower/util/struct.BoxCloneService.html"><code>BoxCloneService</code></a> wrapping the service operation (the implementation) and
 the information to consume the service operation.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>(tower::util::BoxCloneService::new(svc), capture_pokemon_operation_request_spec)
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Now the <code>Router</code> is built. <code>Router</code> is not code generated, it instead lives in the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/"><code>aws-smithy-http-server</code></a> crate.
 We write Rust code in the runtime to:</p>
 <ul>
@@ -1201,14 +1167,12 @@ let app = app.layer(
         .layer(TraceLayer::new_for_http())
         .layer(AddExtensionLayer::new(shared_state)),
 );
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The service is run by a <a href="https://docs.rs/hyper/latest/hyper/server/struct.Server.html">Hyper server</a>:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>hyper::Server::bind(&amp;bind).serve(app.into_make_service());
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Generation of objects common to services, such as shapes, is described in <a href="server/./code_generation.html">Code Generation</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="instrumentation"><a class="header" href="#instrumentation">Instrumentation</a></h1>
 <p>A Smithy Rust server uses the <a href="https://github.com/tokio-rs/tracing"><code>tracing</code></a> crate to provide instrumentation. The customer is responsible for setting up a <a href="https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html"><code>Subscriber</code></a> in order to ingest and process <a href="https://docs.rs/tracing/latest/tracing/struct.Event.html">events</a> - Smithy Rust makes no prescription on the choice of <code>Subscriber</code>. Common choices might include:</p>
@@ -1228,8 +1192,7 @@ let app = app.layer(
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>let filter = filter::Targets::new().with_target(&quot;aws_smithy_http_server&quot;, Level::DEBUG);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In general, Smithy Rust is conservative when using high-priority log levels:</p>
 <ul>
 <li>ERROR
@@ -1287,8 +1250,7 @@ pub fn setup_tracing() {
         .unwrap();
     tracing_subscriber::registry().with(format).with(filter).init();
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Running the Pokémon service example using</p>
 <pre><code class="language-bash">RUST_LOG=aws_smithy_http_server=debug,pokemon_service=debug cargo r
 </code></pre>
@@ -1356,6 +1318,7 @@ pub fn setup_tracing() {
 <li><a href="rfcs/./rfc0021_dependency_versions.html">RFC-0021: Dependency Versions</a></li>
 <li><a href="rfcs/./rfc0022_error_context_and_compatibility.html">RFC-0022: Error Context and Compatibility</a></li>
 <li><a href="rfcs/./rfc0023_refine_builder.html">RFC-0023: Evolving the new service builder API</a></li>
+<li><a href="rfcs/./rfc0024_request_id.html">RFC-0024: RequestID</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="aws-configuration-rfc"><a class="header" href="#aws-configuration-rfc">AWS Configuration RFC</a></h1>
 <blockquote>
@@ -1399,8 +1362,7 @@ async fn main() -&gt; Result&lt;(), dynamodb::Error&gt; {
     let resp = dynamodb.list_tables().send().await;
     println!(&quot;my tables: {}&quot;, resp.tables.unwrap_or_default());
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <blockquote>
 <p>Tip: Every AWS service exports a top level <code>Error</code> type (e.g. <a href="https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/enum.Error.html">aws_sdk_dynamodb::Error</a>).
 Individual operations return specific error types that contain only the <a href="https://awslabs.github.io/aws-sdk-rust/aws_sdk_dynamodb/error/struct.ListTablesError.html">error variants returned by the operation</a>.
@@ -1419,8 +1381,7 @@ async fn main() -&gt; Result&lt;(), dynamodb::Error&gt; {
     let resp = dynamodb.list_tables().send().await;
     println!(&quot;my tables: {}&quot;, resp.tables.unwrap_or_default());
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <h3 id="sharing-configuration-between-multiple-services"><a class="header" href="#sharing-configuration-between-multiple-services">Sharing configuration between multiple services</a></h3>
 <p>The <code>Config</code> produced by <code>aws-config</code> can be used with any AWS service. If we wanted to read our Dynamodb DB tables
 aloud with Polly, we could create a Polly client as well. First, we'll need to add Polly to our <code>Cargo.toml</code>:</p>
@@ -1467,8 +1428,7 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; { // error type cha
         .await
         .expect(&quot;failed to write to file&quot;);
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <h3 id="specifying-a-custom-credential-provider"><a class="header" href="#specifying-a-custom-credential-provider">Specifying a custom credential provider</a></h3>
 <p>If you have your own source of credentials, you may opt-out of the standard credential provider chain.</p>
 <p>To do this, implement the <code>ProvideCredentials</code> trait.</p>
@@ -1495,8 +1455,7 @@ impl ProvideCredentials for MyCustomProvider {
         future::ProvideCredentials::new(self.load_credentials())
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <blockquote>
 <p>Hint: If your credential provider is not asynchronous, you can use <code>ProvideCredentials::ready</code> instead to save an allocation.</p>
 </blockquote>
@@ -1505,8 +1464,7 @@ impl ProvideCredentials for MyCustomProvider {
 async fn main() {
     let config = aws_config::from_env().credentials_provider(MyCustomProvider).load().await;
     let dynamodb = dynamodb::new(&amp;config);
-}
-</code></pre></pre>
+}</code></pre></pre>
 <h2 id="proposed-design"><a class="header" href="#proposed-design">Proposed Design</a></h2>
 <p>Achieving this design consists of three major changes:</p>
 <ol>
@@ -1548,8 +1506,7 @@ impl Config {
     }
 }
 
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The <code>Builder</code> for <code>Config</code> allows customers to provide individual overrides and handles the insertion of the default
 chain for regions and credentials.</p>
 <h3 id="sleep--connectors"><a class="header" href="#sleep--connectors">Sleep + Connectors</a></h3>
@@ -1670,8 +1627,7 @@ given to the new builder instances so that their <code>send()</code> calls can i
 pub struct Client&lt;C, M, R = Standard&gt; {
     handle: Arc&lt;Handle&lt;C, M, R&gt;&gt;,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Functions are generated per operation on the fluent client to gain access to the individual operation builders.
 For example:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1679,8 +1635,7 @@ For example:</p>
 </span>pub fn assume_role(&amp;self) -&gt; fluent_builders::AssumeRole&lt;C, M, R&gt; {
     fluent_builders::AssumeRole::new(self.handle.clone())
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The fluent operation builders ultimately implement <code>send()</code>, which chooses the one and only Smithy client out
 of the handle to make the request with:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1698,8 +1653,7 @@ impl&lt;C, M, R&gt; AssumeRole&lt;C, M, R&gt; where ...{
         self.handle.client.call(op).await
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Smithy clients are constructed from a connector, as shown:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -1708,8 +1662,7 @@ impl&lt;C, M, R&gt; AssumeRole&lt;C, M, R&gt; where ...{
     .middleware(...)
     .build();
 let client = Client::with_config(connector, Config::builder().build());
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The <code>https()</code> method on the Builder constructs the actual Hyper client, and is driven off Cargo features to
 select the correct TLS implementation. For example:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1721,8 +1674,7 @@ pub fn https() -&gt; Https {
     // HyperAdapter is a Tower `Service` request -&gt; response connector that just calls the Hyper client
     crate::hyper_impls::HyperAdapter::from(client)
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="solving-the-connector-creation-problem"><a class="header" href="#solving-the-connector-creation-problem">Solving the Connector Creation Problem</a></h2>
 <p>Customers need to be able to provide HTTP settings, such as timeouts, for all connectors that the clients use.
 These should come out of the <code>SharedConfig</code> when it is used. Connector creation also needs to be customizable
@@ -1737,8 +1689,7 @@ it as such:</p>
         Some(MyCustomConnector::new(reqs))
     })
     .await;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The passed in <code>MakeConnectorRequirements</code> will hold the customer-provided <code>HttpSettings</code> as well
 as any Smithy-modeled requirements, which will just be <code>HttpVersion</code> for now. The <code>MakeConnectorRequirements</code>
 struct will be marked <code>non_exhaustive</code> so that new requirements can be added to it as the SDK evolves.</p>
@@ -1756,8 +1707,7 @@ pub fn default_connector(reqs: &amp;HttpRequirements) -&gt; HyperAdapter {
     }
     HyperAdapter::from(builder.build::&lt;_, SdkBody&gt;(https))
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>For any given service, <code>make_connector</code> could be called multiple times to create connectors
 for all required HTTP versions and settings.</p>
 <p><strong>Note:</strong> the <code>make_connector</code> returns an <code>Option</code> since an HTTP version may not be required, but rather, preferred
@@ -1793,8 +1743,7 @@ struct Handle&lt;C, M, R&gt; {
 pub struct Client&lt;C, M, R = Standard&gt; {
     handle: Arc&lt;Handle&lt;C, M, R&gt;&gt;,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>With how the generics are organized, the connector type will have to be the same between HTTP implementations,
 but this should be fine since it is generally a thin wrapper around a separate HTTP implementor.
 For cases where it is not, the custom connector type can host its own <code>dyn Trait</code> solution.</p>
@@ -1816,8 +1765,7 @@ impl&lt;'a&gt; HttpRequirements&lt;'a&gt; {
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>With the cache established, each operation needs to be aware of its requirements. The code generator will be
 updated to store a prioritized list of <code>HttpVersion</code> in the property bag in an input's <code>make_operation()</code> method.
 This prioritized list will come from the Smithy protocol trait's <code>http</code> or <code>eventStreamHttp</code> attribute, depending
@@ -1847,8 +1795,7 @@ HTTP setting overrides are implemented. This doc is not attempting to solve that
         client.call(op).await
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>If an operation requires a specific protocol version, and if the <code>make_connection</code> implementation can't
 provide that it, then the <code>get_or_create_client()</code> function will return <code>SdkError::ConstructionFailure</code>
 indicating the error.</p>
@@ -1935,8 +1882,7 @@ impl PresigningConfig {
 
     pub fn builder() -&gt; Builder { ... }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Construction of <code>PresigningConfig</code> will validate that <code>expires_in</code> is no greater than one week, as this
 is the longest supported expiration time for SigV4. This validation will result in a panic.</p>
 <p>It's not inconceivable that <code>PresigningConfig</code> will need additional service-specific parameters as customizations,
@@ -1955,8 +1901,7 @@ let presigned: PresignedRequest = client.get_object()
     .key(&quot;example-object&quot;)
     .presigned(presigning_config)
     .await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This API requires a client, and for use-cases where no actual service calls need to be made,
 customers should be able to create presigned URLs without the overhead of an HTTP client.
 Once the <a href="rfcs/./rfc0002_http_versions.html">HTTP Versions RFC</a> is implemented, the underlying HTTP client
@@ -1988,8 +1933,7 @@ let presigned: PresignedRequest = GetObjectInput::builder()
     .key(&quot;example-bucket&quot;)
     .presigned(&amp;config, presigning_config)
     .await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Creating the URL through the input will exercise the same code path as creating it through the client,
 but it will be more apparent that the overhead of a client isn't present.</p>
 <h2 id="behind-the-scenes"><a class="header" href="#behind-the-scenes">Behind the scenes</a></h2>
@@ -2135,8 +2079,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
     let resp = sts.get_caller_identity().send().await?;
     println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>Then, in your terminal:</p>
 <pre><code class="language-sh"># Set the env var before running the example program
 export AWS_MAX_ATTEMPTS=5
@@ -2157,8 +2100,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
     let resp = sts.get_caller_identity().send().await?;
     println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <h3 id="calling-a-method-on-service-specific-config"><a class="header" href="#calling-a-method-on-service-specific-config">Calling a method on service-specific config</a></h3>
 <p>Here's an example app that creates a service-specific config with custom retry behavior and then logs your AWS user's identity</p>
 <pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
@@ -2174,8 +2116,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
     let resp = sts.get_caller_identity().send().await?;
     println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <h3 id="disabling-retries"><a class="header" href="#disabling-retries">Disabling retries</a></h3>
 <p>Here's an example app that creates a shared config that disables retries and then logs your AWS user's identity</p>
 <pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
@@ -2190,8 +2131,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
     let resp = sts.get_caller_identity().send().await?;
     println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>Retries can also be disabled by explicitly passing the <code>RetryConfig::NoRetries</code> enum variant to the <code>retry_config</code> builder method:</p>
 <pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
 use aws_types::retry_config::RetryConfig;
@@ -2205,8 +2145,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
     let resp = sts.get_caller_identity().send().await?;
     println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
     Ok(())
-}
-</code></pre></pre>
+}</code></pre></pre>
 <h2 id="behind-the-scenes-1"><a class="header" href="#behind-the-scenes-1">Behind the scenes</a></h2>
 <p>Currently, when users want to send a request, the following occurs:</p>
 <ol>
@@ -2616,8 +2555,7 @@ original input, but with the field marked <code>inputToken</code> to the value o
     .send()
     .await;
 let tables: Result&lt;Vec&lt;_ &gt;, _ &gt; = paginator.collect().await;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Paginators are lazy and only retrieve pages when polled by a client.</p>
 <h3 id="details"><a class="header" href="#details">Details</a></h3>
 <p>Paginators will be generated into the <code>paginator</code> module of service crates. Currently, paginators are <em>not</em> feature gated, but this
@@ -2632,8 +2570,7 @@ struct ListTablesPaginator&lt;C, M, R&gt; {
     // input builder to construct the actual input on demand
     input: ListTablesInputBuilder
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In addition to the basic usage example above, when <code>pageSize</code> is modeled, customers can specify the page size during
 pagination:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -2648,8 +2585,7 @@ while let Some(next_page) = pages.try_next().await? {
     // pages of 20 items requested from DynamoDb
     tables.extend(next_page.table_names.unwrap_or_default().into_iter());
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Paginators define a public method <code>send()</code>. This method
 returns <code>impl Stream&lt;Item=Result&lt;OperationOutput, OperationError&gt;</code>. This uses <code>FnStream</code> defined in the <code>aws-smithy-async</code> crate which
 enables demand driven execution of a closure. A rendezvous channel is used which will block on <code>send</code> until demand exists.</p>
@@ -2733,8 +2669,7 @@ impl&lt;C, M, R&gt; ListTablesPaginator&lt;C, M, R&gt;
     })
   }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p><strong>On Box::pin</strong>: The stream returned by <code>AsyncStream</code> does not implement <code>Unpin</code>. Unfortunately, this makes iteration
 require an invocation of <code>pin_mut!</code> and generates several hundred lines of compiler errors. Box::pin seems a worthwhile
 trade off to improve the user experience.</p>
@@ -2751,8 +2686,7 @@ regressions in the generated code which would break users.</p>
 pub fn paginate(self) -&gt; crate::paginator::ListTablesPaginator&lt;C, M, R&gt; {
   crate::paginator::ListTablesPaginator::new(self.handle, self.inner)
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="discussion-areas"><a class="header" href="#discussion-areas">Discussion Areas</a></h2>
 <h3 id="on-sendawait"><a class="header" href="#on-sendawait">On <code>send().await</code></a></h3>
 <p>Calling <code>send().await</code> is not necessary from an API perspective—we could have the paginators impl-stream directly. However,
@@ -2926,8 +2860,7 @@ loop {
         Terminate(result) =&gt; return result,
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In the AWS SDK for Rust, waiters can be added without making any backwards breaking changes
 to the current API. This doc outlines the approach to add them in this fashion, but does <em>NOT</em>
 examine code generating response classification from JMESPath expressions, which can be left
@@ -2973,8 +2906,7 @@ client.wait_until_bucket_exists()
     .bucket_name(&quot;my-bucket&quot;)
     .send()
     .await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The call to <code>wait_until_bucket_exists()</code> will return a waiter-specific fluent builder with a <code>send()</code> function
 that will start the polling and return a future.</p>
 <p>To avoid name conflicts with other API methods, the waiter functions can be added to the client via trait:</p>
@@ -2983,8 +2915,7 @@ that will start the polling and return a future.</p>
 </span>pub trait WaitUntilBucketExists {
     fn wait_until_bucket_exists(&amp;self) -&gt; crate::waiter::bucket_exists::Builder;
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This trait would be implemented for the service's fluent client (which will necessitate making the fluent client's
 <code>handle</code> field <code>pub(crate)</code>).</p>
 <h2 id="waiter-implementation"><a class="header" href="#waiter-implementation">Waiter Implementation</a></h2>
@@ -2996,8 +2927,7 @@ that will start the polling and return a future.</p>
         crate::waiter::bucket_exists::Builder::new()
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This builder will have a short <code>send()</code> function to kick off the actual waiter implementation:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -3011,8 +2941,7 @@ that will start the polling and return a future.</p>
         crate::waiter::bucket_exists::wait(self.handle, input).await
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This wait function needs to, in a loop similar to the pseudo-code in the beginning,
 convert the given input into an operation, replace the default response classifier on it
 with a no-retry classifier, and then determine what to do next based on that classification:</p>
@@ -3051,8 +2980,7 @@ fn classify_result(
         &quot;The Smithy model would dictate conditions to check here to produce an `AcceptorState`&quot;
     )
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The retry delay time should be calculated by the same exponential backoff with jitter code that the
 <a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-client/src/retry.rs#L252-L292">default <code>RetryHandler</code> uses in <code>aws-smithy-client</code></a>. This function will need to be split up and made
 available to the waiter implementations so that just the delay can be calculated.</p>
@@ -3430,8 +3358,7 @@ impl BodyCallback for Box&lt;dyn BodyCallback&gt; {
    fn trailers(&amp;self) -&gt; Result&lt;Option&lt;HeaderMap&lt;HeaderValue&gt;&gt;, BoxError&gt; { BodyCallback::trailers(self) }
    fn make_new(&amp;self) -&gt; Box&lt;dyn SendCallback&gt; { BodyCallback::make_new(self) }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The changes we need to make to <code>ByteStream</code>:</p>
 <p><em>(The current version of <code>ByteStream</code> and <code>Inner</code> can be seen <a href="https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205">here</a>.)</em></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -3456,8 +3383,7 @@ impl Inner&lt;SdkBody&gt; {
         self
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The changes we need to make to <code>SdkBody</code>:</p>
 <p><em>(The current version of <code>SdkBody</code> can be seen <a href="https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71">here</a>.)</em></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -3628,8 +3554,7 @@ impl http_body::Body for SdkBody {
         Poll::Ready(Ok(header_map))
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="implementing-checksums"><a class="header" href="#implementing-checksums">Implementing Checksums</a></h2>
 <p>What follows is a simplified example of how this API could be used to introduce checksum validation for outgoing request payloads. In this example, the checksum calculation is fallible and no validation takes place. All it does it calculate
 the checksum of some data and then returns the checksum of that data when <code>trailers</code> is called. This is fine because it's
@@ -3672,8 +3597,7 @@ impl ReadCallback for Crc32cChecksumCallback {
         Box::new(Crc32cChecksumCallback::default())
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p><em>NOTE: If <code>Crc32cChecksumCallback</code> needed to validate a response, then we could modify it to check its internal state against a target checksum value and calling <code>trailers</code> would produce an error if the values didn't match.</em></p>
 <p>In order to use this in a request, we'd modify codegen for that request's service.</p>
 <ol>
@@ -3804,8 +3728,7 @@ impl&lt;S&gt; tower::Layer&lt;S&gt; for AwsMiddleware {
             .service(inner)
   }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The above code is only included for context. This RFC doesn't define any timeouts specific to AWS so <code>AwsMiddleware</code> won't require any changes.</p>
 <h3 id="middlewares-for-smithy-client-requests"><a class="header" href="#middlewares-for-smithy-client-requests">Middlewares for Smithy Client requests</a></h3>
 <p><em>View <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175">aws_smithy_client::Client::call_raw</a> in GitHub</em></p>
@@ -3842,8 +3765,7 @@ impl&lt;S&gt; tower::Layer&lt;S&gt; for AwsMiddleware {
     svc.ready().await?.call(input).await
   }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The Smithy Client creates a new <code>Stack</code> of services to handle each request it sends. Specifically:</p>
 <ul>
 <li>A method <code>retry</code> is used set the retry handler. The configuration for this was set during creation of the <code>Client</code>.</li>
@@ -3900,8 +3822,7 @@ impl&lt;S&gt; tower::Layer&lt;S&gt; for AwsMiddleware {
     svc.ready().await?.call(input).await
   }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <!-- TODO where should this note live? -->
 <p><em>Note: Our HTTP client supports multiple TLS implementations. We'll likely have to implement this feature once per library.</em></p>
 <p>Timeouts will be implemented in the following places:</p>
@@ -4007,8 +3928,7 @@ impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
         self.connector(Adapter::builder().build(crate::conns::native_tls()))
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>When the example code above is compiled with both features enabled, compilation will fail with a &quot;duplicate definitions with name <code>tls_adapter</code>&quot; error. Also, note that the return type of the function differs between the two versions. This is a SemVer-incompatible change.</p>
 <p>Here's an updated version of the example that fixes these issues:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -4030,8 +3950,7 @@ impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
         self.connector(Adapter::builder().build(crate::conns::native_tls()))
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Both features can now be enabled at once without creating a conflict. Since both methods have different names, it's now Ok for them to have different return types.</p>
 <p><a href="https://github.com/awslabs/smithy-rs/blob/2e7ed943513203f1472f2490866dc4fb8a392bd3/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L303"><em>This is real code, see it in context</em></a></p>
 <h3 id="we-should-avoid-using-cfgnotfeature--some-feature"><a class="header" href="#we-should-avoid-using-cfgnotfeature--some-feature">We should avoid using <code>#[cfg(not(feature = &quot;some-feature&quot;))]</code></a></h3>
@@ -4053,8 +3972,7 @@ pub fn default_async_sleep() -&gt; Option&lt;Arc&lt;dyn AsyncSleep&gt;&gt; {
 pub fn default_async_sleep() -&gt; Option&lt;Arc&lt;dyn AsyncSleep&gt;&gt; {
     None
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="dont-default-to-defining-default-features"><a class="header" href="#dont-default-to-defining-default-features">Don't default to defining &quot;default features&quot;</a></h3>
 <p>Because Cargo will use the union of all features enabled on a dependency when building it, we should be wary of marking features as default. Once we do mark features as default, users that want to exclude code and dependencies brought in by those features will have a difficult time doing so. One need look no further than <a href="https://github.com/awslabs/aws-sdk-rust/issues/304">this issue</a> submitted by a user that wanted to use Native TLS and struggled to make sure that Rustls was actually disabled <em>(This issue was resolved in <a href="https://github.com/awslabs/smithy-rs/pull/935">this PR</a> which removed default features from our runtime crates.)</em> This is not to say that we should never use them, as having defaults for the most common use cases means less work for those users.</p>
 <h4 id="when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality"><a class="header" href="#when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality">When a default feature providing some functionality is disabled, active features must not automatically replace that functionality</a></h4>
@@ -4566,8 +4484,7 @@ impl Checksum for Md5 {
 }
 
 // We have existing tests for the checksums, those don't require an update
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="checksumbody"><a class="header" href="#checksumbody"><code>ChecksumBody</code></a></h3>
 <p>When creating a checksum-validated request with an in-memory request body, we can read the body, calculate a checksum, and insert the checksum header, all before sending the request. When creating a checksum-validated request with a streaming request body, we don't have that luxury. Instead, we must calculate a checksum while sending the body, and append that checksum as a <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Trailer">trailer</a>.</p>
 <p>We will accomplish this by wrapping the <code>SdkBody</code> that requires validation within a <code>ChecksumBody</code>. Afterwards, we'll need to wrap the <code>ChecksumBody</code> in yet another layer which we'll discuss in the <a href="rfcs/rfc0016_flexible_checksum_support.html#awschunkedbody-and-awschunkedbodyoptions"><code>AwsChunkedBody</code> and <code>AwsChunkedBodyOptions</code></a> section.</p>
@@ -4731,8 +4648,7 @@ impl http_body::Body for ChecksumBody&lt;SdkBody&gt; {
 }
 
 // The tests I have written are omitted from this RFC for brevity. The request body checksum calculation and trailer size calculations are all tested.
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="checksumvalidatedbody"><a class="header" href="#checksumvalidatedbody"><code>ChecksumValidatedBody</code></a></h3>
 <p>Users may request checksum validation for response bodies. That capability is provided by <code>ChecksumValidatedBody</code>, which will calculate a checksum as the response body is being read. Once all data has been read, the calculated checksum is compared to a precalculated checksum set during body creation. If the checksums don't match, then the body will emit an error.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -4873,8 +4789,7 @@ impl http_body::Body for ChecksumValidatedBody&lt;SdkBody&gt; {
 }
 
 // The tests I have written are omitted from this RFC for brevity. The response body checksum verification is tested.
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="awschunkedbody-and-awschunkedbodyoptions"><a class="header" href="#awschunkedbody-and-awschunkedbodyoptions"><code>AwsChunkedBody</code> and <code>AwsChunkedBodyOptions</code></a></h3>
 <p>In order to send a request with checksum trailers, we must use an AWS-specific content encoding called <code>aws-chunked</code>. This encoding requires that we:</p>
 <ul>
@@ -5326,8 +5241,7 @@ mod tests {
         );
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="sigv4-update"><a class="header" href="#sigv4-update">Sigv4 Update</a></h3>
 <p>When sending checksum-verified requests with a streaming body, we must update the usual signing process. Instead of signing the request based on the request body's checksum, we must sign it with a special header instead:</p>
 <pre><code class="language-HTTP">Authorization: &lt;computed authorization header value using &quot;STREAMING-UNSIGNED-PAYLOAD-TRAILER&quot;&gt;
@@ -5351,8 +5265,7 @@ pub enum SignableBody&lt;'a&gt; {
     /// body cannot be known prior to signing **AND** which include HTTP trailers.
     StreamingUnsignedPayloadTrailer,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>Updating the <code>CanonicalRequest::payload_hash</code> method to include the new <code>SignableBody</code> variant:
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -5375,8 +5288,7 @@ pub enum SignableBody&lt;'a&gt; {
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li><em>(in generated code)</em> Inserting the <code>SignableBody</code> into the request property bag when making a checksum-verified streaming request:
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -5386,8 +5298,7 @@ pub enum SignableBody&lt;'a&gt; {
         .properties_mut()
         .insert(aws_sig_auth::signer::SignableBody::StreamingUnsignedPayloadTrailer);
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 </ul>
 <p>It's possible to send <code>aws-chunked</code> requests where each chunk is signed individually. Because this feature isn't strictly necessary for flexible checksums, I've avoided implementing it.</p>
@@ -5423,8 +5334,7 @@ pub fn build_checksum_validated_request(
 
     Ok(())
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>Building checksum-validated requests with streaming request bodies:
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -5477,8 +5387,7 @@ pub fn build_checksum_validated_request_with_streaming_body(
         .body(body)
         .map_err(|err| aws_smithy_http::operation::BuildError::Other(Box::new(err)))
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 <li>Building checksum-validated responses:
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -5517,8 +5426,7 @@ pub fn check_headers_for_precalculated_checksum(
 
     None
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 </li>
 </ul>
 <h2 id="codegen"><a class="header" href="#codegen">Codegen</a></h2>
@@ -5572,8 +5480,7 @@ let operation = {
 };
 
 let response = smithy_client.call(operation).await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This approach is both difficult to discover and implement since it requires acquiring
 a Smithy client rather than the generated fluent client, and it's anything but ergonomic.</p>
 <p>This RFC proposes an easier way to augment requests that is compatible with the fluent
@@ -5603,8 +5510,7 @@ follows:</p>
     })
     .send()
     .await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This new async <code>customize</code> method would return the following:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5666,8 +5572,7 @@ impl&lt;O, R&gt; CustomizableOperation&lt;O, R&gt; {
         self.handle.client.call(self.operation).await
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Additionally, for those who want to avoid closures, the <code>Operation</code> type will have
 <code>request</code> and <code>request_mut</code> methods added to it to get direct access to its underlying
 HTTP request.</p>
@@ -5686,8 +5591,7 @@ operation.request_mut()
         HeaderValue::from_static(&quot;some-value&quot;)
     );
 let response = operation.send().await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="why-not-remove-async-from-customize-to-make-this-more-ergonomic"><a class="header" href="#why-not-remove-async-from-customize-to-make-this-more-ergonomic">Why not remove <code>async</code> from <code>customize</code> to make this more ergonomic?</a></h3>
 <p>In the proposal above, customers must <code>await</code> the result of <code>customize</code> in order
 to get the <code>CustomizableOperation</code>. This is a result of the underlying <code>map_operation</code>
@@ -5707,8 +5611,7 @@ customers won't realize that they can call <code>send</code> directly, and then 
     .build() // Oops, didn't need to do this
     .send()
     .await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>vs.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5716,8 +5619,7 @@ customers won't realize that they can call <code>send</code> directly, and then 
     .some_value()
     .send()
     .await?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Additionally, no AWS services at time of writing have a member named <code>customize</code>
 that would conflict with the new function, so adding it would not be a breaking change.</p>
 <h2 id="changes-checklist-11"><a class="header" href="#changes-checklist-11">Changes Checklist</a></h2>
@@ -5784,8 +5686,7 @@ let app = app.map_request(|request| {
         info!(?request);
         request
     });
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>A more subtle violation of the specification may occur when the customer enables verbose logging - a third-party dependency might simply log data marked as sensitive, for example <code>tokio</code> or <code>hyper</code>.</p>
 <p>These two cases illustrate that <code>smithy-rs</code> can only prevent violation of the specification in a restricted scope - logs emitted from generated code and the runtime crates. A <code>smithy-rs</code> specific guideline should be available to the customer which outlines how to avoid violating the specification in areas outside of our control.</p>
 <h3 id="routing"><a class="header" href="#routing">Routing</a></h3>
@@ -5815,8 +5716,7 @@ let app = app.map_request(|request| {
 } else {
     debug!(data = &quot;{redacted}&quot;, &quot;logging here&quot;);
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>the following wrapper should be provided from a runtime crate:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5847,14 +5747,12 @@ where
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In which case the branch above becomes</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>debug!(sensitive_data = %Sensitive(data));
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="code-generated-logging-middleware"><a class="header" href="#code-generated-logging-middleware">Code Generated Logging Middleware</a></h3>
 <p>Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be carefully crafted to avoid leaking sensitive data.</p>
 <p>As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a <code>tracing::span</code>. As a response leaves this middleware it should record the HTTP headers and status code in a <code>tracing::debug</code>.</p>
@@ -5927,8 +5825,7 @@ where
         fut.instrument(span)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="http-debugdisplay-wrappers"><a class="header" href="#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a></h3>
 <p>The <code>Service::call</code> path, seen in <a href="rfcs/rfc0018_logging_sensitive.html#code-generated-logging-middleware">Code Generated Logging Middleware</a>, is latency-sensitive. Careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping <a href="https://docs.rs/http/latest/http/uri/struct.Uri.html">Uri</a> and <a href="https://docs.rs/http/latest/http/header/struct.HeaderMap.html">HeaderMap</a> then providing a new <a href="https://doc.rust-lang.org/std/fmt/trait.Display.html">Display</a>/<a href="https://doc.rust-lang.org/std/fmt/trait.Debug.html">Debug</a> implementation which skips over the sensitive data is preferable over allocating a new <code>String</code>/<code>HeaderMap</code> and then mutating it.</p>
 <p>These wrappers should be provided alongside the <code>Sensitive</code> struct described in <a href="rfcs/rfc0018_logging_sensitive.html#debug-logging">Debug Logging</a>. If they are implemented on top of <code>Sensitive</code>, they will inherit the same behavior - allowing redactions to be toggled using <code>unredacted-logging</code> feature flag.</p>
@@ -5946,8 +5843,7 @@ let routes = vec![
     (BoxCloneService::new(get_server_statistics), get_server_statistics_request_spec),
 ];
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Although an acceptable first step, putting logging middleware here is suboptimal - the <code>Router</code> allows a <code>tower::Layer</code> to be applied to the operation by using the <a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146">Router::layer</a> method. This middleware will be applied <em>outside</em> of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the <code>Router</code> must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.</p>
 <p>This is a general problem, not specific to this proposal. For example, <a href="rfcs/rfc0018_logging_sensitive.html#use-request-extensions">Use Request Extensions</a> must also solve this problem.</p>
 <p>Fortunately, this problem is separable from the actual implementation of the logging middleware and we can get immediate benefit by application of it in the suboptimal position described above.</p>
@@ -5998,8 +5894,7 @@ impl&lt;B, S&gt; Service&lt;Request&lt;B&gt;&gt; for Middleware&lt;S&gt; {
         self.inner.call(request)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>A middleware layer must be code generated (much in the same way as the logging middleware) which is dedicated to inserting the <code>Sensitivity</code> struct into the extensions of each incoming request.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6018,8 +5913,7 @@ where
         self.inner.call(request)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h4 id="advantages"><a class="header" href="#advantages">Advantages</a></h4>
 <ul>
 <li>Applicable to <em>all</em> middleware which takes <code>http::Request&lt;B&gt;</code>.</li>
@@ -6061,8 +5955,7 @@ impl&lt;B, S&gt; Service&lt;Request&lt;B&gt;&gt; for Middleware&lt;S&gt; {
         self.inner.call(request)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>It would then be required that the code generation responsible constructing a <code>Sensitivity</code> for each operation. Additionally, if any middleware is being applied to a operation then the code generation would be responsible for passing that middleware the appropriate <code>Sensitivity</code> before applying it.</p>
 <h4 id="advantages-1"><a class="header" href="#advantages-1">Advantages</a></h4>
 <ul>
@@ -6140,8 +6033,7 @@ Refactor <code>Router</code> to allow for better positioning described in <a hre
 </span>stream! {
     yield Ok(EventStreamUnion::ErrorVariant ...)
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Furthermore, there is no support for <code>@error</code>s in event streams being terminal; that is, when an error is sent,
 it does not signal termination and thus does not complete the stream.</p>
 <p>This RFC proposes to make changes to:</p>
@@ -6154,8 +6046,7 @@ it does not signal termination and thus does not complete the stream.</p>
 </span>stream! {
     yield Err(EventStreamUnionError::ErrorKind ...)
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Thus any <code>Err(_)</code> from the stream is terminal, rather than any <code>Ok(x)</code> with <code>x</code> being matched against the set of modeled variant errors in the union.</p>
 <!-- Explain the implementation of this new feature -->
 <h2 id="how-to-actually-implement-this-rfc"><a class="header" href="#how-to-actually-implement-this-rfc">How to actually implement this RFC</a></h2>
@@ -6261,16 +6152,14 @@ pub enum AttemptCapturingPokemonEventErrorKind {
     MasterBallUnsuccessful(crate::error::MasterBallUnsuccessful),
     Unhandled(Box&lt;dyn std::error::Error + Send + Sync + 'static&gt;),
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>On the server,</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>pub enum AttemptCapturingPokemonEventError {
     MasterBallUnsuccessful(crate::error::MasterBallUnsuccessful),
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Both are modeled as normal errors, where the <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L50">name</a> comes from <code>Error</code> with a prefix of the union's name.
 In fact, both the <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L71">client</a> and <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerCombinedErrorGenerator.kt#L46">server</a>
 generate operation errors and event stream errors the same way.</p>
@@ -6286,8 +6175,7 @@ A terminated stream has <a href="https://github.com/awslabs/smithy-rs/blob/8f7e0
     AttemptCapturingPokemonEventErrorKind::MasterBallUnsuccessful(MasterBallUnsuccessful::builder().build()),
     Default::default()
 ));
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Because unions can be used in input or output of more than one operation, errors must be generated once as they are in the <code>error::</code> namespace.</p>
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 <h2 id="changes-checklist-13"><a class="header" href="#changes-checklist-13">Changes checklist</a></h2>
@@ -6358,8 +6246,7 @@ let app: Router = OperationRegistryBuilder::default()
     .unwrap()
     // Convert to `Router`
     .into();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>During the survey we touch on the major mechanisms used to achieve this API.</p>
 <h3 id="handlers"><a class="header" href="#handlers">Handlers</a></h3>
 <p>A core concept in the service builder is the <code>Handler</code> trait:</p>
@@ -6368,8 +6255,7 @@ let app: Router = OperationRegistryBuilder::default()
 </span>pub trait Handler&lt;T, Input&gt; {
     async fn call(self, req: http::Request) -&gt; http::Response;
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Its purpose is to provide an even interface over closures of the form <code>FnOnce({Operation}Input) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code> and <code>FnOnce({Operation}Input, State) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code>. It's this abstraction which allows the customers to supply both <code>async fn handler(input: {Operation}Input) -&gt; {Operation}Output</code> and <code>async fn handler(input: {Operation}Input, state: Extension&lt;S&gt;) -&gt; {Operation}Output</code> to the service builder.</p>
 <p>We generate <code>Handler</code> implementations for said closures in <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt">ServerOperationHandlerGenerator.kt</a>:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -6406,8 +6292,7 @@ where
         response
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Creating <code>{Operation}Input</code> from a <code>http::Request</code> and <code>http::Response</code> from a <code>{Operation}Output</code> involves protocol aware serialization/deserialization, for example, it can involve the <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html">HTTP binding traits</a>. The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5">RuntimeError</a> enumerates error cases such as serialization/deserialization failures, <code>extensions().get::&lt;T&gt;()</code> failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the <code>RuntimeError</code> to <code>http::Response</code>. The reader should make note of the influence of the model on the different sections of this procedure.</p>
 <p>The <code>request.extensions().get::&lt;T&gt;()</code> present in the <code>Fun: FnOnce(Operation0Input, Extension&lt;S&gt;) -&gt; Fut</code> implementation is the current approach to injecting state into handlers. The customer is required to apply a <a href="https://docs.rs/tower-http/latest/tower_http/add_extension/struct.AddExtensionLayer.html">AddExtensionLayer</a> to the output of the service builder so that, when the request reaches the handler, the <code>extensions().get::&lt;T&gt;()</code> will succeed.</p>
 <p>To convert the closures described above into a <code>Service</code> an <code>OperationHandler</code> is used:</p>
@@ -6433,8 +6318,7 @@ where
         self.handler.call(req).await.map(Ok)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="builder"><a class="header" href="#builder">Builder</a></h3>
 <p>The service builder we provide to the customer is the <code>OperationRegistryBuilder</code>, generated from <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt">ServerOperationRegistryGenerator.kt</a>.</p>
 <p>Currently, the reference model would generate the following <code>OperationRegistryBuilder</code> and <code>OperationRegistry</code>:</p>
@@ -6449,8 +6333,7 @@ pub struct OperationRegistry&lt;Op0, In0, Op1, In1&gt; {
     operation1: Op0,
     operation2: Op1,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The <code>OperationRegistryBuilder</code> includes a setter per operation, and a fallible <code>build</code> method:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6472,8 +6355,7 @@ pub struct OperationRegistry&lt;Op0, In0, Op1, In1&gt; {
         })
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The <code>OperationRegistry</code> does not include any methods of its own, however it does enjoy a <code>From&lt;OperationRegistry&gt; for Router&lt;B&gt;</code> implementation:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6505,8 +6387,7 @@ where
         ])
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="router"><a class="header" href="#router">Router</a></h3>
 <p>The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60">aws_smithy_http::routing::Router</a> provides the protocol aware routing of requests to their target , it exists as</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -6525,8 +6406,7 @@ enum Routes {
 pub struct Router {
     routes: Routes,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>and enjoys the following <code>Service&lt;http::Request&gt;</code> implementation:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6551,8 +6431,7 @@ pub struct Router {
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Along side the protocol specific constructors, <code>Router</code> includes a <code>layer</code> method. This provides a way for the customer to apply a <code>tower::Layer</code> to all routes. For every protocol, <code>Router::layer</code> has the approximately the same behavior:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6564,8 +6443,7 @@ pub struct Router {
     .map(|svc| Box::new(svc))
     // Collect the iterator back into a collection (`Vec` or `TinyMap`)
     .collect();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="comparison-to-axum"><a class="header" href="#comparison-to-axum">Comparison to Axum</a></h3>
 <p>Historically, <code>smithy-rs</code> has borrowed from <a href="https://github.com/tokio-rs/axum">axum</a>. Despite various divergences the code bases still have much in common:</p>
 <ul>
@@ -6596,8 +6474,7 @@ pub struct Router {
 </span>async fn request(Json(payload): Json&lt;Value&gt;, Query(params): Query&lt;HashMap&lt;String, String&gt;&gt;, headers: HeaderMap) {
     todo!()
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>is a valid handler - each argument satisfies the <a href="https://docs.rs/axum/latest/axum/extract/trait.FromRequest.html">axum::extract::FromRequest</a> trait, therefore satisfies one of <code>axum</code>s blanket <code>Handler</code> implementations:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6629,8 +6506,7 @@ pub struct Router {
         }
     };
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The implementations of <code>Handler</code> in <code>axum</code> and <code>smithy-rs</code> follow a similar pattern - convert <code>http::Request</code> into the closure's input, run the closure, convert the output of the closure to <code>http::Response</code>.</p>
 <p>In <code>smithy-rs</code> we do not need a general notion of &quot;extractor&quot; - the <code>http::Request</code> decomposition is specified by the Smithy model, whereas in <code>axum</code> it's defined by the handlers signature. Despite the Smithy specification the customer may still want an &quot;escape hatch&quot; to allow them access to data outside of the Smithy service inputs, for this reason we should continue to support a restricted notion of extractor. This will help support use cases such as passing <a href="https://docs.rs/lambda_http/latest/lambda_http/struct.Context.html">lambda_http::Context</a> through to the handler despite it not being modeled in the Smithy model.</p>
 <p>Dual to <code>FromRequest</code> is the <a href="https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html">axum::response::IntoResponse</a> trait. This plays the role of converting the output of the handler to <code>http::Response</code>. Again, the difference between <code>axum</code> and <code>smithy-rs</code> is that <code>smithy-rs</code> has the conversion from <code>{Operation}Output</code> to <code>http::Response</code> specified by the Smithy model, whereas in <code>axum</code> the customer is free to specify a return type which implements <code>axum::response::IntoResponse</code>.</p>
@@ -6648,8 +6524,7 @@ let api_routes = Router::new()
     .nest(&quot;/teams&quot;, team_routes);
 
 let app = Router::new().nest(&quot;/api&quot;, api_routes);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Note that, in <code>axum</code> handlers are eagerly converted to a <code>tower::Service</code> (via <code>IntoService</code>) before they are passed into the <code>Router</code>. In contrast, in <code>smithy-rs</code>, handlers are passed into a builder and then the conversion to <code>tower::Service</code> is performed (via <code>OperationHandler</code>).</p>
 <p>Introducing state to handlers in <code>axum</code> is done in the same way as <code>smithy-rs</code>, described briefly in <a href="rfcs/rfc0020_service_builder.html#handlers">Handlers</a> - a layer is used to insert state into incoming <code>http::Request</code>s and the <code>Handler</code> implementation pops it out of the type map layer. In <code>axum</code>, if a customer wanted to scope state to all routes within <code>/users/</code> they are able to do the following:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -6659,8 +6534,7 @@ let app = Router::new().nest(&quot;/api&quot;, api_routes);
 let api_routes = Router::new()
     .nest(&quot;/users&quot;, user_routes.layer(Extension(/* state */)))
     .nest(&quot;/teams&quot;, team_routes);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In <code>smithy-rs</code> a customer is only able to apply a layer around the <code>aws_smithy_http::routing::Router</code> or around every route via the <a href="rfcs/rfc0020_service_builder.html#router">layer method</a> described above.</p>
 <h2 id="proposal-3"><a class="header" href="#proposal-3">Proposal</a></h2>
 <p>The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, and it is stated in the cases where an interdependency exists.</p>
@@ -6679,8 +6553,7 @@ let api_routes = Router::new()
             operation1: self.operation1.ok_or(/* OperationRegistryBuilderError */)?,
         })
     }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>We can do away with fallibility if we allow for on <code>Op0</code>, <code>Op1</code> to switch types during build and remove the <code>Option</code> from around the fields. The <code>OperationRegistryBuilder</code> then becomes</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6716,28 +6589,24 @@ where
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The customer will now get a compile time error rather than a runtime error when they fail to specify a handler.</p>
 <h3 id="switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method"><a class="header" href="#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method">Switch <code>From&lt;OperationRegistry&gt; for Router</code> to an <code>OperationRegistry::build</code> method</a></h3>
 <p>To construct a <code>Router</code>, the customer must either give a type ascription</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>let app: Router = /* Service builder */.into();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>or be explicit about the <code>Router</code> namespace</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>let app = Router::from(/* Service builder */);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>If we switch from a <code>From&lt;OperationRegistry&gt; for Router</code> to a <code>build</code> method on <code>OperationRegistry</code> the customer may simply</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>let app = /* Service builder */.build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>There already exists a <code>build</code> method taking <code>OperationRegistryBuilder</code> to <code>OperationRegistry</code>, this is removed in <a href="rfcs/rfc0020_service_builder.html#remove-two-step-build-procedure">Remove two-step build procedure</a>. These two transforms pair well together for this reason.</p>
 <h3 id="operations-as-middleware-constructors"><a class="header" href="#operations-as-middleware-constructors">Operations as Middleware Constructors</a></h3>
 <p>As mentioned in <a href="rfcs/rfc0020_service_builder.html#routing">Comparison to Axum: Routing</a> and <a href="rfcs/rfc0020_service_builder.html#handlers">Handlers</a>, the <code>smithy-rs</code> service builder accepts handlers and only converts them into a <code>tower::Service</code> during the final conversion into a <code>Router</code>. There are downsides to this:</p>
@@ -6763,8 +6632,7 @@ impl&lt;Op0, Op1&gt; OperationRegistryBuilder&lt;Op0, Op1&gt; {
         self
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The API usage would then become</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6781,8 +6649,7 @@ let operation0 = /* A HTTP `tower::Layer` */.layer(op1_svc);
 OperationRegistryBuilder::default()
     .operation0(operation0)
     /* ... */
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Note that this requires that the <code>OperationRegistryBuilder</code> stores services, rather than <code>Handler</code>s. An unintended and superficial benefit of this is that we are able to drop <code>In{n}</code> from the <code>OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt;</code> - only <code>Op{n}</code> remains and it parametrizes each operation's <code>tower::Service</code>.</p>
 <p>It is still possible to retain the original API which accepts <code>Handler</code> by introducing the following setters:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -6795,8 +6662,7 @@ OperationRegistryBuilder::default()
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>There are two points at which the customer might want to apply middleware: around <code>tower::Service&lt;{Operation}Input, Response = {Operation}Output&gt;</code> and <code>tower::Service&lt;http::Request, Response = http::Response&gt;</code>, that is, before and after the serialization/deserialization is performed. The change described only succeeds in the latter, and therefore is only a partial solution to (1).</p>
 <p>This solves (2), the service builder may apply additional middleware around the service.</p>
 <p>This does not solve (3), as the customer is not able to provide a <code>tower::Service&lt;{Operation}Input, Response = {Operation}Output&gt;</code>.</p>
@@ -6829,8 +6695,7 @@ where
         response
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Notice the similarity between this and the <code>OperationHandler</code>, the only real difference being that we hold an inner service rather than a closure. In this way we have separated all model aware serialization/deserialization, we noted in <a href="rfcs/rfc0020_service_builder.html#handlers">Handlers</a>, into this middleware.</p>
 <p>A consequence of this is that the user <code>Operation0</code> must have two constructors:</p>
 <ul>
@@ -6857,8 +6722,7 @@ impl&lt;F&gt; Operation0&lt;ServiceFn&lt;F&gt;&gt; {
         Operation0::from_service(service_fn(inner))
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The API usage then becomes:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -6874,8 +6738,7 @@ OperationRegistryBuilder::default()
     .operation0(operation_0)
     .operation1(operation_1)
     /* ... */
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h4 id="approach-c-operations-as-middleware-constructors"><a class="header" href="#approach-c-operations-as-middleware-constructors">Approach C: Operations as Middleware Constructors</a></h4>
 <p>While <a href="rfcs/rfc0020_service_builder.html#approach-b-operations-as-middleware">Attempt B</a> solves all three problems, it fails to adequately model the Smithy semantics. An operation cannot uniquely define a <code>tower::Service</code> without reference to a parent Smithy service - information concerning the serialization/deserialization, error modes are all inherited from the Smithy service an operation is used within. In this way, <code>Operation0</code> should not be a standalone middleware, but become middleware once accepted by the service builder.</p>
 <p>Any solution which provides an <code>{Operation}</code> structure and wishes it to be accepted by multiple service builders must deal with this problem. We currently build one library per service and hence have duplicate structures when <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#service-closure">service closures</a> overlap. This means we wouldn't run into this problem today, but it would be a future obstruction if we wanted to reduce the amount of generated code.</p>
@@ -6952,8 +6815,7 @@ impl&lt;Op1, Op2&gt; OperationRegistryBuilder&lt;Op1, Op2&gt; {
         operation.layer(http_svc)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Notice that we get some additional type safety here when compared to <a href="rfcs/rfc0020_service_builder.html#approach-a-customer-uses-operationhandlernew">Approach A</a> and <a href="rfcs/rfc0020_service_builder.html#approach-b-operations-as-middleware">Approach B</a> - <code>operation0</code> accepts a <code>Operation0</code> rather than a general <code>tower::Service</code>. We also get a namespace to include utility methods - notice the <code>logging</code> and <code>auth</code> methods.</p>
 <p>The RFC favours this approach out of all those presented.</p>
 <h4 id="approach-d-add-more-methods-to-the-service-builder"><a class="header" href="#approach-d-add-more-methods-to-the-service-builder">Approach D: Add more methods to the Service Builder</a></h4>
@@ -6977,8 +6839,7 @@ impl&lt;Op1, Op2&gt; OperationRegistryBuilder&lt;Op1, Op2&gt; {
         /* Same internal implementation without boxing */
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="protocol-specific-routers"><a class="header" href="#protocol-specific-routers">Protocol specific Routers</a></h3>
 <p>Currently there is a single <code>Router</code> structure, described in <a href="rfcs/rfc0020_service_builder.html#router">Router</a>, situated in the <code>rust-runtime/aws-smithy-http-server</code> crate, which is output by the service builder. This, roughly, takes the form of an <code>enum</code> listing the different protocols.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -6990,8 +6851,7 @@ enum Routes {
     AwsJson1_0(/* Container */),
     AwsJson1_1(/* Container */),
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Recall the form of the <code>Service::call</code> method, given in <a href="rfcs/rfc0020_service_builder.html#router">Router</a>, which involved matching on the protocol and then performing protocol specific logic.</p>
 <p>Two downsides of modelling <code>Router</code> in this way are:</p>
 <ul>
@@ -7030,16 +6890,14 @@ enum Routes {
     .build()
     .unwrap()
     .into();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>With <a href="rfcs/rfc0020_service_builder.html#remove-two-step-build-procedure">Remove two-step build procedure</a>, <a href="rfcs/rfc0020_service_builder.html#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method">Switch <code>From&lt;OperationRegistry&gt; for Router</code> to a <code>OperationRegistry::build</code> method</a>, and <a href="rfcs/rfc0020_service_builder.html#statically-check-for-missing-handlers">Statically check for missing Handlers</a> we obtain the following API:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>let service_0: Service0 = Service0::builder()
     /* use the setters */
     .build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="combined-proposal"><a class="header" href="#combined-proposal">Combined Proposal</a></h3>
 <p>A combination of all the proposed transformations results in the following API:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -7098,8 +6956,7 @@ let service_0 = Service0::builder()
     .operation_0(operation_0)
     .operation_1(operation_1)
     .build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>A toy implementation of the combined proposal is presented in <a href="https://github.com/hlbarber/service-builder/pull/1">this PR</a>.</p>
 <h2 id="changes-checklist-14"><a class="header" href="#changes-checklist-14">Changes Checklist</a></h2>
 <ul>
@@ -7227,8 +7084,7 @@ impl Error for InvalidFullUriError {
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This error does a few things well:</p>
 <ol>
 <li>Using <code>#[non_exhaustive]</code> on the enum allows new errors to be added in the future.</li>
@@ -7277,8 +7133,7 @@ impl Display for ProfileParseError {
 }
 
 impl Error for ProfileParseError {}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>What this error does well:</p>
 <ul>
 <li>The members are private, so <code>#[non_exhaustive]</code> isn't even necessary</li>
@@ -7313,8 +7168,7 @@ pub enum Error {
     ObjectNotInActiveTierError(ObjectNotInActiveTierError),
     Unhandled(Box&lt;dyn Error + Send + Sync + 'static&gt;),
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Each error variant gets its own struct, which can hold error-specific contextual information.
 Except for the <code>Unhandled</code> variant, both the error enum and the details on each variant are extensible.
 The <code>Unhandled</code> variant should move the error source into a struct so that its type can be hidden.
@@ -7338,8 +7192,7 @@ pub struct Error {
     kind: ErrorKind,
     source: Box&lt;dyn std::error::Error + Send + Sync&gt;,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>What this error does well:</p>
 <ul>
 <li>It is extensible since the <code>ErrorKind</code> is non-exhaustive</li>
@@ -7353,7 +7206,7 @@ to this error in the future</li>
 <li>The source error can be downcasted, which could be a trap for backwards compatibility.</li>
 </ul>
 <h3 id="hyper-10"><a class="header" href="#hyper-10">Hyper 1.0</a></h3>
-<p>Hyper is has outlined <a href="https://github.com/hyperium/hyper/blob/bd7928f3dd6a8461f0f0fdf7ee0fd95c2f156f88/docs/ROADMAP.md#errors">some problems they want to address with errors</a>
+<p>Hyper has outlined <a href="https://github.com/hyperium/hyper/blob/bd7928f3dd6a8461f0f0fdf7ee0fd95c2f156f88/docs/ROADMAP.md#errors">some problems they want to address with errors</a>
 for the coming 1.0 release. To summarize:</p>
 <ul>
 <li>It's difficult to match on specific errors (Hyper 0.x's <code>Error</code> relies
@@ -7446,8 +7299,7 @@ impl VariantA {
         self.some_field
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Error variants that contain a source must return it from the <code>Error::source</code> method.
 The <code>source</code> implementation <em>should not</em> use the catch all (<code>_</code>) match arm, as this makes it easy to miss
 adding a new error variant's source at a later date.</p>
@@ -7476,8 +7328,7 @@ impl fmt::Display for Error {
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="informative-error-pattern"><a class="header" href="#informative-error-pattern">Informative error pattern</a></h3>
 <p>Informative errors must be represented as structs. If error messaging changes based on an underlying cause, then a
 private error kind enum can be used internally for this purpose. For example:</p>
@@ -7500,8 +7351,7 @@ impl Error for InformativeError {
         Some(&amp;self.source)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In general, informative errors should be referenced by variants in actionable errors since they cannot be converted
 to actionable errors at a later date without a breaking change. This is not a hard rule, however. Use your best judgement
 for the situation.</p>
@@ -7512,8 +7362,7 @@ is used as a wrapper to get the better error formatting:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>tracing::warn!(err = %DisplayErrorContext(err), &quot;some message&quot;);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This might be implemented as follows:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -7536,8 +7385,7 @@ fn write_err(f: &amp;mut fmt::Formatter&lt;'_&gt;, err: &amp;dyn Error) -&gt; fm
     }
     Ok(())
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="changes-checklist-16"><a class="header" href="#changes-checklist-16">Changes Checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox" checked=""/>
@@ -7623,8 +7471,7 @@ pub async fn main() {
     let bind: SocketAddr = /* */;
     let server = hyper::Server::bind(&amp;bind).serve(app.into_make_service());
     // [...]
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>The builder is infallible: we are able to verify at compile-time that all handlers have been provided using the <a href="https://www.greyblake.com/blog/builder-with-typestate-in-rust/">typestate builder pattern</a>.</p>
 <h3 id="compiler-errors-cannot-be-tuned"><a class="header" href="#compiler-errors-cannot-be-tuned">Compiler errors cannot be tuned</a></h3>
 <p>What happens if we stray away from the happy path? We might forget, for example, to add the <code>check_health</code> handler.
@@ -7689,8 +7536,7 @@ The definition of <code>PokemonServiceBuilder</code> goes from:</p>
     _exts: std::marker::PhantomData&lt;(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)&gt;,
     plugin: Pl,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>to:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -7719,8 +7565,7 @@ The definition of <code>PokemonServiceBuilder</code> goes from:</p>
     _exts: std::marker::PhantomData&lt;(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)&gt;,
     plugin: Pl,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>All operation fields are now <code>Option</code>-wrapped.
 We introduce a new <code>MissingOperationsError</code> error to hold the names of the missing operations and their respective setter methods:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -7733,8 +7578,7 @@ pub struct MissingOperationsError {
 
 impl Display for MissingOperationsError { /* */ }
 impl std::error::Error for MissingOperationsError {}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>which is then used in <code>build</code> as error type <em>(not shown here for brevity)</em>.
 We can now try again to stray away from the happy path by forgetting to register a handler for the <code>CheckHealth</code> operation.
 The code compiles just fine this time, but the application fails when launched via <code>cargo run</code>:</p>
@@ -7777,8 +7621,7 @@ We can also provide actionable suggestions: Rust beginners should be able to eas
     _exts: std::marker::PhantomData&lt;(Exts1, Exts2, Exts3, Exts4, Exts5, Exts6)&gt;,
     plugin: Pl,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>We have 13 generic parameters:</p>
 <ul>
 <li>1 for plugins (<code>Pl</code>);</li>
@@ -7805,8 +7648,7 @@ let app = if check_database {
     app.check_health(check_health_with_database)
 };
 app.build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The compiler is not pleased:</p>
 <pre><code class="language-text">error[E0308]: `if` and `else` have incompatible types
   --&gt; pokemon-service/src/bin/pokemon-service.rs:39:9
@@ -7848,8 +7690,7 @@ let app = if check_database {
 } else {
     app.check_health(check_health_with_database).build()
 };
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>It becomes more cumbersome when we have more than a single conditional:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -7873,8 +7714,7 @@ match (check_database, include_cpu_statics) {
         .get_server_statistics(get_server_statistics)
         .build(),
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>A lot of repetition compared to the code for the &quot;obvious&quot; approach:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -7891,8 +7731,7 @@ let app = if include_cpu_statistics {
     app.get_server_statistics(get_server_statistics)
 };
 app.build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The obvious approach becomes viable if we stop embedding the handler function type in <code>PokemonServiceBuilder</code>'s overall type.</p>
 <h3 id="refactoring-into-smaller-functions---prepare-for-some-type-juggling"><a class="header" href="#refactoring-into-smaller-functions---prepare-for-some-type-juggling">Refactoring into smaller functions -&gt; Prepare for some type juggling!</a></h3>
 <p>Services with a high number of routes can lead to fairly long startup routines.
@@ -7905,8 +7744,7 @@ The service builder must be one of the arguments if we want to register handlers
 </span>fn partial_setup(builder: PokemonServiceBuilder) -&gt; PokemonServiceBuilder {
     /* */
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The compiler demands to see those generic parameters in the signature:</p>
 <pre><code class="language-text">error[E0107]: missing generics for struct `PokemonServiceBuilder`
   --&gt; pokemon-service/src/bin/pokemon-service.rs:28:27
@@ -7932,8 +7770,7 @@ note: struct defined here, with at least 6 generic parameters: `Op1`, `Op2`, `Op
 ) -&gt; PokemonServiceBuilder&lt;_, _, _, _, _, _&gt; {
     /* */
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>but that won't fly either:</p>
 <pre><code class="language-text">error[E0121]: the placeholder `_` is not allowed within types on item signatures for return types
   --&gt; pokemon-service/src/bin/pokemon-service.rs:30:28
@@ -7955,8 +7792,7 @@ note: struct defined here, with at least 6 generic parameters: `Op1`, `Op2`, `Op
 ) -&gt; PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt; {
     builder
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>That compiles, at last.
 Let's try to register an operation handler now:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -7966,8 +7802,7 @@ Let's try to register an operation handler now:</p>
 ) -&gt; PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6&gt; {
     builder.get_server_statistics(get_server_statistics)
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>That looks innocent, but it doesn't fly:</p>
 <pre><code class="language-text">error[E0308]: mismatched types
   --&gt; pokemon-service/src/bin/pokemon-service.rs:31:5
@@ -8000,8 +7835,7 @@ Can we get rid of them?</p>
     get_storage: Option&lt;Route&lt;Body&gt;&gt;,
     plugin: Plugin,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>We no longer store the raw handlers inside <code>PokemonServiceBuilder</code>.
 We eagerly upgrade the operation handlers to a <code>Route</code> instance when they are registered with the builder.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -8017,8 +7851,7 @@ We eagerly upgrade the operation handlers to a <code>Route</code> instance when 
 
     /* other setters and methods */
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The existing API performs the upgrade when <code>build</code> is called, forcing <code>PokemonServiceBuilder</code> to store the raw handlers and keep two generic parameters around (<code>OpX</code> and <code>ExtsX</code>) for each operation.
 The proposed API requires plugins to be specified upfront, when creating an instance of the builder. They cannot be modified after a <code>PokemonServiceBuilder</code> instance has been built:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -8037,8 +7870,7 @@ The proposed API requires plugins to be specified upfront, when creating an inst
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This constraint guarantees that all operation handlers are upgraded to a <code>Route</code> using the same set of plugins.</p>
 <p>Having to specify all plugins upfront is unlikely to have a negative impact on developers currently using <code>smithy-rs</code>.
 We have seen how cumbersome it is to break the startup logic into different functions using the current service builder API. Developers are most likely specifying all plugins and routes in the same function even if the current API allows them to intersperse route registrations and plugin registrations: they would simply have to re-order their registration statements to adopt the API proposed in this RFC.</p>
@@ -8054,8 +7886,7 @@ PokemonService::builder(plugin)
     .print()
     .get_storage(get_storage)
     .build()
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>We could choose to remove this limitation and allow handlers to be upgraded using a different set of plugins depending on where they were registered.
 In the snippet above, for example, we would have:</p>
 <ul>
@@ -8074,8 +7905,7 @@ For attaching additional plugins to a single operation, we could introduce a bla
        new_plugin.map(self)
    }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>which would allow developers to invoke <code>op.apply(MyPlugin)</code> or call extensions methods such as <code>op.print()</code> where <code>op</code> is an <code>Operation</code>.
 For attaching additional plugins to a subgroup of operations, instead, we could introduce nested builders:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -8092,8 +7922,7 @@ let nested_builder = builder.scoped(additional_plugins)
     // API names are definitely provisional and bikesheddable.
     .attach(builder);
 let app = builder.build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Both proposals are outside the scope of this RFC, but they are shown here for illustrative purposes.</p>
 <h3 id="alternatives-lazy-and-eager-on-demand-type-erasure"><a class="header" href="#alternatives-lazy-and-eager-on-demand-type-erasure">Alternatives: lazy and eager-on-demand type erasure</a></h3>
 <p>A lot of our issues stem from type mismatch errors: we are encoding the type of our handlers into the overall type of the service builder and, as a consequence, we end up modifying that type every time we set a handler or modify its state.
@@ -8124,8 +7953,7 @@ pub trait Upgradable&lt;Protocol, Operation, Exts, Body, Plugin&gt; {
     /// Performs an upgrade from a representation of an operation to a HTTP [`Service`](tower::Service).
     fn upgrade(self, plugin: &amp;Plugin) -&gt; Self::Service;
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In order to perform type erasure, we need to determine:</p>
 <ul>
 <li>what type parameters we are going to pass as generic arguments to <code>Upgradable</code>;</li>
@@ -8150,8 +7978,7 @@ let builder = if check_database {
     builder.check_health(check_health_with_database)
 };
 let app = builder.build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In approach 1), we could leverage the <code>.boxed()</code> method to convert the actual <code>OpX</code> type into a <code>Box&lt;dyn Upgradable&gt;</code>, thus ensuring that both branches return the same type:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -8162,8 +7989,7 @@ let builder = if check_database {
     builder.check_health_operation(Operation::from_handler(check_health_with_database).boxed())
 };
 let app = builder.build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The same cannot be done when conditionally registering a route, because on the <code>else</code> branch we cannot convert <code>MissingOperation</code> into a <code>Box&lt;dyn Upgradable&gt;</code> since <code>MissingOperation</code> doesn't implement <code>Upgradable</code> - the pillar on which we built all our compile-time safety story.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -8173,8 +7999,7 @@ let builder = if check_database {
 } else {
     builder
 };
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>In approach 2), we can erase the whole builder in both branches when they both register a route:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -8185,8 +8010,7 @@ let boxed_builder = if check_database {
     builder.check_health(check_health_with_database).erase()
 };
 let app = boxed_builder.build();
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>but, like in approach 1), we will still get a type mismatch error if one of the two branches leaves the route unset.</p>
 <h4 id="refactoring-into-smaller-functions"><a class="header" href="#refactoring-into-smaller-functions">Refactoring into smaller functions</a></h4>
 <p>Developers would still have to spell out all generic parameters when writing a function that takes in a builder as a parameter:</p>
@@ -8197,8 +8021,7 @@ let app = boxed_builder.build();
 ) -&gt; PokemonServiceBuilder&lt;Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin&gt; {
     builder
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Writing the signature after having modified the builder becomes easier though.
 In approach 1), they can explicitly change the touched operation parameters to the boxed variant:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -8211,8 +8034,7 @@ In approach 1), they can explicitly change the touched operation parameters to t
     &gt; {
     builder.get_server_statistics(get_server_statistics)
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>It becomes trickier in approach 2), since to retain compile-time safety on the builder we expect <code>erase</code> to map <code>MissingOperation</code> into <code>MissingOperation</code>. Therefore, we can't write something like this:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -8221,8 +8043,7 @@ In approach 1), they can explicitly change the touched operation parameters to t
 ) -&gt; PokemonServiceBuilder&lt;Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;, Route&lt;B&gt;&gt; {
     builder.get_server_statistics(get_server_statistics).()
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The compiler would reject it since it can't guarantee that all other operations can be erased to a <code>Route&lt;B&gt;</code>. This is likely to require something along the lines of:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -8240,8 +8061,7 @@ where
 {
     builder.get_server_statistics(get_server_statistics).()
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h4 id="summary-2"><a class="header" href="#summary-2">Summary</a></h4>
 <p>Both approaches force us to have a number of generic parameters that scales linearly with the number of operations on the service, affecting the ergonomics of the resulting API in both the branching and the refactoring scenarios.
 We believe that the ergonomics advantages of the proposal advanced by this RFC outweigh the limitation of having to specify your plugins upfront, when creating the builder instance.</p>
@@ -8261,8 +8081,7 @@ pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable&lt;PrintPlugin&gt;
         self.apply(PrintPlugin)
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This pattern needs to be revisited if we want to move forward with this RFC, since new plugins cannot be registered after the builder has been instantiated.
 My recommendation would be to implement <code>Pluggable</code> for <code>PluginStack</code>, providing the same pattern ahead of the creation of the builder:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -8279,8 +8098,7 @@ let app = PokemonService::builder(plugin_stack)
     .capture_pokemon(capture_pokemon)
     .do_nothing(do_nothing)
     .build()?;
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="playing-around-with-the-design"><a class="header" href="#playing-around-with-the-design">Playing around with the design</a></h2>
 <p>The API proposed in this RFC has been manually implemented for the Pokemon service. You can find the code <a href="https://github.com/LukeMathWalker/builder-experiments">here</a>.</p>
 <h2 id="changes-checklist-17"><a class="header" href="#changes-checklist-17">Changes checklist</a></h2>
@@ -8295,6 +8113,138 @@ Evaluate the introduction of a <code>PluginBuilder</code> as the primary API to 
 <div class="footnote-definition" id="further-dev-productivity-improvements"><sup class="footnote-definition-label">1</sup>
 <p>The impact of a runtime error on developer productivity can be further minimised by encouraging adoption of integration testing; this can be achieved, among other options, by authoring guides that highlight its benefits and provide implementation guidance.</p>
 </div>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-requestid-in-business-logic-handlers"><a class="header" href="#rfc-requestid-in-business-logic-handlers">RFC: RequestID in business logic handlers</a></h1>
+<blockquote>
+<p>Status: RFC</p>
+<p>Applies to: server</p>
+</blockquote>
+<p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0024_request_id.html#changes-checklist">Changes Checklist</a> section.</p>
+<h2 id="terminology-12"><a class="header" href="#terminology-12">Terminology</a></h2>
+<ul>
+<li><strong>RequestID</strong>: a service-wide request's unique identifier</li>
+<li><strong>UUID</strong>: a universally unique identifier</li>
+</ul>
+<p>RequestID is an element that uniquely identifies a client request. RequestID is used by services to map all logs, events and
+specific data to a single operation. This RFC discusses whether and how smithy-rs can make that value available to customers.</p>
+<p>Services use a RequestID to collect logs related to the same request and see its flow through the various operations,
+help clients debug requests by sharing this value and, in some cases, use this value to perform their business logic. RequestID is unique across a service at least within a certain timeframe.</p>
+<p>This value for the purposes above must be set by the service.</p>
+<p>Having the client send the value brings the following challenges:</p>
+<ul>
+<li>The client could repeatedly send the same RequestID</li>
+<li>The client could send no RequestID</li>
+<li>The client could send a malformed or malicious RequestID (like in <a href="https://en.wikipedia.org/wiki/Shellshock_(software_bug)">1</a> and
+<a href="https://cwiki.apache.org/confluence/display/WW/S2-045">2</a>).</li>
+</ul>
+<p>To minimise the attack surface and provide a uniform experience to customers, servers should generate the value.
+However, services should be free to read the ID sent by clients in HTTP headers: it is common for services to
+read the request ID a client sends, record it and send it back upon success. A client may want to send the same value to multiple services.
+Services should still decide to have their own unique request ID per actual call.</p>
+<p>RequestIDs are not to be used by multiple services, but only within a single service.</p>
+<!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
+<h2 id="the-user-experience-if-this-rfc-is-implemented-1"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented-1">The user experience if this RFC is implemented</a></h2>
+<p>The proposal is to implement a <code>RequestId</code> type and make it available to middleware and business logic handlers, through <a href="rfcs/../server/from-parts.html">FromParts</a> and as a <code>Service</code>.
+To aid customers already relying on clients' request IDs, there will be two types: <code>ClientRequestId</code> and <code>ServerRequestId</code>.</p>
+<ol>
+<li>Implementing <code>FromParts</code> for <code>Extension&lt;RequestId&gt;</code> gives customers the ability to write their handlers:</li>
+</ol>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub async fn handler(
+    input: input::Input,
+    request_id: Extension&lt;ServerRequestId&gt;,
+) -&gt; ...
+<span class="boring">}</span></code></pre></pre>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub async fn handler(
+    input: input::Input,
+    request_id: Extension&lt;ClientRequestId&gt;,
+) -&gt; ...
+<span class="boring">}</span></code></pre></pre>
+<p><code>ServerRequestId</code> and <code>ClientRequestId</code> will be injected into the extensions by a layer.
+This layer can also be used to open a span that will log the request ID: subsequent logs will be in the scope of that span.</p>
+<ol start="2">
+<li>ServerRequestId format:</li>
+</ol>
+<p>Common formats for RequestIDs are:</p>
+<ul>
+<li>UUID: a random string, represented in hex, of 128 bits from IETF RFC 4122: <code>7c038a43-e499-4162-8e70-2d4d38595930</code></li>
+<li>The hash of a sequence such as <code>date+thread+server</code>: <code>734678902ea938783a7200d7b2c0b487</code></li>
+<li>A verbose description: <code>current_ms+hostname+increasing_id</code></li>
+</ul>
+<p>For privacy reasons, any format that provides service details should be avoided. A random string is preferred.
+The proposed format is to use UUID, version 4.</p>
+<p>A <code>Service</code> that inserts a RequestId in the extensions will be implemented as follows:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;R, S&gt; Service&lt;http::Request&lt;R&gt;&gt; for ServerRequestIdProvider&lt;S&gt;
+where
+    S: Service&lt;http::Request&lt;R&gt;&gt;,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&amp;mut self, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&amp;mut self, mut req: http::Request&lt;R&gt;) -&gt; Self::Future {
+        request.extensions_mut().insert(ServerRequestId::new());
+        self.inner.call(req)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>For client request IDs, the process will be, in order:</p>
+<ul>
+<li>If a header is found matching one of the possible ones, use it</li>
+<li>Otherwise, None</li>
+</ul>
+<p><code>Option</code> is used to distinguish whether a client had provided an ID or not.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;R, S&gt; Service&lt;http::Request&lt;R&gt;&gt; for ClientRequestIdProvider&lt;S&gt;
+where
+    S: Service&lt;http::Request&lt;R&gt;&gt;,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&amp;mut self, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&amp;mut self, mut req: http::Request&lt;R&gt;) -&gt; Self::Future {
+        for possible_header in self.possible_headers {
+            if let Some(id) = req.headers.get(possible_header) {
+                req.extensions_mut().insert(Some(ClientRequestId::new(id)));
+                return self.inner.call(req)
+            }
+        }
+        req.extensions_mut().insert(None);
+        self.inner.call(req)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The string representation of a generated ID will be valid for this regex:</p>
+<ul>
+<li>For <code>ServerRequestId</code>: <code>/^[A-Za-z0-9_-]{,48}$/</code></li>
+<li>For <code>ClientRequestId</code>: see <a href="https://httpwg.org/specs/rfc9110.html#rfc.section.5.5">the spec</a></li>
+</ul>
+<p>Although the generated ID is opaque, this will give guarantees to customers as to what they can expect, if the server ID is ever updated to a different format.</p>
+<h2 id="changes-checklist-18"><a class="header" href="#changes-checklist-18">Changes checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Implement <code>ServerRequestId</code>: a <code>new()</code> function that generates a UUID, with <code>Display</code>, <code>Debug</code> and <code>ToStr</code> implementations</li>
+<li><input disabled="" type="checkbox"/>
+Implement <code>ClientRequestId</code>: <code>new()</code> that wraps a string (the header value) and the header in which the value could be found, with <code>Display</code>, <code>Debug</code> and <code>ToStr</code> implementations</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>FromParts</code> for <code>Extension&lt;ServerRequestId&gt;</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement <code>FromParts</code> for <code>Extension&lt;ClientRequestId&gt;</code></li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
 <p>This is a collection of written resources for smithy-rs and SDK contributors.</p>
 <ul>
@@ -8336,8 +8286,7 @@ if let Some(content_length) = body.content_length() {
     );
 }
 let request = request.body(body).expect(&quot;should be valid request&quot;);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Most all request body creation in the SDKs looks like that. Note how it automatically sets the <code>Content-Length</code> header
 whenever the size of the body is known; It'll be relevant later. The body is read into memory and can be inspected
 before the request is sent. This allows for things like calculating a checksum and then inserting it into the request
@@ -8358,8 +8307,7 @@ request
         http::header::HeaderName::from_static(&quot;x-amz-trailer&quot;),
         http::header::HeaderValue::from_static(&quot;x-amz-checksum-sha256&quot;),
     );
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h2 id="the-issues-i-encountered-while-implementing-checksums-for-streaming-request-bodies"><a class="header" href="#the-issues-i-encountered-while-implementing-checksums-for-streaming-request-bodies">The issues I encountered while implementing checksums for streaming request bodies</a></h2>
 <h3 id="content-encoding-aws-chunked"><a class="header" href="#content-encoding-aws-chunked"><code>Content-Encoding: aws-chunked</code></a></h3>
 <p>When sending a request body with trailers, we must use an AWS-specific content encoding called <code>aws-chunked</code>. To encode
@@ -8481,8 +8429,7 @@ looked like this:</p>
         )
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <h3 id="the-stream-is-closing-early-and-i-dont-know-why"><a class="header" href="#the-stream-is-closing-early-and-i-dont-know-why">&quot;The stream is closing early, and I don't know why&quot;</a></h3>
 <p>In my early implementation of <code>http_body::Body</code> for an <code>aws-chunked</code> encoded body, the body wasn't being completely read
 out. The problem turned out to be that I was delegating to the <code>is_end_stream</code> trait method of the inner body. Because
@@ -8541,8 +8488,7 @@ async fn test_checksum_on_streaming_request_against_s3() {
         .await
         .unwrap();
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>The echo server was based off of an <a href="https://github.com/tokio-rs/axum">axum</a> example and looked like this:</p>
 <pre><pre class="playground"><code class="language-rust">use axum::{
   body::{Body, Bytes},
@@ -8614,8 +8560,7 @@ where
     }
 
     Ok(bytes)
-}
-</code></pre></pre>
+}</code></pre></pre>
 <h2 id=""><a class="header" href="#"></a></h2>
 </li>
 </ul>
@@ -8641,24 +8586,24 @@ where
 
 
 
-        <script type="text/javascript">
+        <script>
             window.playground_copyable = true;
         </script>
 
 
-        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
 
-        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
 
         <!-- Custom JS scripts -->
-        <script type="text/javascript" src="static/mermaid.min.js"></script>
-        <script type="text/javascript" src="static/mermaid-init.js"></script>
+        <script src="static/mermaid.min.js"></script>
+        <script src="static/mermaid-init.js"></script>
 
-        <script type="text/javascript">
+        <script>
         window.addEventListener('load', function() {
             window.setTimeout(window.print, 100);
         });
