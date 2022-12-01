@@ -8,8 +8,8 @@
 //! representing the Smithy inputs, outputs, and errors respectively. When an operation error is not specified
 //! [`OperationShape::Error`] is [`Infallible`](std::convert::Infallible).
 //!
-//! We should generate a zero-sized type (ZST) for each Smithy operation and [`OperationShape`] should be implemented
-//! on it. This will be used as a helper - providing static methods and parameterizing other traits.
+//! We generate a marker struct for each Smithy operation and implement [`OperationShape`] on them. This
+//! is used as a helper - providing static methods and parameterizing other traits.
 //!
 //! The model
 //!
@@ -39,7 +39,7 @@
 //! }
 //! ```
 //!
-//! The behavior of a Smithy operation is encoded by an [`Operation`]. The [`OperationShape`] ZSTs can be used to
+//! The behavior of a Smithy operation is encoded by an [`Operation`]. The [`OperationShape`] types can be used to
 //! construct specific operations using [`OperationShapeExt::from_handler`] and [`OperationShapeExt::from_service`].
 //! The [from_handler](OperationShapeExt::from_handler) constructor takes a [`Handler`] whereas the
 //! [from_service](OperationShapeExt::from_service) takes a [`OperationService`]. Both traits serve a similar purpose -
