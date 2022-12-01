@@ -325,7 +325,23 @@ fun RustType.isCopy(): Boolean = when (this) {
 enum class Visibility {
     PRIVATE,
     PUBCRATE,
-    PUBLIC
+    PUBLIC;
+
+    companion object {
+        fun publicIf(condition: Boolean, ifNot: Visibility): Visibility =
+            if (condition) {
+                PUBLIC
+            } else {
+                ifNot
+            }
+    }
+
+    fun toRustQualifier(): String =
+        when (this) {
+            PRIVATE -> ""
+            PUBCRATE -> "pub(crate)"
+            PUBLIC -> "pub"
+        }
 }
 
 /**
@@ -365,6 +381,15 @@ data class RustMetadata(
     fun render(writer: RustWriter) {
         renderAttributes(writer)
         renderVisibility(writer)
+    }
+
+    companion object {
+        val TestModule = RustMetadata(
+            visibility = Visibility.PRIVATE,
+            additionalAttributes = listOf(
+                Attribute.Cfg("test"),
+            ),
+        )
     }
 }
 

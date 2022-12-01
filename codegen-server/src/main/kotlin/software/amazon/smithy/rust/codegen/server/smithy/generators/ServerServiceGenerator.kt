@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
@@ -34,12 +35,18 @@ open class ServerServiceGenerator(
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
     protected val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
+    private val serviceName = codegenContext.serviceShape.id.name.toString()
 
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      */
     fun render() {
+        rustCrate.lib {
+            rust("##[doc(inline, hidden)]")
+            rust("pub use crate::service::$serviceName;")
+        }
+
         rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) {
             ServerProtocolTestGenerator(codegenContext, protocolSupport, protocolGenerator).render(this)
         }
@@ -68,7 +75,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule(
+            RustModule.LeafModule(
                 "operation_shape",
                 RustMetadata(
                     visibility = Visibility.PUBLIC,
@@ -78,14 +85,12 @@ open class ServerServiceGenerator(
                 ),
             ),
         ) {
-            for (operation in operations) {
-                ServerOperationGenerator(codegenContext, operation).render(this)
-            }
+            ServerOperationShapeGenerator(operations, codegenContext).render(this)
         }
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
+            RustModule.LeafModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) {
             ServerServiceGeneratorV2(
                 codegenContext,

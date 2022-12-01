@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -25,7 +24,7 @@ fun EndpointTrait.prefixFormatString(): String {
     return this.hostPrefix.rustFormatString("", "")
 }
 
-fun RuntimeConfig.smithyHttp() = CargoDependency.SmithyHttp(this).asType()
+fun RuntimeConfig.smithyHttp() = CargoDependency.smithyHttp(this).toType()
 
 class EndpointTraitBindings(
     model: Model,

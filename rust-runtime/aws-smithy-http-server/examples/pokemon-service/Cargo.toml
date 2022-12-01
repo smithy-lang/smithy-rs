@@ -44,7 +44,7 @@ futures-util = "0.3"
 lambda_http = "0.7.1"
 
 # Local paths
-aws-smithy-http-server = { path = "../../" }
+aws-smithy-http-server = { path = "../../", features = ["aws-lambda"] }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
 
 [dev-dependencies]

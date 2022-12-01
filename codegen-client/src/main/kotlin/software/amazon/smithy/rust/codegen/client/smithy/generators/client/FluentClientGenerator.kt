@@ -21,9 +21,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -58,12 +58,12 @@ class FluentClientGenerator(
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
-        retryDefault = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType()
+        retryDefault = CargoDependency.smithyClient(codegenContext.runtimeConfig).toType()
             .member("retry::Standard"),
-        client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType(),
+        client = CargoDependency.smithyClient(codegenContext.runtimeConfig).toType(),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryClassifier: RuntimeType = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
+    private val retryClassifier: RuntimeType = CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType()
         .member("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
@@ -81,7 +81,7 @@ class FluentClientGenerator(
         TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
+    private val clientDep = CargoDependency.smithyClient(codegenContext.runtimeConfig)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
@@ -146,7 +146,7 @@ class FluentClientGenerator(
             """,
             "generics_decl" to generics.decl,
             "smithy_inst" to generics.smithyInst,
-            "client" to clientDep.asType(),
+            "client" to clientDep.toType(),
             "client_docs" to writable
             {
                 customizations.forEach {
@@ -160,7 +160,7 @@ class FluentClientGenerator(
         )
         writer.rustBlockTemplate(
             "impl${generics.inst} Client${generics.inst} #{bounds:W}",
-            "client" to clientDep.asType(),
+            "client" to clientDep.toType(),
             "bounds" to generics.bounds,
         ) {
             operations.forEach { operation ->
@@ -221,7 +221,7 @@ class FluentClientGenerator(
                 )
             }
         }
-        writer.withModule(RustModule.public("fluent_builders")) {
+        writer.withInlineModule(RustModule.new("fluent_builders", visibility = Visibility.PUBLIC, inline = true)) {
             docs(
                 """
                 Utilities to ergonomically construct a request to the service.
@@ -255,14 +255,14 @@ class FluentClientGenerator(
                     }
                     """,
                     "Inner" to input.builderSymbol(symbolProvider),
-                    "client" to clientDep.asType(),
+                    "client" to clientDep.toType(),
                     "generics" to generics.decl,
                     "operation" to operationSymbol,
                 )
 
                 rustBlockTemplate(
                     "impl${generics.inst} ${operationSymbol.name}${generics.inst} #{bounds:W}",
-                    "client" to clientDep.asType(),
+                    "client" to clientDep.toType(),
                     "bounds" to generics.bounds,
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))

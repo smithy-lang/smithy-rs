@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -60,7 +59,7 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerato
 class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val defaultProvider = defaultProvider()
     private val codegenScope = arrayOf(
-        "credentials" to awsTypes(runtimeConfig).asType().member("credentials"),
+        "credentials" to awsTypes(runtimeConfig).toType().member("credentials"),
         "DefaultProvider" to defaultProvider,
     )
 
@@ -131,7 +130,7 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::Credentials;",
-                    awsTypes(runtimeConfig).asType(),
+                    awsTypes(runtimeConfig).toType(),
                 )
             }
 

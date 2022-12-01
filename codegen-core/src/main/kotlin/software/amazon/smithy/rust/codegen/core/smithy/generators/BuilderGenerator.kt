@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
@@ -36,7 +37,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -53,12 +56,12 @@ fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Sym
 fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
     val structureSymbol = symbolProvider.toSymbol(this)
     val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
-    val rustType = RustType.Opaque("Builder", "${structureSymbol.namespace}::$builderNamespace")
+    val module = RustModule.new(builderNamespace, visibility = Visibility.PUBLIC, parent = structureSymbol.module(), inline = true)
+    val rustType = RustType.Opaque("Builder", module.fullyQualifiedPath())
     return Symbol.builder()
         .rustType(rustType)
         .name(rustType.name)
-        .namespace(rustType.namespace, "::")
-        .definitionFile(structureSymbol.definitionFile)
+        .locatedIn(module)
         .build()
 }
 
@@ -112,7 +115,7 @@ class BuilderGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
-        writer.withModule(RustModule.public(segments.last())) {
+        writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
             renderBuilder(this)
         }
     }

@@ -9,14 +9,13 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.Errors
-import software.amazon.smithy.rust.codegen.core.smithy.Inputs
-import software.amazon.smithy.rust.codegen.core.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
+import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -76,18 +75,18 @@ class PythonApplicationGenerator(
     private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-            "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType(),
-            "tower" to PythonServerCargoDependency.Tower.asType(),
-            "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
-            "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
-            "hyper" to PythonServerCargoDependency.Hyper.asType(),
+            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "tokio" to PythonServerCargoDependency.Tokio.toType(),
+            "tracing" to PythonServerCargoDependency.Tracing.toType(),
+            "tower" to PythonServerCargoDependency.Tower.toType(),
+            "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
+            "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
+            "hyper" to PythonServerCargoDependency.Hyper.toType(),
             "HashMap" to RustType.HashMap.RuntimeType,
-            "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
+            "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
             "http" to RuntimeType.http,
         )
 
@@ -279,6 +278,7 @@ class PythonApplicationGenerator(
                     self.run_server(py, address, port, backlog, workers)
                 }
                 /// Lambda entrypoint: start the server on Lambda.
+                ##[cfg(feature = "aws-lambda")]
                 ##[pyo3(text_signature = "(${'$'}self)")]
                 pub fn run_lambda(
                     &mut self,
@@ -338,12 +338,12 @@ class PythonApplicationGenerator(
         )
         writer.rust(
             """
-            /// from $libName import ${Inputs.namespace}
-            /// from $libName import ${Outputs.namespace}
+            /// from $libName import ${InputsModule.name}
+            /// from $libName import ${OutputsModule.name}
             """.trimIndent(),
         )
         if (operations.any { it.errors.isNotEmpty() }) {
-            writer.rust("""/// from $libName import ${Errors.namespace}""".trimIndent())
+            writer.rust("""/// from $libName import ${ErrorsModule.name}""".trimIndent())
         }
         writer.rust(
             """
@@ -397,8 +397,8 @@ class PythonApplicationGenerator(
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val inputT = "${Inputs.namespace}::${inputSymbol.name}"
-        val outputT = "${Outputs.namespace}::${outputSymbol.name}"
+        val inputT = "${InputsModule.name}::${inputSymbol.name}"
+        val outputT = "${OutputsModule.name}::${outputSymbol.name}"
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
         return "@app.$operationName\n/// def $operationName(input: $inputT, ctx: Context) -> $outputT"
     }

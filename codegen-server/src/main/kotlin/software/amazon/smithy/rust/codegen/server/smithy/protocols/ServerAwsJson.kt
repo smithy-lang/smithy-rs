@@ -21,7 +21,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonS
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapJsonCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapOrCollectionJsonCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeSerializingMemberJsonCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerAwsJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
@@ -31,7 +32,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  */
 class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
     ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
-    override fun protocol(codegenContext: ServerCodegenContext): ServerProtocol = ServerAwsJsonProtocol(codegenContext, version)
+    override fun protocol(codegenContext: ServerCodegenContext): ServerProtocol =
+        ServerAwsJsonProtocol(codegenContext, version)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
         ServerHttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
@@ -71,6 +73,7 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonSeria
                 rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
             }
         }
+
         else -> emptySection
     }
 }
@@ -90,6 +93,10 @@ class ServerAwsJsonSerializerGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            customizations = listOf(ServerAwsJsonError(awsJsonVersion), BeforeIteratingOverMapJsonCustomization(codegenContext)),
+            customizations = listOf(
+                ServerAwsJsonError(awsJsonVersion),
+                BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext),
+                BeforeSerializingMemberJsonCustomization(codegenContext),
+            ),
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
