@@ -7,4 +7,4 @@ Smithy Rust provides the ability to generate a server whose operations are provi
 <!-- - [Middleware](./middleware.md) -->
 - [Instrumentation](./instrumentation.md)
 <!-- - [The Anatomy of a Service](./anatomy.md) -->
-<!-- - [Accessing Un-modelled Data](./from-parts.md) -->
+<!-- - [Accessing Un-modelled Data](./from_parts.md) -->
