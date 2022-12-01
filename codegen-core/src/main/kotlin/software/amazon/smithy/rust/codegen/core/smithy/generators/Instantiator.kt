@@ -129,6 +129,7 @@ open class Instantiator(
             }
 
             // Simple Shapes
+            is EnumShape -> renderEnum(writer, shape, data as StringNode)
             is StringShape -> renderString(writer, shape, data as StringNode)
             is NumberShape -> when (data) {
                 is StringNode -> {
@@ -279,12 +280,13 @@ open class Instantiator(
 
     private fun renderString(writer: RustWriter, shape: StringShape, arg: StringNode) {
         val data = writer.escape(arg.value).dq()
-        if (shape !is EnumShape) {
-            writer.rust("$data.to_owned()")
-        } else {
-            val enumSymbol = symbolProvider.toSymbol(shape)
-            writer.rustTemplate("#{EnumFromStringFn:W}", "EnumFromStringFn" to enumFromStringFn(enumSymbol, data))
-        }
+        writer.rust("$data.to_owned()")
+    }
+
+    private fun renderEnum(writer: RustWriter, shape: EnumShape, arg: StringNode) {
+        val enumSymbol = symbolProvider.toSymbol(shape)
+        val data = writer.escape(arg.value).dq()
+        writer.rustTemplate("#{EnumFromStringFn:W}", "EnumFromStringFn" to enumFromStringFn(enumSymbol, data))
     }
 
     /**

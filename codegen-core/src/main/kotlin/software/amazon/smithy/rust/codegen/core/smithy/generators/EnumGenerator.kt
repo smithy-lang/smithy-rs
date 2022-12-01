@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -97,7 +96,7 @@ open class EnumGenerator(
             val builder = EnumDefinition.builder()
                 .name(it.key)
                 .value(shape.enumValues[it.key])
-                .deprecated(it.value.getTrait<DeprecatedTrait>() != null)
+                .deprecated(it.value.hasTrait<DeprecatedTrait>())
                 .tags(it.value.tags)
             if (it.value.hasTrait<DocumentationTrait>()) {
                 builder.documentation(it.value.expectTrait(DocumentationTrait::class.java).value)
@@ -134,33 +133,6 @@ open class EnumGenerator(
         writer.rustBlock("impl AsRef<str> for $enumName") {
             rustBlock("fn as_ref(&self) -> &str") {
                 rust("self.as_str()")
-            }
-        }
-    }
-
-    private fun renderUnnamedEnum() {
-        writer.documentShape(shape, model)
-        writer.deprecatedShape(shape)
-        meta.render(writer)
-        writer.write("struct $enumName(String);")
-        writer.rustBlock("impl $enumName") {
-            docs("Returns the `&str` value of the enum member.")
-            rustBlock("pub fn as_str(&self) -> &str") {
-                rust("&self.0")
-            }
-
-            docs("Returns all the `&str` representations of the enum members.")
-            rustBlock("pub fn $Values() -> &'static [&'static str]") {
-                withBlock("&[", "]") {
-                    val memberList = sortedMembers.joinToString(", ") { it.value.dq() }
-                    rust(memberList)
-                }
-            }
-        }
-
-        writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
-            rustBlock("fn from(s: T) -> Self") {
-                rust("$enumName(s.as_ref().to_owned())")
             }
         }
     }

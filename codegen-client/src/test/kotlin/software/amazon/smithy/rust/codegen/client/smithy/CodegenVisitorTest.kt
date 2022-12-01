@@ -89,9 +89,7 @@ class CodegenVisitorTest {
             ])
             string BasicEnum
         """.asSmithyModel(smithyVersion = "2.0")
-        val (ctx, testDir) = generatePluginContext(model)
-        testDir.resolve("src").createDirectory()
-        testDir.resolve("src/main.rs").writeText("fn main() {}")
+        val (ctx, _) = generatePluginContext(model)
         val codegenDecorator =
             CombinedCodegenDecorator.fromClasspath(
                 ctx,
@@ -100,5 +98,38 @@ class CodegenVisitorTest {
         val visitor = CodegenVisitor(ctx, codegenDecorator)
         val baselineModel = visitor.baselineTransform(model)
         baselineModel.getShapesWithTrait(EnumTrait.ID).isEmpty() shouldBe true
+    }
+
+    @Test
+    fun `baseline transform verify bad string enum throws if not converted to EnumShape`() {
+        val model = """
+            namespace com.example
+            use aws.protocols#restJson1
+            @restJson1
+            service Example {
+                operations: [ BasicOperation ]
+            }
+            operation BasicOperation {
+                input: Shape
+            }
+            structure Shape {
+                enum: BasicEnum
+            }
+            @enum([
+                {
+                    value: "$ a/0",
+                },
+            ])
+            string BasicEnum
+        """.asSmithyModel(smithyVersion = "2.0")
+        val (ctx, _) = generatePluginContext(model)
+        val codegenDecorator =
+            CombinedCodegenDecorator.fromClasspath(
+                ctx,
+                ClientCustomizations(),
+            )
+        val visitor = CodegenVisitor(ctx, codegenDecorator)
+        val baselineModel = visitor.baselineTransform(model)
+        baselineModel.getShapesWithTrait(EnumTrait.ID).isEmpty() shouldBe false
     }
 }

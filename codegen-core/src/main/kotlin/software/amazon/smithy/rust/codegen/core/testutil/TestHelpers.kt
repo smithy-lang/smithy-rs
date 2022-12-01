@@ -10,7 +10,6 @@ import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
@@ -71,7 +70,6 @@ fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String =
     val processed = letIf(!this.startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
     return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
         .unwrap()
-        .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 }
 
 // Intentionally only visible to codegen-core since the other modules have their own symbol providers

@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -44,6 +45,7 @@ class EnumGeneratorTest {
             ])
             string EnumWithUnknown
         """.asSmithyModel()
+            .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
         private val symbolProvider = testSymbolProvider(testModel)
 
         private val enum = testModel.lookup<EnumShape>("test#EnumWithUnknown")
@@ -83,7 +85,7 @@ class EnumGeneratorTest {
             rendered shouldContain
                 """
                 /// Some documentation.
-                SomeName1,
+                #[deprecated]SomeName1,
                 """.trimIndent()
         }
 
@@ -96,7 +98,7 @@ class EnumGeneratorTest {
                 /// It has some docs that #need to be escaped
                 ///
                 /// _Note: `::Unknown` has been renamed to `::UnknownValue`._
-                UnknownValue,
+                #[deprecated]UnknownValue,
                 """.trimIndent()
         }
     }
@@ -125,6 +127,7 @@ class EnumGeneratorTest {
                 @deprecated(since: "1.2.3")
                 string InstanceType
             """.asSmithyModel()
+                .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
@@ -169,6 +172,7 @@ class EnumGeneratorTest {
                 }])
                 string FooEnum
             """.asSmithyModel()
+                .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
@@ -203,6 +207,7 @@ class EnumGeneratorTest {
                 @deprecated
                 string FooEnum
             """.asSmithyModel()
+                .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
@@ -235,6 +240,7 @@ class EnumGeneratorTest {
                 ])
                 string SomeEnum
             """.asSmithyModel()
+                .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
@@ -266,6 +272,7 @@ class EnumGeneratorTest {
                 ])
                 string SomeEnum
             """.asSmithyModel()
+                .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
@@ -296,6 +303,7 @@ class EnumGeneratorTest {
                 ])
                 string SomeEnum
             """.asSmithyModel()
+                .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 
             val provider = testSymbolProvider(model)
             val project = TestWorkspace.testProject(provider)
@@ -323,6 +331,7 @@ class EnumGeneratorTest {
             ])
             string SomeEnum
         """.asSmithyModel()
+            .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
 
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
@@ -374,6 +383,7 @@ class EnumGeneratorTest {
             ])
             string SomeEnum
         """.asSmithyModel()
+            .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
         val variant3AsUnknown = """SomeEnum::from("Variant3")"""
         expectMatchExpressionCompiles(modelV1, "test#SomeEnum", variant3AsUnknown)
 
@@ -387,6 +397,7 @@ class EnumGeneratorTest {
             ])
             string SomeEnum
         """.asSmithyModel()
+            .let { ModelTransformer.create().changeStringEnumsToEnumShapes(it, true) }
         val variant3AsVariant3 = "SomeEnum::Variant3"
         expectMatchExpressionCompiles(modelV2, "test#SomeEnum", variant3AsVariant3)
     }

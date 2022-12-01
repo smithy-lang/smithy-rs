@@ -360,7 +360,10 @@ open class ServerCodegenVisitor(
      */
     override fun stringShape(shape: StringShape) {
         if (shape.hasTrait<EnumTrait>()) {
-            throw CodegenException("Unnamed @enum shapes are unsupported: $shape")
+            throw CodegenException(
+                "Code generation has failed because this unnamed @enum could not be converted to an enum shape: $shape." +
+                    "For more info, look above at the logs from awslabs/smithy.",
+            )
         }
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")

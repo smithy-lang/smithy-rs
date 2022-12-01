@@ -66,7 +66,8 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     is MapShape -> this.hasTrait<LengthTrait>()
-    is StringShape -> this is EnumShape || this.hasTrait<LengthTrait>()
+    is EnumShape -> true
+    is StringShape -> this.hasTrait<LengthTrait>()
     else -> false
 }
 
