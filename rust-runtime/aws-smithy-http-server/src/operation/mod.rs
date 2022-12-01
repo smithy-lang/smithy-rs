@@ -50,7 +50,7 @@
 //! The [`Handler`] trait is implemented by all async functions which accept [`OperationShape::Input`] as their first
 //! argument, the remaining arguments implement [`FromParts`](crate::request::FromParts), and return either
 //! [`OperationShape::Output`] when [`OperationShape::Error`] is [`Infallible`](std::convert::Infallible) or
-//! [`Result`]<[`OperationShape::Output`],[`OperationShape::Error`]>. The following are examples of closures which
+//! [`Result`]<[`OperationShape::Output`],[`OperationShape::Error`]>. The following are examples of async functions which
 //! implement [`Handler`]:
 //!
 //! ```rust,no_run
