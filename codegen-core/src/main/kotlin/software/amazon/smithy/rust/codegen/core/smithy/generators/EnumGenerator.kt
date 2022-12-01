@@ -179,7 +179,7 @@ open class EnumGenerator(
             }
 
             rust("/// Returns all the `&str` values of the enum members.")
-            rustBlock("pub fn $Values() -> &'static [&'static str]") {
+            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
                 withBlock("&[", "]") {
                     val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
                     write(memberList)

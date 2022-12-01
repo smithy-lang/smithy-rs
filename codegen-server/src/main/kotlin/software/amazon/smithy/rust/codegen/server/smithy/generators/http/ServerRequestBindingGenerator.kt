@@ -75,7 +75,9 @@ class ServerRequestBindingGenerator(
 class ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUnconstrainedMapHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
     HttpBindingCustomization() {
     override fun section(section: HttpBindingSection): Writable = when (section) {
-        is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders -> emptySection
+        is HttpBindingSection.BeforeRenderingHeaderValue,
+        is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
+        -> emptySection
         is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders -> writable {
             if (section.memberShape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.unconstrainedShapeSymbolProvider)) {
                 rust(

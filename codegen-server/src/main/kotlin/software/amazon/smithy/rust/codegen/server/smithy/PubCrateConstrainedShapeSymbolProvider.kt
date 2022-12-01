@@ -16,13 +16,16 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.smithy.Constrained
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
 import software.amazon.smithy.rust.codegen.core.smithy.handleRustBoxing
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -68,13 +71,17 @@ class PubCrateConstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape is MapShape)
 
         val name = constrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
-        val namespace = "crate::${Constrained.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
-        val rustType = RustType.Opaque(name, namespace)
+        val module = RustModule.new(
+            RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
+            visibility = Visibility.PUBCRATE,
+            parent = ConstrainedModule,
+            inline = true,
+        )
+        val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
         return Symbol.builder()
             .rustType(rustType)
             .name(rustType.name)
-            .namespace(rustType.namespace, "::")
-            .definitionFile(Constrained.filename)
+            .locatedIn(module)
             .build()
     }
 
@@ -88,6 +95,7 @@ class PubCrateConstrainedShapeSymbolProvider(
             is CollectionShape, is MapShape -> {
                 constrainedSymbolForCollectionOrMapShape(shape)
             }
+
             is MemberShape -> {
                 require(model.expectShape(shape.container).isStructureShape) {
                     "This arm is only exercised by `ServerBuilderGenerator`"
@@ -100,14 +108,21 @@ class PubCrateConstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 } else {
                     val targetSymbol = this.toSymbol(targetShape)
-                    // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex, base.config().nullabilityCheckMode)
+                    // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                    handleOptionality(
+                        handleRustBoxing(targetSymbol, shape),
+                        shape,
+                        nullableIndex,
+                        base.config().nullabilityCheckMode,
+                    )
                 }
             }
+
             is StructureShape, is UnionShape -> {
                 // Structure shapes and union shapes always generate a [RustType.Opaque] constrained type.
                 base.toSymbol(shape)
             }
+
             else -> {
                 check(shape is SimpleShape)
                 // The rest of the shape types are simple shapes, which are impossible to be transitively but not

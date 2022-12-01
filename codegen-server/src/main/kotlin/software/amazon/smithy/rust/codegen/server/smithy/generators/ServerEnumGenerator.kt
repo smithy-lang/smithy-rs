@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -41,8 +42,8 @@ open class ServerEnumGenerator(
     )
 
     override fun renderFromForStr() {
-        writer.withModule(
-            RustModule.public(constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()),
+        writer.withInlineModule(
+            constraintViolationSymbol.module() as RustModule.LeafModule,
         ) {
             rustTemplate(
                 """

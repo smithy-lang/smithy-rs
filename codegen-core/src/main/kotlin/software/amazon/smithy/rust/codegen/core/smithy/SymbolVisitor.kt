@@ -38,6 +38,7 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
@@ -68,24 +69,6 @@ data class SymbolVisitorConfig(
     val renameExceptions: Boolean,
     val nullabilityCheckMode: CheckMode,
 )
-
-/**
- * Container type for the file a symbol should be written to
- *
- * Downstream code uses symbol location to determine which file to use acquiring a writer
- */
-data class SymbolLocation(val namespace: String) {
-    val filename = "$namespace.rs"
-}
-
-val Models = SymbolLocation(ModelsModule.name)
-val Errors = SymbolLocation(ErrorsModule.name)
-val Operations = SymbolLocation(OperationsModule.name)
-val Serializers = SymbolLocation("serializer")
-val Inputs = SymbolLocation(InputsModule.name)
-val Outputs = SymbolLocation(OutputsModule.name)
-val Unconstrained = SymbolLocation("unconstrained")
-val Constrained = SymbolLocation("constrained")
 
 /**
  * Make the Rust type of a symbol optional (hold `Option<T>`)
@@ -152,15 +135,16 @@ fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
 }
 
 /** Set the symbolLocation for this symbol builder */
-fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
+fun Symbol.Builder.locatedIn(rustModule: RustModule.LeafModule): Symbol.Builder {
     val currentRustType = this.build().rustType()
     check(currentRustType is RustType.Opaque) {
         "Only `Opaque` can have their namespace updated"
     }
-    val newRustType = currentRustType.copy(namespace = "crate::${symbolLocation.namespace}")
-    return this.definitionFile("src/${symbolLocation.filename}")
-        .namespace("crate::${symbolLocation.namespace}", "::")
+    val newRustType = currentRustType.copy(namespace = rustModule.fullyQualifiedPath())
+    return this.definitionFile(rustModule.definitionFile())
+        .namespace(rustModule.fullyQualifiedPath(), "::")
         .rustType(newRustType)
+        .module(rustModule)
 }
 
 /**
@@ -273,7 +257,7 @@ open class SymbolVisitor(
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun enumShape(shape: EnumShape): Symbol {
         val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-        return symbolBuilder(shape, rustType).locatedIn(Models).build()
+        return symbolBuilder(shape, rustType).locatedIn(ModelsModule).build()
     }
     override fun stringShape(shape: StringShape): Symbol = simpleShape(shape)
 
@@ -322,7 +306,7 @@ open class SymbolVisitor(
                     .replaceFirstChar { it.uppercase() },
             ),
         )
-            .locatedIn(Operations)
+            .locatedIn(OperationsModule)
             .build()
     }
 
@@ -343,23 +327,23 @@ open class SymbolVisitor(
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))
         return when {
-            isError -> builder.locatedIn(Errors)
-            isInput -> builder.locatedIn(Inputs)
-            isOutput -> builder.locatedIn(Outputs)
-            else -> builder.locatedIn(Models)
+            isError -> builder.locatedIn(ErrorsModule)
+            isInput -> builder.locatedIn(InputsModule)
+            isOutput -> builder.locatedIn(OutputsModule)
+            else -> builder.locatedIn(ModelsModule)
         }.build()
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
         val name = shape.contextName(serviceShape).toPascalCase()
-        val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
+        val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(ModelsModule)
 
         return builder.build()
     }
 
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
-        // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>.
+        // Handle boxing first, so we end up with Option<Box<_>>, not Box<Option<_>>.
         return handleOptionality(
             handleRustBoxing(toSymbol(target), shape),
             shape,
@@ -396,13 +380,15 @@ fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
 fun handleOptionality(symbol: Symbol, member: MemberShape, nullableIndex: NullableIndex, nullabilityCheckMode: CheckMode): Symbol =
     symbol.letIf(nullableIndex.isMemberNullable(member, nullabilityCheckMode)) { symbol.makeOptional() }
 
-// TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
+private const val RUST_MODULE_KEY = "rustmodule"
 private const val SHAPE_KEY = "shape"
 private const val SYMBOL_DEFAULT = "symboldefault"
 private const val RENAMED_FROM_KEY = "renamedfrom"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
+fun Symbol.Builder.module(module: RustModule.LeafModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
+fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)
 
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
     return this.putProperty(RENAMED_FROM_KEY, name)

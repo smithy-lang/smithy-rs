@@ -16,8 +16,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCusto
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
-import kotlin.io.path.createDirectory
-import kotlin.io.path.writeText
 
 class CodegenVisitorTest {
     @Test
@@ -49,8 +47,6 @@ class CodegenVisitorTest {
             }
         """.asSmithyModel(smithyVersion = "2.0")
         val (ctx, testDir) = generatePluginContext(model)
-        testDir.resolve("src").createDirectory()
-        testDir.resolve("src/main.rs").writeText("fn main() {}")
         val codegenDecorator =
             CombinedCodegenDecorator.fromClasspath(
                 ctx,

@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.Std
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -144,8 +145,8 @@ class ErrorGenerator(
                     if (it.shouldRedact(model)) {
                         write("""write!(f, ": {}", $REDACTION)?;""")
                     } else {
-                        ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
-                            write("""write!(f, ": {}", $field)?;""")
+                        ifSet(it, symbolProvider.toSymbol(it), ValueExpression.Reference("&self.message")) { field ->
+                            write("""write!(f, ": {}", ${field.asRef()})?;""")
                         }
                     }
                 }
