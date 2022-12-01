@@ -218,6 +218,8 @@ where
 }
 
 /// An interface to convert a representation of a Smithy operation into a [`Route`].
+///
+/// See the [module](crate::operation) documentation for more information.
 pub trait Upgradable<Protocol, Operation, Exts, B, Plugin> {
     /// Upgrade the representation of a Smithy operation to a [`Route`].
     fn upgrade(self, plugin: &Plugin) -> Route<B>;
