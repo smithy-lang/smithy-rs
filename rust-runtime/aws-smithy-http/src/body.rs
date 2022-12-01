@@ -50,6 +50,7 @@ impl Debug for SdkBody {
     }
 }
 
+/// The primary [`Body`] returned by the generated `smithy-rs` service.
 pub type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
 
 pin_project! {
