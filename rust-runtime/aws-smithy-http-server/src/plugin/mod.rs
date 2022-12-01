@@ -71,7 +71,9 @@ pub use stack::PluginStack;
 ///
 /// The generics `Protocol` and `Op` allow the behavior to be parameterized.
 pub trait Plugin<Protocol, Op, S, L> {
+    /// The type of the new [`Service`](tower::Service).
     type Service;
+    /// The type of the new [`Layer`](tower::Layer).
     type Layer;
 
     /// Maps an [`Operation`] to another.
