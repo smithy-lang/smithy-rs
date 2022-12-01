@@ -346,7 +346,7 @@ open class SymbolVisitor(
 
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
-        // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>.
+        // Handle boxing first, so we end up with Option<Box<_>>, not Box<Option<_>>.
         return handleOptionality(
             handleRustBoxing(toSymbol(target), shape),
             shape,

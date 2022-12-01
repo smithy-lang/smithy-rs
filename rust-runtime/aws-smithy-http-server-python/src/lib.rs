@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Rust/Python bindings, runtime and utilities.
 //!
 //! This crates implements all the generic code needed to start and manage
