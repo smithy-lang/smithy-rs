@@ -21,9 +21,7 @@ pub async fn get_storage_lambda(
     _state: Extension<Arc<State>>,
     context: Context,
 ) -> Result<output::GetStorageOutput, error::GetStorageError> {
-    tracing::debug!("attempting to authenticate storage user");
-
-    tracing::debug!(request_id = %context.request_id);
+    tracing::debug!(request_id = %context.request_id, "attempting to authenticate storage user");
 
     // We currently only support Ash and he has nothing stored
     if !(input.user == "ash" && input.passcode == "pikachu123") {
