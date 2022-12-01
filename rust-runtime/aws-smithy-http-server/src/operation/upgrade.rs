@@ -273,11 +273,6 @@ where
 
 /// A marker struct indicating an [`Operation`] has not been set in a builder.
 ///
-/// This does _not_ implement [`Upgradable`] purposely.
-pub struct MissingOperation;
-
-/// A marker struct indicating an [`Operation`] has not been set in a builder.
-///
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
 pub struct FailOnMissingOperation;
 
