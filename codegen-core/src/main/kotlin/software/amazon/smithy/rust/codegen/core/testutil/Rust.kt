@@ -87,7 +87,8 @@ object TestWorkspace {
             )
             newProject.resolve("rust-toolchain.toml").writeText(
                 // help rust select the right version when we run cargo test
-                // TODO(cleanup): load this from the msrv property using a method like we do for runtime crate versions
+                // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
+                //  method as we do for runtime crate versions
                 "[toolchain]\nchannel = \"1.62.1\"\n",
             )
             // ensure there at least an empty lib.rs file to avoid broken crates

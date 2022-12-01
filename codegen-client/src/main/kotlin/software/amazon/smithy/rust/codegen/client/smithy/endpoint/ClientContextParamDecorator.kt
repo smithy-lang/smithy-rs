@@ -89,7 +89,7 @@ internal class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization
                     docsOrFallback(param.docs)
                     rust(
                         """
-                        pub fn set_${param.name}(mut self, ${param.name}: Option<#T>) -> Self {
+                        pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
                             self.${param.name} = ${param.name};
                             self
                         }
