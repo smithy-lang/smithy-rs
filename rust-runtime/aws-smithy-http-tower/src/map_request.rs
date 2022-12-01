@@ -11,7 +11,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
-use tracing::{debug_span, Instrument};
+use tracing::{debug_span, instrument::Instrumented, Instrument};
 
 #[derive(Debug)]
 pub struct AsyncMapRequestLayer<M> {
@@ -62,19 +62,23 @@ where
     }
 
     fn call(&mut self, req: operation::Request) -> Self::Future {
-        let mut inner = self.inner.clone();
-        let future = self.mapper.apply(req);
         let span = debug_span!("async_map_request", name = tracing::field::Empty);
         if let Some(name) = self.mapper.name() {
             span.record("name", name);
         }
-        let future = future.instrument(span);
-        Box::pin(async move {
-            let mapped_request = future
-                .await
-                .map_err(|e| SendOperationError::RequestConstructionError(e.into()))?;
-            inner.call(mapped_request).await
-        })
+
+        let mut inner = self.inner.clone();
+        let future = self.mapper.apply(req);
+        Box::pin(
+            async move {
+                let mapped_request = future
+                    .instrument(debug_span!("apply"))
+                    .await
+                    .map_err(|e| SendOperationError::RequestConstructionError(e.into()))?;
+                inner.call(mapped_request).await
+            }
+            .instrument(span),
+        )
     }
 }
 
@@ -108,7 +112,7 @@ pin_project! {
     pub enum MapRequestFuture<F, E> {
         Inner {
             #[pin]
-            inner: F
+            inner: Instrumented<F>
         },
         Ready { inner: Option<E> },
     }
@@ -137,12 +141,13 @@ pub struct MapRequestService<S, M> {
 
 impl<S, M> Service<operation::Request> for MapRequestService<S, M>
 where
-    S: Service<operation::Request, Error = SendOperationError>,
-    M: MapRequest,
+    S: Service<operation::Request, Error = SendOperationError> + Clone + Send + 'static,
+    M: MapRequest + Clone + Send + 'static,
+    S::Future: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
-    type Future = MapRequestFuture<S::Future, S::Error>;
+    type Future = BoxFuture<Result<S::Response, S::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -153,13 +158,16 @@ where
         if let Some(name) = self.mapper.name() {
             span.record("name", name);
         }
-        let mapper = &mut self.mapper;
-        let result = span.in_scope(|| mapper.apply(req));
-        match result.map_err(|e| SendOperationError::RequestConstructionError(e.into())) {
-            Err(e) => MapRequestFuture::Ready { inner: Some(e) },
-            Ok(req) => MapRequestFuture::Inner {
-                inner: self.inner.call(req),
-            },
-        }
+
+        let mut this = self.clone();
+        Box::pin(
+            async move {
+                let req = debug_span!("apply")
+                    .in_scope(|| this.mapper.apply(req))
+                    .map_err(|e| SendOperationError::RequestConstructionError(e.into()))?;
+                this.inner.call(req).await
+            }
+            .instrument(span),
+        )
     }
 }
