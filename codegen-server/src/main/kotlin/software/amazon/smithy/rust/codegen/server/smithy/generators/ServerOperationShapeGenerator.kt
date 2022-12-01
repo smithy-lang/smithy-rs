@@ -55,7 +55,7 @@ class ServerOperationShapeGenerator(
             //! ## Use as Marker Structs
             //!
             //! The [plugin system](#{SmithyHttpServer}::plugin) also makes use of these
-            //! [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html#zero-sized-types-zsts) (ZSTs) to
+            //! [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html##zero-sized-types-zsts) (ZSTs) to
             //! parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. The traits, such as
             //! [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape) can be used to provide
             //! operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
