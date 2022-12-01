@@ -68,14 +68,13 @@ pub enum PercentEncodingMode {
 /// <https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html>
 ///
 /// URI path normalization is performed based on <https://www.rfc-editor.org/rfc/rfc3986>.
-/// The exception to this is that we do not normalize URI paths for requests to Amazon S3.
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum UriPathNormalizationMode {
     /// We normalize URI paths according to the RFC
     Enabled,
 
-    /// We do not normalize URI paths
+    /// The exception to this is that we do not normalize URI paths for requests to Amazon S3
     Disabled,
 }
 
