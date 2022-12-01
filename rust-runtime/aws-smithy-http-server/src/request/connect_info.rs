@@ -34,7 +34,7 @@ impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
     }
 }
 
-/// Extractor for getting connection information produced by a `Connected`.
+/// Extractor for getting connection information produced by a [`Connected`](crate::routing::Connected).
 ///
 /// Note this extractor requires the existence of [`ConnectInfo<T>`] in the [`http::Extensions`]. This is
 /// automatically inserted by the [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
