@@ -40,7 +40,10 @@ impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
 /// automatically inserted by the [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 /// middleware, which can be applied using the `into_make_service_with_connect_info` method on your generated service.
 #[derive(Clone, Debug)]
-pub struct ConnectInfo<T>(pub T);
+pub struct ConnectInfo<T>(
+    /// The type produced via [`Connected`](crate::routing::Connected).
+    pub T,
+);
 
 impl<P, T> FromParts<P> for ConnectInfo<T>
 where
