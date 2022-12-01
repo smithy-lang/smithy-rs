@@ -6,12 +6,32 @@
 // This program is exported as a binary named `pokemon-service-lambda`.
 use std::sync::Arc;
 
-use aws_smithy_http_server::{plugin::PluginPipeline, routing::LambdaHandler, AddExtensionLayer};
-use pokemon_service::{
-    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, get_storage,
-    plugin::PrintExt, setup_tracing, State,
+use aws_smithy_http_server::{
+    plugin::PluginPipeline, request::lambda::Context, routing::LambdaHandler, AddExtensionLayer, Extension,
 };
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service::{
+    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, plugin::PrintExt,
+    setup_tracing, State,
+};
+use pokemon_service_server_sdk::{error, input, output, PokemonService};
+
+/// Retrieves the user's storage and records the .
+pub async fn get_storage_lambda(
+    input: input::GetStorageInput,
+    _state: Extension<Arc<State>>,
+    context: Context,
+) -> Result<output::GetStorageOutput, error::GetStorageError> {
+    tracing::debug!("attempting to authenticate storage user");
+
+    tracing::debug!(request_id = %context.request_id);
+
+    // We currently only support Ash and he has nothing stored
+    if !(input.user == "ash" && input.passcode == "pikachu123") {
+        tracing::debug!("authentication failed");
+        return Err(error::GetStorageError::NotAuthorized(error::NotAuthorized {}));
+    }
+    Ok(output::GetStorageOutput { collection: vec![] })
+}
 
 #[tokio::main]
 pub async fn main() {
@@ -23,7 +43,7 @@ pub async fn main() {
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
         .get_pokemon_species(get_pokemon_species)
-        .get_storage(get_storage)
+        .get_storage(get_storage_lambda)
         .get_server_statistics(get_server_statistics)
         .capture_pokemon(capture_pokemon)
         .do_nothing(do_nothing)
