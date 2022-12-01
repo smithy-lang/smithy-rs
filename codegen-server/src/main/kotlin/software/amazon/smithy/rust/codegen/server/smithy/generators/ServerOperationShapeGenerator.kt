@@ -62,7 +62,7 @@ class ServerOperationShapeGenerator(
             "SmithyHttpServer" to
                 ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
-            "Handler" to DocHandlerGenerator(operations[0], "//!", codegenContext)::render,
+            "Handler" to DocHandlerGenerator(operations[0], "//!", "handler", codegenContext)::render,
         )
         for (operation in operations) {
             ServerOperationGenerator(codegenContext, operation).render(writer)
