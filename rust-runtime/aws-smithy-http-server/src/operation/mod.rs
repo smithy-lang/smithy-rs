@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! # Operations.
-//!
 //! The shape of a [Smithy operation] is modelled by the [`OperationShape`] trait. Its associated types
 //! [`OperationShape::Input`], [`OperationShape::Output`], and [`OperationShape::Error`] map to the structures
 //! representing the Smithy inputs, outputs, and errors respectively. When an operation error is not specified
