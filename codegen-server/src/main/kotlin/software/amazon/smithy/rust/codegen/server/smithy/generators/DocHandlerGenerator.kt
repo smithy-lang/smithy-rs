@@ -18,39 +18,38 @@ import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
 Generates a stub for use within documentation.
  */
-class DocHandlerGenerator(private val operation: OperationShape, private val commentToken: String = "//", codegenContext: CodegenContext) {
+class DocHandlerGenerator(private val operation: OperationShape, private val commentToken: String = "//", private val handlerName: String, codegenContext: CodegenContext) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    private val crateName = codegenContext.settings.moduleName.toSnakeCase()
+    private val crateName = codegenContext.moduleUseName()
 
     /**
      * Returns the function signature for an operation handler implementation. Used in the documentation.
      */
-    private fun OperationShape.docSignature(): Writable {
-        val inputSymbol = symbolProvider.toSymbol(inputShape(model))
-        val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
+    fun docSignature(): Writable {
+        val inputSymbol = symbolProvider.toSymbol(operation.inputShape(model))
+        val outputSymbol = symbolProvider.toSymbol(operation.outputShape(model))
+        val errorSymbol = operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
 
-        val outputT = if (errors.isEmpty()) {
+        val outputT = if (operation.errors.isEmpty()) {
             outputSymbol.name
         } else {
             "Result<${outputSymbol.name}, ${errorSymbol.name}>"
         }
 
         return writable {
-            if (!errors.isEmpty()) {
+            if (operation.errors.isNotEmpty()) {
                 rust("$commentToken ## use $crateName::${ErrorsModule.name}::${errorSymbol.name};")
             }
             rust(
                 """
                 $commentToken ## use $crateName::${InputsModule.name}::${inputSymbol.name};
                 $commentToken ## use $crateName::${OutputsModule.name}::${outputSymbol.name};
-                $commentToken async fn handler(input: ${inputSymbol.name}) -> $outputT {
+                $commentToken async fn $handlerName(input: ${inputSymbol.name}) -> $outputT {
                 $commentToken     todo!()
                 $commentToken }
                 """.trimIndent(),
@@ -59,6 +58,6 @@ class DocHandlerGenerator(private val operation: OperationShape, private val com
     }
 
     fun render(writer: RustWriter) {
-        operation.docSignature()(writer)
+        docSignature()(writer)
     }
 }

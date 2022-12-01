@@ -198,21 +198,14 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
      * Renders a `check_length` function to validate the string matches the
      * required length indicated by the `@length` trait.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
-        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
-            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
-        } else if (lengthTrait.min.isPresent) {
-            "${lengthTrait.min.get()} <= length"
-        } else {
-            "length <= ${lengthTrait.max.get()}"
-        }
-
         rust(
             """
             fn check_length(string: &str) -> Result<(), $constraintViolation> {
                 let length = string.chars().count();
 
-                if $condition {
+                if ${lengthTrait.rustCondition("length")} {
                     Ok(())
                 } else {
                     Err($constraintViolation::Length(length))
