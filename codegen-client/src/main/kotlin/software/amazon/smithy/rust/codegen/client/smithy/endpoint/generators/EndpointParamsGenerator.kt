@@ -1,13 +1,16 @@
 /*
- *  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *  SPDX-License-Identifier: Apache-2.0
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.endpoint
+package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
 import software.amazon.smithy.rulesengine.language.eval.Value
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -35,7 +38,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1927): When endpoint resolution is implemented, remove doc-hidden
 /**
  * The module containing all endpoint resolution machinery. Module layout:
  * ```
@@ -50,7 +52,20 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
  * ```
  */
 val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functionality")
-    .copy(rustMetadata = RustMetadata(additionalAttributes = listOf(Attribute.DocHidden), visibility = Visibility.PUBLIC))
+
+// internals contains the actual resolver function
+val EndpointsImpl = RustModule.private("internals", "Endpoints internals", parent = EndpointsModule)
+
+val EndpointTests = RustModule.new(
+    "test",
+    visibility = Visibility.PRIVATE,
+    documentation = "Generated endpoint tests",
+    parent = EndpointsModule,
+    inline = true,
+).copy(rustMetadata = RustMetadata.TestModule)
+
+// stdlib is isolated because it contains code generated names of stdlib functions–we want to ensure we avoid clashing
+val EndpointsStdLib = RustModule.private("endpoint_lib", "Endpoints standard library functions")
 
 /** Endpoint Parameters generator.
  *
@@ -110,7 +125,7 @@ val EndpointsModule = RustModule.public("endpoint", "Endpoint resolution functio
  *  ```
  */
 
-class EndpointParamsGenerator(private val parameters: Parameters) {
+internal class EndpointParamsGenerator(private val parameters: Parameters) {
 
     companion object {
         fun memberName(parameterName: String) = Identifier.of(parameterName).rustName()

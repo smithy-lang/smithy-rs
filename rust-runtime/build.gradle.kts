@@ -15,7 +15,7 @@ version = "0.0.3"
 
 tasks.jar {
     from("./") {
-        include("inlineable/src/*.rs")
+        include("inlineable/src/")
         include("inlineable/Cargo.toml")
     }
 }
