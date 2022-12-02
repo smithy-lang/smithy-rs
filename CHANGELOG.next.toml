@@ -505,7 +505,7 @@ author = "LukeMathWalker"
 
 [[smithy-rs]]
 message = """
-# Plugins/New Service Builder API
+### Plugins/New Service Builder API
 
 The `Router` struct has been replaced by a new `Service` located at the root of the generated crate. Its name coincides
 with the same name as the Smithy service you are generating.
@@ -547,7 +547,7 @@ let app = PokemonService::builder_with_plugins(plugins)
 
 See the `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/bin` folder for various working examples.
 
-# Public `FromParts` trait
+### Public `FromParts` trait
 
 Previously, we only supported one
 [`Extension`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/struct.Extension.html) as an
@@ -570,7 +570,7 @@ fn get_pokemon_species(input: GetPokemonSpeciesInput, state: Extension<State>, a
 [`FromParts` documentation](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md) has been
 added.
 
-# New Documentation
+### New Documentation
 
 New sections to the
 [server side of the book](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/overview.md)
@@ -582,7 +582,7 @@ These include:
 - [Accessing Un-modelled Data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
 - [Anatomy of a Service](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/anatomy.md)
 
-# Deprecations
+### Deprecations
 
 The existing service builder infrastructure, `OperationRegistryBuilder`/`OperationRegistry`/`Router`, is now
 deprecated. Customers should migrate to the newer scheme described above. The deprecated types will be removed in a
