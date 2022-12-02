@@ -161,9 +161,9 @@ private class AwsFluentClientExtensions(types: Types) {
                 ///
                 /// ## Panics
                 ///
-                /// - This method will panic if the `conf` is missing an async sleep implementation. If you experience this panic, set
+                /// - This method will panic if the `sdk_config` is missing an async sleep implementation. If you experience this panic, set
                 ///     the `sleep_impl` on the Config passed into this function to fix it.
-                /// - This method will panic if the `conf` is missing an HTTP connector. If you experience this panic, set the
+                /// - This method will panic if the `sdk_config` is missing an HTTP connector. If you experience this panic, set the
                 ///     `http_connector` on the Config passed into this function to fix it.
                 pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
                     Self::from_conf(sdk_config.into())
@@ -171,7 +171,7 @@ private class AwsFluentClientExtensions(types: Types) {
 
                 /// Creates a new client from the service [`Config`](crate::Config).
                 ///
-                /// ###### Panics
+                /// ## Panics
                 ///
                 /// - This method will panic if the `conf` is missing an async sleep implementation. If you experience this panic, set
                 ///     the `sleep_impl` on the Config passed into this function to fix it.
