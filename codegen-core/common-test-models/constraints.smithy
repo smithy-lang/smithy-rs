@@ -21,6 +21,7 @@ service ConstraintsService {
         QueryParamsTargetingMapOfLengthStringOperation,
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
+        QueryParamsTargetingMapOfLengthListOfPatternStringOperation,
         QueryParamsTargetingMapOfListOfEnumStringOperation,
 
         QueryParamsTargetingMapOfPatternStringOperation,
@@ -98,6 +99,13 @@ operation QueryParamsTargetingMapOfListOfLengthStringOperation {
 operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-length-list-of-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfLengthListOfPatternStringOperation {
+    input: QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -225,8 +233,16 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     // @httpHeader("X-Length-Set")
     // lengthStringSetHeader: SetOfLengthString,
 
-    @httpHeader("X-Length-List")
-    lengthStringListHeader: ListOfLengthString,
+    @httpHeader("X-List-Length-String")
+    listLengthStringHeader: ListOfLengthString,
+
+    @httpHeader("X-Length-List-Pattern-String")
+    lengthListPatternStringHeader: LengthListOfPatternString,
+
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // @httpHeader("X-Length-Set-Pattern-String")
+    // lengthSetPatternStringHeader: LengthSetOfPatternString,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
@@ -278,6 +294,9 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @httpQuery("lengthStringList")
     lengthStringListQuery: ListOfLengthString,
+
+    @httpQuery("lengthListPatternString")
+    lengthListPatternStringQuery: LengthListOfPatternString,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
@@ -364,6 +383,11 @@ structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
 structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfSetOfLengthString: MapOfSetOfLengthString
+}
+
+structure QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthListOfPatternString: MapOfLengthListOfPatternString
 }
 
 structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
@@ -501,6 +525,11 @@ structure ConA {
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // setOfLengthPatternString: SetOfLengthPatternString,
+
+    lengthListOfPatternString: LengthListOfPatternString,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // lengthSetOfPatternString: LengthSetOfPatternString,
 }
 
 map MapOfLengthString {
@@ -559,6 +588,11 @@ map MapOfSetOfLengthString {
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // value: SetOfLengthString,
     value: ListOfLengthString
+}
+
+map MapOfLengthListOfPatternString {
+    key: PatternString,
+    value: LengthListOfPatternString
 }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
@@ -706,6 +740,11 @@ set SetOfLengthPatternString {
     member: LengthPatternString
 }
 
+@length(min: 5, max: 9)
+set LengthSetOfPatternString {
+    member: PatternString
+}
+
 list ListOfLengthString {
     member: LengthString
 }
@@ -760,6 +799,11 @@ list ListOfPatternString {
 
 list ListOfLengthPatternString {
     member: LengthPatternString
+}
+
+@length(min: 12, max: 39)
+list LengthListOfPatternString {
+    member: PatternString
 }
 
 structure ConB {

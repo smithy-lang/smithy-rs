@@ -39,7 +39,7 @@ class ServerServiceGeneratorV2(
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    val crateName = codegenContext.settings.moduleName.toSnakeCase()
+    private val crateName = codegenContext.moduleUseName()
 
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
@@ -156,7 +156,7 @@ class ServerServiceGeneratorV2(
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "Handler" to DocHandlerGenerator(operationShape, "///", codegenContext)::render,
+                "Handler" to DocHandlerGenerator(codegenContext, operationShape, "handler", "///")::render,
                 *codegenScope,
             )
 
@@ -256,7 +256,7 @@ class ServerServiceGeneratorV2(
         rustTemplate(
             """
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
-            /// Operations without a handler default to returning 500s to the caller.
+            /// Operations without a handler default to returning 500 Internal Server Error to the caller.
             ///
             /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
             /// not have a registered handler.
@@ -343,6 +343,8 @@ class ServerServiceGeneratorV2(
 
         rustTemplate(
             """
+            ///
+            /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
@@ -377,9 +379,10 @@ class ServerServiceGeneratorV2(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
+
                 /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
-                pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::request::connect_info::IntoMakeServiceWithConnectInfo<Self, C> {
-                    #{SmithyHttpServer}::request::connect_info::IntoMakeServiceWithConnectInfo::new(self)
+                pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
+                    #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
                 }
 
                 /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
@@ -394,7 +397,7 @@ class ServerServiceGeneratorV2(
 
                 /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
                 ///
-                /// This has the effect of erasing all types accumulated via [`layer`].
+                /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
                 pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
                     S: #{Tower}::Service<
@@ -483,6 +486,7 @@ class ServerServiceGeneratorV2(
             "MissingOperationsError" to missingOperationsError(),
             "RequestSpecs" to requestSpecsModule(),
             "Struct" to serviceStruct(),
+            *codegenScope,
         )
     }
 }

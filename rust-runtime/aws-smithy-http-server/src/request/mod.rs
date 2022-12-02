@@ -46,14 +46,31 @@ use futures_util::{
     future::{try_join, MapErr, MapOk, TryJoin},
     TryFutureExt,
 };
-use http::{request::Parts, Extensions, HeaderMap, Request, Uri};
+use http::{request::Parts, Extensions, HeaderMap, Request, StatusCode, Uri};
 
-use crate::{rejection::any_rejections, response::IntoResponse};
+use crate::{
+    body::{empty, BoxBody},
+    rejection::any_rejections,
+    response::IntoResponse,
+};
 
 pub mod connect_info;
 pub mod extension;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
+pub mod lambda;
+
+fn internal_server_error() -> http::Response<BoxBody> {
+    let mut response = http::Response::new(empty());
+    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    response
+}
 
 #[doc(hidden)]
+#[deprecated(
+    since = "0.52.0",
+    note = "This is not used by the new service builder. We use the `http::Parts` struct directly."
+)]
 #[derive(Debug)]
 pub struct RequestParts<B> {
     uri: Uri,
@@ -62,6 +79,7 @@ pub struct RequestParts<B> {
     body: Option<B>,
 }
 
+#[allow(deprecated)]
 impl<B> RequestParts<B> {
     /// Create a new `RequestParts`.
     ///
@@ -119,9 +137,10 @@ impl<B> RequestParts<B> {
     }
 }
 
-// NOTE: We cannot reference `FromRequest` here, as a point of contrast, as it's `doc(hidden)`.
-/// Provides a protocol aware extraction from a requests [`Parts`].
+/// Provides a protocol aware extraction from a [`Request`]. This borrows the [`Parts`], in contrast to
+/// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
+    /// The type of the extraction failures.
     type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.
@@ -174,9 +193,14 @@ impl_from_parts!(Seven, A, B, C, D, E, F, G);
 impl_from_parts!(Eight, A, B, C, D, E, F, G, H);
 
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
-/// [`Request`], in contrast to [`FromParts`].
+/// [`Request`], including the body, in contrast to [`FromParts`] which borrows the [`Parts`].
+///
+/// This should not be implemented by hand. Code generation should implement this for your operations input. To extract
+/// items from a HTTP request [`FromParts`] should be used.
 pub trait FromRequest<Protocol, B>: Sized {
+    /// The type of the extraction failures.
     type Rejection: IntoResponse<Protocol>;
+    /// The type of the extraction [`Future`].
     type Future: Future<Output = Result<Self, Self::Rejection>>;
 
     /// Extracts `self` from a [`Request`] asynchronously.

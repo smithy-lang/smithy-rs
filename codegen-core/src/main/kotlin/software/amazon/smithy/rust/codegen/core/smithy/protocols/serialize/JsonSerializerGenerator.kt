@@ -62,8 +62,8 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
         JsonSerializerSection("ServerError")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
-    data class BeforeIteratingOverMap(val shape: MapShape, val context: JsonSerializerGenerator.Context<MapShape>) :
-        JsonSerializerSection("BeforeIteratingOverMap")
+    data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: JsonSerializerGenerator.Context<Shape>) :
+        JsonSerializerSection("BeforeIteratingOverMapOrCollection")
 
     /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
     data class BeforeSerializingNonNullMember(val shape: Shape, val context: JsonSerializerGenerator.MemberContext) :
@@ -90,7 +90,7 @@ class JsonSerializerGenerator(
     private val jsonName: (MemberShape) -> String,
     private val customizations: List<JsonSerializerCustomization> = listOf(),
 ) : StructuredDataSerializerGenerator {
-    data class Context<T : Shape>(
+    data class Context<out T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
         val writerExpression: String,
         /** Expression representing the value to write to the JsonValueWriter */
@@ -455,6 +455,9 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
         val itemName = safeName("item")
+        for (customization in customizations) {
+            customization.section(JsonSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+        }
         rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
             serializeMember(MemberContext.collectionMember(context, itemName))
         }
@@ -464,7 +467,7 @@ class JsonSerializerGenerator(
         val keyName = safeName("key")
         val valueName = safeName("value")
         for (customization in customizations) {
-            customization.section(JsonSerializerSection.BeforeIteratingOverMap(context.shape, context))(
+            customization.section(JsonSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(
                 this,
             )
         }

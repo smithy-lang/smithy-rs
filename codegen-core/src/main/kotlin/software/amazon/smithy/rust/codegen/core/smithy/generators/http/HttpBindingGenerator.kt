@@ -590,7 +590,14 @@ class HttpBindingGenerator(
         renderErrorMessage: (String) -> Writable,
     ) {
         val loopVariable = ValueExpression.Reference(safeName("inner"))
-        rustBlock("for ${loopVariable.name} in ${value.asRef()}") {
+        val context = HeaderValueSerializationContext(value, shape)
+        for (customization in customizations) {
+            customization.section(
+                HttpBindingSection.BeforeRenderingHeaderValue(context),
+            )(this)
+        }
+
+        rustBlock("for ${loopVariable.name} in ${context.valueExpression.asRef()}") {
             this.renderHeaderValue(
                 headerName,
                 loopVariable,

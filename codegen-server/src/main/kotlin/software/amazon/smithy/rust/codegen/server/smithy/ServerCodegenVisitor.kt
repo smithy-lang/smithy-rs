@@ -46,6 +46,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedNumberGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
@@ -281,26 +284,47 @@ open class ServerCodegenVisitor(
     override fun setShape(shape: SetShape) = collectionShape(shape)
 
     private fun collectionShape(shape: CollectionShape) {
-        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
+        val renderUnconstrainedList =
+            shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
                 model,
                 codegenContext.symbolProvider,
             )
-        ) {
+        val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
+
+        if (renderUnconstrainedList) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for collection shape $shape")
-            rustCrate.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
-                rustCrate.withModule(ModelsModule) modelsModuleWriter@{
-                    UnconstrainedCollectionGenerator(
-                        codegenContext,
-                        this@unconstrainedModuleWriter,
-                        this@modelsModuleWriter,
-                        shape,
-                    ).render()
-                }
+            rustCrate.withModule(UnconstrainedModule) {
+                UnconstrainedCollectionGenerator(
+                    codegenContext,
+                    this,
+                    shape,
+                ).render()
             }
 
-            logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
-            rustCrate.withModule(ConstrainedModule) {
-                PubCrateConstrainedCollectionGenerator(codegenContext, this, shape).render()
+            if (!isDirectlyConstrained) {
+                logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
+                rustCrate.withModule(ConstrainedModule) {
+                    PubCrateConstrainedCollectionGenerator(codegenContext, this, shape).render()
+                }
+            }
+        }
+
+        val constraintsInfo = CollectionTraitInfo.fromShape(shape)
+        if (isDirectlyConstrained) {
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedCollectionGenerator(
+                    codegenContext,
+                    this,
+                    shape,
+                    constraintsInfo,
+                    if (renderUnconstrainedList) codegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape) else null,
+                ).render()
+            }
+        }
+
+        if (isDirectlyConstrained || renderUnconstrainedList) {
+            rustCrate.withModule(ModelsModule) {
+                CollectionConstraintViolationGenerator(codegenContext, this, shape, constraintsInfo).render()
             }
         }
     }
@@ -311,13 +335,15 @@ open class ServerCodegenVisitor(
                 model,
                 codegenContext.symbolProvider,
             )
+        val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
+
         if (renderUnconstrainedMap) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
             rustCrate.withModule(UnconstrainedModule) {
                 UnconstrainedMapGenerator(codegenContext, this, shape).render()
             }
 
-            if (!shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            if (!isDirectlyConstrained) {
                 logger.info("[rust-server-codegen] Generating a constrained type for map $shape")
                 rustCrate.withModule(ConstrainedModule) {
                     PubCrateConstrainedMapGenerator(codegenContext, this, shape).render()
@@ -325,7 +351,6 @@ open class ServerCodegenVisitor(
             }
         }
 
-        val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
         if (isDirectlyConstrained) {
             rustCrate.withModule(ModelsModule) {
                 ConstrainedMapGenerator(

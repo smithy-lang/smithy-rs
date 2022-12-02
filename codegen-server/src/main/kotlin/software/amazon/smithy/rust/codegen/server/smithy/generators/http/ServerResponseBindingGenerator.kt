@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -88,16 +89,18 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
     HttpBindingCustomization() {
     override fun section(section: HttpBindingSection): Writable = when (section) {
         is HttpBindingSection.BeforeRenderingHeaderValue -> writable {
-            if (workingWithPublicConstrainedWrapperTupleType(
-                    section.context.shape,
-                    codegenContext.model,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
-                )
-            ) {
-                if (section.context.shape is IntegerShape || section.context.shape is ShortShape || section.context.shape is LongShape || section.context.shape is ByteShape) {
-                    section.context.valueExpression =
-                        ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
-                }
+            val isIntegral = section.context.shape is ByteShape || section.context.shape is ShortShape || section.context.shape is IntegerShape || section.context.shape is LongShape
+            val isCollection = section.context.shape is CollectionShape
+
+            val workingWithPublicWrapper = workingWithPublicConstrainedWrapperTupleType(
+                section.context.shape,
+                codegenContext.model,
+                codegenContext.settings.codegenConfig.publicConstrainedTypes,
+            )
+
+            if (workingWithPublicWrapper && (isIntegral || isCollection)) {
+                section.context.valueExpression =
+                    ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
             }
         }
 
