@@ -5,6 +5,7 @@
 
 package aws.sdk
 
+import CrateSet
 import org.gradle.api.Project
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model

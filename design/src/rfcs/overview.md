@@ -32,4 +32,7 @@
 - [RFC-0020: Service Builder Improvements](./rfc0020_service_builder.md)
 - [RFC-0021: Dependency Versions](./rfc0021_dependency_versions.md)
 - [RFC-0022: Error Context and Compatibility](./rfc0022_error_context_and_compatibility.md)
-- [RFC-0023: SDK Credential Cache Type Safety](./rfc0023_sdk_credential_cache_type_safety.md)
+- [RFC-0023: Evolving the new service builder API](./rfc0023_refine_builder.md)
+- [RFC-0024: RequestID](./rfc0024_request_id.md)
+- [RFC-0025: Constraint traits](./rfc0025_constraint_traits.md)
+- [RFC-0026: SDK Credential Cache Type Safety](./rfc0026_sdk_credential_cache_type_safety.md)

@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVers
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.SmithyTypesPubUseGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
@@ -55,7 +55,6 @@ class RequiredCustomizations : RustCodegenDecorator<ClientProtocolGenerator, Cli
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
         baseCustomizations + CrateVersionGenerator() +
-            SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) +
             AllowLintsGenerator()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
@@ -64,6 +63,8 @@ class RequiredCustomizations : RustCodegenDecorator<ClientProtocolGenerator, Cli
 
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(rustCrate)
+
+        pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
     }
 
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =

@@ -10,12 +10,14 @@
 //! If, at a future point, this interface stabilizes it is a good candidate for extraction into a
 //! shared crate.
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
-use aws_smithy_json::deserialize::Error;
+use crate::endpoint_lib::partition::deser::deserialize_partitions;
+use aws_smithy_json::deserialize::error::DeserializeError;
 use regex::Regex;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Determine the AWS partition metadata for a given region
+#[derive(Default)]
 pub(crate) struct PartitionResolver {
     partitions: Vec<PartitionMetadata>,
 }
@@ -30,17 +32,40 @@ impl PartitionResolver {
 pub(crate) struct Partition<'a> {
     name: &'a str,
     dns_suffix: &'a str,
-    dualstack_dns_suffix: &'a str,
+    dual_stack_dns_suffix: &'a str,
     supports_fips: bool,
-    supports_dualstack: bool,
+    supports_dual_stack: bool,
+}
+
+#[allow(unused)]
+impl<'a> Partition<'a> {
+    pub(crate) fn name(&self) -> &str {
+        self.name
+    }
+
+    pub(crate) fn dns_suffix(&self) -> &str {
+        self.dns_suffix
+    }
+
+    pub(crate) fn supports_fips(&self) -> bool {
+        self.supports_fips
+    }
+
+    pub(crate) fn dual_stack_dns_suffix(&self) -> &str {
+        self.dual_stack_dns_suffix
+    }
+
+    pub(crate) fn supports_dual_stack(&self) -> bool {
+        self.supports_dual_stack
+    }
 }
 
 static DEFAULT_OVERRIDE: &PartitionOutputOverride = &PartitionOutputOverride {
     name: None,
     dns_suffix: None,
-    dualstack_dns_suffix: None,
+    dual_stack_dns_suffix: None,
     supports_fips: None,
-    supports_dualstack: None,
+    supports_dual_stack: None,
 };
 
 /// Merge the base output and the override output, dealing with `Cow`s
@@ -55,11 +80,20 @@ macro_rules! merge {
 }
 
 impl PartitionResolver {
-    pub(crate) fn new() -> PartitionResolver {
+    #[allow(unused)]
+    pub(crate) fn empty() -> PartitionResolver {
         PartitionResolver { partitions: vec![] }
     }
+
+    #[allow(unused)]
     pub(crate) fn add_partition(&mut self, partition: PartitionMetadata) {
         self.partitions.push(partition);
+    }
+
+    pub(crate) fn new_from_json(
+        partition_dot_json: &[u8],
+    ) -> Result<PartitionResolver, DeserializeError> {
+        deserialize_partitions(partition_dot_json)
     }
 
     /// Resolve a partition for a given region
@@ -104,13 +138,13 @@ impl PartitionResolver {
         Some(Partition {
             name: merge!(base, region_override, name),
             dns_suffix: merge!(base, region_override, dns_suffix),
-            dualstack_dns_suffix: merge!(base, region_override, dualstack_dns_suffix),
+            dual_stack_dns_suffix: merge!(base, region_override, dual_stack_dns_suffix),
             supports_fips: region_override
                 .supports_fips
                 .unwrap_or(base.outputs.supports_fips),
-            supports_dualstack: region_override
-                .supports_dualstack
-                .unwrap_or(base.outputs.supports_dualstack),
+            supports_dual_stack: region_override
+                .supports_dual_stack
+                .unwrap_or(base.outputs.supports_dual_stack),
         })
     }
 }
@@ -172,18 +206,18 @@ impl PartitionMetadata {
 pub(crate) struct PartitionOutput {
     name: Str,
     dns_suffix: Str,
-    dualstack_dns_suffix: Str,
+    dual_stack_dns_suffix: Str,
     supports_fips: bool,
-    supports_dualstack: bool,
+    supports_dual_stack: bool,
 }
 
 #[derive(Default)]
 pub(crate) struct PartitionOutputOverride {
     name: Option<Str>,
     dns_suffix: Option<Str>,
-    dualstack_dns_suffix: Option<Str>,
+    dual_stack_dns_suffix: Option<Str>,
     supports_fips: Option<bool>,
-    supports_dualstack: Option<bool>,
+    supports_dual_stack: Option<bool>,
 }
 
 impl PartitionOutputOverride {
@@ -193,11 +227,13 @@ impl PartitionOutputOverride {
         Ok(PartitionOutput {
             name: self.name.ok_or("missing name")?,
             dns_suffix: self.dns_suffix.ok_or("missing dnsSuffix")?,
-            dualstack_dns_suffix: self
-                .dualstack_dns_suffix
-                .ok_or("missing dualstackDnsSuffix")?,
+            dual_stack_dns_suffix: self
+                .dual_stack_dns_suffix
+                .ok_or("missing dual_stackDnsSuffix")?,
             supports_fips: self.supports_fips.ok_or("missing supports fips")?,
-            supports_dualstack: self.supports_dualstack.ok_or("missing supportsDualstack")?,
+            supports_dual_stack: self
+                .supports_dual_stack
+                .ok_or("missing supportsDualstack")?,
         })
     }
 }
@@ -212,12 +248,14 @@ mod deser {
     use aws_smithy_json::deserialize::token::{
         expect_bool_or_null, expect_start_object, expect_string_or_null, skip_value,
     };
-    use aws_smithy_json::deserialize::{json_token_iter, Error, Token};
+    use aws_smithy_json::deserialize::{error::DeserializeError, json_token_iter, Token};
     use regex::Regex;
     use std::borrow::Cow;
     use std::collections::HashMap;
 
-    pub(crate) fn deserialize_partitions(value: &[u8]) -> Result<PartitionResolver, Error> {
+    pub(crate) fn deserialize_partitions(
+        value: &[u8],
+    ) -> Result<PartitionResolver, DeserializeError> {
         let mut tokens_owned = json_token_iter(value).peekable();
         let tokens = &mut tokens_owned;
         expect_start_object(tokens.next())?;
@@ -234,7 +272,7 @@ mod deser {
                     _ => skip_value(tokens)?,
                 },
                 other => {
-                    return Err(Error::custom(format!(
+                    return Err(DeserializeError::custom(format!(
                         "expected object key or end object, found: {:?}",
                         other
                     )))
@@ -242,18 +280,18 @@ mod deser {
             }
         }
         if tokens.next().is_some() {
-            return Err(Error::custom(
+            return Err(DeserializeError::custom(
                 "found more JSON tokens after completing parsing",
             ));
         }
-        resolver.ok_or_else(|| Error::custom("did not find partitions array"))
+        resolver.ok_or_else(|| DeserializeError::custom("did not find partitions array"))
     }
 
     fn deser_partitions<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<Vec<PartitionMetadata>, Error>
+    ) -> Result<Vec<PartitionMetadata>, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartArray { .. }) => {
@@ -271,15 +309,15 @@ mod deser {
                 }
                 Ok(items)
             }
-            _ => Err(Error::custom("expected start array")),
+            _ => Err(DeserializeError::custom("expected start array")),
         }
     }
 
     pub(crate) fn deser_partition<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<PartitionMetadata, Error>
+    ) -> Result<PartitionMetadata, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartObject { .. }) => {
@@ -295,7 +333,7 @@ mod deser {
                                 builder.region_regex = token_to_str(tokens.next())?
                                     .map(|region_regex| Regex::new(&region_regex))
                                     .transpose()
-                                    .map_err(|e| Error::custom("invalid regex"))?;
+                                    .map_err(|_e| DeserializeError::custom("invalid regex"))?;
                             }
                             "regions" => {
                                 builder.regions = deser_explicit_regions(tokens)?;
@@ -306,7 +344,7 @@ mod deser {
                             _ => skip_value(tokens)?,
                         },
                         other => {
-                            return Err(Error::custom(format!(
+                            return Err(DeserializeError::custom(format!(
                                 "expected object key or end object, found: {:?}",
                                 other
                             )))
@@ -315,16 +353,16 @@ mod deser {
                 }
                 Ok(builder.build())
             }
-            _ => Err(Error::custom("expected start object")),
+            _ => Err(DeserializeError::custom("expected start object")),
         }
     }
 
     #[allow(clippy::type_complexity, non_snake_case)]
     pub(crate) fn deser_explicit_regions<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<HashMap<super::Str, PartitionOutputOverride>, Error>
+    ) -> Result<HashMap<super::Str, PartitionOutputOverride>, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartObject { .. }) => {
@@ -340,7 +378,7 @@ mod deser {
                             }
                         }
                         other => {
-                            return Err(Error::custom(format!(
+                            return Err(DeserializeError::custom(format!(
                                 "expected object key or end object, found: {:?}",
                                 other
                             )))
@@ -349,12 +387,14 @@ mod deser {
                 }
                 Ok(map)
             }
-            _ => Err(Error::custom("expected start object")),
+            _ => Err(DeserializeError::custom("expected start object")),
         }
     }
 
     /// Convert a token to `Str` (a potentially static String)
-    fn token_to_str(token: Option<Result<Token, Error>>) -> Result<Option<super::Str>, Error> {
+    fn token_to_str(
+        token: Option<Result<Token, DeserializeError>>,
+    ) -> Result<Option<super::Str>, DeserializeError> {
         Ok(expect_string_or_null(token)?
             .map(|s| s.to_unescaped().map(|u| u.into_owned()))
             .transpose()?
@@ -363,9 +403,9 @@ mod deser {
 
     fn deser_outputs<'a, I>(
         tokens: &mut std::iter::Peekable<I>,
-    ) -> Result<Option<PartitionOutputOverride>, Error>
+    ) -> Result<Option<PartitionOutputOverride>, DeserializeError>
     where
-        I: Iterator<Item = Result<Token<'a>, Error>>,
+        I: Iterator<Item = Result<Token<'a>, DeserializeError>>,
     {
         match tokens.next().transpose()? {
             Some(Token::StartObject { .. }) => {
@@ -382,18 +422,18 @@ mod deser {
                                 builder.dns_suffix = token_to_str(tokens.next())?;
                             }
                             "dualStackDnsSuffix" => {
-                                builder.dualstack_dns_suffix = token_to_str(tokens.next())?;
+                                builder.dual_stack_dns_suffix = token_to_str(tokens.next())?;
                             }
                             "supportsFIPS" => {
                                 builder.supports_fips = expect_bool_or_null(tokens.next())?;
                             }
                             "supportsDualStack" => {
-                                builder.supports_dualstack = expect_bool_or_null(tokens.next())?;
+                                builder.supports_dual_stack = expect_bool_or_null(tokens.next())?;
                             }
                             _ => skip_value(tokens)?,
                         },
                         other => {
-                            return Err(Error::custom(format!(
+                            return Err(DeserializeError::custom(format!(
                                 "expected object key or end object, found: {:?}",
                                 other
                             )))
@@ -402,7 +442,7 @@ mod deser {
                 }
                 Ok(Some(builder))
             }
-            _ => Err(Error::custom("expected start object")),
+            _ => Err(DeserializeError::custom("expected start object")),
         }
     }
 }
@@ -533,7 +573,7 @@ mod test {
 
     #[test]
     fn resolve_partitions() {
-        let mut resolver = PartitionResolver::new();
+        let mut resolver = PartitionResolver::empty();
         let mut new_suffix = PartitionOutputOverride::default();
         new_suffix.dns_suffix = Some("mars.aws".into());
         resolver.add_partition(PartitionMetadata {
@@ -543,9 +583,9 @@ mod test {
             outputs: PartitionOutput {
                 name: "aws".into(),
                 dns_suffix: "amazonaws.com".into(),
-                dualstack_dns_suffix: "api.aws".into(),
+                dual_stack_dns_suffix: "api.aws".into(),
                 supports_fips: true,
-                supports_dualstack: true,
+                supports_dual_stack: true,
             },
         });
         resolver.add_partition(PartitionMetadata {
@@ -555,9 +595,9 @@ mod test {
             outputs: PartitionOutput {
                 name: "other".into(),
                 dns_suffix: "other.amazonaws.com".into(),
-                dualstack_dns_suffix: "other.aws".into(),
+                dual_stack_dns_suffix: "other.aws".into(),
                 supports_fips: false,
-                supports_dualstack: true,
+                supports_dual_stack: true,
             },
         });
         assert_eq!(resolve(&resolver, "us-east-1").name, "aws");

@@ -9,6 +9,7 @@ use aws_smithy_http::operation;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
 use aws_smithy_http::result::SdkError;
+use aws_smithy_types::error::display::DisplayErrorContext;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -77,7 +78,7 @@ where
         + Send
         + Sync
         + 'static,
-    FailureResponse: std::error::Error,
+    FailureResponse: std::error::Error + 'static,
 {
     type Response = aws_smithy_http::result::SdkSuccess<SuccessResponse>;
     type Error = aws_smithy_http::result::SdkError<FailureResponse>;
@@ -88,7 +89,7 @@ where
     }
 
     fn call(&mut self, req: Operation<ResponseHandler, RetryPolicy>) -> Self::Future {
-        let (req, parts) = req.into_request_response();
+        let (mut req, parts) = req.into_request_response();
         let handler = parts.response_handler;
         // send_operation records the full request-response lifecycle.
         // NOTE: For operations that stream output, only the setup is captured in this span.
@@ -103,6 +104,7 @@ where
         if let Some(metadata) = parts.metadata {
             span.record("operation", &metadata.name());
             span.record("service", &metadata.service());
+            req.properties_mut().insert(metadata);
         }
         let resp = self.inner.call(req);
         let fut = async move {
@@ -118,21 +120,19 @@ where
             };
             match &resp {
                 Ok(_) => inner_span.record("status", &"ok"),
-                Err(SdkError::ServiceError { err, .. }) => inner_span
-                    .record("status", &"service_err")
-                    .record("message", &display(&err)),
-                Err(SdkError::ResponseError { err, .. }) => inner_span
-                    .record("status", &"response_err")
-                    .record("message", &display(&err)),
-                Err(SdkError::DispatchFailure(err)) => inner_span
-                    .record("status", &"dispatch_failure")
-                    .record("message", &display(err)),
-                Err(SdkError::ConstructionFailure(err)) => inner_span
-                    .record("status", &"construction_failure")
-                    .record("message", &display(err)),
-                Err(SdkError::TimeoutError(err)) => inner_span
-                    .record("status", &"timeout_error")
-                    .record("message", &display(err)),
+                Err(err) => inner_span
+                    .record(
+                        "status",
+                        &match err {
+                            SdkError::ConstructionFailure(_) => "construction_failure",
+                            SdkError::DispatchFailure(_) => "dispatch_failure",
+                            SdkError::ResponseError(_) => "response_error",
+                            SdkError::ServiceError(_) => "service_error",
+                            SdkError::TimeoutError(_) => "timeout_error",
+                            _ => "error",
+                        },
+                    )
+                    .record("message", &display(DisplayErrorContext(err))),
             };
             resp
         }

@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -69,6 +70,8 @@ interface RustCodegenDecorator<T, C : CodegenContext> {
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
 
+    fun endpointCustomizations(codegenContext: C): List<EndpointCustomization> = listOf()
+
     fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean
 }
 
@@ -85,7 +88,8 @@ open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<Rust
     override val order: Byte
         get() = 0
 
-    fun withDecorator(decorator: RustCodegenDecorator<T, C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
+    fun withDecorator(vararg decorator: RustCodegenDecorator<T, C>) =
+        CombinedCodegenDecorator(orderedDecorators + decorator)
 
     override fun configCustomizations(
         codegenContext: C,
@@ -138,6 +142,10 @@ open class CombinedCodegenDecorator<T, C : CodegenContext>(decorators: List<Rust
         return orderedDecorators.foldRight(model) { decorator, otherModel ->
             decorator.transformModel(service, otherModel)
         }
+    }
+
+    override fun endpointCustomizations(codegenContext: C): List<EndpointCustomization> {
+        return orderedDecorators.flatMap { it.endpointCustomizations(codegenContext) }
     }
 
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =

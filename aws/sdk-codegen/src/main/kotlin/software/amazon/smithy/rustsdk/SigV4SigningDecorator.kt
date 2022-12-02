@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -147,7 +146,7 @@ class SigV4SigningFeature(
 ) :
     OperationCustomization() {
     private val codegenScope =
-        arrayOf("sig_auth" to runtimeConfig.sigAuth().asType(), "aws_types" to awsTypes(runtimeConfig).asType())
+        arrayOf("sig_auth" to runtimeConfig.sigAuth().toType(), "aws_types" to awsTypes(runtimeConfig).toType())
 
     private val serviceIndex = ServiceIndex.of(model)
 

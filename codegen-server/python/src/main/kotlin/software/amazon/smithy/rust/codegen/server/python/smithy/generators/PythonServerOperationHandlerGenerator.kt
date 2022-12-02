@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -41,12 +40,12 @@ class PythonServerOperationHandlerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-            "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType(),
+            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "tokio" to PythonServerCargoDependency.Tokio.toType(),
+            "tracing" to PythonServerCargoDependency.Tracing.toType(),
         )
 
     override fun render(writer: RustWriter) {
@@ -91,7 +90,7 @@ class PythonServerOperationHandlerGenerator(
         writable {
             rustTemplate(
                 """
-                #{tracing}::debug!("Executing Python handler function `$name()`");
+                #{tracing}::trace!(name = "$name", "executing python handler function");
                 #{pyo3}::Python::with_gil(|py| {
                     let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
                     let output = if handler.args == 1 {
@@ -110,7 +109,7 @@ class PythonServerOperationHandlerGenerator(
         writable {
             rustTemplate(
                 """
-                #{tracing}::debug!("Executing Python handler coroutine `$name()`");
+                #{tracing}::trace!(name = "$name", "executing python handler coroutine");
                 let result = #{pyo3}::Python::with_gil(|py| {
                     let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
                     let coroutine = if handler.args == 1 {
@@ -132,15 +131,9 @@ class PythonServerOperationHandlerGenerator(
                 """
                 // Catch and record a Python traceback.
                 result.map_err(|e| {
-                    let traceback = #{pyo3}::Python::with_gil(|py| {
-                        match e.traceback(py) {
-                            Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
-                            None => "Unknown traceback\n".to_string()
-                        }
-                    });
-                    let error = e.into();
-                    #{tracing}::error!("{}{}", traceback, error);
-                    error
+                    let rich_py_err = #{SmithyPython}::rich_py_err(#{pyo3}::Python::with_gil(|py| { e.clone_ref(py) }));
+                    #{tracing}::error!(error = ?rich_py_err, "handler error");
+                    e.into()
                 })
                 """,
                 *codegenScope,

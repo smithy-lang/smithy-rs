@@ -6,7 +6,7 @@
 package aws.sdk
 
 import org.gradle.api.Project
-import software.amazon.smithy.utils.CodeWriter
+import software.amazon.smithy.utils.SimpleCodeWriter
 import java.io.File
 
 /**
@@ -17,7 +17,7 @@ import java.io.File
  */
 fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
     val project = this
-    val writer = CodeWriter()
+    val writer = SimpleCodeWriter()
     with(writer) {
         write("# AWS SDK for Rust")
         write(

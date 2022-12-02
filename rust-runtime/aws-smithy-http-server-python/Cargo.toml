@@ -12,6 +12,9 @@ Python server runtime for Smithy Rust Server Framework.
 """
 publish = true
 
+[features]
+aws-lambda = ["aws-smithy-http-server/aws-lambda", "dep:lambda_http"]
+
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
@@ -22,7 +25,7 @@ bytes = "1.2"
 futures = "0.3"
 http = "0.2"
 hyper = { version = "0.14.20", features = ["server", "http1", "http2", "tcp", "stream"] }
-lambda_http = "0.6.0"
+lambda_http = { version = "0.7.1", optional = true }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2"
@@ -41,6 +44,14 @@ tracing-appender = { version = "0.2.2"}
 [dev-dependencies]
 pretty_assertions = "1"
 futures-util = "0.3"
+tower-test = "0.4"
+tokio-test = "0.4"
+pyo3-asyncio = { version = "0.17.0", features = ["testing", "attributes", "tokio-runtime"] }
+
+[[test]]
+name = "middleware_tests"
+path = "src/middleware/pytests/harness.rs"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true

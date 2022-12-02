@@ -15,10 +15,12 @@
   - [Backwards Compatibility](smithy/backwards-compat.md)
 
 - [Server](./server/overview.md)
-  - [Generating Common Service Code](./server/code_generation.md)
-  - [Generating the Pokémon Service](./server/pokemon_service.md)
-  - [Instrumentation](./server/instrumentation.md)
-  <!-- - [The Anatomy of a Service](./server/anatomy.md) -->
+  - [Middleware](./middleware.md)
+  - [Instrumentation](./instrumentation.md)
+  - [Accessing Un-modelled Data](./from_parts.md)
+  - [The Anatomy of a Service](./anatomy.md)
+  - [Generating Common Service Code](./code_generation.md)
+  - [Generating the Pokémon Service](./pokemon_service.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)
@@ -43,7 +45,10 @@
   - [RFC-0020: Service Builder Improvements](./rfcs/rfc0020_service_builder.md)
   - [RFC-0021: Dependency Versions](./rfcs/rfc0021_dependency_versions.md)
   - [RFC-0022: Error Context and Compatibility](./rfcs/rfc0022_error_context_and_compatibility.md)
-  - [RFC-0023: SDK Credential Cache Type Safety](./rfcs/rfc0023_sdk_credential_cache_type_safety.md)
+  - [RFC-0023: Evolving the new service builder API](./rfcs/rfc0023_refine_builder.md)
+  - [RFC-0024: RequestID](./rfcs/rfc0024_request_id.md)
+  - [RFC-0025: Constraint traits](./rfcs/rfc0025_constraint_traits.md)
+  - [RFC-0026: SDK Credential Cache Type Safety](./rfcs/rfc0026_sdk_credential_cache_type_safety.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)

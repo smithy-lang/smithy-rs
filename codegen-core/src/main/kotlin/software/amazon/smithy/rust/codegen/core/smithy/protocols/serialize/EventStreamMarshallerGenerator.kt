@@ -53,7 +53,7 @@ open class EventStreamMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
 ) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
         "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
@@ -112,7 +112,7 @@ open class EventStreamMarshallerGenerator(
                         rustTemplate(
                             """
                             Self::Input::${UnionGenerator.UnknownVariantName} => return Err(
-                                #{Error}::Marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
+                                #{Error}::marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                             )
                             """,
                             *codegenScope,
@@ -212,7 +212,7 @@ open class EventStreamMarshallerGenerator(
                     rustTemplate(
                         """
                         #{serializerFn}(&$input)
-                            .map_err(|err| #{Error}::Marshalling(format!("{}", err)))?
+                            .map_err(|err| #{Error}::marshalling(format!("{}", err)))?
                         """,
                         "serializerFn" to serializerFn,
                         *codegenScope,

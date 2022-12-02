@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
@@ -68,7 +67,7 @@ fun testRustSettings(
 
 private const val SmithyVersion = "1.0"
 fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion): Model {
-    val processed = letIf(!this.startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
+    val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
     return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
         .unwrap()
 }
@@ -118,8 +117,8 @@ fun StructureShape.renderWithModelBuilder(
 val TokioWithTestMacros = CargoDependency(
     "tokio",
     CratesIo("1"),
-    features = setOf("macros", "test-util", "rt"),
+    features = setOf("macros", "test-util", "rt", "rt-multi-thread"),
     scope = DependencyScope.Dev,
 )
 
-val TokioTest = Attribute.Custom("tokio::test", listOf(TokioWithTestMacros.asType()))
+val TokioTest = Attribute.Custom("tokio::test", listOf(TokioWithTestMacros.toType()))

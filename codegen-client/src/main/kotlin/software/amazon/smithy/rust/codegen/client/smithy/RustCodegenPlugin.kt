@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -14,7 +13,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCu
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.testutil.DecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
@@ -31,10 +33,12 @@ import java.util.logging.Logger
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
  */
-class RustCodegenPlugin : SmithyBuildPlugin {
+class RustCodegenPlugin : DecoratableBuildPlugin<ClientProtocolGenerator, ClientCodegenContext>() {
     override fun getName(): String = "rust-codegen"
-
-    override fun execute(context: PluginContext) {
+    override fun executeWithDecorator(
+        context: PluginContext,
+        vararg decorator: RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>,
+    ) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
         // Discover `RustCodegenDecorators` on the classpath. `RustCodegenDecorator` returns different types of
@@ -49,6 +53,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 RequiredCustomizations(),
                 FluentClientDecorator(),
                 NoOpEventStreamSigningDecorator(),
+                *decorator,
             )
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code

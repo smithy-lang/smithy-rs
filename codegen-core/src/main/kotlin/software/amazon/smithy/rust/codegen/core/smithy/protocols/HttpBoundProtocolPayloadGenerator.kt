@@ -17,7 +17,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -58,12 +57,12 @@ class HttpBoundProtocolPayloadGenerator(
 
     private val operationSerModule = RustModule.private("operation_ser")
 
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
-        "hyper" to CargoDependency.HyperWithStream.asType(),
+        "hyper" to CargoDependency.HyperWithStream.toType(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
+        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
         "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
     )
 
@@ -193,7 +192,7 @@ class HttpBoundProtocolPayloadGenerator(
             symbolProvider,
             unionShape,
             serializerGenerator,
-            contentType ?: throw CodegenException("event streams must set a content type"),
+            contentType,
         ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
@@ -272,6 +271,8 @@ class HttpBoundProtocolPayloadGenerator(
                                 """,
                             )
                             is StructureShape -> rust("#T()", serializerGenerator.unsetStructure(targetShape))
+                            is UnionShape -> throw CodegenException("Currently unsupported. Tracking issue: https://github.com/awslabs/smithy-rs/issues/1896")
+                            else -> throw CodegenException("`httpPayload` on member shapes targeting shapes of type ${targetShape.type} is unsupported")
                         }
                     }
                 }

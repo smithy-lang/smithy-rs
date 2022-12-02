@@ -3,35 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// This code was copied and then modified from Tokio's Axum.
-
-/* Copyright (c) 2021 Tower Contributors
- *
- * Permission is hereby granted, free of charge, to any
- * person obtaining a copy of this software and associated
- * documentation files (the "Software"), to deal in the
- * Software without restriction, including without
- * limitation the rights to use, copy, modify, merge,
- * publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software
- * is furnished to do so, subject to the following
- * conditions:
- *
- * The above copyright notice and this permission notice
- * shall be included in all copies or substantial portions
- * of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
- * ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
- * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
- * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
- * SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
- * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
- * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- */
-
 //! Extension types.
 //!
 //! Extension types are types that are stored in and extracted from _both_ requests and
@@ -50,14 +21,13 @@
 
 use std::ops::Deref;
 
-use http::StatusCode;
 use thiserror::Error;
 
-use crate::{
-    body::{empty, BoxBody},
-    request::{FromParts, RequestParts},
-    response::IntoResponse,
-};
+#[allow(deprecated)]
+use crate::request::RequestParts;
+
+pub use crate::request::extension::Extension;
+pub use crate::request::extension::MissingExtension;
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
 /// This extension type is set when it has been correctly determined that the request should be
@@ -66,6 +36,10 @@ use crate::{
 ///
 /// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
+#[deprecated(
+    since = "0.52.0",
+    note = "This is no longer inserted by the new service builder. Layers should be constructed per operation using the plugin system."
+)]
 pub struct OperationExtension {
     absolute: &'static str,
 
@@ -81,6 +55,7 @@ pub enum ParseError {
     MissingNamespace,
 }
 
+#[allow(deprecated)]
 impl OperationExtension {
     /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
@@ -130,8 +105,7 @@ impl Deref for ModeledErrorExtension {
     }
 }
 
-/// Extension type used to store the _name_ of the [`crate::runtime_error::RuntimeError`] that
-/// occurred during request handling (see [`crate::runtime_error::RuntimeError::name`]).
+/// Extension type used to store the _name_ of the possible runtime errors.
 /// These are _unmodeled_ errors; the operation handler was not invoked.
 #[derive(Debug, Clone)]
 pub struct RuntimeErrorExtension(String);
@@ -151,53 +125,15 @@ impl Deref for RuntimeErrorExtension {
     }
 }
 
-/// Generic extension type stored in and extracted from [request extensions].
-///
-/// This is commonly used to share state across handlers.
-///
-/// If the extension is missing it will reject the request with a `500 Internal
-/// Server Error` response.
-///
-/// [request extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
-#[derive(Debug, Clone)]
-pub struct Extension<T>(pub T);
-
-impl<T> Deref for Extension<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-/// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
-#[derive(Debug, Error)]
-#[error("the `Extension` is not present in the `http::Request`")]
-pub struct MissingExtension;
-
-impl<Protocol> IntoResponse<Protocol> for MissingExtension {
-    fn into_response(self) -> http::Response<BoxBody> {
-        let mut response = http::Response::new(empty());
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        response
-    }
-}
-
-impl<Protocol, T> FromParts<Protocol> for Extension<T>
-where
-    T: Clone + Send + Sync + 'static,
-{
-    type Rejection = MissingExtension;
-
-    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
-        parts.extensions.remove::<T>().map(Extension).ok_or(MissingExtension)
-    }
-}
-
 /// Extract an [`Extension`] from a request.
 /// This is essentially the implementation of `FromRequest` for `Extension`, but with a
 /// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
 /// this function and converts the rejection type into a [`crate::runtime_error::RuntimeError`].
+#[deprecated(
+    since = "0.52.0",
+    note = "This was used for extraction under the older service builder. The `FromParts::from_parts` method is now used instead."
+)]
+#[allow(deprecated)]
 pub async fn extract_extension<T, B>(
     req: &mut RequestParts<B>,
 ) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
@@ -221,6 +157,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

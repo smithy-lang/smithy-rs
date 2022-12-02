@@ -9,17 +9,43 @@ use crate::operation::{Operation, OperationShape};
 
 use super::Plugin;
 
-/// A [`Plugin`] used to filter [`Plugin::map`] application using a predicate over the [`OperationShape::NAME`].
+/// Filters the application of an inner [`Plugin`] using a predicate over the
+/// [`OperationShape::NAME`](crate::operation::OperationShape).
 ///
-/// See [`PluginExt::filter_by_operation_name`](super::PluginExt::filter_by_operation_name) for more information.
+/// See [`filter_by_operation_name`] for more details.
 pub struct FilterByOperationName<Inner, F> {
     inner: Inner,
     predicate: F,
 }
 
+/// Filters the application of an inner [`Plugin`] using a predicate over the
+/// [`OperationShape::NAME`](crate::operation::OperationShape).
+///
+/// # Example
+///
+/// ```rust
+/// use aws_smithy_http_server::plugin::filter_by_operation_name;
+/// # use aws_smithy_http_server::{plugin::Plugin, operation::{Operation, OperationShape}};
+/// # struct Pl;
+/// # struct CheckHealth;
+/// # impl OperationShape for CheckHealth { const NAME: &'static str = ""; type Input = (); type Output = (); type Error = (); }
+/// # impl Plugin<(), CheckHealth, (), ()> for Pl { type Service = (); type Layer = (); fn map(&self, input: Operation<(), ()>) -> Operation<(), ()> { input }}
+/// # let plugin = Pl;
+/// # let operation = Operation { inner: (), layer: () };
+/// // Prevents `plugin` from being applied to the `CheckHealth` operation.
+/// let filtered_plugin = filter_by_operation_name(plugin, |name| name != CheckHealth::NAME);
+/// let new_operation = filtered_plugin.map(operation);
+/// ```
+pub fn filter_by_operation_name<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationName<Inner, F>
+where
+    F: Fn(&str) -> bool,
+{
+    FilterByOperationName::new(plugins, predicate)
+}
+
 impl<Inner, F> FilterByOperationName<Inner, F> {
     /// Creates a new [`FilterByOperationName`].
-    pub(crate) fn new(inner: Inner, predicate: F) -> Self {
+    fn new(inner: Inner, predicate: F) -> Self {
         Self { inner, predicate }
     }
 }
