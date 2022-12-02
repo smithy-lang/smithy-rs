@@ -47,16 +47,26 @@ pub trait AsyncMapRequest {
 /// augment the request. Most fundamental middleware is expressed as `MapRequest`, including
 /// signing & endpoint resolution.
 ///
+/// ## Examples
+///
 /// ```rust
 /// # use aws_smithy_http::middleware::MapRequest;
 /// # use std::convert::Infallible;
 /// # use aws_smithy_http::operation;
 /// use http::header::{HeaderName, HeaderValue};
-/// struct AddHeader(HeaderName, HeaderValue);
+///
 /// /// Signaling struct added to the request property bag if a header should be added
 /// struct NeedsHeader;
+///
+/// struct AddHeader(HeaderName, HeaderValue);
+///
 /// impl MapRequest for AddHeader {
 ///     type Error = Infallible;
+///
+///     fn name(&self) -> &'static str {
+///         "add_header"
+///     }
+///
 ///     fn apply(&self, request: operation::Request) -> Result<operation::Request, Self::Error> {
 ///         request.augment(|mut request, properties| {
 ///             if properties.get::<NeedsHeader>().is_some() {
