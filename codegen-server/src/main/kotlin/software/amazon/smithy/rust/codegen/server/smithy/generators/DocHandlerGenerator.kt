@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
@@ -41,12 +42,12 @@ class DocHandlerGenerator(
      */
     fun docSignatureImports(): Writable = writable {
         if (operation.errors.isNotEmpty()) {
-            rust("$commentToken ## use $crateName::${ErrorsModule.name}::${errorSymbol.name};")
+            rust("$commentToken use $crateName::${ErrorsModule.name}::${errorSymbol.name};")
         }
         rust(
             """
-            $commentToken ## use $crateName::${InputsModule.name}::${inputSymbol.name};
-            $commentToken ## use $crateName::${OutputsModule.name}::${outputSymbol.name};
+            $commentToken use $crateName::${InputsModule.name}::${inputSymbol.name};
+            $commentToken use $crateName::${OutputsModule.name}::${outputSymbol.name};
             """.trimIndent(),
         )
     }
@@ -72,8 +73,15 @@ class DocHandlerGenerator(
         }
     }
 
-    fun render(rustWriter: RustWriter) {
-        docSignatureImports()(rustWriter)
-        docSignature()(rustWriter)
+    fun render(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            #{Docs:W}
+            $commentToken
+            #{Handler:W}
+            """,
+            "Docs" to docSignatureImports(),
+            "Handler" to docSignature(),
+        )
     }
 }

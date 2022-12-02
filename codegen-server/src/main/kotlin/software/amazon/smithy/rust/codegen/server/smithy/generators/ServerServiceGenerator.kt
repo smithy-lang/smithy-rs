@@ -61,7 +61,7 @@ open class ServerServiceGenerator(
             .map { operation ->
                 DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!")::render
             }
-            .join("\n")
+            .join("//!\n")
 
         writer.rustTemplate(
             """
@@ -91,7 +91,9 @@ open class ServerServiceGenerator(
             //!
             //! ###### Running on Lambda
             //!
-            //! ```rust,no_run
+            //! This requires the `aws-lambda` feature flag to be passed to the [`#{SmithyHttpServer}`] crate.
+            //!
+            //! ```rust,ignore
             //! use #{SmithyHttpServer}::routing::LambdaHandler;
             //! use $crateName::$serviceName;
             //!
@@ -174,7 +176,7 @@ open class ServerServiceGenerator(
             //! }
             //! ```
             //!
-            //! See the [operation module](#{SmithyHttpServer}::operation) for information on precisely what constitutes a handler.
+            //! See the [`operation module`](#{SmithyHttpServer}::operation) for information on precisely what constitutes a handler.
             //!
             //! #### Build
             //!
