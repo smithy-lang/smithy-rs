@@ -116,13 +116,13 @@ inline fun <reified T : Trait> UnionShape.findMemberWithTrait(model: Model): Mem
     return this.members().find { it.getMemberTrait(model, T::class.java).isPresent }
 }
 
-/** Kotlin sugar for hasTrait() check. e.g. shape.hasTrait<EnumTrait>() instead of shape.hasTrait(EnumTrait::class.java) */
+/** Kotlin sugar for hasTrait() check. e.g. shape.hasTrait<HttpTrait>() instead of shape.hasTrait(HttpTrait::class.java) */
 inline fun <reified T : Trait> Shape.hasTrait(): Boolean = hasTrait(T::class.java)
 
-/** Kotlin sugar for expectTrait() check. e.g. shape.expectTrait<EnumTrait>() instead of shape.expectTrait(EnumTrait::class.java) */
+/** Kotlin sugar for expectTrait() check. e.g. shape.expectTrait<HttpTrait>() instead of shape.expectTrait(HttpTrait::class.java) */
 inline fun <reified T : Trait> Shape.expectTrait(): T = expectTrait(T::class.java)
 
-/** Kotlin sugar for getTrait() check. e.g. shape.getTrait<EnumTrait>() instead of shape.getTrait(EnumTrait::class.java) */
+/** Kotlin sugar for getTrait() check. e.g. shape.getTrait<HttpTrait>() instead of shape.getTrait(HttpTrait::class.java) */
 inline fun <reified T : Trait> Shape.getTrait(): T? = getTrait(T::class.java).orNull()
 
 fun Shape.isPrimitive(): Boolean {

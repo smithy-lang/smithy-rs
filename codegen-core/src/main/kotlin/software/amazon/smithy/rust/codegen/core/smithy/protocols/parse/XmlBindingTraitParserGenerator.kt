@@ -14,6 +14,7 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -22,7 +23,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -658,7 +658,7 @@ class XmlBindingTraitParserGenerator(
 
     private fun RustWriter.parseStringInner(shape: StringShape, provider: Writable) {
         withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlDecodeError) {
-            if (shape.hasTrait<EnumTrait>()) {
+            if (shape is EnumShape) {
                 val enumSymbol = symbolProvider.toSymbol(shape)
                 if (convertsToEnumInServer(shape)) {
                     withBlock("#T::try_from(", ")", enumSymbol) {
@@ -678,7 +678,7 @@ class XmlBindingTraitParserGenerator(
         }
     }
 
-    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
+    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape is EnumShape
 
     private fun MemberShape.xmlName(): XmlName {
         return XmlName(xmlIndex.memberName(this))

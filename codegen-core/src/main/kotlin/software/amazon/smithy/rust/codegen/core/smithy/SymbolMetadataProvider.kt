@@ -8,18 +8,17 @@ package software.amazon.smithy.rust.codegen.core.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
  * Default delegator to enable easily decorating another symbol provider.
@@ -54,9 +53,8 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
             is MemberShape -> memberMeta(shape)
             is StructureShape -> structureMeta(shape)
             is UnionShape -> unionMeta(shape)
-            is StringShape -> if (shape.hasTrait<EnumTrait>()) {
-                enumMeta(shape)
-            } else null
+            is EnumShape -> enumMeta(shape)
+            is StringShape -> null
 
             else -> null
         }

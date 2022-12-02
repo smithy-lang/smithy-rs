@@ -5,7 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
-import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGe
 class PythonServerEnumGenerator(
     codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
-    shape: StringShape,
+    shape: EnumShape,
 ) : ServerEnumGenerator(codegenContext, writer, shape) {
 
     private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.toType())

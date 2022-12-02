@@ -8,12 +8,12 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Struc
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.expectMember
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
@@ -291,15 +290,14 @@ class HttpBoundProtocolPayloadGenerator(
         serializer: StructuredDataSerializerGenerator,
     ) {
         when (val targetShape = model.expectShape(member.target)) {
+            is EnumShape -> {
+                // Convert an enum to `&str` then to `&[u8]` then to `Vec<u8>`.
+                rust("$payloadName.as_str().as_bytes().to_vec()")
+            }
             is StringShape -> {
                 // Write the raw string to the payload.
-                if (targetShape.hasTrait<EnumTrait>()) {
-                    // Convert an enum to `&str` then to `&[u8]` then to `Vec<u8>`.
-                    rust("$payloadName.as_str().as_bytes().to_vec()")
-                } else {
-                    // Convert a `String` to `Vec<u8>`.
-                    rust("$payloadName.into_bytes()")
-                }
+                // Convert a `String` to `Vec<u8>`.
+                rust("$payloadName.into_bytes()")
             }
 
             is BlobShape -> {

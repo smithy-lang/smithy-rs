@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -19,7 +20,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -303,7 +303,7 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String) {
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
-            when (target.hasTrait<EnumTrait>()) {
+            when (target is EnumShape) {
                 true -> {
                     if (returnSymbolToParse(target).isUnconstrained) {
                         rust("u.into_owned()")

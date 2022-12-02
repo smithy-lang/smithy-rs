@@ -138,10 +138,10 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
             """,
             "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
         )
-        renderBuildEnforcingRequiredAndEnumTraitsFn(implBlockWriter)
+        renderBuildEnforcingRequiredTraitAndEnumValuesFn(implBlockWriter)
     }
 
-    private fun renderBuildEnforcingRequiredAndEnumTraitsFn(implBlockWriter: RustWriter) {
+    private fun renderBuildEnforcingRequiredTraitAndEnumValuesFn(implBlockWriter: RustWriter) {
         implBlockWriter.rustBlockTemplate(
             "fn build_enforcing_required_and_enum_traits(self) -> #{ReturnType:W}",
             "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),

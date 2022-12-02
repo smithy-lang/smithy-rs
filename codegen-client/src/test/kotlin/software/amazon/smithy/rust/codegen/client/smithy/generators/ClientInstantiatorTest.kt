@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -18,18 +18,11 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class ClientInstantiatorTest {
     private val model = """
         namespace com.test
-
-        @enum([
-            { value: "t2.nano" },
-            { value: "t2.micro" },
-        ])
-        string UnnamedEnum
 
         @enum([
             {
@@ -49,37 +42,18 @@ internal class ClientInstantiatorTest {
 
     @Test
     fun `generate named enums`() {
-        val shape = model.lookup<StringShape>("com.test#NamedEnum")
+        val shape = model.lookup<EnumShape>("com.test#NamedEnum")
         val sut = clientInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, this, shape).render()
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
                 }
                 rust("assert_eq!(result, NamedEnum::T2Nano);")
-            }
-        }
-        project.compileAndTest()
-    }
-
-    @Test
-    fun `generate unnamed enums`() {
-        val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
-        val sut = clientInstantiator(codegenContext)
-        val data = Node.parse("t2.nano".dq())
-
-        val project = TestWorkspace.testProject()
-        project.withModule(RustModule.Model) {
-            EnumGenerator(model, symbolProvider, this, shape, shape.expectTrait()).render()
-            unitTest("generate_unnamed_enums") {
-                withBlock("let result = ", ";") {
-                    sut.render(this, shape, data)
-                }
-                rust("""assert_eq!(result, UnnamedEnum("t2.nano".to_owned()));""")
             }
         }
         project.compileAndTest()

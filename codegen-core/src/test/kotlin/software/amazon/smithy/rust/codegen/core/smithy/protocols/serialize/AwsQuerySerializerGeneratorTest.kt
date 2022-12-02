@@ -7,8 +7,8 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
@@ -135,8 +134,8 @@ class AwsQuerySerializerGeneratorTest {
         project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
             UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice"), renderUnknownVariant = generateUnknownVariant).render()
-            val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
+            val enum = model.lookup<EnumShape>("test#FooEnum")
+            EnumGenerator(model, symbolProvider, this, enum).render()
         }
 
         project.withModule(RustModule.public("input")) {

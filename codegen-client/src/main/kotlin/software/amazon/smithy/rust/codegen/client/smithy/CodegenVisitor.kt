@@ -6,9 +6,11 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -37,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamN
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
@@ -94,6 +95,8 @@ class CodegenVisitor(
      */
     internal fun baselineTransform(model: Model) =
         model
+            // Convert string shapes with an @enum trait to an enum shape
+            .let { ModelTransformer.create().changeStringEnumsToEnumShapes(model, true) }
             // Flattens mixins out of the model and removes them from the model
             .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
             // Add errors attached at the service level to the models
@@ -194,13 +197,24 @@ class CodegenVisitor(
     /**
      * String Shape Visitor
      *
-     * Although raw strings require no code generation, enums are actually `EnumTrait` applied to string shapes.
+     * Unnamed @enum shapes are not supported. If they could not be converted to EnumShape, this will fail.
      */
     override fun stringShape(shape: StringShape) {
-        shape.getTrait<EnumTrait>()?.also { enum ->
-            rustCrate.useShapeWriter(shape) {
-                EnumGenerator(model, symbolProvider, this, shape, enum).render()
-            }
+        if (shape.hasTrait<EnumTrait>()) {
+            throw CodegenException(
+                "Code generation has failed because this unnamed @enum could not be converted to an enum shape: $shape." +
+                    "For more info, look above at the logs from awslabs/smithy.",
+            )
+        }
+        super.stringShape(shape)
+    }
+
+    /**
+     * Enum Shape Visitor
+     */
+    override fun enumShape(shape: EnumShape) {
+        rustCrate.useShapeWriter(shape) {
+            EnumGenerator(model, symbolProvider, this, shape).render()
         }
     }
 

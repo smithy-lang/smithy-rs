@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -20,7 +21,6 @@ import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
@@ -40,14 +40,13 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * we support it or not_.
  */
 fun Shape.hasConstraintTrait() =
-    allConstraintTraits.any(this::hasTrait)
+    allConstraintTraits.any(this::hasTrait) || this is EnumShape
 
 val allConstraintTraits = setOf(
     LengthTrait::class.java,
     PatternTrait::class.java,
     RangeTrait::class.java,
     UniqueItemsTrait::class.java,
-    EnumTrait::class.java,
     RequiredTrait::class.java,
 )
 
@@ -87,7 +86,8 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
     }
 
     is MapShape -> this.hasTrait<LengthTrait>()
-    is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
+    is EnumShape -> true
+    is StringShape -> supportedStringConstraintTraits.any { this.hasTrait(it) }
     is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> this.hasTrait<RangeTrait>()
     else -> false
@@ -115,7 +115,8 @@ fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: Sym
 fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTypes: Boolean): Boolean = when (this) {
     is CollectionShape -> publicConstrainedTypes && supportedCollectionConstraintTraits.any(this::hasTrait)
     is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
-    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
+    is EnumShape -> false
+    is StringShape -> publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait)
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
     else -> false

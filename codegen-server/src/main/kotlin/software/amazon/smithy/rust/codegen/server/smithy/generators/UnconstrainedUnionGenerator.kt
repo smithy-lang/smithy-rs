@@ -5,10 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -196,7 +196,7 @@ class UnconstrainedUnionGenerator(
                         } else {
                             val targetShape = model.expectShape(member.target)
                             val resolveToNonPublicConstrainedType =
-                                targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>() &&
+                                targetShape !is StructureShape && targetShape !is UnionShape && targetShape !is EnumShape &&
                                     (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
 
                             val (unconstrainedVar, boxIt) = if (member.hasTrait<RustBoxTrait>()) {

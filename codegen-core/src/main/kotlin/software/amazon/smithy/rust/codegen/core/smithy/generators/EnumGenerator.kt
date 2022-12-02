@@ -7,16 +7,15 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -29,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.doubleQuote
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
@@ -86,14 +86,26 @@ open class EnumGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    protected val shape: StringShape,
-    protected val enumTrait: EnumTrait,
+    protected val shape: EnumShape,
 ) {
     protected val symbol: Symbol = symbolProvider.toSymbol(shape)
     protected val enumName: String = symbol.name
     protected val meta = symbol.expectRustMetadata()
     protected val sortedMembers: List<EnumMemberModel> =
-        enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
+        shape.allMembers.entries.sortedBy { it.key }.map {
+            val builder = EnumDefinition.builder()
+                .name(it.key)
+                .value(shape.enumValues[it.key])
+                .deprecated(it.value.hasTrait<DeprecatedTrait>())
+                .tags(it.value.tags)
+            if (it.value.hasTrait<DocumentationTrait>()) {
+                builder.documentation(it.value.expectTrait(DocumentationTrait::class.java).value)
+            }
+            EnumMemberModel(
+                builder.build(),
+                symbolProvider,
+            )
+        }
     protected open var target: CodegenTarget = CodegenTarget.CLIENT
 
     companion object {
@@ -108,50 +120,19 @@ open class EnumGenerator(
     }
 
     open fun render() {
-        if (enumTrait.hasNames()) {
-            // pub enum Blah { V1, V2, .. }
-            renderEnum()
-            writer.insertTrailingNewline()
-            // impl From<str> for Blah { ... }
-            renderFromForStr()
-            // impl FromStr for Blah { ... }
-            renderFromStr()
-            writer.insertTrailingNewline()
-            // impl Blah { pub fn as_str(&self) -> &str
-            implBlock()
-            writer.rustBlock("impl AsRef<str> for $enumName") {
-                rustBlock("fn as_ref(&self) -> &str") {
-                    rust("self.as_str()")
-                }
-            }
-        } else {
-            renderUnnamedEnum()
-        }
-    }
-
-    private fun renderUnnamedEnum() {
-        writer.documentShape(shape, model)
-        writer.deprecatedShape(shape)
-        meta.render(writer)
-        writer.write("struct $enumName(String);")
-        writer.rustBlock("impl $enumName") {
-            docs("Returns the `&str` value of the enum member.")
-            rustBlock("pub fn as_str(&self) -> &str") {
-                rust("&self.0")
-            }
-
-            docs("Returns all the `&str` representations of the enum members.")
-            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
-                withBlock("&[", "]") {
-                    val memberList = sortedMembers.joinToString(", ") { it.value.dq() }
-                    rust(memberList)
-                }
-            }
-        }
-
-        writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
-            rustBlock("fn from(s: T) -> Self") {
-                rust("$enumName(s.as_ref().to_owned())")
+        // pub enum Blah { V1, V2, .. }
+        renderEnum()
+        writer.insertTrailingNewline()
+        // impl From<str> for Blah { ... }
+        renderFromForStr()
+        // impl FromStr for Blah { ... }
+        renderFromStr()
+        writer.insertTrailingNewline()
+        // impl Blah { pub fn as_str(&self) -> &str
+        implBlock()
+        writer.rustBlock("impl AsRef<str> for $enumName") {
+            rustBlock("fn as_ref(&self) -> &str") {
+                rust("self.as_str()")
             }
         }
     }
