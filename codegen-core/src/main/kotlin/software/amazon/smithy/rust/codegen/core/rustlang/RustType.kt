@@ -382,6 +382,15 @@ data class RustMetadata(
         renderAttributes(writer)
         renderVisibility(writer)
     }
+
+    companion object {
+        val TestModule = RustMetadata(
+            visibility = Visibility.PRIVATE,
+            additionalAttributes = listOf(
+                Attribute.Cfg("test"),
+            ),
+        )
+    }
 }
 
 /**

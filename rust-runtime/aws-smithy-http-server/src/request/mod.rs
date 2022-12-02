@@ -137,9 +137,10 @@ impl<B> RequestParts<B> {
     }
 }
 
-// NOTE: We cannot reference `FromRequest` here, as a point of contrast, as it's `doc(hidden)`.
-/// Provides a protocol aware extraction from a requests [`Parts`].
+/// Provides a protocol aware extraction from a [`Request`]. This borrows the [`Parts`], in contrast to
+/// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
+    /// The type of the extraction failures.
     type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.
@@ -192,9 +193,14 @@ impl_from_parts!(Seven, A, B, C, D, E, F, G);
 impl_from_parts!(Eight, A, B, C, D, E, F, G, H);
 
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
-/// [`Request`], in contrast to [`FromParts`].
+/// [`Request`], including the body, in contrast to [`FromParts`] which borrows the [`Parts`].
+///
+/// This should not be implemented by hand. Code generation should implement this for your operations input. To extract
+/// items from a HTTP request [`FromParts`] should be used.
 pub trait FromRequest<Protocol, B>: Sized {
+    /// The type of the extraction failures.
     type Rejection: IntoResponse<Protocol>;
+    /// The type of the extraction [`Future`].
     type Future: Future<Output = Result<Self, Self::Rejection>>;
 
     /// Extracts `self` from a [`Request`] asynchronously.

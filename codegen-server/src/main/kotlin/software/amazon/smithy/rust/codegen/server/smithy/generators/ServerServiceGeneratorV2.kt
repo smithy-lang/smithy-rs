@@ -346,6 +346,8 @@ class ServerServiceGeneratorV2(
 
         rustTemplate(
             """
+            ///
+            /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
@@ -570,11 +572,11 @@ class ServerServiceGeneratorV2(
             ///
             /// #### Build
             ///
-            /// You can convert [`$builderName`] into [`$serviceName`] using either [`$builderName::build`] or [`$builderName::build_unchecked`].  
+            /// You can convert [`$builderName`] into [`$serviceName`] using either [`$builderName::build`] or [`$builderName::build_unchecked`].
             ///
-            /// [`$builderName::build`] requires you to provide a handler for every single operation in your Smithy model. It will return an error if that is not the case.  
+            /// [`$builderName::build`] requires you to provide a handler for every single operation in your Smithy model. It will return an error if that is not the case.
             ///
-            /// [`$builderName::build_unchecked`], instead, does not require exhaustiveness. The server will automatically return 500s to all requests for operations that do not have a registered handler.  
+            /// [`$builderName::build_unchecked`], instead, does not require exhaustiveness. The server will automatically return 500s to all requests for operations that do not have a registered handler.
             /// [`$builderName::build_unchecked`] is particularly useful if you are deploying your Smithy service as a collection of Lambda functions, where each Lambda is only responsible for a subset of the operations in the Smithy service (or even a single one!).
             ///
             /// ## Example

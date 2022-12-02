@@ -105,8 +105,7 @@ impl Deref for ModeledErrorExtension {
     }
 }
 
-/// Extension type used to store the _name_ of the [`crate::runtime_error::RuntimeError`] that
-/// occurred during request handling (see [`crate::runtime_error::RuntimeError::name`]).
+/// Extension type used to store the _name_ of the possible runtime errors.
 /// These are _unmodeled_ errors; the operation handler was not invoked.
 #[derive(Debug, Clone)]
 pub struct RuntimeErrorExtension(String);

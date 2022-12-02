@@ -5,7 +5,6 @@
 
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 use http::Uri;
-use std::error::Error;
 use url::{Host, Url as ParsedUrl};
 
 #[derive(PartialEq, Debug)]

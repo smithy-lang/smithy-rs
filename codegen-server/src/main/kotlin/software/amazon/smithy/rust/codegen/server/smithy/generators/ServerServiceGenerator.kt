@@ -44,8 +44,7 @@ open class ServerServiceGenerator(
      */
     fun render() {
         rustCrate.lib {
-            rust("##[doc(inline)]")
-            rust("pub use crate::service::$serviceName;")
+            rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
         }
 
         rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) {
