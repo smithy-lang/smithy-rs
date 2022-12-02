@@ -10,6 +10,7 @@ But what if we, the customer, want to access data in the handler which is _not_ 
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the
 /// [`Parts`], in contrast to [`FromRequest`].
 pub trait FromParts<Protocol>: Sized {
+    /// The type of the failures yielded extraction attempts.
     type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.

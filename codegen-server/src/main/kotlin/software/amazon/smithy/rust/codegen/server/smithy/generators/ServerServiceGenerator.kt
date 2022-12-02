@@ -44,7 +44,7 @@ open class ServerServiceGenerator(
     fun render() {
         rustCrate.lib {
             rust("##[doc(inline, hidden)]")
-            rust("pub use crate::service::$serviceName;")
+            rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
         }
 
         rustCrate.withModule(RustModule.operation(Visibility.PRIVATE)) {
@@ -90,7 +90,7 @@ open class ServerServiceGenerator(
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule.LeafModule("service", RustMetadata(visibility = Visibility.PUBLIC, additionalAttributes = listOf(Attribute.DocHidden)), null),
+            RustModule.LeafModule("service", RustMetadata(visibility = Visibility.PRIVATE, additionalAttributes = listOf(Attribute.DocHidden)), null),
         ) {
             ServerServiceGeneratorV2(
                 codegenContext,
