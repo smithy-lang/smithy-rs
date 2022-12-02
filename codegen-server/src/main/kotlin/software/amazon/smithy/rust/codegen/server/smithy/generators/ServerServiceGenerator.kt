@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -69,8 +70,8 @@ open class ServerServiceGenerator(
             //!
             //! ## Using $serviceName
             //!
-            //! The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
-            //! trait and therefore can be handed to a [`hyper` server] via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](#{SmithyHttpServer}::routing::LambdaHandler).
+            //! The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`](#{Tower}::Service)
+            //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](#{SmithyHttpServer}::routing::LambdaHandler).
             //! The [`crate::${InputsModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputsModule.name}`], ${if (hasErrors) "and [`crate::${ErrorsModule.name}`]" else "" }
             //! modules provide the types used in each operation.
             //!
@@ -225,6 +226,7 @@ open class ServerServiceGenerator(
             "Handlers" to handlers,
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
             "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
+            "Tower" to ServerCargoDependency.Tower.toType(),
         )
     }
 
@@ -236,7 +238,6 @@ open class ServerServiceGenerator(
         rustCrate.lib {
             documentation(this)
 
-            rust("##[doc(inline, hidden)]")
             rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
         }
 
@@ -255,35 +256,35 @@ open class ServerServiceGenerator(
             renderOperationHandler(this, operations)
         }
         rustCrate.withModule(
-            RustModule.public(
+            RustModule.LeafModule(
                 "operation_registry",
+                RustMetadata(
+                    visibility = Visibility.PUBLIC,
+                    additionalAttributes = listOf(
+                        Attribute.Deprecated("0.52.0", "This module exports the deprecated `OperationRegistry`. Use the service builder exported from your root crate."),
+                    ),
+                ),
                 """
                 Contains the [`operation_registry::OperationRegistry`], a place where
                 you can register your service's operation implementations.
+
+                ## Deprecation
+
+                This service builder is deprecated - use [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder_with_plugins`] or [`${codegenContext.serviceShape.id.name.toPascalCase()}::builder_without_plugins`] instead.
                 """,
             ),
         ) {
             renderOperationRegistry(this, operations)
         }
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule.LeafModule(
-                "operation_shape",
-                RustMetadata(
-                    visibility = Visibility.PUBLIC,
-                    additionalAttributes = listOf(
-                        Attribute.DocHidden,
-                    ),
-                ),
-            ),
+            RustModule.public("operation_shape"),
         ) {
             ServerOperationShapeGenerator(operations, codegenContext).render(this)
         }
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1707): Remove, this is temporary.
         rustCrate.withModule(
-            RustModule.LeafModule("service", RustMetadata(visibility = Visibility.PRIVATE, additionalAttributes = listOf(Attribute.DocHidden)), null),
+            RustModule.private("service"),
         ) {
             ServerServiceGeneratorV2(
                 codegenContext,

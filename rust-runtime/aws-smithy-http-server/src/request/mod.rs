@@ -67,6 +67,10 @@ fn internal_server_error() -> http::Response<BoxBody> {
 }
 
 #[doc(hidden)]
+#[deprecated(
+    since = "0.52.0",
+    note = "This is not used by the new service builder. We use the `http::Parts` struct directly."
+)]
 #[derive(Debug)]
 pub struct RequestParts<B> {
     uri: Uri,
@@ -75,6 +79,7 @@ pub struct RequestParts<B> {
     body: Option<B>,
 }
 
+#[allow(deprecated)]
 impl<B> RequestParts<B> {
     /// Create a new `RequestParts`.
     ///
