@@ -199,7 +199,7 @@ pub struct Operation<S, L = Identity> {
 }
 
 impl<S, L> Operation<S, L> {
-    /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
+    /// Applies a [`Layer`](tower::Layer) to the operation _after_ it has been upgraded via [`Operation::upgrade`].
     pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
         Operation {
             inner: self.inner,

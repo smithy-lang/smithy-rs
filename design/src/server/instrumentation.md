@@ -53,11 +53,19 @@ Smithy provides an out-the-box middleware which:
 - Opens a DEBUG level span, prior to request handling, including the operation name and request URI and headers.
 - Emits a DEBUG level event, after to request handling, including the response headers and status code.
 
-This is applied by default and can be enabled and disabled by filtering on `aws_smithy_http_server::instrumentation`.
+This is enabled via the `instrument` method provided by the `aws_smithy_http_server::instrumentation::InstrumentExt` trait.
+
+```rust
+use aws_smithy_http_server::instrumentation::InstrumentExt;
+
+let plugins = PluginPipeline::new().instrument();
+let app = PokemonService::builder_with_plugins(plugins)
+  .get_pokemon_species(/* handler */)
+  /* ... */
+  .build();
+```
 
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
-
-<!-- TODO: Document use of the `InstrumentExt` after the new service builder is released. -->
 
 ### Example
 

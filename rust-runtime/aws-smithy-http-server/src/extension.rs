@@ -23,6 +23,7 @@ use std::ops::Deref;
 
 use thiserror::Error;
 
+#[allow(deprecated)]
 use crate::request::RequestParts;
 
 pub use crate::request::extension::Extension;
@@ -35,6 +36,10 @@ pub use crate::request::extension::MissingExtension;
 ///
 /// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
+#[deprecated(
+    since = "0.52.0",
+    note = "This is no longer inserted by the new service builder. Layers should be constructed per operation using the plugin system."
+)]
 pub struct OperationExtension {
     absolute: &'static str,
 
@@ -50,6 +55,7 @@ pub enum ParseError {
     MissingNamespace,
 }
 
+#[allow(deprecated)]
 impl OperationExtension {
     /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
@@ -123,6 +129,11 @@ impl Deref for RuntimeErrorExtension {
 /// This is essentially the implementation of `FromRequest` for `Extension`, but with a
 /// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
 /// this function and converts the rejection type into a [`crate::runtime_error::RuntimeError`].
+#[deprecated(
+    since = "0.52.0",
+    note = "This was used for extraction under the older service builder. The `FromParts::from_parts` method is now used instead."
+)]
+#[allow(deprecated)]
 pub async fn extract_extension<T, B>(
     req: &mut RequestParts<B>,
 ) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
@@ -146,6 +157,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

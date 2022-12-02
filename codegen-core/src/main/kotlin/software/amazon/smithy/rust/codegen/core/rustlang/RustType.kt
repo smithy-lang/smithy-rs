@@ -424,6 +424,28 @@ sealed class Attribute {
         val NonExhaustive = Custom("non_exhaustive")
     }
 
+    data class Deprecated(val since: String?, val note: String?) : Attribute() {
+        override fun render(writer: RustWriter) {
+            writer.raw("#[deprecated")
+            if (since != null || note != null) {
+                writer.raw("(")
+                if (since != null) {
+                    writer.raw("""since = "$since"""")
+
+                    if (note != null) {
+                        writer.raw(", ")
+                    }
+                }
+
+                if (note != null) {
+                    writer.raw("""note = "$note"""")
+                }
+                writer.raw(")")
+            }
+            writer.raw("]")
+        }
+    }
+
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {
         override fun render(writer: RustWriter) {
             if (derives.isEmpty()) {
