@@ -171,7 +171,7 @@ Services should still decide to have their own unique request ID per actual call
 <p>RequestIDs are not to be used by multiple services, but only within a single service.</p>
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 <h2 id="the-user-experience-if-this-rfc-is-implemented"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented">The user experience if this RFC is implemented</a></h2>
-<p>The proposal is to implement a <code>RequestId</code> type and make it available to middleware and business logic handlers, through <a href="../server/from-parts.html">FromParts</a> and as a <code>Service</code>.
+<p>The proposal is to implement a <code>RequestId</code> type and make it available to middleware and business logic handlers, through <a href="../server/from_parts.html">FromParts</a> and as a <code>Service</code>.
 To aid customers already relying on clients' request IDs, there will be two types: <code>ClientRequestId</code> and <code>ServerRequestId</code>.</p>
 <ol>
 <li>Implementing <code>FromParts</code> for <code>Extension&lt;RequestId&gt;</code> gives customers the ability to write their handlers:</li>

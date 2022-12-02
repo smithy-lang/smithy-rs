@@ -264,6 +264,24 @@ impl From&lt;HashMap&lt;String, Document&gt;&gt; for Document {
     }
 }
 
+impl From&lt;u64&gt; for Document {
+    fn from(value: u64) -&gt; Self {
+        Document::Number(Number::PosInt(value))
+    }
+}
+
+impl From&lt;i64&gt; for Document {
+    fn from(value: i64) -&gt; Self {
+        Document::Number(Number::NegInt(value))
+    }
+}
+
+impl From&lt;i32&gt; for Document {
+    fn from(value: i32) -&gt; Self {
+        Document::Number(Number::NegInt(value as i64))
+    }
+}
+
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// &lt;https://docs.serde.rs/src/serde_json/number.rs.html#20-22&gt;
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -473,6 +473,24 @@ impl From&lt;HashMap&lt;String, Document&gt;&gt; for Document {
     }
 }
 
+impl From&lt;u64&gt; for Document {
+    fn from(value: u64) -&gt; Self {
+        Document::Number(Number::PosInt(value))
+    }
+}
+
+impl From&lt;i64&gt; for Document {
+    fn from(value: i64) -&gt; Self {
+        Document::Number(Number::NegInt(value))
+    }
+}
+
+impl From&lt;i32&gt; for Document {
+    fn from(value: i32) -&gt; Self {
+        Document::Number(Number::NegInt(value as i64))
+    }
+}
+
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// &lt;https://docs.serde.rs/src/serde_json/number.rs.html#20-22&gt;
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -918,7 +936,7 @@ pub enum AttributeValue {
 <li><a href="server/./instrumentation.html">Instrumentation</a></li>
 </ul>
 <!-- - [The Anatomy of a Service](./anatomy.md) -->
-<!-- - [Accessing Un-modelled Data](./from-parts.md) -->
+<!-- - [Accessing Un-modelled Data](./from_parts.md) -->
 <div style="break-before: page; page-break-before: always;"></div><h1 id="generating-common-service-code"><a class="header" href="#generating-common-service-code">Generating Common Service Code</a></h1>
 <p>How a service is constructed and how to plug in new business logic is described in <a href="server/./pokemon_service.html">Pokémon Service</a>.
 This document introduces the project and how code is being generated. It is written for developers who want to start contributing to <code>smithy-rs</code>.</p>
@@ -8144,7 +8162,7 @@ Services should still decide to have their own unique request ID per actual call
 <p>RequestIDs are not to be used by multiple services, but only within a single service.</p>
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 <h2 id="the-user-experience-if-this-rfc-is-implemented-1"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented-1">The user experience if this RFC is implemented</a></h2>
-<p>The proposal is to implement a <code>RequestId</code> type and make it available to middleware and business logic handlers, through <a href="rfcs/../server/from-parts.html">FromParts</a> and as a <code>Service</code>.
+<p>The proposal is to implement a <code>RequestId</code> type and make it available to middleware and business logic handlers, through <a href="rfcs/../server/from_parts.html">FromParts</a> and as a <code>Service</code>.
 To aid customers already relying on clients' request IDs, there will be two types: <code>ClientRequestId</code> and <code>ServerRequestId</code>.</p>
 <ol>
 <li>Implementing <code>FromParts</code> for <code>Extension&lt;RequestId&gt;</code> gives customers the ability to write their handlers:</li>
