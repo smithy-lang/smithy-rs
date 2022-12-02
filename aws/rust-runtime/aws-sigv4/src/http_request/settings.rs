@@ -74,7 +74,7 @@ pub enum UriPathNormalizationMode {
     /// Normalize the URI path according to RFC3986
     Enabled,
 
-    /// The exception to this is that we do not normalize URI paths for requests to Amazon S3
+    /// Don't normalize the URI path (S3, for example, rejects normalized paths in some instances)
     Disabled,
 }
 
