@@ -565,7 +565,7 @@ In addition to the [`ConnectInfo`](https://docs.rs/aws-smithy-http-server/latest
 
 ### New Documentation
 
-New sections to the[server side of the book](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/overview.md) have been added.
+New sections to have been added to the [server side of the book](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/overview.md).
 
 These include:
 
