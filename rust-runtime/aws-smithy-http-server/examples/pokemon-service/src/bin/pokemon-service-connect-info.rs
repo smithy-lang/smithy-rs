@@ -62,9 +62,10 @@ pub async fn do_nothing_but_log_request_ids(
     server_request_id: Extension<ServerRequestId>,
     client_request_id: Extension<Option<ClientRequestId>>,
 ) -> DoNothingOutput {
-    println!(
+    tracing::debug!(
         "This request has this client ID: {:?} and server ID: {}",
-        client_request_id.0, server_request_id.0
+        client_request_id.0,
+        server_request_id.0
     );
     DoNothingOutput {}
 }
