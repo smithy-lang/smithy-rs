@@ -85,7 +85,7 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
-        request.extensions_mut().insert(ServerRequestId::new());
+        req.extensions_mut().insert(ServerRequestId::new());
         self.inner.call(req)
     }
 }
