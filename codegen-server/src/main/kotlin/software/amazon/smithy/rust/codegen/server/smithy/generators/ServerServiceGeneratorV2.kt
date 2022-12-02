@@ -156,7 +156,7 @@ class ServerServiceGeneratorV2(
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "Handler" to DocHandlerGenerator(operationShape, "///", "handler", codegenContext)::render,
+                "Handler" to DocHandlerGenerator(codegenContext, operationShape, "handler", "///")::render,
                 *codegenScope,
             )
 
@@ -256,7 +256,7 @@ class ServerServiceGeneratorV2(
         rustTemplate(
             """
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
-            /// Operations without a handler default to returning 500s to the caller.
+            /// Operations without a handler default to returning 500 Internal Server Error to the caller.
             ///
             /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
             /// not have a registered handler.

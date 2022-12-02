@@ -14,9 +14,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
@@ -54,19 +54,14 @@ open class ServerServiceGenerator(
                     compareBy { it.id },
                 )
         val crateName = codegenContext.moduleUseName()
+        val builderName = "${serviceName}Builder"
         val service = codegenContext.serviceShape
+        val hasErrors = service.operations.any { codegenContext.model.expectShape(it).asOperationShape().get().errors.isNotEmpty() }
         val handlers: Writable = operations
             .map { operation ->
-                DocHandlerGenerator(operation, "//!", builderFieldNames[operation]!!, codegenContext).docSignature()
+                DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!")::render
             }
-            .reduce { acc, wt ->
-                writable {
-                    rustTemplate("#{acc:W} \n#{wt:W}", "acc" to acc, "wt" to wt)
-                }
-            }
-        val builderName = "${serviceName}Builder"
-
-        val hasErrors = service.operations.any { codegenContext.model.expectShape(it).asOperationShape().get().errors.isNotEmpty() }
+            .join("\n")
 
         writer.rustTemplate(
             """
@@ -75,7 +70,7 @@ open class ServerServiceGenerator(
             //! ## Using $serviceName
             //!
             //! The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`]
-            //! trait and therefore can be handed to a [`hyper` server] via [`$serviceName::into_make_service`] or used in Lambda via [`#{SmithyHttpServer}::routing::LambdaHandler`].
+            //! trait and therefore can be handed to a [`hyper` server] via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](#{SmithyHttpServer}::routing::LambdaHandler).
             //! The [`crate::${InputsModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputsModule.name}`], ${if (hasErrors) "and [`crate::${ErrorsModule.name}`]" else "" }
             //! modules provide the types used in each operation.
             //!
@@ -85,6 +80,7 @@ open class ServerServiceGenerator(
             //! ## use std::net::SocketAddr;
             //! ## async fn dummy() {
             //! use $crateName::$serviceName;
+            //!
             //! ## let app = $serviceName::builder_without_plugins().build_unchecked();
             //! let server = app.into_make_service();
             //! let bind: SocketAddr = "127.0.0.1:6969".parse()
@@ -95,11 +91,13 @@ open class ServerServiceGenerator(
             //!
             //! ###### Running on Lambda
             //!
-            //! ```rust,ignore
+            //! ```rust,no_run
+            //! use #{SmithyHttpServer}::routing::LambdaHandler;
             //! use $crateName::$serviceName;
+            //!
             //! ## async fn dummy() {
             //! ## let app = $serviceName::builder_without_plugins().build_unchecked();
-            //! let handler = #{SmithyHttpServer}::routing::LambdaHandler::new(app);
+            //! let handler = LambdaHandler::new(app);
             //! lambda_http::run(handler).await.unwrap();
             //! ## }
             //! ```
@@ -115,15 +113,17 @@ open class ServerServiceGenerator(
             //! accepts a [`Plugin`](aws_smithy_http_server::plugin::Plugin).
             //! Plugins allow you to build middleware which is aware of the operation it is being applied to.
             //!
-            //! ```rust,ignore
+            //! ```rust
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
+            //! ## use hyper::Body;
             //! use #{SmithyHttpServer}::plugin::PluginPipeline;
+            //! use $crateName::{$serviceName, $builderName};
             //!
             //! let plugins = PluginPipeline::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
-            //! let builder = $crateName::$serviceName::builder_with_plugins(plugins);
+            //! let builder: $builderName<Body, _> = $serviceName::builder_with_plugins(plugins);
             //! ```
             //!
             //! Check out [`#{SmithyHttpServer}::plugin`] to learn more about plugins.
@@ -138,19 +138,43 @@ open class ServerServiceGenerator(
             //! * A `Result<Output, Error>` if your operation has modeled errors, or
             //! * An `Output` otherwise.
             //!
-            //! ```rust,ignore
-            //! async fn fallible_handler(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Result<Output, Error> { todo!() }
-            //! async fn infallible_handler(input: Input, extensions: #{SmithyHttpServer}::Extension<T>) -> Output { todo!() }
+            //! ```rust
+            //! ## struct Input;
+            //! ## struct Output;
+            //! ## struct Error;
+            //! async fn infallible_handler(input: Input) -> Output { todo!() }
+            //!
+            //! async fn fallible_handler(input: Input) -> Result<Output, Error> { todo!() }
             //! ```
             //!
             //! Handlers can accept up to 8 extractors:
             //!
-            //! ```rust,ignore
-            //! async fn handler_with_no_extensions(input: Input) -> ... { todo!() }
-            //! async fn handler_with_one_extension(input: Input, ext: #{SmithyHttpServer}::Extension<T>) -> ... { todo!() }
-            //! async fn handler_with_two_extensions(input: Input, ext0: #{SmithyHttpServer}::Extension<T>, ext1: #{SmithyHttpServer}::Extension<T>) -> ... { todo!() }
-            //! ...
+            //! ```rust
+            //! ## struct Input;
+            //! ## struct Output;
+            //! ## struct Error;
+            //! ## struct State;
+            //! ## use std::net::SocketAddr;
+            //! use #{SmithyHttpServer}::request::{extension::Extension, connect_info::ConnectInfo};
+            //!
+            //! async fn handler_with_no_extensions(input: Input) -> Output {
+            //!     todo!()
+            //! }
+            //!
+            //! async fn handler_with_one_extractor(input: Input, ext: Extension<State>) -> Output {
+            //!     todo!()
+            //! }
+            //!
+            //! async fn handler_with_two_extractors(
+            //!     input: Input,
+            //!     ext0: Extension<State>,
+            //!     ext1: ConnectInfo<SocketAddr>,
+            //! ) -> Output {
+            //!     todo!()
+            //! }
             //! ```
+            //!
+            //! See the [operation module](#{SmithyHttpServer}::operation) for information on precisely what constitutes a handler.
             //!
             //! #### Build
             //!
@@ -158,13 +182,13 @@ open class ServerServiceGenerator(
             //!
             //! [`$builderName::build`] requires you to provide a handler for every single operation in your Smithy model. It will return an error if that is not the case.
             //!
-            //! [`$builderName::build_unchecked`], instead, does not require exhaustiveness. The server will automatically return 500s to all requests for operations that do not have a registered handler.
+            //! [`$builderName::build_unchecked`], instead, does not require exhaustiveness. The server will automatically return 500 Internal Server Error to all requests for operations that do not have a registered handler.
             //! [`$builderName::build_unchecked`] is particularly useful if you are deploying your Smithy service as a collection of Lambda functions, where each Lambda is only responsible for a subset of the operations in the Smithy service (or even a single one!).
             //!
             //! ## Example
             //!
             //! ```rust
-            //! use std::net::SocketAddr;
+            //! ## use std::net::SocketAddr;
             //! use $crateName::$serviceName;
             //!
             //! ##[tokio::main]
@@ -197,7 +221,7 @@ open class ServerServiceGenerator(
             //! [Service]: https://docs.rs/tower-service/latest/tower_service/trait.Service.html
             """,
             "Handlers" to handlers,
-            "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(operation, "//!", builderFieldNames[operation]!!, codegenContext).docSignature() },
+            "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
             "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
         )
     }
