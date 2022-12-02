@@ -33,10 +33,8 @@ pub trait AsyncMapRequest {
     type Error: Into<BoxError> + 'static;
     type Future: Future<Output = Result<operation::Request, Self::Error>> + Send + 'static;
 
-    /// Optionally returns the name of this map request operation for inclusion in a tracing span.
-    fn name(&self) -> Option<&'static str> {
-        None
-    }
+    /// Returns the name of this map request operation for inclusion in a tracing span.
+    fn name(&self) -> &'static str;
 
     fn apply(&self, request: operation::Request) -> Self::Future;
 }
