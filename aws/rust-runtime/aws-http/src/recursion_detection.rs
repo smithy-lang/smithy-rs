@@ -33,8 +33,8 @@ impl RecursionDetectionStage {
 impl MapRequest for RecursionDetectionStage {
     type Error = std::convert::Infallible;
 
-    fn name(&self) -> Option<&'static str> {
-        Some("recursion_detection")
+    fn name(&self) -> &'static str {
+        "recursion_detection"
     }
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {

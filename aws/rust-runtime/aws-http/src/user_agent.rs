@@ -582,8 +582,8 @@ lazy_static::lazy_static! {
 impl MapRequest for UserAgentStage {
     type Error = UserAgentStageError;
 
-    fn name(&self) -> Option<&'static str> {
-        Some("generate_user_agent")
+    fn name(&self) -> &'static str {
+        "generate_user_agent"
     }
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {

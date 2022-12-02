@@ -66,10 +66,7 @@ where
         let mut inner = self.inner.clone();
         let future = self.mapper.apply(req);
         Box::pin(async move {
-            let span = debug_span!("async_map_request", name = tracing::field::Empty);
-            if let Some(name) = mapper_name {
-                span.record("name", name);
-            }
+            let span = debug_span!("async_map_request", name = mapper_name);
             let mapped_request = future
                 .instrument(span)
                 .await
@@ -150,11 +147,7 @@ where
     }
 
     fn call(&mut self, req: operation::Request) -> Self::Future {
-        let span = debug_span!("map_request", name = tracing::field::Empty);
-        if let Some(name) = self.mapper.name() {
-            span.record("name", name);
-        }
-
+        let span = debug_span!("map_request", name = self.mapper.name());
         let mapper = &self.mapper;
         match span
             .in_scope(|| mapper.apply(req))

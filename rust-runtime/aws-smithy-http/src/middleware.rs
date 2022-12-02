@@ -73,10 +73,8 @@ pub trait MapRequest {
     /// If this middleware never fails use [std::convert::Infallible] or similar.
     type Error: Into<BoxError>;
 
-    /// Optionally returns the name of this map request operation for inclusion in a tracing span.
-    fn name(&self) -> Option<&'static str> {
-        None
-    }
+    /// Returns the name of this map request operation for inclusion in a tracing span.
+    fn name(&self) -> &'static str;
 
     /// Apply this middleware to a request.
     ///

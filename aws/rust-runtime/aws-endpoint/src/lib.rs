@@ -138,8 +138,8 @@ impl From<AwsEndpointStageErrorKind> for AwsEndpointStageError {
 impl MapRequest for AwsEndpointStage {
     type Error = AwsEndpointStageError;
 
-    fn name(&self) -> Option<&'static str> {
-        Some("resolve_endpoint")
+    fn name(&self) -> &'static str {
+        "resolve_endpoint"
     }
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
