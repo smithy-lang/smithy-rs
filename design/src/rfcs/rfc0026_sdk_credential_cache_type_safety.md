@@ -49,13 +49,13 @@ pub struct CredentialsCache {
 }
 
 impl CredentialsCache {
-    // Methods prefixed with `default_` just use the default cache settings
-    pub fn default_lazy() -> Self { /* ... */ }
-    pub fn default_eager() -> Self { /* ... */ }
+    // These methods use default cache settings
+    pub fn lazy() -> Self { /* ... */ }
+    pub fn eager() -> Self { /* ... */ }
 
     // Unprefixed methods return a builder that can take customizations
-    pub fn lazy() -> LazyBuilder { /* ... */ }
-    pub fn eager() -> EagerBuilder { /* ... */ }
+    pub fn lazy_builder() -> LazyBuilder { /* ... */ }
+    pub fn eager_builder() -> EagerBuilder { /* ... */ }
 
     // Later, when custom implementations are supported
     pub fn custom(cache_impl: Box<dyn SomeCacheTrait>) -> Self { /* ... */ }
@@ -65,6 +65,9 @@ impl CredentialsCache {
         provider: Box<dyn ProvideCredentials>,
         sleep_impl: Arc<dyn AsyncSleep>
     ) -> SharedCredentialsProvider {
+        // Note: SharedCredentialsProvider would get renamed to SharedCredentialsCache.
+        // This code is using the old name to make it clearer that it already exists,
+        // and the rename is called out in the change checklist.
         SharedCredentialsProvider::new(
             match self {
                 Self::Lazy(inner) => LazyCachingCredentialsProvider::new(provider, settings.time, /* ... */),
@@ -108,10 +111,12 @@ The `credentials_cache` will default to `CredentialsCache::default_lazy()` if no
 Changes Checklist
 -----------------
 
+- [ ] Remove cache from `AssumeRoleProvider`
 - [ ] Implement `CredentialsCache` with its `Lazy` variant and builder
 - [ ] Add `credentials_cache` method to `ConfigLoader`
 - [ ] Refactor `ConfigLoader` to take `CredentialsCache` instead of `impl ProvideCredentials + 'static`
 - [ ] Refactor `SharedCredentialsProvider` to take a cache implementation in addition to an `impl ProvideCredentials + 'static`
+- [ ] Remove `ProvideCredentials` impl from `LazyCachingCredentialsProvider`
 - [ ] Rename `LazyCachingCredentialsProvider` -> `LazyCredentialsCache`
 - [ ] Refactor the SDK `Config` code generator to be consistent with `ConfigLoader`
 - [ ] Write changelog upgrade instructions
