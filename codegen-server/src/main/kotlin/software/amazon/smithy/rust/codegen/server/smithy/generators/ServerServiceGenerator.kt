@@ -235,6 +235,8 @@ open class ServerServiceGenerator(
      */
     fun render() {
         rustCrate.lib {
+            documentation(this)
+
             rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
         }
 
