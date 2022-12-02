@@ -90,7 +90,7 @@ open class ServerServiceGenerator(
         }
 
         rustCrate.withModule(
-            RustModule.public("service"),
+            RustModule.private("service"),
         ) {
             ServerServiceGeneratorV2(
                 codegenContext,
