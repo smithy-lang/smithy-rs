@@ -159,7 +159,7 @@ private class AwsFluentClientExtensions(types: Types) {
                 """
                 /// Creates a new client from an [SDK Config](#{aws_types}::sdk_config::SdkConfig).
                 ///
-                /// ###### Panics
+                /// ## Panics
                 ///
                 /// - This method will panic if the `conf` is missing an async sleep implementation. If you experience this panic, set
                 ///     the `sleep_impl` on the Config passed into this function to fix it.
