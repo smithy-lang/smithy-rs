@@ -1,7 +1,7 @@
 RFC: RequestID in business logic handlers
 =============
 
-> Status: RFC
+> Status: Implemented
 >
 > Applies to: server
 
@@ -131,7 +131,7 @@ Although the generated ID is opaque, this will give guarantees to customers as t
 Changes checklist
 -----------------
 
-- [ ] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
-- [ ] Implement `ClientRequestId`: `new()` that wraps a string (the header value) and the header in which the value could be found, with `Display`, `Debug` and `ToStr` implementations
+- [x] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
+- [x] Implement `ClientRequestId`: `new()` that wraps a string (the header value) and the header in which the value could be found, with `Display`, `Debug` and `ToStr` implementations
 - [x] Implement `FromParts` for `Extension<ServerRequestId>`
 - [x] Implement `FromParts` for `Extension<ClientRequestId>`
