@@ -30,7 +30,7 @@ class ServerOperationShapeGenerator(
 
         writer.rustTemplate(
             """
-            //! A collection of zero-sized types (ZSTs) representing each operation defined in the service closure.
+            //! A collection of types representing each operation defined in the service closure.
             //!
             //! ## Constructing an [`Operation`](#{SmithyHttpServer}::operation::OperationShapeExt)
             //!
@@ -54,8 +54,9 @@ class ServerOperationShapeGenerator(
             //!
             //! ## Use as Marker Structs
             //!
-            //! The [plugin system](#{SmithyHttpServer}::plugin) also makes use of these ZSTs to parameterize
-            //! [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. The traits, such as
+            //! The [plugin system](#{SmithyHttpServer}::plugin) also makes use of these
+            //! [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html##zero-sized-types-zsts) (ZSTs) to
+            //! parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. The traits, such as
             //! [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape) can be used to provide
             //! operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
             """.trimIndent(),

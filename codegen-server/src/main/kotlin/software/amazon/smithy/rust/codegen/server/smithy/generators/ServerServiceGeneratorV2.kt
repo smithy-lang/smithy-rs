@@ -343,6 +343,8 @@ class ServerServiceGeneratorV2(
 
         rustTemplate(
             """
+            ///
+            /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,

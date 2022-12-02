@@ -19,7 +19,7 @@
 //! #   Ok(Response::new(()))
 //! # }
 //! # async fn example() {
-//! # let svc = service_fn(service);
+//! # let service = service_fn(service);
 //! let request = Request::get("http://localhost/a/b/c/d?bar=hidden")
 //!     .header("header-name-a", "hidden")
 //!     .body(())
@@ -47,11 +47,11 @@
 //!         }
 //!     })
 //!     .status_code();
-//! let mut svc = InstrumentOperation::new(svc, "foo-operation")
+//! let mut service = InstrumentOperation::new(service, "foo-operation")
 //!     .request_fmt(request_fmt)
 //!     .response_fmt(response_fmt);
 //!
-//! let _ = svc.call(request).await.unwrap();
+//! let _ = service.call(request).await.unwrap();
 //! # }
 //! ```
 //!

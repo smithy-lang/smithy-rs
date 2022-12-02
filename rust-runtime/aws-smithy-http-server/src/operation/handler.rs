@@ -19,6 +19,8 @@ use tower::Service;
 use super::{OperationError, OperationShape};
 
 /// A utility trait used to provide an even interface for all operation handlers.
+///
+/// See [`operation`](crate::operation) documentation for more info.
 pub trait Handler<Op, Exts>
 where
     Op: OperationShape,
