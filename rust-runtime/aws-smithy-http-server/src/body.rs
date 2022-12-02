@@ -15,6 +15,7 @@ use bytes::Bytes;
 
 use crate::error::{BoxError, Error};
 
+/// The primary [`Body`] returned by the generated `smithy-rs` service.
 pub type BoxBody = http_body::combinators::UnsyncBoxBody<Bytes, Error>;
 
 // `boxed` is used in the codegen of the implementation of the operation `Handler` trait.

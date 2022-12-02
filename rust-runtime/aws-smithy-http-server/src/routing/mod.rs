@@ -44,6 +44,8 @@ pub(crate) mod tiny_map;
 #[cfg(feature = "aws-lambda")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub use self::lambda_handler::LambdaHandler;
+
+#[allow(deprecated)]
 pub use self::{
     future::RouterFuture,
     into_make_service::IntoMakeService,
@@ -72,6 +74,10 @@ pub use self::{
 /// [awsJson1.1]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html
 /// [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 #[derive(Debug)]
+#[deprecated(
+    since = "0.52.0",
+    note = "`OperationRegistry` is part of the deprecated service builder API. This type no longer appears in the public API."
+)]
 pub struct Router<B = Body> {
     routes: Routes<B>,
 }
@@ -91,6 +97,7 @@ enum Routes<B = Body> {
     AwsJson1_1(RoutingService<AwsJsonRouter<Route<B>>, AwsJson1_1>),
 }
 
+#[allow(deprecated)]
 impl<B> Clone for Router<B> {
     fn clone(&self) -> Self {
         match &self.routes {
@@ -110,6 +117,7 @@ impl<B> Clone for Router<B> {
     }
 }
 
+#[allow(deprecated)]
 impl<B> Router<B>
 where
     B: Send + 'static,
@@ -259,6 +267,7 @@ where
     }
 }
 
+#[allow(deprecated)]
 impl<B> Service<Request<B>> for Router<B>
 where
     B: Send + 'static,
@@ -287,6 +296,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod rest_tests {
     use super::*;
     use crate::{
@@ -513,6 +523,7 @@ mod rest_tests {
     }
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod awsjson_tests {
     use super::rest_tests::{get_body_as_string, req};

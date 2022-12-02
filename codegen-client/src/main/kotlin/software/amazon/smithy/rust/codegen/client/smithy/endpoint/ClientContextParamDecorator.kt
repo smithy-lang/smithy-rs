@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Servi
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -28,9 +29,10 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 /**
  * This decorator adds `ClientContextParams` to the service config.
  *
- * This handles injecting parameters like `s3::Accelerate` or `s3::ForcePathStyle`
+ * This handles injecting parameters like `s3::Accelerate` or `s3::ForcePathStyle`. The resulting parameters become
+ * setters on the config builder object.
  */
-class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization() {
+internal class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization() {
     private val contextParams = ctx.serviceShape.getTrait<ClientContextParamsTrait>()?.parameters.orEmpty().toList()
         .map { (key, value) -> ContextParam.fromClientParam(key, value, ctx.symbolProvider) }
 
@@ -74,11 +76,21 @@ class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization() {
             }
             ServiceConfig.BuilderImpl -> writable {
                 contextParams.forEach { param ->
-                    param.docs?.also { docs(it) }
+                    docsOrFallback(param.docs)
                     rust(
                         """
                         pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
                             self.${param.name} = Some(${param.name}.into());
+                            self
+                        }""",
+                        param.type,
+                    )
+
+                    docsOrFallback(param.docs)
+                    rust(
+                        """
+                        pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
+                            self.${param.name} = ${param.name};
                             self
                         }
                         """,

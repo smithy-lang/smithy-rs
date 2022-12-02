@@ -502,3 +502,114 @@ in non-serverless environments (e.g. via `hyper`).
 references = ["smithy-rs#2035"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "LukeMathWalker"
+
+[[smithy-rs]]
+message = """
+### Plugins/New Service Builder API
+
+The `Router` struct has been replaced by a new `Service` located at the root of the generated crate. Its name coincides with the same name as the Smithy service you are generating.
+
+```rust
+use pokemon_service_server_sdk::PokemonService;
+```
+
+The new service builder infrastructure comes with a `Plugin` system which supports middleware on `smithy-rs`. See the [mididleware documentation](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/middleware.md) and the [API documentation](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/plugin/index.html) for more details.
+
+Usage of the new service builder API:
+
+```rust
+// Apply a sequence of plugins using `PluginPipeline`.
+let plugins = PluginPipeline::new()
+    // Apply the `PrintPlugin`.
+    // This is a dummy plugin found in `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs`
+    .print()
+    // Apply the `InstrumentPlugin` plugin, which applies `tracing` instrumentation.
+    .instrument();
+
+// Construct the service builder using the `plugins` defined above.
+let app = PokemonService::builder_with_plugins(plugins)
+    // Assign all the handlers.
+    .get_pokemon_species(get_pokemon_species)
+    .get_storage(get_storage)
+    .get_server_statistics(get_server_statistics)
+    .capture_pokemon(capture_pokemon)
+    .do_nothing(do_nothing)
+    .check_health(check_health)
+    // Construct the `PokemonService`.
+    .build()
+    // If handlers are missing a descriptive error will be provided.
+    .expect("failed to build an instance of `PokemonService`");
+```
+
+See the `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/bin` folder for various working examples.
+
+### Public `FromParts` trait
+
+Previously, we only supported one [`Extension`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/struct.Extension.html) as an additional argument provided to the handler. This number has been increased to 8 and the argument type has been broadened to any struct which implements the [`FromParts`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) trait. The trait is publicly exported and therefore provides customers with the ability to extend the domain of the handlers.
+
+As noted, a ubiqutious example of a struct that implements `FromParts` is the `Extension` struct, which extracts state from the `Extensions` typemap of a [`http::Request`](https://docs.rs/http/latest/http/request/struct.Request.html). A new example is the `ConnectInfo` struct which allows handlers to access the connection data. See the `rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/bin/pokemon-service-connect-info.rs` example.
+
+```rust
+fn get_pokemon_species(
+    input: GetPokemonSpeciesInput,
+    state: Extension<State>,
+    address: ConnectInfo<SocketAddr>
+) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
+    todo!()
+}
+```
+
+In addition to the [`ConnectInfo`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/connect_info/struct.ConnectInfo.html) extractor, we also have added [lambda extractors](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/lambda/index.html) which are feature gated with `aws-lambda`.
+
+[`FromParts` documentation](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md) has been added.
+
+### New Documentation
+
+New sections to have been added to the [server side of the book](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/overview.md).
+
+These include:
+
+- [Middleware](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/middleware.md)
+- [Accessing Un-modelled Data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
+- [Anatomy of a Service](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/anatomy.md)
+
+This release also introduces extensive documentation at the root of the generated crate. For best results compile documentation with `cargo +nightly doc --open`.
+
+### Deprecations
+
+The existing service builder infrastructure, `OperationRegistryBuilder`/`OperationRegistry`/`Router`, is now deprecated. Customers should migrate to the newer scheme described above. The deprecated types will be removed in a future release.
+"""
+references = [
+    "smithy-rs#1620",
+    "smithy-rs#1666",
+    "smithy-rs#1731",
+    "smithy-rs#1736",
+    "smithy-rs#1753",
+    "smithy-rs#1738",
+    "smithy-rs#1782",
+    "smithy-rs#1829",
+    "smithy-rs#1837",
+    "smithy-rs#1891",
+    "smithy-rs#1840",
+    "smithy-rs#1844",
+    "smithy-rs#1858",
+    "smithy-rs#1930",
+    "smithy-rs#1999",
+    "smithy-rs#2003",
+    "smithy-rs#2008",
+    "smithy-rs#2010",
+    "smithy-rs#2019",
+    "smithy-rs#2020",
+    "smithy-rs#2021",
+    "smithy-rs#2038",
+    "smithy-rs#2039",
+    "smithy-rs#2041",
+]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "server" }
+author = "hlbarber"
+
+[[aws-sdk-rust]]
+message = "Normalize URI paths per RFC3986 when constructing canonical requests, except for S3."
+references = ["smithy-rs#2018"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
