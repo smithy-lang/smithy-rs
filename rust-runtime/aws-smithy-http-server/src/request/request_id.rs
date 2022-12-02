@@ -61,11 +61,18 @@ impl<P> FromParts<P> for ServerRequestId {
         parts.extensions.remove().ok_or(MissingServerRequestId)
     }
 }
+#[derive(Clone)]
 pub struct ServerRequestIdProvider<S> {
     inner: S,
 }
 
 pub struct ServerRequestIdProviderLayer {}
+
+impl ServerRequestIdProviderLayer {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 
 impl<S> Layer<S> for ServerRequestIdProviderLayer {
     type Service = ServerRequestIdProvider<S>;
@@ -133,13 +140,20 @@ impl<P> FromParts<P> for Option<ClientRequestId> {
     }
 }
 
+#[derive(Clone)]
 pub struct ClientRequestIdProvider<'a, S> {
     inner: S,
-    possible_headers: &'a [&'static str],
+    possible_headers: &'a [&'a str],
 }
 
 pub struct ClientRequestIdProviderLayer<'a> {
-    possible_headers: &'a [&'static str],
+    possible_headers: &'a [&'a str],
+}
+
+impl<'a> ClientRequestIdProviderLayer<'a> {
+    pub fn new(possible_headers: &'a [&'a str]) -> Self {
+        Self { possible_headers }
+    }
 }
 
 impl<'a, S> Layer<S> for ClientRequestIdProviderLayer<'a> {

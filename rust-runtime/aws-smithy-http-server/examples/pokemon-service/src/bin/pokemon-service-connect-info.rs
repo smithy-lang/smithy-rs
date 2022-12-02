@@ -5,14 +5,19 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use aws_smithy_http_server::request::connect_info::ConnectInfo;
-use clap::Parser;
-use pokemon_service::{
-    capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics, setup_tracing,
+use aws_smithy_http_server::request::request_id::ClientRequestIdProviderLayer;
+use aws_smithy_http_server::request::request_id::ServerRequestIdProviderLayer;
+use aws_smithy_http_server::{
+    request::connect_info::ConnectInfo, request::request_id::ClientRequestId, request::request_id::ServerRequestId,
+    Extension,
 };
+use clap::Parser;
+use pokemon_service::{capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing};
 use pokemon_service_server_sdk::{
     error::{GetStorageError, NotAuthorized},
+    input::DoNothingInput,
     input::GetStorageInput,
+    output::DoNothingOutput,
     output::GetStorageOutput,
     PokemonService,
 };
@@ -55,6 +60,18 @@ pub async fn get_storage_with_local_approved(
     Err(GetStorageError::NotAuthorized(NotAuthorized {}))
 }
 
+pub async fn do_nothing_but_log_request_ids(
+    _input: DoNothingInput,
+    server_request_id: Extension<ServerRequestId>,
+    client_request_id: Extension<Option<ClientRequestId>>,
+) -> DoNothingOutput {
+    println!(
+        "This request has this client ID: {:?} and server ID: {}",
+        client_request_id.0, server_request_id.0
+    );
+    DoNothingOutput {}
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -64,10 +81,13 @@ async fn main() {
         .get_storage(get_storage_with_local_approved)
         .get_server_statistics(get_server_statistics)
         .capture_pokemon(capture_pokemon)
-        .do_nothing(do_nothing)
+        .do_nothing(do_nothing_but_log_request_ids)
         .check_health(check_health)
         .build()
         .expect("failed to build an instance of PokemonService");
+
+    let app = app.layer(&ServerRequestIdProviderLayer::new());
+    let app = app.layer(&ClientRequestIdProviderLayer::new(&["x-request-id"]));
 
     // Start the [`hyper::Server`].
     let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
