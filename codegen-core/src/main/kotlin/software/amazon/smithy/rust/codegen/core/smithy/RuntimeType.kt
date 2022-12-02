@@ -23,8 +23,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
@@ -258,8 +258,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             )
         }
 
-        fun ConstrainedTrait() = constrained().asType().member("Constrained")
-        fun MaybeConstrained() = constrained().asType().member("MaybeConstrained")
+        fun ConstrainedTrait() = constrained().toType().member("Constrained")
+        fun MaybeConstrained() = constrained().toType().member("MaybeConstrained")
 
         fun ProtocolTestHelper(runtimeConfig: RuntimeConfig, func: String): RuntimeType =
             RuntimeType(

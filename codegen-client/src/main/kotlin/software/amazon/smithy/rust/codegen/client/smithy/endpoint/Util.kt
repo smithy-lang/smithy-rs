@@ -10,18 +10,47 @@ import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsStdLib
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+
+data class Context(val functionRegistry: FunctionRegistry, val runtimeConfig: RuntimeConfig)
 
 /**
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)
  */
 fun Identifier.rustName(): String {
     return this.toString().stringToRustName()
+}
+
+/**
+ * Endpoints standard library file
+ */
+internal fun endpointsLib(name: String, vararg additionalDependency: RustDependency) = InlineDependency.forRustFile(
+    RustModule.pubCrate(
+        name,
+        parent = EndpointsStdLib,
+    ),
+    "/inlineable/src/endpoint_lib/$name.rs",
+    *additionalDependency,
+)
+
+class Types(runtimeConfig: RuntimeConfig) {
+    private val smithyTypesEndpointModule = CargoDependency.smithyTypes(runtimeConfig).toType().member("endpoint")
+    val smithyHttpEndpointModule = CargoDependency.smithyHttp(runtimeConfig).toType().member("endpoint")
+    val resolveEndpoint = smithyHttpEndpointModule.member("ResolveEndpoint")
+    val smithyEndpoint = smithyTypesEndpointModule.member("Endpoint")
+    val resolveEndpointError = smithyHttpEndpointModule.member("ResolveEndpointError")
 }
 
 private fun String.stringToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
