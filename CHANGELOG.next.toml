@@ -613,3 +613,15 @@ message = "Normalize URI paths per RFC3986 when constructing canonical requests,
 references = ["smithy-rs#2018"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fixed and improved the request `tracing` span hierarchy to improve log messages, profiling, and debuggability."
+references = ["smithy-rs#2044", "smithy-rs#371"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fixed and improved the request `tracing` span hierarchy to improve log messages, profiling, and debuggability."
+references = ["smithy-rs#2044", "smithy-rs#371"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+author = "jdisanti"
