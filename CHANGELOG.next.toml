@@ -567,6 +567,9 @@ fn get_pokemon_species(input: GetPokemonSpeciesInput, state: Extension<State>, a
 }
 ```
 
+In addition to the [`ConnectInfo`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/connect_info/struct.ConnectInfo.html) extractor, we also have added
+[lambda extractors](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/lambda/index.html) which are feature gated with `aws-lambda`.
+
 [`FromParts` documentation](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md) has been
 added.
 
@@ -581,6 +584,9 @@ These include:
 - [Middleware](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/middleware.md)
 - [Accessing Un-modelled Data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
 - [Anatomy of a Service](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/anatomy.md)
+
+This release also introduces extensive documentation at the root of the generated crate. For best results compile
+documentation with `cargo +nightly doc --open`.
 
 ### Deprecations
 
@@ -603,7 +609,16 @@ references = [
     "smithy-rs#1844",
     "smithy-rs#1858",
     "smithy-rs#1930",
-    "smithy-rs#1999"
+    "smithy-rs#1999",
+    "smithy-rs#2003",
+    "smithy-rs#2008",
+    "smithy-rs#2010",
+    "smithy-rs#2019",
+    "smithy-rs#2020",
+    "smithy-rs#2021",
+    "smithy-rs#2038",
+    "smithy-rs#2039",
+    "smithy-rs#2041",
 ]
 meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "server" }
 author = "hlbarber"
