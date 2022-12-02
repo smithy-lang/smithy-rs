@@ -35,3 +35,4 @@
 - [RFC-0023: Evolving the new service builder API](./rfc0023_refine_builder.md)
 - [RFC-0024: RequestID](./rfc0024_request_id.md)
 - [RFC-0025: Constraint traits](./rfc0025_constraint_traits.md)
+- [RFC-0026: Custom validation exceptions](./rfc0026_custom_validation_exceptions.md)
