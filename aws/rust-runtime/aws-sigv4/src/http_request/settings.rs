@@ -71,7 +71,7 @@ pub enum PercentEncodingMode {
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum UriPathNormalizationMode {
-    /// We normalize URI paths according to the RFC
+    /// Normalize the URI path according to RFC3986
     Enabled,
 
     /// The exception to this is that we do not normalize URI paths for requests to Amazon S3
