@@ -448,14 +448,11 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("object").also { objectName ->
+            rust("let mut $objectName = ${context.writerExpression}.start_object();")
             if (context.shape.isTargetUnit()) {
-                rust("let $objectName = ${context.writerExpression}.start_object();")
-                rust("$objectName.finish();")
-            } else {
-                rust("let mut $objectName = ${context.writerExpression}.start_object();")
                 inner(objectName)
-                rust("$objectName.finish();")
             }
+            rust("$objectName.finish();")
         }
     }
 
