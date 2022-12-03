@@ -107,6 +107,24 @@ impl<'de> Deserialize<'de> for Blob {
             deserializer.deserialize_byte_buf(NotHumanReadableBlobVisitor)
         }
     }
+
+    #[test]
+    fn deserialize_blob() {
+        let aws_in_base64 = r#"{"blob": "QVdT"}"#;
+
+        #[derive(Deserialize, Debug, PartialEq)]
+        struct ForTest {
+            blob: Blob,
+        }
+        assert_eq!(
+            ForTest {
+                blob: Blob {
+                    inner: vec!['A' as u8, 'W' as u8, 'S' as u8]
+                }
+            },
+            serde_json::from_str(aws_in_base64).unwrap()
+        )
+    }
 }
 
 impl Blob {
