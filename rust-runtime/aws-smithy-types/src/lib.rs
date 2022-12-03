@@ -77,7 +77,6 @@ impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
     }
 }
 
-
 #[cfg(feature = "unstable-serde-deserialize")]
 struct NotHumanReadableBlobVisitor;
 

@@ -1,4 +1,4 @@
-use std::{ffi::CString};
+use std::ffi::CString;
 
 use crate::*;
 use serde::{Deserialize, Serialize};
