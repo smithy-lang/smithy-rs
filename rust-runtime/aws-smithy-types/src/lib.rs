@@ -13,6 +13,13 @@
     unreachable_pub
 )]
 
+#[cfg(test)]
+#[cfg(all(
+    feature = "unstable-serde-serialize",
+    feature = "unstable-serde-deserialize"
+))]
+mod test;
+
 #[cfg(feature = "unstable-serde-serialize")]
 use serde::Serialize;
 #[cfg(feature = "unstable-serde-deserialize")]
@@ -41,57 +48,64 @@ impl Serialize for Blob {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&crate::base64::encode(&self.inner))
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&crate::base64::encode(&self.inner))
+        } else {
+            serializer.serialize_bytes(&self.inner)
+        }
     }
 }
 
 #[cfg(feature = "unstable-serde-deserialize")]
-mod deserialize_blob {
-    use super::*;
-    struct BlobVisitor;
+struct HumanReadableBlobVisitor;
 
-    impl<'de> Visitor<'de> for BlobVisitor {
-        type Value = Blob;
-        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            formatter.write_str("expected base64 encoded string")
-        }
-
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            match base64::decode(v) {
-                Ok(inner) => Ok(Blob { inner }),
-                Err(e) => Err(serde::de::Error::custom(e)),
-            }
-        }
+#[cfg(feature = "unstable-serde-deserialize")]
+impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
+    type Value = Blob;
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("expected base64 encoded string")
     }
 
-    impl<'de> Deserialize<'de> for Blob {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de>,
-        {
-            deserializer.deserialize_str(BlobVisitor)
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match base64::decode(v) {
+            Ok(inner) => Ok(Blob { inner }),
+            Err(e) => Err(serde::de::Error::custom(e)),
         }
     }
+}
 
-    #[test]
-    fn deserialize_blob() {
-        let aws_in_base64 = r#"{"blob": "QVdT"}"#;
+#[cfg(feature = "unstable-serde-deserialize")]
+struct NotHumanReadableBlobVisitor;
 
-        #[derive(Deserialize, Debug, PartialEq)]
-        struct ForTest {
-            blob: Blob,
+#[cfg(feature = "unstable-serde-deserialize")]
+impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
+    type Value = Blob;
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("expected base64 encoded string")
+    }
+
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Blob { inner: v })
+    }
+}
+
+#[cfg(feature = "unstable-serde-deserialize")]
+impl<'de> Deserialize<'de> for Blob {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(HumanReadableBlobVisitor)
+        } else {
+            deserializer.deserialize_byte_buf(NotHumanReadableBlobVisitor)
         }
-        assert_eq!(
-            ForTest {
-                blob: Blob {
-                    inner: vec!['A' as u8, 'W' as u8, 'S' as u8]
-                }
-            },
-            serde_json::from_str(aws_in_base64).unwrap()
-        )
     }
 }
 

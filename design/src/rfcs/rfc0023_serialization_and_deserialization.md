@@ -40,7 +40,7 @@ These data types must implement serde traits as well since SDK uses the data typ
 
 In human-readable format, `Blob` is serialized as base64 encoded string and any data to be deserialized as this data type must be encoded in base 64.  
 Encoding must be carried out by `base64::encode` function available from `aws_smithy_types` crate.  
-Non-human readable format implements `Blob` as an array of `u64` which is created by encoding `u8` as big endian.  
+Non-human readable format serializes `Blob` with `fn serialize_bytes`.
 
 - Reason behind the implementation of human-readable format
  
@@ -51,11 +51,7 @@ For the reasons above, we believe base 64 is favourable over other encoding sche
 
 - Reason behind the implementation of non-human readable format
 
-We can make the resulting size of the serialized data smaller.  
-Alternatively, we can serialize it as an array of `u8`, which will make the implementation simpler.
-However, thanks to `byteorder` crate, implementation is fairly simple and we believe that the benefit outweighs the complexity.
-
-For encoding, we considered using little endian, however, we believe that there is no advantage or disadvantage over one another.  
+// TODO: brnig better reasoning
 
 ### Date Time
 `Serialize` and `Deserialize` is not implemented with derive macro.  
