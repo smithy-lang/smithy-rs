@@ -13,6 +13,17 @@ Data types are, a) builder data types and b) data types that builder types may h
 
 `DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human redable format.
 
+# Terminology
+- Builder  
+ Refers to data types prefixed with `Builder`, which converts itself into a corresponding data type upon being built. e.g. `aws_sdk_dynamodb::input::PutItemInput`.
+- serde  
+  Refers to `serde` crate.
+- `Serialize`   
+  Refers to `Serialize` trait avaialble on `serde` crate.
+- `Deserialize`  
+  Refers to `Deserialize` trait available on `serde` crate.
+- 
+
 # Use Case
 Users have requested `serde` traits to be implemented on data types implemented in rust SDK.  
 We have created this RFC with following use cases in mind.
@@ -30,11 +41,11 @@ These data types must implement serde traits as well since SDK uses the data typ
 
 In human-readable format, `Blob` is serialized as base64 encoded string and any data to be deserialized as this data type must be encoded in base 64.  
 Encoding must be carried out by `base64::encode` function available from `aws_smithy_types` crate.  
-Non-human readable format implements `Blob` as an array of `u64` which is created by encoding `u8` as big endian.  
+Non-human readable format serializes `Blob` with `fn serialize_bytes`.
 
 - Reason behind the implementation of human-readable format
  
-`aws_smithy_types` crate comes with functions for encoding base 64, which makes the implementation simpler.  
+`aws_smithy_types` crate comes with functions for encoding/decoding base 64, which makes the implementation simpler.  
 Additionally, AWS CLI and AWS SDK for other languages require data to be encoded in base 64 when it requires `Blob` type as input.  
 
 For the reasons above, we believe base 64 is favourable over other encoding schemes such as base 16, 32, or Ascii85.  
@@ -42,10 +53,7 @@ For the reasons above, we believe base 64 is favourable over other encoding sche
 - Reason behind the implementation of non-human readable format
 
 We can make the resulting size of the serialized data smaller.  
-Alternatively, we can serialize it as an array of `u8`, which will make the implementation simpler.
-However, we believe that the benefit outweighs the complexity.
 
-For encoding, we considered using little endian, however, we believe that there is no advantage or disadvantage over one another.  
 
 ### Date Time
 `Serialize` and `Deserialize` is not implemented with derive macro.  
@@ -118,11 +126,6 @@ We also believe that users will be able to have a more productive experience whe
 
 Additionally, they are sometimes used as a data type to represent bi-directional data transfer, which does not happen during serialization/deserialization.
 
-# What users must know
-## Sensitive Information
-Serialized data may involve sensitive information.  
-
-
 ## `Serde` traits implemented on Builder of Output Types
 Output data, such as `aws_sdk_dynamodb::output::UpdateTableOutput` has builder types. 
 These builder types are available to users, however, no API requires users to build data types by themselves.  
@@ -130,11 +133,12 @@ These builder types are available to users, however, no API requires users to bu
 We considered removing traits from these data types, however, code-gen framework does not carry the necessary metadata to determine whether the data is the builder type of an output type or not.
 We conclude that benefit of avoiding the technical complexity/challenge is inevitable to bring this RFC to life.
 
-
-TODO: write things that users should know such as handling of sensitive information here
+# What users must know
+## Sensitive Information
+If serialized data contains sensitive information, it will not be masked.
 
 ## Compile Time
-We ran the following benchmark on C6a.2xlarge instance with 50gb of GP2 SSD.
+We ran the following benchmark on C6a.2xlarge instance with 50gb of GP2 SSD.  
 The commit hash of the code is a8e2e19129aead4fbc8cf0e3d34df0188a62de9f.
 
 - `aws-sdk-dynamodb`
@@ -151,6 +155,7 @@ The commit hash of the code is a8e2e19129aead4fbc8cf0e3d34df0188a62de9f.
 | cargo build --release --all-features                        | 1m3.198s  | 5m26.076s  | 0m12.311s |
 
 - `aws-sdk-ec2`
+ 
 | command                                                     | real time | user time  | sys time  |
 | ----------------------------------------------------------- | --------- | ---------- | --------- |
 | cargo build                                                 | 1m20.041s | 2m14.592s  | 0m6.611s  |
@@ -164,7 +169,7 @@ The commit hash of the code is a8e2e19129aead4fbc8cf0e3d34df0188a62de9f.
 
 
 ## Misleading Results
-// TODO
+One of the reason that 
 
 # Feature Gate
 Features suggested in this RFC are implemented behind feature gates.  
@@ -185,11 +190,6 @@ For example, output and input types can have `unstable-output-serde-*` and `unst
 
 Complexity that this implementation introduces is significant as data types in Kotlin does not hold any meta data that determines which one of the category that data belongs too.
 Thus, we believe that benefit does not outweigh the cost of maintenance and implementation.
-
-## Future Directions (WIP) 
-TODO:// talk about things that we might want to see in future
-- Remove serde traits from Output Builder types
-
 
 Changes checklist
 -----------------
