@@ -504,16 +504,13 @@ class JsonSerializerGenerator(
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = symbolProvider.toMemberName(member)
-
-                        if (member.isTargetUnit()) {
-                            withBlock("#T::$variantName => {", "},", unionSymbol) {
-                                serializeMember(MemberContext.unionMember(context, "", member, jsonName))
-                            }
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
                         } else {
-                            withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
-                                serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
-                            }
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName => {", "},", unionSymbol) {
+                            serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
                         }
                     }
                     if (codegenTarget.renderUnknownVariant()) {

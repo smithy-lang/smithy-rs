@@ -312,21 +312,19 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = symbolProvider.toMemberName(member)
-                        if (member.isTargetUnit()) {
-                            withBlock("#T::$variantName => {", "},", unionSymbol) {
-                                serializeMember(MemberContext.unionMember(context.copy(writerExpression = "writer"), "", member))
-                            }
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
                         } else {
-                            withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
-                                serializeMember(
-                                    MemberContext.unionMember(
-                                        context.copy(writerExpression = "writer"),
-                                        "inner",
-                                        member,
-                                    ),
-                                )
-                            }
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName => {", "},", unionSymbol) {
+                            serializeMember(
+                                MemberContext.unionMember(
+                                    context.copy(writerExpression = "writer"),
+                                    "inner",
+                                    member,
+                                ),
+                            )
                         }
                     }
                     if (target.renderUnknownVariant()) {
