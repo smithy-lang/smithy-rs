@@ -61,6 +61,13 @@ impl<P> FromParts<P> for ServerRequestId {
         parts.extensions.remove().ok_or(MissingServerRequestId)
     }
 }
+
+impl Default for ServerRequestId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone)]
 pub struct ServerRequestIdProvider<S> {
     inner: S,
@@ -71,6 +78,12 @@ pub struct ServerRequestIdProviderLayer {}
 impl ServerRequestIdProviderLayer {
     pub fn new() -> Self {
         Self {}
+    }
+}
+
+impl Default for ServerRequestIdProviderLayer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
