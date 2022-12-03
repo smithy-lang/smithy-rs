@@ -63,7 +63,7 @@ class UnionGenerator(
             if (shape.hasTrait<SensitiveTrait>()) {
                 renderFullyRedactedDebugImpl()
             } else {
-                renderDebugImplForUnionMemberWise()
+                renderDebugImpl()
             }
         }
     }
@@ -146,7 +146,7 @@ class UnionGenerator(
         )
     }
 
-    private fun renderDebugImplForUnionMemberWise() {
+    private fun renderDebugImpl() {
         writer.rustBlock("impl #T for ${unionSymbol.name}", RuntimeType.Debug) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
                 rustBlock("match self") {
