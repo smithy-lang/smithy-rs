@@ -52,8 +52,7 @@ For the reasons above, we believe base 64 is favourable over other encoding sche
 
 - Reason behind the implementation of non-human readable format
 
-We can make the resulting size of the serialized data smaller.  
-
+// TODO: brnig better reasoning
 
 ### Date Time
 `Serialize` and `Deserialize` is not implemented with derive macro.  
