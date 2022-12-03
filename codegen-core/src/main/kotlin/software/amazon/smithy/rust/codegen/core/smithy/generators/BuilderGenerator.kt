@@ -119,7 +119,6 @@ class BuilderGenerator(
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
-        shape.builderSymbol(symbolProvider).namespace.split("::")
         writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
             // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
             renderBuilder(this)
