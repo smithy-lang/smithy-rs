@@ -74,6 +74,7 @@ open class ClientProtocolGenerator(
             /// See [`crate::client::fluent_builders::$operationName`] for more details about the operation.
             """,
         )
+        
         Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")

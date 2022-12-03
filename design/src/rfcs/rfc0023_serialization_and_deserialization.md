@@ -23,7 +23,6 @@ Data types are, a) builder data types and b) data types that builder types may h
 - `Deserialize`  
   Refers to `Deserialize` trait available on `serde` crate.
 - 
-
 # Use Case
 Users have requested `serde` traits to be implemented on data types implemented in rust SDK.  
 We have created this RFC with following use cases in mind.

@@ -13,8 +13,11 @@
     unreachable_pub
 )]
 
+#[cfg(feature = "unstable-serde-serialize")]
+use serde::Serialize;
+#[cfg(feature = "unstable-serde-deserialize")]
+use serde::{de::Visitor, Deserialize};
 use std::collections::HashMap;
-
 pub mod base64;
 pub mod date_time;
 pub mod endpoint;
@@ -30,6 +33,66 @@ pub use crate::date_time::DateTime;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Blob {
     inner: Vec<u8>,
+}
+
+#[cfg(feature = "unstable-serde-serialize")]
+impl Serialize for Blob {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&crate::base64::encode(&self.inner))
+    }
+}
+
+#[cfg(feature = "unstable-serde-deserialize")]
+mod deserialize_blob {
+    use super::*;
+    struct BlobVisitor;
+
+    impl<'de> Visitor<'de> for BlobVisitor {
+        type Value = Blob;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("expected base64 encoded string")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match base64::decode(v) {
+                Ok(inner) => Ok(Blob { inner }),
+                Err(e) => Err(serde::de::Error::custom(e)),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Blob {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_str(BlobVisitor)
+        }
+    }
+
+    #[test]
+    fn deserialize_blob() {
+        let aws_in_base64 = r#"{"blob": "QVdT"}"#;
+
+        #[derive(Deserialize, Debug, PartialEq)]
+        struct ForTest {
+            blob: Blob,
+        }
+        assert_eq!(
+            ForTest {
+                blob: Blob {
+                    inner: vec!['A' as u8, 'W' as u8, 'S' as u8]
+                }
+            },
+            serde_json::from_str(aws_in_base64).unwrap()
+        )
+    }
 }
 
 impl Blob {
@@ -61,6 +124,15 @@ impl AsRef<[u8]> for Blob {
 /// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
 /// The serialization format of a document is an implementation detail of a protocol.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "unstable-serde-serialize", derive(Serialize))]
+#[cfg_attr(feature = "unstable-serde-deserialize", derive(Deserialize))]
+#[cfg_attr(
+    any(
+        feature = "unstable-serde-deserialize",
+        feature = "unstable-serde-serialize"
+    ),
+    serde(untagged)
+)]
 pub enum Document {
     /// JSON object
     Object(HashMap<String, Document>),
@@ -100,9 +172,64 @@ impl From<HashMap<String, Document>> for Document {
     }
 }
 
+/// checks if a) serialization of json suceeds and b) it is compatible with serde_json
+#[test]
+#[cfg(all(
+    feature = "unstable-serde-serialize",
+    feature = "unstable-serde-deserialize"
+))]
+fn serialize_json() {
+    let mut map: HashMap<String, Document> = HashMap::new();
+    // string
+    map.insert("hello".into(), "world".to_string().into());
+    // numbers
+    map.insert("pos_int".into(), Document::Number(Number::PosInt(1).into()));
+    map.insert(
+        "neg_int".into(),
+        Document::Number(Number::NegInt(-1).into()),
+    );
+    map.insert(
+        "float".into(),
+        Document::Number(Number::Float(0.1 + 0.2).into()),
+    );
+    // booleans
+    map.insert("true".into(), true.into());
+    map.insert("false".into(), false.into());
+    // check if array with different datatypes would succeed
+    map.insert(
+        "array".into(),
+        vec![
+            map.clone().into(),
+            "hello-world".to_string().into(),
+            true.into(),
+            false.into(),
+        ]
+        .into(),
+    );
+    // map
+    map.insert("map".into(), map.clone().into());
+    let obj = Document::Object(map);
+    // comparing string isnt going to work since there is no gurantee for the ordering of the keys
+    let target_file = include_str!("../test_data/serialize_document.json");
+    let json: Result<serde_json::Value, _> = serde_json::from_str(target_file);
+    // serializer
+    assert_eq!(serde_json::to_value(&obj).unwrap(), json.unwrap());
+    let doc: Result<Document, _> = serde_json::from_str(target_file);
+    assert_eq!(obj, doc.unwrap());
+}
+
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "unstable-serde-deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "unstable-serde-serialize", derive(Serialize))]
+#[cfg_attr(
+    any(
+        feature = "unstable-serde-deserialize",
+        feature = "unstable-serde-serialize"
+    ),
+    serde(untagged)
+)]
 pub enum Number {
     /// Unsigned 64-bit integer value.
     PosInt(u64),
@@ -111,7 +238,6 @@ pub enum Number {
     /// 64-bit floating-point value.
     Float(f64),
 }
-
 /* ANCHOR_END: document */
 
 impl Number {
@@ -134,6 +260,31 @@ impl Number {
             Number::Float(v) => v as f32,
         }
     }
+}
+
+#[test]
+#[cfg(all(
+    feature = "unstable-serde-deserialize",
+    feature = "unstable-serde-serialize"
+))]
+/// ensures that numbers are deserialized as expected
+/// 0 <= PosInt  
+/// 0 > NegInt  
+/// non integer values == Float
+fn number_deserialization_works() {
+    let n: Number = serde_json::from_str("1.1").unwrap();
+    assert_eq!(n, Number::Float(1.1));
+    let n: Number = serde_json::from_str("1").unwrap();
+    assert_eq!(n, Number::PosInt(1));
+    let n: Number = serde_json::from_str("0").unwrap();
+    assert_eq!(n, Number::PosInt(0));
+    let n: Number = serde_json::from_str("-1").unwrap();
+    assert_eq!(n, Number::NegInt(-1));
+
+    assert_eq!("1.1", serde_json::to_string(&Number::Float(1.1)).unwrap());
+    assert_eq!("1", serde_json::to_string(&Number::PosInt(1)).unwrap());
+    assert_eq!("0", serde_json::to_string(&Number::PosInt(0)).unwrap());
+    assert_eq!("-1", serde_json::to_string(&Number::NegInt(-1)).unwrap());
 }
 
 /// The error type returned when conversion into an integer type or floating point type is lossy.

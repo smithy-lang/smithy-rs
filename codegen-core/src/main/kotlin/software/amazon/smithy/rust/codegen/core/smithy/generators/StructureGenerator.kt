@@ -161,6 +161,8 @@ open class StructureGenerator(
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
+        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", derive(#T))]\n", RuntimeType.SerdeSerialize)
+        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", derive(#T))]\n", RuntimeType.SerdeDeserialize)
         val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
         containerMeta.copy(derives = withoutDebug).render(writer)
 

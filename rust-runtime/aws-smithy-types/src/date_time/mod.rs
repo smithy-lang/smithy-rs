@@ -52,6 +52,53 @@ pub struct DateTime {
     subsecond_nanos: u32,
 }
 
+#[cfg(feature = "unstable-serde-serialize")]
+impl serde::Serialize for DateTime {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self.fmt(Format::DateTime) {
+            Ok(val) => serializer.serialize_str(&val),
+            Err(e) => Err(serde::ser::Error::custom(e)),
+        }
+    }
+}
+
+#[cfg(feature = "unstable-serde-deserialize")]
+mod der {
+    use super::*;
+    use serde::de::Visitor;
+    use serde::Deserialize;
+    struct DateTimeVisitor;
+
+    impl<'de> Visitor<'de> for DateTimeVisitor {
+        type Value = DateTime;
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("expected RFC-3339 Date Time")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match DateTime::from_str(v, Format::DateTime) {
+                Ok(e) => Ok(e),
+                Err(e) => Err(serde::de::Error::custom(e)),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for DateTime {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_str(DateTimeVisitor)
+        }
+    }
+}
+
 /* ANCHOR_END: date_time */
 
 impl DateTime {
