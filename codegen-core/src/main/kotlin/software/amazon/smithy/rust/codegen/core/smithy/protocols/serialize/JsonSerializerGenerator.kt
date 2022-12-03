@@ -448,8 +448,21 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("object").also { objectName ->
+            rust("##[allow(unused_mut)]")
             rust("let mut $objectName = ${context.writerExpression}.start_object();")
-            if (context.shape.isTargetUnit()) {
+            // Calling inner when context's shape being the Unit type would generate
+            // a function looking like this:
+            //   pub fn serialize_structure_crate_model_unit(
+            //       object: &mut aws_smithy_json::serialize::JsonObjectWriter,
+            //       input: &crate::model::Unit,
+            //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+            //       let (_, _) = (object, input);
+            //       Ok(())
+            //   }
+            // However, this would cause a compilation error because we cannot extract data
+            // out of the Unit type that corresponds to the variable "input" above.
+            // Therefore, we call inner only when the context's shape is not the Unit type.
+            if (!context.shape.isTargetUnit()) {
                 inner(objectName)
             }
             rust("$objectName.finish();")
