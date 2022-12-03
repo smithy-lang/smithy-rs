@@ -17,6 +17,8 @@ use super::{OperationError, OperationShape};
 /// This serves to take [`Service`]s of the form `Service<(Op::Input, Ext0, Ext1, ...)>` to the canonical
 /// representation of `Service<(Input, (Ext0, Ext1, ...))>` inline with
 /// [`IntoService`](super::IntoService).
+///
+/// See [`operation`](crate::operation) documentation for more info.
 pub trait OperationService<Op, Exts, PollError>:
     Service<Self::Normalized, Response = Op::Output, Error = OperationError<Op::Error, PollError>>
 where
