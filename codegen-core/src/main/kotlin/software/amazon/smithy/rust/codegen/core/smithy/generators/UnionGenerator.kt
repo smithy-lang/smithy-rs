@@ -61,7 +61,7 @@ class UnionGenerator(
         renderImplBlock()
         if (!unionSymbol.expectRustMetadata().derives.derives.contains(RuntimeType.Debug)) {
             if (shape.hasTrait<SensitiveTrait>()) {
-                renderDebugImplForUnion()
+                renderFullyRedactedDebugImpl()
             } else {
                 renderDebugImplForUnionMemberWise()
             }
@@ -132,7 +132,7 @@ class UnionGenerator(
         }
     }
 
-    private fun renderDebugImplForUnion() {
+    private fun renderFullyRedactedDebugImpl() {
         writer.rustTemplate(
             """
             impl #{Debug} for ${unionSymbol.name} {
