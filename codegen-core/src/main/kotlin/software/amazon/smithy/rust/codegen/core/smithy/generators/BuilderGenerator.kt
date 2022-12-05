@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
@@ -110,13 +111,20 @@ class BuilderGenerator(
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
+    private val builderSymbol = shape.builderSymbol(symbolProvider)
+    private val baseDerives = structureSymbol.expectRustMetadata().derives
+    private val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
+    private val builderName = "Builder"
 
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
         writer.docs("See #D.", symbol)
-        val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
         writer.withInlineModule(shape.builderSymbol(symbolProvider).module()) {
+            // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
             renderBuilder(this)
+            if (!builderDerives.contains(RuntimeType.Debug)) {
+                renderDebugImpl(this)
+            }
         }
     }
 
@@ -142,7 +150,6 @@ class BuilderGenerator(
     }
 
     fun renderConvenienceMethod(implBlock: RustWriter) {
-        val builderSymbol = shape.builderSymbol(symbolProvider)
         implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
         implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
             write("#T::default()", builderSymbol)
@@ -195,13 +202,8 @@ class BuilderGenerator(
     }
 
     private fun renderBuilder(writer: RustWriter) {
-        val builderName = "Builder"
-
         writer.docs("A builder for #D.", structureSymbol)
-        // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
-        val baseDerives = structureSymbol.expectRustMetadata().derives
-        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = derives).render(writer)
+        baseDerives.copy(derives = builderDerives).render(writer)
         writer.rustBlock("pub struct $builderName") {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
@@ -229,6 +231,23 @@ class BuilderGenerator(
                 renderBuilderMemberSetterFn(this, outerType, member, memberName)
             }
             renderBuildFn(this)
+        }
+    }
+
+    private fun renderDebugImpl(writer: RustWriter) {
+        writer.rustBlock("impl #T for $builderName", RuntimeType.Debug) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+                rust("""let mut formatter = f.debug_struct(${builderName.dq()});""")
+                members.forEach { member ->
+                    val memberName = symbolProvider.toMemberName(member)
+                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+
+                    rust(
+                        "formatter.field(${memberName.dq()}, &$fieldValue);",
+                    )
+                }
+                rust("formatter.finish()")
+            }
         }
     }
 

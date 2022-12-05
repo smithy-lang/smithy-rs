@@ -15,12 +15,12 @@
   - [Backwards Compatibility](smithy/backwards-compat.md)
 
 - [Server](./server/overview.md)
-  - [Middleware](./middleware.md)
-  - [Instrumentation](./instrumentation.md)
-  - [Accessing Un-modelled Data](./from_parts.md)
-  - [The Anatomy of a Service](./anatomy.md)
-  - [Generating Common Service Code](./code_generation.md)
-  - [Generating the Pokémon Service](./pokemon_service.md)
+  - [Middleware](./server/middleware.md)
+  - [Instrumentation](./server/instrumentation.md)
+  - [Accessing Un-modelled Data](./server/from_parts.md)
+  - [The Anatomy of a Service](./server/anatomy.md)
+  - [Generating Common Service Code](./server/code_generation.md)
+  - [Generating the Pokémon Service](./server/pokemon_service.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)
