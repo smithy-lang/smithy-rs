@@ -164,6 +164,7 @@ ${operationImplementationStubs(operations)}
     }
 
     private fun renderOperationRegistryStruct(writer: RustWriter) {
+        writer.rust("""##[deprecated(since = "0.52.0", note = "`OperationRegistry` is part of the deprecated service builder API. Use `$serviceName::builder` instead.")]""")
         writer.rustBlock("pub struct $operationRegistryNameWithArguments") {
             val members = operationNames
                 .mapIndexed { i, operationName -> "$operationName: Op$i" }
@@ -182,6 +183,7 @@ ${operationImplementationStubs(operations)}
      * Renders the `OperationRegistryBuilder` structure, used to build the `OperationRegistry`.
      */
     private fun renderOperationRegistryBuilderStruct(writer: RustWriter) {
+        writer.rust("""##[deprecated(since = "0.52.0", note = "`OperationRegistryBuilder` is part of the deprecated service builder API. Use `$serviceName::builder` instead.")]""")
         writer.rustBlock("pub struct $operationRegistryBuilderNameWithArguments") {
             val members = operationNames
                 .mapIndexed { i, operationName -> "$operationName: Option<Op$i>" }

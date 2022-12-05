@@ -325,7 +325,23 @@ fun RustType.isCopy(): Boolean = when (this) {
 enum class Visibility {
     PRIVATE,
     PUBCRATE,
-    PUBLIC
+    PUBLIC;
+
+    companion object {
+        fun publicIf(condition: Boolean, ifNot: Visibility): Visibility =
+            if (condition) {
+                PUBLIC
+            } else {
+                ifNot
+            }
+    }
+
+    fun toRustQualifier(): String =
+        when (this) {
+            PRIVATE -> ""
+            PUBCRATE -> "pub(crate)"
+            PUBLIC -> "pub"
+        }
 }
 
 /**
@@ -366,6 +382,15 @@ data class RustMetadata(
         renderAttributes(writer)
         renderVisibility(writer)
     }
+
+    companion object {
+        val TestModule = RustMetadata(
+            visibility = Visibility.PRIVATE,
+            additionalAttributes = listOf(
+                Attribute.Cfg("test"),
+            ),
+        )
+    }
 }
 
 /**
@@ -397,6 +422,28 @@ sealed class Attribute {
          * indicates that more fields may be added in the future
          */
         val NonExhaustive = Custom("non_exhaustive")
+    }
+
+    data class Deprecated(val since: String?, val note: String?) : Attribute() {
+        override fun render(writer: RustWriter) {
+            writer.raw("#[deprecated")
+            if (since != null || note != null) {
+                writer.raw("(")
+                if (since != null) {
+                    writer.raw("""since = "$since"""")
+
+                    if (note != null) {
+                        writer.raw(", ")
+                    }
+                }
+
+                if (note != null) {
+                    writer.raw("""note = "$note"""")
+                }
+                writer.raw(")")
+            }
+            writer.raw("]")
+        }
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {

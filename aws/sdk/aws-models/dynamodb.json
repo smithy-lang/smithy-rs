@@ -1,5 +1,5 @@
 {
-    "smithy": "1.0",
+    "smithy": "2.0",
     "metadata": {
         "suppressions": [
             {
@@ -447,10 +447,7 @@
             }
         },
         "com.amazonaws.dynamodb#Backfilling": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#BackupArn": {
             "type": "string",
@@ -582,7 +579,6 @@
         "com.amazonaws.dynamodb#BackupSizeBytes": {
             "type": "long",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 0
                 }
@@ -726,7 +722,6 @@
         "com.amazonaws.dynamodb#BackupsInputLimit": {
             "type": "integer",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 1,
                     "max": 100
@@ -897,7 +892,7 @@
                 "Message": {
                     "target": "com.amazonaws.dynamodb#String",
                     "traits": {
-                        "smithy.api#documentation": "<p> The error message associated with the PartiQL batch resposne. </p>"
+                        "smithy.api#documentation": "<p> The error message associated with the PartiQL batch response. </p>"
                     }
                 }
             },
@@ -1112,7 +1107,6 @@
         "com.amazonaws.dynamodb#BilledSizeBytes": {
             "type": "long",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 0
                 }
@@ -1163,16 +1157,10 @@
             }
         },
         "com.amazonaws.dynamodb#BooleanAttributeValue": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#BooleanObject": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#CancellationReason": {
             "type": "structure",
@@ -1208,7 +1196,7 @@
             "traits": {
                 "smithy.api#length": {
                     "min": 1,
-                    "max": 25
+                    "max": 100
                 }
             }
         },
@@ -1248,7 +1236,19 @@
             }
         },
         "com.amazonaws.dynamodb#ClientToken": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#pattern": "^[^\\$]+$"
+            }
+        },
+        "com.amazonaws.dynamodb#CloudWatchLogGroupArn": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 1024
+                }
+            }
         },
         "com.amazonaws.dynamodb#Code": {
             "type": "string"
@@ -1414,10 +1414,7 @@
             }
         },
         "com.amazonaws.dynamodb#ConsistentRead": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#ConsumedCapacity": {
             "type": "structure",
@@ -1476,10 +1473,7 @@
             }
         },
         "com.amazonaws.dynamodb#ConsumedCapacityUnits": {
-            "type": "double",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "double"
         },
         "com.amazonaws.dynamodb#ContinuousBackupsDescription": {
             "type": "structure",
@@ -1952,6 +1946,58 @@
             },
             "traits": {
                 "smithy.api#documentation": "<p>Represents the output of a <code>CreateTable</code> operation.</p>"
+            }
+        },
+        "com.amazonaws.dynamodb#CsvDelimiter": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 1
+                },
+                "smithy.api#pattern": "^[,;:|\\t ]$"
+            }
+        },
+        "com.amazonaws.dynamodb#CsvHeader": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 65536
+                },
+                "smithy.api#pattern": "^[\\x20-\\x21\\x23-\\x2B\\x2D-\\x7E]*$"
+            }
+        },
+        "com.amazonaws.dynamodb#CsvHeaderList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.dynamodb#CsvHeader"
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#CsvOptions": {
+            "type": "structure",
+            "members": {
+                "Delimiter": {
+                    "target": "com.amazonaws.dynamodb#CsvDelimiter",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The delimiter used for separating items in the CSV file being imported.\n            </p>"
+                    }
+                },
+                "HeaderList": {
+                    "target": "com.amazonaws.dynamodb#CsvHeaderList",
+                    "traits": {
+                        "smithy.api#documentation": "<p> List of the headers used to specify a common header for all source CSV files being\n            imported. If this field is specified then the first line of each CSV file is treated as\n            data instead of the header. If this field is not specified the the first line of each\n            CSV file is treated as the header. \n            </p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n            Processing options for the CSV file being imported.\n            </p>"
             }
         },
         "com.amazonaws.dynamodb#Date": {
@@ -2668,6 +2714,47 @@
                 }
             }
         },
+        "com.amazonaws.dynamodb#DescribeImport": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.dynamodb#DescribeImportInput"
+            },
+            "output": {
+                "target": "com.amazonaws.dynamodb#DescribeImportOutput"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.dynamodb#ImportNotFoundException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>\n                Represents the properties of the import.\n                </p>"
+            }
+        },
+        "com.amazonaws.dynamodb#DescribeImportInput": {
+            "type": "structure",
+            "members": {
+                "ImportArn": {
+                    "target": "com.amazonaws.dynamodb#ImportArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                The Amazon Resource Name (ARN) associated with the table you're importing to.\n            </p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#DescribeImportOutput": {
+            "type": "structure",
+            "members": {
+                "ImportTableDescription": {
+                    "target": "com.amazonaws.dynamodb#ImportTableDescription",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                Represents the properties of the table created for the import, and parameters of \n                the import. The import parameters include import status, how many items were processed, \n                and how many errors were encountered.\n                </p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
         "com.amazonaws.dynamodb#DescribeKinesisStreamingDestination": {
             "type": "operation",
             "input": {
@@ -3026,10 +3113,7 @@
             }
         },
         "com.amazonaws.dynamodb#Double": {
-            "type": "double",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "double"
         },
         "com.amazonaws.dynamodb#DuplicateItemException": {
             "type": "structure",
@@ -3045,28 +3129,6 @@
         },
         "com.amazonaws.dynamodb#DynamoDB_20120810": {
             "type": "service",
-            "traits": {
-                "aws.api#clientEndpointDiscovery": {
-                    "operation": "com.amazonaws.dynamodb#DescribeEndpoints",
-                    "error": "com.amazonaws.dynamodb#InvalidEndpointException"
-                },
-                "aws.api#service": {
-                    "sdkId": "DynamoDB",
-                    "arnNamespace": "dynamodb",
-                    "cloudFormationName": "DynamoDB",
-                    "cloudTrailEventSource": "dynamodb.amazonaws.com",
-                    "endpointPrefix": "dynamodb"
-                },
-                "aws.auth#sigv4": {
-                    "name": "dynamodb"
-                },
-                "aws.protocols#awsJson1_0": {},
-                "smithy.api#documentation": "<fullname>Amazon DynamoDB</fullname>\n\n        <p>Amazon DynamoDB is a fully managed NoSQL database service that provides fast\n            and predictable performance with seamless scalability. DynamoDB lets you\n            offload the administrative burdens of operating and scaling a distributed database, so\n            that you don't have to worry about hardware provisioning, setup and configuration,\n            replication, software patching, or cluster scaling.</p>\n\n        <p>With DynamoDB, you can create database tables that can store and retrieve\n            any amount of data, and serve any level of request traffic. You can scale up or scale\n            down your tables' throughput capacity without downtime or performance degradation, and\n            use the Amazon Web Services Management Console to monitor resource utilization and performance\n            metrics.</p>\n\n        <p>DynamoDB automatically spreads the data and traffic for your tables over\n            a sufficient number of servers to handle your throughput and storage requirements, while\n            maintaining consistent and fast performance. All of your data is stored on solid state\n            disks (SSDs) and automatically replicated across multiple Availability Zones in an\n                Amazon Web Services Region, providing built-in high availability and data\n            durability.</p>",
-                "smithy.api#title": "Amazon DynamoDB",
-                "smithy.api#xmlNamespace": {
-                    "uri": "http://dynamodb.amazonaws.com/doc/2012-08-10/"
-                }
-            },
             "version": "2012-08-10",
             "operations": [
                 {
@@ -3118,6 +3180,9 @@
                     "target": "com.amazonaws.dynamodb#DescribeGlobalTableSettings"
                 },
                 {
+                    "target": "com.amazonaws.dynamodb#DescribeImport"
+                },
+                {
                     "target": "com.amazonaws.dynamodb#DescribeKinesisStreamingDestination"
                 },
                 {
@@ -3151,6 +3216,9 @@
                     "target": "com.amazonaws.dynamodb#GetItem"
                 },
                 {
+                    "target": "com.amazonaws.dynamodb#ImportTable"
+                },
+                {
                     "target": "com.amazonaws.dynamodb#ListBackups"
                 },
                 {
@@ -3161,6 +3229,9 @@
                 },
                 {
                     "target": "com.amazonaws.dynamodb#ListGlobalTables"
+                },
+                {
+                    "target": "com.amazonaws.dynamodb#ListImports"
                 },
                 {
                     "target": "com.amazonaws.dynamodb#ListTables"
@@ -3219,7 +3290,2201 @@
                 {
                     "target": "com.amazonaws.dynamodb#UpdateTimeToLive"
                 }
-            ]
+            ],
+            "traits": {
+                "aws.api#clientEndpointDiscovery": {
+                    "operation": "com.amazonaws.dynamodb#DescribeEndpoints",
+                    "error": "com.amazonaws.dynamodb#InvalidEndpointException"
+                },
+                "aws.api#service": {
+                    "sdkId": "DynamoDB",
+                    "arnNamespace": "dynamodb",
+                    "cloudFormationName": "DynamoDB",
+                    "cloudTrailEventSource": "dynamodb.amazonaws.com",
+                    "endpointPrefix": "dynamodb"
+                },
+                "aws.auth#sigv4": {
+                    "name": "dynamodb"
+                },
+                "aws.protocols#awsJson1_0": {},
+                "smithy.api#documentation": "<fullname>Amazon DynamoDB</fullname>\n\n        <p>Amazon DynamoDB is a fully managed NoSQL database service that provides fast\n            and predictable performance with seamless scalability. DynamoDB lets you\n            offload the administrative burdens of operating and scaling a distributed database, so\n            that you don't have to worry about hardware provisioning, setup and configuration,\n            replication, software patching, or cluster scaling.</p>\n\n        <p>With DynamoDB, you can create database tables that can store and retrieve\n            any amount of data, and serve any level of request traffic. You can scale up or scale\n            down your tables' throughput capacity without downtime or performance degradation, and\n            use the Amazon Web Services Management Console to monitor resource utilization and performance\n            metrics.</p>\n\n        <p>DynamoDB automatically spreads the data and traffic for your tables over\n            a sufficient number of servers to handle your throughput and storage requirements, while\n            maintaining consistent and fast performance. All of your data is stored on solid state\n            disks (SSDs) and automatically replicated across multiple Availability Zones in an\n                Amazon Web Services Region, providing built-in high availability and data\n            durability.</p>",
+                "smithy.api#title": "Amazon DynamoDB",
+                "smithy.api#xmlNamespace": {
+                    "uri": "http://dynamodb.amazonaws.com/doc/2012-08-10/"
+                },
+                "smithy.rules#endpointRuleSet": {
+                    "version": "1.0",
+                    "parameters": {
+                        "Region": {
+                            "builtIn": "AWS::Region",
+                            "required": false,
+                            "documentation": "The AWS region used to dispatch the request.",
+                            "type": "String"
+                        },
+                        "UseDualStack": {
+                            "builtIn": "AWS::UseDualStack",
+                            "required": true,
+                            "default": false,
+                            "documentation": "When true, use the dual-stack endpoint. If the configured endpoint does not support dual-stack, dispatching the request MAY return an error.",
+                            "type": "Boolean"
+                        },
+                        "UseFIPS": {
+                            "builtIn": "AWS::UseFIPS",
+                            "required": true,
+                            "default": false,
+                            "documentation": "When true, send this request to the FIPS-compliant regional endpoint. If the configured endpoint does not have a FIPS compliant endpoint, dispatching the request will return an error.",
+                            "type": "Boolean"
+                        },
+                        "Endpoint": {
+                            "builtIn": "SDK::Endpoint",
+                            "required": false,
+                            "documentation": "Override the endpoint used to send this request",
+                            "type": "String"
+                        }
+                    },
+                    "rules": [
+                        {
+                            "conditions": [
+                                {
+                                    "fn": "aws.partition",
+                                    "argv": [
+                                        {
+                                            "ref": "Region"
+                                        }
+                                    ],
+                                    "assign": "PartitionResult"
+                                }
+                            ],
+                            "type": "tree",
+                            "rules": [
+                                {
+                                    "conditions": [
+                                        {
+                                            "fn": "isSet",
+                                            "argv": [
+                                                {
+                                                    "ref": "Endpoint"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "fn": "parseURL",
+                                            "argv": [
+                                                {
+                                                    "ref": "Endpoint"
+                                                }
+                                            ],
+                                            "assign": "url"
+                                        }
+                                    ],
+                                    "type": "tree",
+                                    "rules": [
+                                        {
+                                            "conditions": [
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        {
+                                                            "ref": "UseFIPS"
+                                                        },
+                                                        true
+                                                    ]
+                                                }
+                                            ],
+                                            "error": "Invalid Configuration: FIPS and custom endpoint are not supported",
+                                            "type": "error"
+                                        },
+                                        {
+                                            "conditions": [],
+                                            "type": "tree",
+                                            "rules": [
+                                                {
+                                                    "conditions": [
+                                                        {
+                                                            "fn": "booleanEquals",
+                                                            "argv": [
+                                                                {
+                                                                    "ref": "UseDualStack"
+                                                                },
+                                                                true
+                                                            ]
+                                                        }
+                                                    ],
+                                                    "error": "Invalid Configuration: Dualstack and custom endpoint are not supported",
+                                                    "type": "error"
+                                                },
+                                                {
+                                                    "conditions": [],
+                                                    "endpoint": {
+                                                        "url": {
+                                                            "ref": "Endpoint"
+                                                        },
+                                                        "properties": {},
+                                                        "headers": {}
+                                                    },
+                                                    "type": "endpoint"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "conditions": [
+                                        {
+                                            "fn": "booleanEquals",
+                                            "argv": [
+                                                {
+                                                    "ref": "UseFIPS"
+                                                },
+                                                true
+                                            ]
+                                        },
+                                        {
+                                            "fn": "booleanEquals",
+                                            "argv": [
+                                                {
+                                                    "ref": "UseDualStack"
+                                                },
+                                                true
+                                            ]
+                                        }
+                                    ],
+                                    "type": "tree",
+                                    "rules": [
+                                        {
+                                            "conditions": [
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        true,
+                                                        {
+                                                            "fn": "getAttr",
+                                                            "argv": [
+                                                                {
+                                                                    "ref": "PartitionResult"
+                                                                },
+                                                                "supportsFIPS"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        true,
+                                                        {
+                                                            "fn": "getAttr",
+                                                            "argv": [
+                                                                {
+                                                                    "ref": "PartitionResult"
+                                                                },
+                                                                "supportsDualStack"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            "type": "tree",
+                                            "rules": [
+                                                {
+                                                    "conditions": [],
+                                                    "endpoint": {
+                                                        "url": "https://dynamodb-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                                                        "properties": {},
+                                                        "headers": {}
+                                                    },
+                                                    "type": "endpoint"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "conditions": [],
+                                            "error": "FIPS and DualStack are enabled, but this partition does not support one or both",
+                                            "type": "error"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "conditions": [
+                                        {
+                                            "fn": "booleanEquals",
+                                            "argv": [
+                                                {
+                                                    "ref": "UseFIPS"
+                                                },
+                                                true
+                                            ]
+                                        }
+                                    ],
+                                    "type": "tree",
+                                    "rules": [
+                                        {
+                                            "conditions": [
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        true,
+                                                        {
+                                                            "fn": "getAttr",
+                                                            "argv": [
+                                                                {
+                                                                    "ref": "PartitionResult"
+                                                                },
+                                                                "supportsFIPS"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            "type": "tree",
+                                            "rules": [
+                                                {
+                                                    "conditions": [],
+                                                    "type": "tree",
+                                                    "rules": [
+                                                        {
+                                                            "conditions": [
+                                                                {
+                                                                    "fn": "stringEquals",
+                                                                    "argv": [
+                                                                        "aws-us-gov",
+                                                                        {
+                                                                            "fn": "getAttr",
+                                                                            "argv": [
+                                                                                {
+                                                                                    "ref": "PartitionResult"
+                                                                                },
+                                                                                "name"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ],
+                                                            "endpoint": {
+                                                                "url": "https://dynamodb.{Region}.{PartitionResult#dnsSuffix}",
+                                                                "properties": {},
+                                                                "headers": {}
+                                                            },
+                                                            "type": "endpoint"
+                                                        },
+                                                        {
+                                                            "conditions": [],
+                                                            "endpoint": {
+                                                                "url": "https://dynamodb-fips.{Region}.{PartitionResult#dnsSuffix}",
+                                                                "properties": {},
+                                                                "headers": {}
+                                                            },
+                                                            "type": "endpoint"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "conditions": [],
+                                            "error": "FIPS is enabled but this partition does not support FIPS",
+                                            "type": "error"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "conditions": [
+                                        {
+                                            "fn": "booleanEquals",
+                                            "argv": [
+                                                {
+                                                    "ref": "UseDualStack"
+                                                },
+                                                true
+                                            ]
+                                        }
+                                    ],
+                                    "type": "tree",
+                                    "rules": [
+                                        {
+                                            "conditions": [
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        true,
+                                                        {
+                                                            "fn": "getAttr",
+                                                            "argv": [
+                                                                {
+                                                                    "ref": "PartitionResult"
+                                                                },
+                                                                "supportsDualStack"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            "type": "tree",
+                                            "rules": [
+                                                {
+                                                    "conditions": [],
+                                                    "endpoint": {
+                                                        "url": "https://dynamodb.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                                                        "properties": {},
+                                                        "headers": {}
+                                                    },
+                                                    "type": "endpoint"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "conditions": [],
+                                            "error": "DualStack is enabled but this partition does not support DualStack",
+                                            "type": "error"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "conditions": [],
+                                    "type": "tree",
+                                    "rules": [
+                                        {
+                                            "conditions": [
+                                                {
+                                                    "fn": "stringEquals",
+                                                    "argv": [
+                                                        {
+                                                            "ref": "Region"
+                                                        },
+                                                        "local"
+                                                    ]
+                                                }
+                                            ],
+                                            "endpoint": {
+                                                "url": "https://localhost:8000",
+                                                "properties": {
+                                                    "authSchemes": [
+                                                        {
+                                                            "name": "sigv4",
+                                                            "signingName": "dynamodb",
+                                                            "signingRegion": "us-east-1"
+                                                        }
+                                                    ]
+                                                },
+                                                "headers": {}
+                                            },
+                                            "type": "endpoint"
+                                        },
+                                        {
+                                            "conditions": [],
+                                            "endpoint": {
+                                                "url": "https://dynamodb.{Region}.{PartitionResult#dnsSuffix}",
+                                                "properties": {},
+                                                "headers": {}
+                                            },
+                                            "type": "endpoint"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "smithy.rules#endpointTests": {
+                    "testCases": [
+                        {
+                            "documentation": "For region ap-south-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-south-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-south-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-south-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-south-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-south-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-south-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-south-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-south-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-south-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-south-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-south-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-south-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-south-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-south-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-south-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-south-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-south-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-east-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-gov-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-east-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-gov-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-east-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-gov-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-east-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-gov-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region me-central-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.me-central-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-central-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region me-central-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.me-central-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-central-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region me-central-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.me-central-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-central-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region me-central-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.me-central-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-central-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ca-central-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ca-central-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ca-central-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ca-central-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ca-central-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ca-central-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ca-central-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ca-central-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ca-central-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ca-central-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ca-central-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ca-central-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-central-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-central-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-central-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-central-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-west-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "error": "FIPS and DualStack are enabled, but this partition does not support one or both"
+                            },
+                            "params": {
+                                "Region": "us-iso-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-west-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-iso-west-1.c2s.ic.gov"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-iso-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-west-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "error": "DualStack is enabled but this partition does not support DualStack"
+                            },
+                            "params": {
+                                "Region": "us-iso-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-west-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-iso-west-1.c2s.ic.gov"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-iso-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-central-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-central-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-central-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-central-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-central-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-central-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-west-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-west-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-west-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-west-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-west-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-west-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-west-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-west-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-west-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-west-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region af-south-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.af-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "af-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region af-south-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.af-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "af-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region af-south-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.af-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "af-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region af-south-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.af-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "af-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-north-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-north-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-north-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-north-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-north-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-north-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-north-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-north-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-north-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-north-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-north-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-north-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-3 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-west-3.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-3",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-3 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-west-3.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-3",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-3 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-west-3.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-3",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-3 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-west-3.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-3",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-west-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-west-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-west-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-west-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-west-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.eu-west-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-west-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region eu-west-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.eu-west-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "eu-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-3 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-northeast-3.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-3",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-3 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-northeast-3.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-3",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-3 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-northeast-3.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-3",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-3 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-northeast-3.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-3",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-northeast-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-northeast-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-northeast-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-northeast-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-northeast-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-northeast-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-northeast-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-northeast-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-northeast-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-northeast-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region me-south-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.me-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region me-south-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.me-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region me-south-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.me-south-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-south-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region me-south-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.me-south-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "me-south-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region sa-east-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.sa-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "sa-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region sa-east-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.sa-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "sa-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region sa-east-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.sa-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "sa-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region sa-east-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.sa-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "sa-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-east-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-east-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-east-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-east-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-north-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.cn-north-1.api.amazonwebservices.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-north-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-north-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.cn-north-1.amazonaws.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-north-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-north-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.cn-north-1.api.amazonwebservices.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-north-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-north-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.cn-north-1.amazonaws.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-north-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-west-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-gov-west-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-west-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-gov-west-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-west-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-gov-west-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-west-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-gov-west-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-gov-west-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-gov-west-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-east-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "error": "FIPS and DualStack are enabled, but this partition does not support one or both"
+                            },
+                            "params": {
+                                "Region": "us-iso-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-east-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-iso-east-1.c2s.ic.gov"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-iso-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-east-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "error": "DualStack is enabled but this partition does not support DualStack"
+                            },
+                            "params": {
+                                "Region": "us-iso-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-iso-east-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-iso-east-1.c2s.ic.gov"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-iso-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-3 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-3.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-3",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-3 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-3.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-3",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-3 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-3.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-3",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-3 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-3.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-3",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-4 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-4.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-4",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-4 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.ap-southeast-4.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-4",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-4 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-4.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-4",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region ap-southeast-4 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.ap-southeast-4.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "ap-southeast-4",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-east-1.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-east-1.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-2 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-east-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-2",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-2 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-east-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-2",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-2 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-east-2.api.aws"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-2",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-east-2 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-east-2.amazonaws.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-2",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-northwest-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.cn-northwest-1.api.amazonwebservices.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-northwest-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-northwest-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.cn-northwest-1.amazonaws.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-northwest-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-northwest-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.cn-northwest-1.api.amazonwebservices.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-northwest-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region cn-northwest-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.cn-northwest-1.amazonaws.com.cn"
+                                }
+                            },
+                            "params": {
+                                "Region": "cn-northwest-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-isob-east-1 with FIPS enabled and DualStack enabled",
+                            "expect": {
+                                "error": "FIPS and DualStack are enabled, but this partition does not support one or both"
+                            },
+                            "params": {
+                                "Region": "us-isob-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-isob-east-1 with FIPS enabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb-fips.us-isob-east-1.sc2s.sgov.gov"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-isob-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true
+                            }
+                        },
+                        {
+                            "documentation": "For region us-isob-east-1 with FIPS disabled and DualStack enabled",
+                            "expect": {
+                                "error": "DualStack is enabled but this partition does not support DualStack"
+                            },
+                            "params": {
+                                "Region": "us-isob-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For region us-isob-east-1 with FIPS disabled and DualStack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://dynamodb.us-isob-east-1.sc2s.sgov.gov"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-isob-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false
+                            }
+                        },
+                        {
+                            "documentation": "For custom endpoint with fips disabled and dualstack disabled",
+                            "expect": {
+                                "endpoint": {
+                                    "url": "https://example.com"
+                                }
+                            },
+                            "params": {
+                                "Region": "us-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": false,
+                                "Endpoint": "https://example.com"
+                            }
+                        },
+                        {
+                            "documentation": "For custom endpoint with fips enabled and dualstack disabled",
+                            "expect": {
+                                "error": "Invalid Configuration: FIPS and custom endpoint are not supported"
+                            },
+                            "params": {
+                                "Region": "us-east-1",
+                                "UseDualStack": false,
+                                "UseFIPS": true,
+                                "Endpoint": "https://example.com"
+                            }
+                        },
+                        {
+                            "documentation": "For custom endpoint with fips disabled and dualstack enabled",
+                            "expect": {
+                                "error": "Invalid Configuration: Dualstack and custom endpoint are not supported"
+                            },
+                            "params": {
+                                "Region": "us-east-1",
+                                "UseDualStack": true,
+                                "UseFIPS": false,
+                                "Endpoint": "https://example.com"
+                            }
+                        }
+                    ],
+                    "version": "1.0"
+                }
+            }
         },
         "com.amazonaws.dynamodb#EnableKinesisStreamingDestination": {
             "type": "operation",
@@ -3266,6 +5531,7 @@
                 "CachePeriodInMinutes": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>Endpoint cache time to live (TTL) value.</p>",
                         "smithy.api#required": {}
                     }
@@ -3279,6 +5545,15 @@
             "type": "list",
             "member": {
                 "target": "com.amazonaws.dynamodb#Endpoint"
+            }
+        },
+        "com.amazonaws.dynamodb#ErrorCount": {
+            "type": "long",
+            "traits": {
+                "smithy.api#default": 0,
+                "smithy.api#range": {
+                    "min": 0
+                }
             }
         },
         "com.amazonaws.dynamodb#ErrorMessage": {
@@ -3789,7 +6064,7 @@
                 "ClientToken": {
                     "target": "com.amazonaws.dynamodb#ClientToken",
                     "traits": {
-                        "smithy.api#documentation": "<p>Providing a <code>ClientToken</code> makes the call to\n                <code>ExportTableToPointInTimeInput</code> idempotent, meaning that multiple\n            identical calls have the same effect as one single call.</p>\n        <p>A client token is valid for 8 hours after the first request that uses it is completed.\n            After 8 hours, any request with the same client token is treated as a new request. Do\n            not resubmit the same request with the same client token for more than 8 hours, or the\n            result might not be idempotent.</p>\n        <p>If you submit a request with the same client token but a change in other parameters\n            within the 8-hour idempotency window, DynamoDB returns an\n                <code>IdempotentParameterMismatch</code> exception.</p>",
+                        "smithy.api#documentation": "<p>Providing a <code>ClientToken</code> makes the call to\n                <code>ExportTableToPointInTimeInput</code> idempotent, meaning that multiple\n            identical calls have the same effect as one single call.</p>\n        <p>A client token is valid for 8 hours after the first request that uses it is completed.\n            After 8 hours, any request with the same client token is treated as a new request. Do\n            not resubmit the same request with the same client token for more than 8 hours, or the\n            result might not be idempotent.</p>\n        <p>If you submit a request with the same client token but a change in other parameters\n            within the 8-hour idempotency window, DynamoDB returns an\n            <code>ImportConflictException</code>.</p>",
                         "smithy.api#idempotencyToken": {}
                     }
                 },
@@ -4145,12 +6420,14 @@
                 "IndexSizeBytes": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The total size of the specified index, in bytes. DynamoDB updates this value\n            approximately every six hours. Recent changes might not be reflected in this\n            value.</p>"
                     }
                 },
                 "ItemCount": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The number of items in the specified index. DynamoDB updates this value approximately\n            every six hours. Recent changes might not be reflected in this value.</p>"
                     }
                 },
@@ -4412,6 +6689,359 @@
                 "smithy.api#error": "client"
             }
         },
+        "com.amazonaws.dynamodb#ImportArn": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 37,
+                    "max": 1024
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#ImportConflictException": {
+            "type": "structure",
+            "members": {
+                "message": {
+                    "target": "com.amazonaws.dynamodb#ErrorMessage"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n            There was a conflict when importing from the specified S3 source. \n            This can occur when the current import conflicts with a previous import request \n            that had the same client token.\n            </p>",
+                "smithy.api#error": "client"
+            }
+        },
+        "com.amazonaws.dynamodb#ImportEndTime": {
+            "type": "timestamp"
+        },
+        "com.amazonaws.dynamodb#ImportNextToken": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 112,
+                    "max": 1024
+                },
+                "smithy.api#pattern": "^([0-9a-f]{16})+$"
+            }
+        },
+        "com.amazonaws.dynamodb#ImportNotFoundException": {
+            "type": "structure",
+            "members": {
+                "message": {
+                    "target": "com.amazonaws.dynamodb#ErrorMessage"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n            The specified import was not found.\n            </p>",
+                "smithy.api#error": "client"
+            }
+        },
+        "com.amazonaws.dynamodb#ImportStartTime": {
+            "type": "timestamp"
+        },
+        "com.amazonaws.dynamodb#ImportStatus": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "IN_PROGRESS",
+                        "name": "IN_PROGRESS"
+                    },
+                    {
+                        "value": "COMPLETED",
+                        "name": "COMPLETED"
+                    },
+                    {
+                        "value": "CANCELLING",
+                        "name": "CANCELLING"
+                    },
+                    {
+                        "value": "CANCELLED",
+                        "name": "CANCELLED"
+                    },
+                    {
+                        "value": "FAILED",
+                        "name": "FAILED"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.dynamodb#ImportSummary": {
+            "type": "structure",
+            "members": {
+                "ImportArn": {
+                    "target": "com.amazonaws.dynamodb#ImportArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The Amazon Resource Number (ARN) corresponding to the import request.\n            </p>"
+                    }
+                },
+                "ImportStatus": {
+                    "target": "com.amazonaws.dynamodb#ImportStatus",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The status of the import operation.\n            </p>"
+                    }
+                },
+                "TableArn": {
+                    "target": "com.amazonaws.dynamodb#TableArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The Amazon Resource Number (ARN) of the table being imported into.\n            </p>"
+                    }
+                },
+                "S3BucketSource": {
+                    "target": "com.amazonaws.dynamodb#S3BucketSource",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The path and S3 bucket of the source file that is being imported. This includes the S3Bucket (required), \n            S3KeyPrefix (optional) and S3BucketOwner (optional if the bucket is owned by the requester).\n            </p>"
+                    }
+                },
+                "CloudWatchLogGroupArn": {
+                    "target": "com.amazonaws.dynamodb#CloudWatchLogGroupArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The Amazon Resource Number (ARN) of the Cloudwatch Log Group associated with this import task.\n            </p>"
+                    }
+                },
+                "InputFormat": {
+                    "target": "com.amazonaws.dynamodb#InputFormat",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The format of the source data. Valid values are <code>CSV</code>,\n            <code>DYNAMODB_JSON</code> or <code>ION</code>.</p>"
+                    }
+                },
+                "StartTime": {
+                    "target": "com.amazonaws.dynamodb#ImportStartTime",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The time at which this import task began.\n            </p>"
+                    }
+                },
+                "EndTime": {
+                    "target": "com.amazonaws.dynamodb#ImportEndTime",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The time at which this import task ended. (Does this include the successful complete creation of \n            the table it was imported to?)\n            </p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n            Summary information about the source file for the import.\n            </p>"
+            }
+        },
+        "com.amazonaws.dynamodb#ImportSummaryList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.dynamodb#ImportSummary"
+            }
+        },
+        "com.amazonaws.dynamodb#ImportTable": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.dynamodb#ImportTableInput"
+            },
+            "output": {
+                "target": "com.amazonaws.dynamodb#ImportTableOutput"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.dynamodb#ImportConflictException"
+                },
+                {
+                    "target": "com.amazonaws.dynamodb#LimitExceededException"
+                },
+                {
+                    "target": "com.amazonaws.dynamodb#ResourceInUseException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>\n                Imports table data from an S3 bucket. \n            \n            </p>"
+            }
+        },
+        "com.amazonaws.dynamodb#ImportTableDescription": {
+            "type": "structure",
+            "members": {
+                "ImportArn": {
+                    "target": "com.amazonaws.dynamodb#ImportArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The Amazon Resource Number (ARN) corresponding to the import request.\n            </p>"
+                    }
+                },
+                "ImportStatus": {
+                    "target": "com.amazonaws.dynamodb#ImportStatus",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The status of the import.\n            </p>"
+                    }
+                },
+                "TableArn": {
+                    "target": "com.amazonaws.dynamodb#TableArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The Amazon Resource Number (ARN) of the table being imported into.\n            </p>"
+                    }
+                },
+                "TableId": {
+                    "target": "com.amazonaws.dynamodb#TableId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The table id corresponding to the table created by import table process.\n            \n            </p>"
+                    }
+                },
+                "ClientToken": {
+                    "target": "com.amazonaws.dynamodb#ClientToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The client token that was provided for the import task. Reusing the client token \n            on retry makes a call to <code>ImportTable</code> idempotent.\n            </p>"
+                    }
+                },
+                "S3BucketSource": {
+                    "target": "com.amazonaws.dynamodb#S3BucketSource",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            Values for the S3 bucket the source file is imported from. Includes bucket name (required), \n            key prefix (optional) and bucket account owner ID (optional).\n            </p>"
+                    }
+                },
+                "ErrorCount": {
+                    "target": "com.amazonaws.dynamodb#ErrorCount",
+                    "traits": {
+                        "smithy.api#default": 0,
+                        "smithy.api#documentation": "<p>\n            The number of errors occurred on importing the source file into the target table.\n            </p>"
+                    }
+                },
+                "CloudWatchLogGroupArn": {
+                    "target": "com.amazonaws.dynamodb#CloudWatchLogGroupArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The Amazon Resource Number (ARN) of the Cloudwatch Log Group associated with the target table.\n            </p>"
+                    }
+                },
+                "InputFormat": {
+                    "target": "com.amazonaws.dynamodb#InputFormat",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The format of the source data going into the target table.\n            </p>"
+                    }
+                },
+                "InputFormatOptions": {
+                    "target": "com.amazonaws.dynamodb#InputFormatOptions",
+                    "traits": {
+                        "smithy.api#documentation": "<p> The format options for the data that was imported into the target table. There is one value, CsvOption.\n            </p>"
+                    }
+                },
+                "InputCompressionType": {
+                    "target": "com.amazonaws.dynamodb#InputCompressionType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The compression options for the data that has been imported into the target table. The values are \n            NONE, GZIP, or ZSTD.\n            </p>"
+                    }
+                },
+                "TableCreationParameters": {
+                    "target": "com.amazonaws.dynamodb#TableCreationParameters",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The parameters for the new table that is being imported into.\n            </p>"
+                    }
+                },
+                "StartTime": {
+                    "target": "com.amazonaws.dynamodb#ImportStartTime",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The time when this import task started.\n            </p>"
+                    }
+                },
+                "EndTime": {
+                    "target": "com.amazonaws.dynamodb#ImportEndTime",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The time at which the creation of the table associated with this import task completed.\n            </p>"
+                    }
+                },
+                "ProcessedSizeBytes": {
+                    "target": "com.amazonaws.dynamodb#Long",
+                    "traits": {
+                        "smithy.api#default": 0,
+                        "smithy.api#documentation": "<p>\n            The total size of data processed from the source file, in Bytes.\n            </p>"
+                    }
+                },
+                "ProcessedItemCount": {
+                    "target": "com.amazonaws.dynamodb#ProcessedItemCount",
+                    "traits": {
+                        "smithy.api#default": 0,
+                        "smithy.api#documentation": "<p>\n            The total number of items processed from the source file.\n            </p>"
+                    }
+                },
+                "ImportedItemCount": {
+                    "target": "com.amazonaws.dynamodb#ImportedItemCount",
+                    "traits": {
+                        "smithy.api#default": 0,
+                        "smithy.api#documentation": "<p>\n            The number of items successfully imported into the new table.\n            </p>"
+                    }
+                },
+                "FailureCode": {
+                    "target": "com.amazonaws.dynamodb#FailureCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The error code corresponding to the failure that the import job ran into during execution.\n            </p>"
+                    }
+                },
+                "FailureMessage": {
+                    "target": "com.amazonaws.dynamodb#FailureMessage",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The error message corresponding to the failure that the import job ran into during execution.\n            </p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n            Represents the properties of the table being imported into.\n            </p>"
+            }
+        },
+        "com.amazonaws.dynamodb#ImportTableInput": {
+            "type": "structure",
+            "members": {
+                "ClientToken": {
+                    "target": "com.amazonaws.dynamodb#ClientToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Providing a <code>ClientToken</code> makes the call to\n                    <code>ImportTableInput</code> idempotent, meaning that multiple\n                    identical calls have the same effect as one single call.</p>\n                <p>A client token is valid for 8 hours after the first request that uses it is completed.\n                    After 8 hours, any request with the same client token is treated as a new request. Do\n                    not resubmit the same request with the same client token for more than 8 hours, or the\n                    result might not be idempotent.</p>\n                <p>If you submit a request with the same client token but a change in other parameters\n                    within the 8-hour idempotency window, DynamoDB returns an\n                    <code>IdempotentParameterMismatch</code> exception.</p>",
+                        "smithy.api#idempotencyToken": {}
+                    }
+                },
+                "S3BucketSource": {
+                    "target": "com.amazonaws.dynamodb#S3BucketSource",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                The S3 bucket that provides the source for the import.\n                </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "InputFormat": {
+                    "target": "com.amazonaws.dynamodb#InputFormat",
+                    "traits": {
+                        "smithy.api#documentation": "<p> The format of the source data. Valid values for <code>ImportFormat</code> are\n                <code>CSV</code>,  <code>DYNAMODB_JSON</code> or <code>ION</code>.\n            </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "InputFormatOptions": {
+                    "target": "com.amazonaws.dynamodb#InputFormatOptions",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                Additional properties that specify how the input is formatted,\n                </p>"
+                    }
+                },
+                "InputCompressionType": {
+                    "target": "com.amazonaws.dynamodb#InputCompressionType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                Type of compression to be used on the input coming from the imported table.\n                </p>"
+                    }
+                },
+                "TableCreationParameters": {
+                    "target": "com.amazonaws.dynamodb#TableCreationParameters",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Parameters for the table to import the data into.\n            </p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#ImportTableOutput": {
+            "type": "structure",
+            "members": {
+                "ImportTableDescription": {
+                    "target": "com.amazonaws.dynamodb#ImportTableDescription",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                Represents the properties of the table created for the import, and parameters of \n                the import. The import parameters include import status, how many items were processed, \n                and how many errors were encountered.\n                </p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#ImportedItemCount": {
+            "type": "long",
+            "traits": {
+                "smithy.api#default": 0,
+                "smithy.api#range": {
+                    "min": 0
+                }
+            }
+        },
         "com.amazonaws.dynamodb#IndexName": {
             "type": "string",
             "traits": {
@@ -4457,14 +7087,66 @@
                 ]
             }
         },
-        "com.amazonaws.dynamodb#Integer": {
-            "type": "integer"
+        "com.amazonaws.dynamodb#InputCompressionType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "GZIP",
+                        "name": "GZIP"
+                    },
+                    {
+                        "value": "ZSTD",
+                        "name": "ZSTD"
+                    },
+                    {
+                        "value": "NONE",
+                        "name": "NONE"
+                    }
+                ]
+            }
         },
-        "com.amazonaws.dynamodb#IntegerObject": {
+        "com.amazonaws.dynamodb#InputFormat": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "DYNAMODB_JSON",
+                        "name": "DYNAMODB_JSON"
+                    },
+                    {
+                        "value": "ION",
+                        "name": "ION"
+                    },
+                    {
+                        "value": "CSV",
+                        "name": "CSV"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.dynamodb#InputFormatOptions": {
+            "type": "structure",
+            "members": {
+                "Csv": {
+                    "target": "com.amazonaws.dynamodb#CsvOptions",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The options for imported source files in CSV format. The values are Delimiter and HeaderList.\n            </p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n            The format options for the data that was imported into the target table. There is one value, CsvOption.</p>"
+            }
+        },
+        "com.amazonaws.dynamodb#Integer": {
             "type": "integer",
             "traits": {
-                "smithy.api#box": {}
+                "smithy.api#default": 0
             }
+        },
+        "com.amazonaws.dynamodb#IntegerObject": {
+            "type": "integer"
         },
         "com.amazonaws.dynamodb#InternalServerError": {
             "type": "structure",
@@ -4562,10 +7244,7 @@
             }
         },
         "com.amazonaws.dynamodb#ItemCollectionSizeEstimateBound": {
-            "type": "double",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "double"
         },
         "com.amazonaws.dynamodb#ItemCollectionSizeEstimateRange": {
             "type": "list",
@@ -4591,7 +7270,6 @@
         "com.amazonaws.dynamodb#ItemCount": {
             "type": "long",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 0
                 }
@@ -4625,7 +7303,7 @@
             "traits": {
                 "smithy.api#length": {
                     "min": 1,
-                    "max": 25
+                    "max": 100
                 }
             }
         },
@@ -4987,6 +7665,7 @@
                 "MaxResults": {
                     "target": "com.amazonaws.dynamodb#ListContributorInsightsLimit",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>Maximum number of results to return per page.</p>"
                     }
                 }
@@ -4995,6 +7674,7 @@
         "com.amazonaws.dynamodb#ListContributorInsightsLimit": {
             "type": "integer",
             "traits": {
+                "smithy.api#default": 0,
                 "smithy.api#range": {
                     "max": 100
                 }
@@ -5068,7 +7748,6 @@
         "com.amazonaws.dynamodb#ListExportsMaxLimit": {
             "type": "integer",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 1,
                     "max": 25
@@ -5155,6 +7834,77 @@
                 }
             }
         },
+        "com.amazonaws.dynamodb#ListImports": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.dynamodb#ListImportsInput"
+            },
+            "output": {
+                "target": "com.amazonaws.dynamodb#ListImportsOutput"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.dynamodb#LimitExceededException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>\n                Lists completed imports within the past 90 days.\n                </p>",
+                "smithy.api#paginated": {
+                    "inputToken": "NextToken",
+                    "outputToken": "NextToken",
+                    "pageSize": "PageSize"
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#ListImportsInput": {
+            "type": "structure",
+            "members": {
+                "TableArn": {
+                    "target": "com.amazonaws.dynamodb#TableArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                The Amazon Resource Name (ARN) associated with the table that was imported to.\n                </p>"
+                    }
+                },
+                "PageSize": {
+                    "target": "com.amazonaws.dynamodb#ListImportsMaxLimit",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                The number of <code>ImportSummary </code>objects returned in a single page.\n                </p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.dynamodb#ImportNextToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                An optional string that, if supplied, must be copied from the output of a previous\n                call to <code>ListImports</code>. When provided in this manner, the API fetches the next\n                page of results.\n                </p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#ListImportsMaxLimit": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#range": {
+                    "min": 1,
+                    "max": 25
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#ListImportsOutput": {
+            "type": "structure",
+            "members": {
+                "ImportSummaryList": {
+                    "target": "com.amazonaws.dynamodb#ImportSummaryList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                A list of <code>ImportSummary</code> objects.\n                </p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.dynamodb#ImportNextToken",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n                If this value is returned, there are additional results to be displayed. To retrieve\n                them, call <code>ListImports</code> again, with <code>NextToken</code> set to this\n                value.\n                </p>"
+                    }
+                }
+            }
+        },
         "com.amazonaws.dynamodb#ListTables": {
             "type": "operation",
             "input": {
@@ -5207,7 +7957,6 @@
         "com.amazonaws.dynamodb#ListTablesInputLimit": {
             "type": "integer",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 1,
                     "max": 100
@@ -5348,12 +8097,14 @@
                 "IndexSizeBytes": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The total size of the specified index, in bytes. DynamoDB updates this value\n            approximately every six hours. Recent changes might not be reflected in this\n            value.</p>"
                     }
                 },
                 "ItemCount": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The number of items in the specified index. DynamoDB updates this value\n            approximately every six hours. Recent changes might not be reflected in this\n            value.</p>"
                     }
                 },
@@ -5413,7 +8164,10 @@
             }
         },
         "com.amazonaws.dynamodb#Long": {
-            "type": "long"
+            "type": "long",
+            "traits": {
+                "smithy.api#default": 0
+            }
         },
         "com.amazonaws.dynamodb#MapAttributeValue": {
             "type": "map",
@@ -5451,17 +8205,13 @@
         "com.amazonaws.dynamodb#NonNegativeLongObject": {
             "type": "long",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 0
                 }
             }
         },
         "com.amazonaws.dynamodb#NullAttributeValue": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#NumberAttributeValue": {
             "type": "string"
@@ -5501,7 +8251,7 @@
             "traits": {
                 "smithy.api#length": {
                     "min": 1,
-                    "max": 25
+                    "max": 100
                 }
             }
         },
@@ -5612,7 +8362,6 @@
         "com.amazonaws.dynamodb#PositiveIntegerObject": {
             "type": "integer",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 1
                 }
@@ -5621,7 +8370,6 @@
         "com.amazonaws.dynamodb#PositiveLongObject": {
             "type": "long",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 1
                 }
@@ -5635,6 +8383,15 @@
             "traits": {
                 "smithy.api#length": {
                     "min": 1
+                }
+            }
+        },
+        "com.amazonaws.dynamodb#ProcessedItemCount": {
+            "type": "long",
+            "traits": {
+                "smithy.api#default": 0,
+                "smithy.api#range": {
+                    "min": 0
                 }
             }
         },
@@ -6134,12 +8891,14 @@
                 "Count": {
                     "target": "com.amazonaws.dynamodb#Integer",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The number of items in the response.</p>\n        <p>If you used a <code>QueryFilter</code> in the request, then <code>Count</code> is the\n            number of items returned after the filter was applied, and <code>ScannedCount</code> is\n            the number of matching items before the filter was applied.</p>\n        <p>If you did not use a filter in the request, then <code>Count</code> and\n                <code>ScannedCount</code> are the same.</p>"
                     }
                 },
                 "ScannedCount": {
                     "target": "com.amazonaws.dynamodb#Integer",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The number of items evaluated, before any <code>QueryFilter</code> is applied. A high\n                <code>ScannedCount</code> value with few, or no, <code>Count</code> results\n            indicates an inefficient <code>Query</code> operation. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/QueryAndScan.html#Count\">Count and\n                ScannedCount</a> in the <i>Amazon DynamoDB Developer\n            Guide</i>.</p>\n        <p>If you did not use a filter in the request, then <code>ScannedCount</code> is the same\n            as <code>Count</code>.</p>"
                     }
                 },
@@ -6821,10 +9580,7 @@
             }
         },
         "com.amazonaws.dynamodb#RestoreInProgress": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#RestoreSummary": {
             "type": "structure",
@@ -7154,13 +9910,56 @@
             }
         },
         "com.amazonaws.dynamodb#S3Bucket": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 255
+                },
+                "smithy.api#pattern": "^[a-z0-9A-Z]+[\\.\\-\\w]*[a-z0-9A-Z]+$"
+            }
         },
         "com.amazonaws.dynamodb#S3BucketOwner": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#pattern": "^[0-9]{12}$"
+            }
+        },
+        "com.amazonaws.dynamodb#S3BucketSource": {
+            "type": "structure",
+            "members": {
+                "S3BucketOwner": {
+                    "target": "com.amazonaws.dynamodb#S3BucketOwner",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The account number of the S3 bucket that is being imported from. \n            If the bucket is owned by the requester this is optional. \n            </p>"
+                    }
+                },
+                "S3Bucket": {
+                    "target": "com.amazonaws.dynamodb#S3Bucket",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The S3 bucket that is being imported from.\n            </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "S3KeyPrefix": {
+                    "target": "com.amazonaws.dynamodb#S3Prefix",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The key prefix shared by all S3 Objects that are being imported.\n            </p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n            The S3 bucket that is being imported from.\n            </p>"
+            }
         },
         "com.amazonaws.dynamodb#S3Prefix": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 1024
+                }
+            }
         },
         "com.amazonaws.dynamodb#S3SseAlgorithm": {
             "type": "string",
@@ -7219,10 +10018,7 @@
             }
         },
         "com.amazonaws.dynamodb#SSEEnabled": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#SSESpecification": {
             "type": "structure",
@@ -7466,12 +10262,14 @@
                 "Count": {
                     "target": "com.amazonaws.dynamodb#Integer",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The number of items in the response.</p>\n        <p>If you set <code>ScanFilter</code> in the request, then <code>Count</code> is the\n            number of items returned after the filter was applied, and <code>ScannedCount</code> is\n            the number of matching items before the filter was applied.</p>\n        <p>If you did not use a filter in the request, then <code>Count</code> is the same as\n                <code>ScannedCount</code>.</p>"
                     }
                 },
                 "ScannedCount": {
                     "target": "com.amazonaws.dynamodb#Integer",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The number of items evaluated, before any <code>ScanFilter</code> is applied. A high\n                <code>ScannedCount</code> value with few, or no, <code>Count</code> results\n            indicates an inefficient <code>Scan</code> operation. For more information, see <a href=\"https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/QueryAndScan.html#Count\">Count and\n                ScannedCount</a> in the <i>Amazon DynamoDB Developer\n            Guide</i>.</p>\n        <p>If you did not use a filter in the request, then <code>ScannedCount</code> is the same\n            as <code>Count</code>.</p>"
                     }
                 },
@@ -7495,7 +10293,6 @@
         "com.amazonaws.dynamodb#ScanSegment": {
             "type": "integer",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 0,
                     "max": 999999
@@ -7505,7 +10302,6 @@
         "com.amazonaws.dynamodb#ScanTotalSegments": {
             "type": "integer",
             "traits": {
-                "smithy.api#box": {},
                 "smithy.api#range": {
                     "min": 1,
                     "max": 1000000
@@ -7570,6 +10366,7 @@
                 "TableSizeBytes": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>Size of the table in bytes. Note that this is an approximate value.</p>"
                     }
                 },
@@ -7659,10 +10456,7 @@
             }
         },
         "com.amazonaws.dynamodb#StreamEnabled": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#StreamSpecification": {
             "type": "structure",
@@ -7799,6 +10593,53 @@
         "com.amazonaws.dynamodb#TableCreationDateTime": {
             "type": "timestamp"
         },
+        "com.amazonaws.dynamodb#TableCreationParameters": {
+            "type": "structure",
+            "members": {
+                "TableName": {
+                    "target": "com.amazonaws.dynamodb#TableName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The name of the table created as part of the import operation. \n            </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "AttributeDefinitions": {
+                    "target": "com.amazonaws.dynamodb#AttributeDefinitions",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The attributes of the table created as part of the import operation.\n            </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "KeySchema": {
+                    "target": "com.amazonaws.dynamodb#KeySchema",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The primary key and option sort key of the table created as part of the import operation.\n            </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "BillingMode": {
+                    "target": "com.amazonaws.dynamodb#BillingMode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The billing mode for provisioning the table created as part of the import operation.\n            </p>"
+                    }
+                },
+                "ProvisionedThroughput": {
+                    "target": "com.amazonaws.dynamodb#ProvisionedThroughput"
+                },
+                "SSESpecification": {
+                    "target": "com.amazonaws.dynamodb#SSESpecification"
+                },
+                "GlobalSecondaryIndexes": {
+                    "target": "com.amazonaws.dynamodb#GlobalSecondaryIndexList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            The Global Secondary Indexes (GSI) of the table to be created as part of the import operation.\n            </p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p> The parameters for the table created as part of the import operation.\n            </p>"
+            }
+        },
         "com.amazonaws.dynamodb#TableDescription": {
             "type": "structure",
             "members": {
@@ -7841,12 +10682,14 @@
                 "TableSizeBytes": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The total size of the specified table, in bytes. DynamoDB updates this value\n            approximately every six hours. Recent changes might not be reflected in this\n            value.</p>"
                     }
                 },
                 "ItemCount": {
                     "target": "com.amazonaws.dynamodb#Long",
                     "traits": {
+                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The number of items in the specified table. DynamoDB updates this value approximately\n            every six hours. Recent changes might not be reflected in this value.</p>"
                     }
                 },
@@ -8159,10 +11002,7 @@
             }
         },
         "com.amazonaws.dynamodb#TimeToLiveEnabled": {
-            "type": "boolean",
-            "traits": {
-                "smithy.api#box": {}
-            }
+            "type": "boolean"
         },
         "com.amazonaws.dynamodb#TimeToLiveSpecification": {
             "type": "structure",
@@ -8232,7 +11072,7 @@
             "traits": {
                 "smithy.api#length": {
                     "min": 1,
-                    "max": 25
+                    "max": 100
                 }
             }
         },
@@ -8268,7 +11108,7 @@
                 "aws.api#clientDiscoveredEndpoint": {
                     "required": false
                 },
-                "smithy.api#documentation": "<p>\n            <code>TransactGetItems</code> is a synchronous operation that atomically retrieves\n            multiple items from one or more tables (but not from indexes) in a single account and\n            Region. A <code>TransactGetItems</code> call can contain up to 25\n                <code>TransactGetItem</code> objects, each of which contains a <code>Get</code>\n            structure that specifies an item to retrieve from a table in the account and Region. A\n            call to <code>TransactGetItems</code> cannot retrieve items from tables in more than one\n                Amazon Web Services account or Region. The aggregate size of the items in the\n            transaction cannot exceed 4 MB.</p>\n        <p>DynamoDB rejects the entire <code>TransactGetItems</code> request if any of\n            the following is true:</p>\n        <ul>\n            <li>\n                <p>A conflicting operation is in the process of updating an item to be\n                    read.</p>\n            </li>\n            <li>\n                <p>There is insufficient provisioned capacity for the transaction to be\n                    completed.</p>\n            </li>\n            <li>\n                <p>There is a user error, such as an invalid data format.</p>\n            </li>\n            <li>\n                <p>The aggregate size of the items in the transaction cannot exceed 4 MB.</p>\n            </li>\n         </ul>"
+                "smithy.api#documentation": "<p>\n            <code>TransactGetItems</code> is a synchronous operation that atomically retrieves\n            multiple items from one or more tables (but not from indexes) in a single account and\n            Region. A <code>TransactGetItems</code> call can contain up to 100\n                <code>TransactGetItem</code> objects, each of which contains a <code>Get</code>\n            structure that specifies an item to retrieve from a table in the account and Region. A\n            call to <code>TransactGetItems</code> cannot retrieve items from tables in more than one\n                Amazon Web Services account or Region. The aggregate size of the items in the\n            transaction cannot exceed 4 MB.</p>\n        <p>DynamoDB rejects the entire <code>TransactGetItems</code> request if any of\n            the following is true:</p>\n        <ul>\n            <li>\n                <p>A conflicting operation is in the process of updating an item to be\n                    read.</p>\n            </li>\n            <li>\n                <p>There is insufficient provisioned capacity for the transaction to be\n                    completed.</p>\n            </li>\n            <li>\n                <p>There is a user error, such as an invalid data format.</p>\n            </li>\n            <li>\n                <p>The aggregate size of the items in the transaction cannot exceed 4 MB.</p>\n            </li>\n         </ul>"
             }
         },
         "com.amazonaws.dynamodb#TransactGetItemsInput": {
@@ -8277,7 +11117,7 @@
                 "TransactItems": {
                     "target": "com.amazonaws.dynamodb#TransactGetItemList",
                     "traits": {
-                        "smithy.api#documentation": "<p>An ordered array of up to 25 <code>TransactGetItem</code> objects, each of which\n            contains a <code>Get</code> structure.</p>",
+                        "smithy.api#documentation": "<p>An ordered array of up to 100 <code>TransactGetItem</code> objects, each of which\n            contains a <code>Get</code> structure.</p>",
                         "smithy.api#required": {}
                     }
                 },
@@ -8301,7 +11141,7 @@
                 "Responses": {
                     "target": "com.amazonaws.dynamodb#ItemResponseList",
                     "traits": {
-                        "smithy.api#documentation": "<p>An ordered array of up to 25 <code>ItemResponse</code> objects, each of which\n            corresponds to the <code>TransactGetItem</code> object in the same position in the\n                <i>TransactItems</i> array. Each <code>ItemResponse</code> object\n            contains a Map of the name-value pairs that are the projected attributes of the\n            requested item.</p>\n        <p>If a requested item could not be retrieved, the corresponding\n                <code>ItemResponse</code> object is Null, or if the requested item has no projected\n            attributes, the corresponding <code>ItemResponse</code> object is an empty Map. </p>"
+                        "smithy.api#documentation": "<p>An ordered array of up to 100 <code>ItemResponse</code> objects, each of which\n            corresponds to the <code>TransactGetItem</code> object in the same position in the\n                <i>TransactItems</i> array. Each <code>ItemResponse</code> object\n            contains a Map of the name-value pairs that are the projected attributes of the\n            requested item.</p>\n        <p>If a requested item could not be retrieved, the corresponding\n                <code>ItemResponse</code> object is Null, or if the requested item has no projected\n            attributes, the corresponding <code>ItemResponse</code> object is an empty Map. </p>"
                     }
                 }
             }
@@ -8346,7 +11186,7 @@
             "traits": {
                 "smithy.api#length": {
                     "min": 1,
-                    "max": 25
+                    "max": 100
                 }
             }
         },
@@ -8388,7 +11228,7 @@
                 "aws.api#clientDiscoveredEndpoint": {
                     "required": false
                 },
-                "smithy.api#documentation": "<p>\n            <code>TransactWriteItems</code> is a synchronous write operation that groups up to 25\n            action requests. These actions can target items in different tables, but not in\n            different Amazon Web Services accounts or Regions, and no two actions can target the same\n            item. For example, you cannot both <code>ConditionCheck</code> and <code>Update</code>\n            the same item. The aggregate size of the items in the transaction cannot exceed 4\n            MB.</p>\n\n        <p>The actions are completed atomically so that either all of them succeed, or all of\n            them fail. They are defined by the following objects:</p>\n\n        <ul>\n            <li>\n                <p>\n                  <code>Put</code>  —   Initiates a <code>PutItem</code>\n                    operation to write a new item. This structure specifies the primary key of the\n                    item to be written, the name of the table to write it in, an optional condition\n                    expression that must be satisfied for the write to succeed, a list of the item's\n                    attributes, and a field indicating whether to retrieve the item's attributes if\n                    the condition is not met.</p>\n            </li>\n            <li>\n                <p>\n                  <code>Update</code>  —   Initiates an <code>UpdateItem</code>\n                    operation to update an existing item. This structure specifies the primary key\n                    of the item to be updated, the name of the table where it resides, an optional\n                    condition expression that must be satisfied for the update to succeed, an\n                    expression that defines one or more attributes to be updated, and a field\n                    indicating whether to retrieve the item's attributes if the condition is not\n                    met.</p>\n            </li>\n            <li>\n                <p>\n                  <code>Delete</code>  —   Initiates a <code>DeleteItem</code>\n                    operation to delete an existing item. This structure specifies the primary key\n                    of the item to be deleted, the name of the table where it resides, an optional\n                    condition expression that must be satisfied for the deletion to succeed, and a\n                    field indicating whether to retrieve the item's attributes if the condition is\n                    not met.</p>\n            </li>\n            <li>\n                <p>\n                  <code>ConditionCheck</code>  —   Applies a condition to an item\n                    that is not being modified by the transaction. This structure specifies the\n                    primary key of the item to be checked, the name of the table where it resides, a\n                    condition expression that must be satisfied for the transaction to succeed, and\n                    a field indicating whether to retrieve the item's attributes if the condition is\n                    not met.</p>\n            </li>\n         </ul>\n\n        <p>DynamoDB rejects the entire <code>TransactWriteItems</code> request if any of the\n            following is true:</p>\n        <ul>\n            <li>\n                <p>A condition in one of the condition expressions is not met.</p>\n            </li>\n            <li>\n                <p>An ongoing operation is in the process of updating the same item.</p>\n            </li>\n            <li>\n                <p>There is insufficient provisioned capacity for the transaction to be\n                    completed.</p>\n            </li>\n            <li>\n                <p>An item size becomes too large (bigger than 400 KB), a local secondary index\n                    (LSI) becomes too large, or a similar validation error occurs because of changes\n                    made by the transaction.</p>\n            </li>\n            <li>\n                <p>The aggregate size of the items in the transaction exceeds 4 MB.</p>\n            </li>\n            <li>\n                <p>There is a user error, such as an invalid data format.</p>\n            </li>\n         </ul>"
+                "smithy.api#documentation": "<p>\n            <code>TransactWriteItems</code> is a synchronous write operation that groups up to 100\n            action requests. These actions can target items in different tables, but not in\n            different Amazon Web Services accounts or Regions, and no two actions can target the same\n            item. For example, you cannot both <code>ConditionCheck</code> and <code>Update</code>\n            the same item. The aggregate size of the items in the transaction cannot exceed 4\n            MB.</p>\n\n        <p>The actions are completed atomically so that either all of them succeed, or all of\n            them fail. They are defined by the following objects:</p>\n\n        <ul>\n            <li>\n                <p>\n                  <code>Put</code>  —   Initiates a <code>PutItem</code>\n                    operation to write a new item. This structure specifies the primary key of the\n                    item to be written, the name of the table to write it in, an optional condition\n                    expression that must be satisfied for the write to succeed, a list of the item's\n                    attributes, and a field indicating whether to retrieve the item's attributes if\n                    the condition is not met.</p>\n            </li>\n            <li>\n                <p>\n                  <code>Update</code>  —   Initiates an <code>UpdateItem</code>\n                    operation to update an existing item. This structure specifies the primary key\n                    of the item to be updated, the name of the table where it resides, an optional\n                    condition expression that must be satisfied for the update to succeed, an\n                    expression that defines one or more attributes to be updated, and a field\n                    indicating whether to retrieve the item's attributes if the condition is not\n                    met.</p>\n            </li>\n            <li>\n                <p>\n                  <code>Delete</code>  —   Initiates a <code>DeleteItem</code>\n                    operation to delete an existing item. This structure specifies the primary key\n                    of the item to be deleted, the name of the table where it resides, an optional\n                    condition expression that must be satisfied for the deletion to succeed, and a\n                    field indicating whether to retrieve the item's attributes if the condition is\n                    not met.</p>\n            </li>\n            <li>\n                <p>\n                  <code>ConditionCheck</code>  —   Applies a condition to an item\n                    that is not being modified by the transaction. This structure specifies the\n                    primary key of the item to be checked, the name of the table where it resides, a\n                    condition expression that must be satisfied for the transaction to succeed, and\n                    a field indicating whether to retrieve the item's attributes if the condition is\n                    not met.</p>\n            </li>\n         </ul>\n\n        <p>DynamoDB rejects the entire <code>TransactWriteItems</code> request if any of the\n            following is true:</p>\n        <ul>\n            <li>\n                <p>A condition in one of the condition expressions is not met.</p>\n            </li>\n            <li>\n                <p>An ongoing operation is in the process of updating the same item.</p>\n            </li>\n            <li>\n                <p>There is insufficient provisioned capacity for the transaction to be\n                    completed.</p>\n            </li>\n            <li>\n                <p>An item size becomes too large (bigger than 400 KB), a local secondary index\n                    (LSI) becomes too large, or a similar validation error occurs because of changes\n                    made by the transaction.</p>\n            </li>\n            <li>\n                <p>The aggregate size of the items in the transaction exceeds 4 MB.</p>\n            </li>\n            <li>\n                <p>There is a user error, such as an invalid data format.</p>\n            </li>\n         </ul>"
             }
         },
         "com.amazonaws.dynamodb#TransactWriteItemsInput": {
@@ -8397,7 +11237,7 @@
                 "TransactItems": {
                     "target": "com.amazonaws.dynamodb#TransactWriteItemList",
                     "traits": {
-                        "smithy.api#documentation": "<p>An ordered array of up to 25 <code>TransactWriteItem</code> objects, each of which\n            contains a <code>ConditionCheck</code>, <code>Put</code>, <code>Update</code>, or\n                <code>Delete</code> object. These can operate on items in different tables, but the\n            tables must reside in the same Amazon Web Services account and Region, and no two of them\n            can operate on the same item. </p>",
+                        "smithy.api#documentation": "<p>An ordered array of up to 100 <code>TransactWriteItem</code> objects, each of which\n            contains a <code>ConditionCheck</code>, <code>Put</code>, <code>Update</code>, or\n                <code>Delete</code> object. These can operate on items in different tables, but the\n            tables must reside in the same Amazon Web Services account and Region, and no two of them\n            can operate on the same item. </p>",
                         "smithy.api#required": {}
                     }
                 },

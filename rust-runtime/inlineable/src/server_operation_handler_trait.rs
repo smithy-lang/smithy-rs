@@ -14,12 +14,17 @@ use tower::Service;
 
 /// Struct that holds a handler, that is, a function provided by the user that implements the
 /// Smithy operation.
+#[deprecated(
+    since = "0.52.0",
+    note = "`OperationHandler` is part of the older service builder API. This type no longer appears in the public API."
+)]
 pub struct OperationHandler<H, B, R, I> {
     handler: H,
     #[allow(clippy::type_complexity)]
     _marker: PhantomData<(B, R, I)>,
 }
 
+#[allow(deprecated)]
 impl<H, B, R, I> Clone for OperationHandler<H, B, R, I>
 where
     H: Clone,
@@ -33,6 +38,11 @@ where
 }
 
 /// Construct an [`OperationHandler`] out of a function implementing the operation.
+#[allow(deprecated)]
+#[deprecated(
+    since = "0.52.0",
+    note = "`OperationHandler` is part of the older service builder API. This type no longer appears in the public API."
+)]
 pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
     OperationHandler {
         handler,
@@ -40,6 +50,7 @@ pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
     }
 }
 
+#[allow(deprecated)]
 impl<H, B, R, I> Service<Request<B>> for OperationHandler<H, B, R, I>
 where
     H: Handler<B, R, I>,
@@ -80,6 +91,10 @@ pub(crate) mod sealed {
     impl HiddenTrait for Hidden {}
 }
 
+#[deprecated(
+    since = "0.52.0",
+    note = "The inlineable `Handler` is part of the deprecated service builder API. This type no longer appears in the public API."
+)]
 #[async_trait]
 pub trait Handler<B, T, Fut>: Clone + Send + Sized + 'static {
     #[doc(hidden)]
