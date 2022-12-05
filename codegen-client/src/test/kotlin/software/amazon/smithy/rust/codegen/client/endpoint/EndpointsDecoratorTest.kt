@@ -95,7 +95,8 @@ class EndpointsDecoratorTest {
         val testDir = clientIntegrationTest(
             model,
             addtionalDecorators = listOf(EndpointsDecorator()),
-            command = { "cargo check".runWithWarnings(it) },
+            // just run integration tests
+            command = { "cargo test --test *".runWithWarnings(it) },
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()
@@ -108,11 +109,10 @@ class EndpointsDecoratorTest {
                                 .bucket("bucket-name").build().expect("input is valid")
                                 .make_operation(&conf).await.expect("valid operation");
                             use $moduleName::endpoint::{Params};
-                            use aws_smithy_http::endpoint::Result;
+                            use aws_smithy_types::endpoint::Endpoint;
                             let props = operation.properties();
                             let endpoint_params = props.get::<Params>().unwrap();
-                            let endpoint_result = props.get::<Result>().unwrap();
-                            let endpoint = endpoint_result.as_ref().expect("endpoint resolved properly");
+                            let endpoint = props.get::<Endpoint>().unwrap();
                             assert_eq!(
                                 endpoint_params,
                                 &Params::builder()

@@ -187,7 +187,7 @@ mod test {
     };
     use crate::signer::{OperationSigningConfig, SigV4Signer};
     use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
-    use aws_endpoint::{AwsEndpointStage, Params};
+    use aws_endpoint::{AwsAuthStage, Params};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::endpoint::ResolveEndpoint;
     use aws_smithy_http::middleware::MapRequest;
@@ -249,7 +249,7 @@ mod test {
             })
             .expect("succeeds");
 
-        let endpoint = AwsEndpointStage;
+        let endpoint = AwsAuthStage;
         let signer = SigV4SigningStage::new(SigV4Signer::new());
         let mut req = endpoint.apply(req).expect("add endpoint should succeed");
         let mut errs = vec![signer

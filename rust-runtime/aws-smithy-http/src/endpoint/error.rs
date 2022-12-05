@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::error::Error as StdError;
+use std::error::{Error as StdError, Error};
 use std::fmt;
 
 /// Endpoint resolution failed
@@ -25,6 +25,13 @@ impl ResolveEndpointError {
     /// Add a source to the error
     pub fn with_source(self, source: Option<Box<dyn std::error::Error + Send + Sync>>) -> Self {
         Self { source, ..self }
+    }
+
+    pub fn from_source(
+        message: impl Into<String>,
+        source: impl Into<Box<dyn Error + Send + Sync>>,
+    ) -> Self {
+        Self::message(message).with_source(Some(source.into()))
     }
 }
 

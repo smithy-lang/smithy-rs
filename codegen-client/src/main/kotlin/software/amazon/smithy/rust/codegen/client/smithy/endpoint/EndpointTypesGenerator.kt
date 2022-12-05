@@ -23,10 +23,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  */
 class EndpointTypesGenerator(
     codegenContext: ClientCodegenContext,
-    private val rules: EndpointRuleSet,
+    private val rules: EndpointRuleSet?,
     private val tests: List<EndpointTestCase>,
 ) {
-    val params: Parameters = rules.parameters
+    val params: Parameters = rules?.parameters ?: Parameters.builder().build()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
     private val stdlib = customizations
@@ -43,9 +43,12 @@ class EndpointTypesGenerator(
     }
 
     fun paramsStruct(): RuntimeType = EndpointParamsGenerator(params).paramsStruct()
-    fun defaultResolver(): RuntimeType = EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(rules)
+    fun defaultResolver(): RuntimeType? =
+        rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
+
     fun testGenerator(): Writable =
-        EndpointTestGenerator(tests, paramsStruct(), defaultResolver(), params, runtimeConfig).generate()
+        defaultResolver()?.let { EndpointTestGenerator(tests, paramsStruct(), it, params, runtimeConfig).generate() }
+            ?: {}
 
     /**
      * Load the builtIn value for [parameter] from the endpoint customizations. If the built-in comes from service config,

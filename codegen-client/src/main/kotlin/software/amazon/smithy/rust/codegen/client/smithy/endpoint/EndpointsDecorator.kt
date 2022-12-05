@@ -139,7 +139,8 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                         """
                         let endpoint_params = #{Params}::builder()#{builderFields:W}.build()
                             .map_err(#{BuildError}::other)?;
-                        let endpoint_result = ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params);
+                        let endpoint = ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params)
+                            .map_err(#{BuildError}::other)?;
                         """,
                         "builderFields" to builderFields(typesGenerator.params, section),
                         *codegenScope,
@@ -147,10 +148,9 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                 }
 
                 is OperationSection.MutateRequest -> writable {
-                    // insert the endpoint resolution _result_ into the bag (note that this won't bail if endpoint
-                    // resolution failed)
+                    // insert the endpoint the bag
                     rustTemplate("${section.request}.properties_mut().insert(endpoint_params);")
-                    rustTemplate("${section.request}.properties_mut().insert(endpoint_result);")
+                    rustTemplate("${section.request}.properties_mut().insert(endpoint);")
                 }
 
                 else -> emptySection

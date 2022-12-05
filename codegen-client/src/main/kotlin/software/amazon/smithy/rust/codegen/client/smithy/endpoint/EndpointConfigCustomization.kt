@@ -30,7 +30,6 @@ internal class EndpointConfigCustomization(
             val codegenScope = arrayOf(
                 "SmithyResolver" to types.resolveEndpoint,
                 "Params" to typesGenerator.paramsStruct(),
-                "DefaultResolver" to typesGenerator.defaultResolver(),
             )
             when (section) {
                 is ServiceConfig.ConfigStruct -> rustTemplate(
@@ -55,10 +54,9 @@ internal class EndpointConfigCustomization(
                         *codegenScope,
                     )
 
-                ServiceConfig.BuilderImpl ->
-                    rustTemplate(
+                ServiceConfig.BuilderImpl -> {
+                    val extraDocs = if (typesGenerator.defaultResolver() != null) {
                         """
-                        /// Sets the endpoint resolver to use when making requests.
                         ///
                         /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
                         /// rules for `$moduleUseName`.
@@ -88,6 +86,12 @@ internal class EndpointConfigCustomization(
                         /// };
                         /// let config = $moduleUseName::Config::builder().endpoint_resolver(prefix_resolver);
                         /// ```
+                        """
+                    } else ""
+                    rustTemplate(
+                        """
+                        /// Sets the endpoint resolver to use when making requests.
+                        $extraDocs
                         pub fn endpoint_resolver(mut self, endpoint_resolver: impl $resolverTrait + 'static) -> Self {
                             self.endpoint_resolver = Some(std::sync::Arc::new(endpoint_resolver) as _);
                             self
@@ -104,16 +108,27 @@ internal class EndpointConfigCustomization(
                         """,
                         *codegenScope,
                     )
+                }
 
                 ServiceConfig.BuilderBuild -> {
-                    rustTemplate(
-                        """
-                        endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
-                            std::sync::Arc::new(#{DefaultResolver}::new())
-                        ),
-                        """,
-                        *codegenScope,
-                    )
+                    val defaultResolver = typesGenerator.defaultResolver()
+                    if (defaultResolver != null) {
+                        rustTemplate(
+                            """
+                            endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
+                                std::sync::Arc::new(#{DefaultResolver}::new())
+                            ),
+                            """,
+                            *codegenScope,
+                            "DefaultResolver" to defaultResolver,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            endpoint_resolver: self.endpoint_resolver.expect("an endpoint resolver must be provided")
+                            """,
+                        )
+                    }
                 }
 
                 else -> emptySection
