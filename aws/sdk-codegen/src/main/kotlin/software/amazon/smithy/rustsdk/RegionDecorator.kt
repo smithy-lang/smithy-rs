@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 /* Example Generated Code */
 /*
@@ -111,6 +113,19 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
                     }
                 }
 
+                override fun applyBuiltIn(name: String, value: Node, configRef: String): Writable? {
+                    if (name != Builtins.REGION.builtIn.get()) {
+                        println("not handling: $name")
+                        return null
+                    }
+                    return writable {
+                        rustTemplate(
+                            "let $configRef = $configRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
+                            "Region" to region(codegenContext.runtimeConfig).member("Region"),
+                        )
+                    }
+                }
+
                 override fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> =
                     listOf()
             },
@@ -167,6 +182,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                 """region: self.region,""",
                 *codegenScope,
             )
+            else -> emptySection
         }
     }
 }

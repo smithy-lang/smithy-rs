@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.model.node.BooleanNode
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeType
@@ -42,6 +43,8 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 interface EndpointCustomization {
     fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? = null
     fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> = listOf()
+
+    fun applyBuiltIn(name: String, value: Node, configRef: String): Writable? = null
 }
 
 /**

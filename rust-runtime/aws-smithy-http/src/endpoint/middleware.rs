@@ -37,8 +37,11 @@ impl MapRequest for SmithyEndpointStage {
             })?;
             apply_endpoint(http_req.uri_mut(), &uri, props.get::<EndpointPrefix>()).map_err(
                 |err| {
-                    ResolveEndpointError::message("failed to imply endpoint")
-                        .with_source(Some(err.into()))
+                    ResolveEndpointError::message(format!(
+                        "failed to apply endpoint `{:?}` to request `{:?}`",
+                        uri, http_req
+                    ))
+                    .with_source(Some(err.into()))
                 },
             )?;
             for (header_name, header_values) in endpoint.headers() {

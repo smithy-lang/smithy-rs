@@ -55,7 +55,8 @@ internal class EndpointConfigCustomization(
                     )
 
                 ServiceConfig.BuilderImpl -> {
-                    val extraDocs = if (typesGenerator.defaultResolver() != null) {
+                    // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
+                    val defaultResolverDocs = if (typesGenerator.defaultResolver() != null) {
                         """
                         ///
                         /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
@@ -91,7 +92,7 @@ internal class EndpointConfigCustomization(
                     rustTemplate(
                         """
                         /// Sets the endpoint resolver to use when making requests.
-                        $extraDocs
+                        $defaultResolverDocs
                         pub fn endpoint_resolver(mut self, endpoint_resolver: impl $resolverTrait + 'static) -> Self {
                             self.endpoint_resolver = Some(std::sync::Arc::new(endpoint_resolver) as _);
                             self

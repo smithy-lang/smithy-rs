@@ -10,7 +10,7 @@ use std::fmt;
 #[derive(Debug)]
 pub struct ResolveEndpointError {
     message: String,
-    source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    source: Option<Box<dyn Error + Send + Sync>>,
 }
 
 impl ResolveEndpointError {
@@ -23,10 +23,11 @@ impl ResolveEndpointError {
     }
 
     /// Add a source to the error
-    pub fn with_source(self, source: Option<Box<dyn std::error::Error + Send + Sync>>) -> Self {
+    pub fn with_source(self, source: Option<Box<dyn Error + Send + Sync>>) -> Self {
         Self { source, ..self }
     }
 
+    /// Create a [`ResolveEndpointError`] from a message and a source
     pub fn from_source(
         message: impl Into<String>,
         source: impl Into<Box<dyn Error + Send + Sync>>,

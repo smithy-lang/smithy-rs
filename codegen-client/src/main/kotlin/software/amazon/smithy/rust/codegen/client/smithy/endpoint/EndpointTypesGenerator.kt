@@ -43,12 +43,9 @@ class EndpointTypesGenerator(
     }
 
     fun paramsStruct(): RuntimeType = EndpointParamsGenerator(params).paramsStruct()
-    fun defaultResolver(): RuntimeType? =
-        rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
-
+    fun defaultResolver(): RuntimeType? = rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
     fun testGenerator(): Writable =
-        defaultResolver()?.let { EndpointTestGenerator(tests, paramsStruct(), it, params, runtimeConfig).generate() }
-            ?: {}
+        defaultResolver()?.let { EndpointTestGenerator(tests, paramsStruct(), it, params, runtimeConfig).generate() } ?: {}
 
     /**
      * Load the builtIn value for [parameter] from the endpoint customizations. If the built-in comes from service config,

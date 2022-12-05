@@ -17,9 +17,8 @@ async fn correct_endpoint_resolver() {
         .await
         .expect("valid operation");
     let props = operation.properties();
-    let ep: &aws_smithy_http::endpoint::Result =
+    let ep: &aws_smithy_types::endpoint::Endpoint =
         props.get().expect("endpoint result was not present");
-    let ep = ep.as_ref().expect("ep resolved successfully");
     // test fips endpoint
     assert_eq!(ep.url(), "https://iam-fips.amazonaws.com/");
 }

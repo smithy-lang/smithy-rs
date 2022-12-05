@@ -196,9 +196,9 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                     """
                     let endpoint_params = #{PlaceholderParams}::new(${section.config}.region.clone());
                     ${section.request}.properties_mut()
-                        .insert::<aws_smithy_http::endpoint::Result>(${section.config}
-                            .endpoint_resolver
-                            .resolve_endpoint(&endpoint_params));
+                        .insert::<aws_smithy_types::endpoint::Endpoint>(
+                            ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params)
+                                .map_err(#{BuildError}::other)?);
                     """,
                     *codegenScope,
                 )
