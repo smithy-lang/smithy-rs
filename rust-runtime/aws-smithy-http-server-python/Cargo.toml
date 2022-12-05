@@ -50,6 +50,8 @@ futures-util = "0.3"
 tower-test = "0.4"
 tokio-test = "0.4"
 pyo3-asyncio = { version = "0.17.0", features = ["testing", "attributes", "tokio-runtime"] }
+rcgen = "0.10.0"
+hyper-rustls = { version = "0.23.1", features = ["http2"] }
 
 [[test]]
 name = "middleware_tests"

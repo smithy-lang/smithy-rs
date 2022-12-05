@@ -64,3 +64,168 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+    use std::sync::{mpsc, Arc};
+    use std::thread;
+
+    use hyper::server::conn::AddrIncoming;
+    use hyper::service::{make_service_fn, service_fn};
+    use hyper::{Body, Client, Error, Response, Server, Uri};
+    use hyper_rustls::HttpsConnectorBuilder;
+    use tokio_rustls::{
+        rustls::{Certificate, ClientConfig, PrivateKey, RootCertStore, ServerConfig},
+        TlsAcceptor,
+    };
+
+    use super::Listener;
+
+    #[tokio::test]
+    async fn server_doesnt_shutdown_after_bad_handshake() {
+        let (_new_acceptor_tx, new_acceptor_rx) = mpsc::channel();
+        let cert = valid_cert();
+        let acceptor = acceptor_from_cert(&cert);
+        let addr = server(acceptor, new_acceptor_rx);
+
+        {
+            // Here client only trusts the `different_cert` and fails for any other certificate even though they are valid
+            let different_cert = valid_cert();
+            let config = client_config_with_cert(&different_cert);
+            let response = make_req(config, &addr).await;
+            assert!(response
+                .unwrap_err()
+                .to_string()
+                .contains("invalid peer certificate: UnknownIssuer"));
+        }
+
+        {
+            // Now use the same cert and it should succeed
+            let config = client_config_with_cert(&cert);
+            let response = make_req(config, &addr).await.unwrap();
+            assert_eq!(
+                "hello world",
+                hyper::body::to_bytes(response.into_body()).await.unwrap()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn server_changes_tls_config() {
+        let (new_acceptor_tx, new_acceptor_rx) = mpsc::channel();
+
+        let invalid_cert = cert_with_invalid_date();
+        let acceptor = acceptor_from_cert(&invalid_cert);
+        let addr = server(acceptor, new_acceptor_rx);
+
+        {
+            // We have a certificate with invalid date, so request should fail
+            let config = client_config_with_cert(&invalid_cert);
+            let response = make_req(config, &addr).await;
+            assert!(response
+                .unwrap_err()
+                .to_string()
+                .contains("invalid peer certificate: InvalidCertValidity"));
+        }
+
+        // Make a new acceptor with a valid cert and replace
+        let cert = valid_cert();
+        let acceptor = acceptor_from_cert(&cert);
+        tokio::spawn(async move {
+            new_acceptor_tx.send(acceptor).unwrap();
+        });
+
+        {
+            // Now it should succeed
+            let config = client_config_with_cert(&cert);
+            let response = make_req(config, &addr).await.unwrap();
+            assert_eq!(
+                "hello world",
+                hyper::body::to_bytes(response.into_body()).await.unwrap()
+            );
+        }
+    }
+
+    fn client_config_with_cert(cert: &rcgen::Certificate) -> ClientConfig {
+        let mut roots = RootCertStore::empty();
+        roots.add_parsable_certificates(&vec![cert.serialize_der().unwrap()]);
+        ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(roots)
+            .with_no_client_auth()
+    }
+
+    fn cert_with_invalid_date() -> rcgen::Certificate {
+        let mut params = rcgen::CertificateParams::new(vec!["localhost".to_string()]);
+        params.not_after = rcgen::date_time_ymd(1970, 01, 01);
+        rcgen::Certificate::from_params(params).unwrap()
+    }
+
+    fn valid_cert() -> rcgen::Certificate {
+        let params = rcgen::CertificateParams::new(vec!["localhost".to_string()]);
+        rcgen::Certificate::from_params(params).unwrap()
+    }
+
+    fn acceptor_from_cert(cert: &rcgen::Certificate) -> TlsAcceptor {
+        TlsAcceptor::from(Arc::new(
+            ServerConfig::builder()
+                .with_safe_defaults()
+                .with_no_client_auth()
+                .with_single_cert(
+                    vec![Certificate(cert.serialize_der().unwrap())],
+                    PrivateKey(cert.serialize_private_key_der()),
+                )
+                .unwrap(),
+        ))
+    }
+
+    fn server(acceptor: TlsAcceptor, new_acceptor_rx: mpsc::Receiver<TlsAcceptor>) -> SocketAddr {
+        let addr = ([127, 0, 0, 1], 0).into();
+        let (addr_tx, addr_rx) = mpsc::channel();
+
+        thread::spawn(move || {
+            tokio_test::block_on(async move {
+                let incoming = AddrIncoming::bind(&addr).unwrap();
+                addr_tx.send(incoming.local_addr()).unwrap();
+
+                let listener = Listener::new(acceptor, incoming, new_acceptor_rx);
+
+                let make_svc = make_service_fn(|_| async {
+                    Ok::<_, Error>(service_fn(|_req| async {
+                        Ok::<_, Error>(Response::new(Body::from("hello world")))
+                    }))
+                });
+                let server = Server::builder(listener).serve(make_svc);
+                if let Err(err) = server.await {
+                    panic!("server error: {}", err);
+                }
+            });
+        });
+
+        addr_rx.recv().unwrap()
+    }
+
+    async fn make_req(
+        config: ClientConfig,
+        addr: &SocketAddr,
+    ) -> Result<Response<Body>, hyper::Error> {
+        let connector = HttpsConnectorBuilder::new()
+            .with_tls_config(config)
+            .https_only()
+            .enable_http2()
+            .build();
+
+        let client = Client::builder().build::<_, Body>(connector);
+        client
+            .get(
+                Uri::builder()
+                    .scheme("https")
+                    .authority(format!("localhost:{}", addr.port()))
+                    .path_and_query("/")
+                    .build()
+                    .unwrap(),
+            )
+            .await
+    }
+}
