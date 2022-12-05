@@ -35,6 +35,7 @@
 //! Macros implementation.
 
 /// Define a type that implements [`std::future::Future`].
+#[doc(hidden)]
 #[macro_export]
 macro_rules! opaque_future {
     ($(#[$m:meta])* pub type $name:ident = $actual:ty;) => {

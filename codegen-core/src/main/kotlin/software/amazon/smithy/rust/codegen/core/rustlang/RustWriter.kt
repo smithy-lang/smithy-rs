@@ -15,6 +15,8 @@ import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -22,7 +24,9 @@ import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -90,6 +94,11 @@ private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
     trim: Boolean = true,
     f: T.(String) -> U,
 ): U {
+    scope.forEach { (k, v) ->
+        when (v) {
+            is Unit -> PANIC("provided `kotlin.Unit` for $k. This is a bug.")
+        }
+    }
     val contents = transformTemplate(template, scope, trim)
     pushState()
     this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
@@ -238,10 +247,18 @@ fun <T : AbstractCodeWriter<T>> T.documentShape(
 ): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
-    when (docTrait?.value?.isNotBlank()) {
+    return docsOrFallback(docTrait?.value, autoSuppressMissingDocs, note)
+}
+
+fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
+    docs: String? = null,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null,
+): T {
+    when (docs?.isNotBlank()) {
         // If docs are modeled, then place them on the code generated shape
         true -> {
-            this.docs(normalizeHtml(escape(docTrait.value)))
+            this.docs(normalizeHtml(escape(docs)))
             note?.also {
                 // Add a blank line between the docs and the note to visually differentiate
                 write("///")
@@ -287,6 +304,15 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
     write(cleaned, *args)
     popState()
     return this
+}
+
+/**
+ * Writes a comment into the code
+ *
+ * Equivalent to [docs] but lines are preceded with `// ` instead of `///`
+ */
+fun <T : AbstractCodeWriter<T>> T.comment(text: String, vararg args: Any): T {
+    return docs(text, *args, newlinePrefix = "// ")
 }
 
 /**
@@ -465,31 +491,80 @@ class RustWriter private constructor(
     }
 
     /**
+     * Generate a wrapping if statement around a nullable value.
+     * The provided code block will only be called if the value is not `None`.
+     */
+    fun ifSome(member: Symbol, value: ValueExpression, block: RustWriter.(value: ValueExpression) -> Unit) {
+        when {
+            member.isOptional() -> {
+                val innerValue = ValueExpression.Reference(safeName("inner"))
+                rustBlock("if let Some(${innerValue.name}) = ${value.asRef()}") {
+                    block(innerValue)
+                }
+            }
+
+            else -> this.block(value)
+        }
+    }
+
+    /**
+     * Generate a wrapping if statement around a primitive field.
+     * The specified block will only be called if the field is not set to its default value - `0` for
+     * numbers, `false` for booleans.
+     */
+    fun ifNotDefault(shape: Shape, variable: ValueExpression, block: RustWriter.(field: ValueExpression) -> Unit) {
+        when (shape) {
+            is FloatShape, is DoubleShape -> rustBlock("if ${variable.asValue()} != 0.0") {
+                block(variable)
+            }
+
+            is NumberShape -> rustBlock("if ${variable.asValue()} != 0") {
+                block(variable)
+            }
+
+            is BooleanShape -> rustBlock("if ${variable.asValue()}") {
+                block(variable)
+            }
+
+            else -> rustBlock("") {
+                this.block(variable)
+            }
+        }
+    }
+
+    /**
      * Generate a wrapping if statement around a field.
      *
      * - If the field is optional, it will only be called if the field is present
      * - If the field is an unboxed primitive, it will only be called if the field is non-zero
      *
+     * # Example
+     *
+     * For a nullable structure shape (e.g. `Option<MyStruct>`), the following code will be generated:
+     *
+     * ```
+     * if let Some(v) = my_nullable_struct {
+     *   /* {block(variable)} */
+     * }
+     * ```
+     *
+     * # Example
+     *
+     * For a non-nullable integer shape, the following code will be generated:
+     *
+     * ```
+     * if my_int != 0 {
+     *   /* {block(variable)} */
+     * }
+     * ```
      */
-    fun ifSet(shape: Shape, member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
-        when {
-            member.isOptional() -> {
-                val derefName = safeName("inner")
-                rustBlock("if let Some($derefName) = $outerField") {
-                    block(derefName)
-                }
-            }
-
-            shape is NumberShape -> rustBlock("if ${outerField.removePrefix("&")} != 0") {
-                block(outerField)
-            }
-
-            shape is BooleanShape -> rustBlock("if ${outerField.removePrefix("&")}") {
-                block(outerField)
-            }
-
-            else -> this.block(outerField)
-        }
+    fun ifSet(
+        shape: Shape,
+        member: Symbol,
+        variable: ValueExpression,
+        block: RustWriter.(field: ValueExpression) -> Unit,
+    ) {
+        ifSome(member, variable) { inner -> ifNotDefault(shape, inner, block) }
     }
 
     fun listForEach(
@@ -550,7 +625,8 @@ class RustWriter private constructor(
     inner class RustWriteableInjector : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             @Suppress("UNCHECKED_CAST")
-            val func = t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
+            val func =
+                t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
             val innerWriter = RustWriter(filename, namespace, printWarning = false)
             func(innerWriter)
             innerWriter.dependencies.forEach { addDependency(it) }
@@ -574,6 +650,16 @@ class RustWriter private constructor(
 
                 is RustType -> {
                     t.render(fullyQualified = true)
+                }
+
+                is Function<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val func =
+                        t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
+                    val innerWriter = RustWriter(filename, namespace, printWarning = false)
+                    func(innerWriter)
+                    innerWriter.dependencies.forEach { addDependency(it) }
+                    return innerWriter.toString().trimEnd()
                 }
 
                 else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")

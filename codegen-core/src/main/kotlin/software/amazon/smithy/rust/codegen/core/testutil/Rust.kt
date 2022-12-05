@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
@@ -36,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import kotlin.io.path.absolutePathString
 
 /**
  * Waiting for Kotlin to stabilize their temp directory functionality
@@ -54,8 +56,18 @@ private fun tempDir(directory: File? = null): File {
  * This workspace significantly improves test performance by sharing dependencies between different tests.
  */
 object TestWorkspace {
-    private val baseDir =
-        System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
+    private val baseDir by lazy {
+        val homeDir = System.getProperty("APPDATA")
+            ?: System.getenv("XDG_DATA_HOME")
+            ?: System.getProperty("user.home")
+                ?.let { Path.of(it, "Library/Application Support").absolutePathString() }
+                ?.takeIf { File(it).exists() }
+        if (homeDir != null) {
+            File(Path.of(homeDir, "smithy-test-workspace").absolutePathString())
+        } else {
+            System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
+        }
+    }
     private val subprojects = mutableListOf<String>()
 
     init {
@@ -83,6 +95,12 @@ object TestWorkspace {
                 name = "stub-${newProject.name}"
                 version = "0.0.1"
                 """.trimIndent(),
+            )
+            newProject.resolve("rust-toolchain.toml").writeText(
+                // help rust select the right version when we run cargo test
+                // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
+                //  method as we do for runtime crate versions
+                "[toolchain]\nchannel = \"1.62.1\"\n",
             )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
@@ -113,7 +131,15 @@ object TestWorkspace {
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
             CoreCodegenConfig(debugMode = debugMode),
-        )
+        ).apply {
+            lib {
+                // If the test fails before the crate is finalized, we'll end up with a broken crate.
+                // Since all tests are generated into the same workspace (to avoid re-compilation) a broken crate
+                // breaks the workspace and all subsequent unit tests. By putting this comment in, we prevent
+                // that state from occurring.
+                rust("// touch lib.rs")
+            }
+        }
     }
 }
 
@@ -394,3 +420,5 @@ fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     }
     return this
 }
+
+fun String.runWithWarnings(crate: Path) = this.runCommand(crate, mapOf("RUSTFLAGS" to "-D warnings"))

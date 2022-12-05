@@ -41,6 +41,10 @@
 //! [`crate::runtime_error::RuntimeError`], thus allowing us to represent the full
 //! error chain.
 
+// For some reason `deprecated(deprecated)` warns of its own deprecation. Putting `allow(deprecated)` at the module
+// level remedies it.
+#![allow(deprecated)]
+
 use strum_macros::Display;
 
 use crate::response::IntoResponse;
@@ -49,6 +53,10 @@ use crate::response::IntoResponse;
 /// extensions]. Contains one variant for each way the extractor can fail.
 ///
 /// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
+#[deprecated(
+    since = "0.52.0",
+    note = "This was used for extraction under the older service builder. The `MissingExtension` struct returned by `FromParts::from_parts` is now used."
+)]
 #[derive(Debug, Display)]
 pub enum RequestExtensionNotFoundRejection {
     /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
@@ -261,8 +269,9 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 // everyone will run a Hyper-based server in their services).
 convert_to_request_rejection!(hyper::Error, HttpBody);
 
-// Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
-convert_to_request_rejection!(lambda_http::Error, HttpBody);
+// Useful in general, but it also required in order to accept Lambda HTTP requests using
+// `Router<lambda_http::Body>` since `lambda_http::Error` is a type alias for `Box<dyn Error + ..>`.
+convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, HttpBody);
 
 pub mod any_rejections {
     //! This module hosts enums, up to size 8, which implement [`IntoResponse`] when their variants implement

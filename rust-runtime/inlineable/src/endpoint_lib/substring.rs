@@ -37,7 +37,7 @@ pub(crate) fn substring<'a, 'b>(
     Some(&input[effective_start..effective_stop])
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "gated-tests"))]
 mod test {
     use super::*;
     use proptest::proptest;
