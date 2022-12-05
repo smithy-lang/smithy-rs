@@ -625,3 +625,15 @@ message = "Implementation of the Debug trait for container shapes now redacts wh
 references = ["smithy-rs#1983", "smithy-rs#2029"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "The SDK clients now default max idle connections to 70 (previously unlimited) to reduce the likelihood of hitting max file handles in AWS Lambda."
+references = ["smithy-rs#2064", "aws-sdk-rust#632"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Clients now default max idle connections to 70 (previously unlimited) to reduce the likelihood of hitting max file handles in AWS Lambda."
+references = ["smithy-rs#2064", "aws-sdk-rust#632"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
