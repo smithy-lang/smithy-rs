@@ -94,12 +94,7 @@ open class EnumGenerator(
 ) {
     protected val symbol: Symbol = symbolProvider.toSymbol(shape)
     protected val enumName: String = symbol.name
-    private val isSensitive = shape.shouldRedact(model)
-    protected val meta = if (isSensitive) {
-        symbol.expectRustMetadata().withoutDerives(RuntimeType.Debug)
-    } else {
-        symbol.expectRustMetadata()
-    }
+    protected val meta = symbol.expectRustMetadata()
     protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
     protected open var target: CodegenTarget = CodegenTarget.CLIENT
@@ -136,7 +131,7 @@ open class EnumGenerator(
             renderUnnamedEnum()
         }
 
-        if (isSensitive) {
+        if (shape.shouldRedact(model)) {
             renderDebugImplForSensitiveEnum()
         }
     }
