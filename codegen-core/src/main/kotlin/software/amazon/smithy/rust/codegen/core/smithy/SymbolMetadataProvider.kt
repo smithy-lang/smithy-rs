@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -77,13 +78,27 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
 class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
     private val model: Model,
-    additionalAttributes: List<Attribute>,
+    private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
-    private val containerDefault = RustMetadata(
-        Attribute.Derives(defaultDerives.toSet()),
-        additionalAttributes = additionalAttributes,
-        visibility = Visibility.PUBLIC,
-    )
+    private fun containerDefault(shape: Shape): RustMetadata {
+        val isSensitive = shape.hasTrait<SensitiveTrait>() ||
+            // Checking the shape's direct members for the sensitive trait should suffice.
+            // Whether their descendants, i.e. a member's member, is sensitive does not
+            // affect the inclusion/exclusion of the derived Debug trait of _this_ container
+            // shape; any sensitive descendant should still be printed as redacted.
+            shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+
+        val setOfDerives = if (isSensitive) {
+            defaultDerives.toSet() - RuntimeType.Debug
+        } else {
+            defaultDerives.toSet()
+        }
+        return RustMetadata(
+            Attribute.Derives(setOfDerives),
+            additionalAttributes = additionalAttributes,
+            visibility = Visibility.PUBLIC,
+        )
+    }
 
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
         val container = model.expectShape(memberShape.container)
@@ -113,15 +128,15 @@ class BaseSymbolMetadataProvider(
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
-        return containerDefault
+        return containerDefault(structureShape)
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {
-        return containerDefault
+        return containerDefault(unionShape)
     }
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
-        return containerDefault.withDerives(
+        return containerDefault(stringShape).withDerives(
             RuntimeType.std.member("hash::Hash"),
         ).withDerives(
             // enums can be eq because they can only contain ints and strings
