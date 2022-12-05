@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::endpoint;
 use crate::endpoint::{apply_endpoint, EndpointPrefix, ResolveEndpointError};
 use crate::middleware::MapRequest;
 use crate::operation::Request;
-use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
 use http::{HeaderValue, Uri};
 use std::str::FromStr;
@@ -29,9 +29,22 @@ impl MapRequest for SmithyEndpointStage {
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
         request.augment(|mut http_req, props| {
-            let endpoint = props
-                .get::<Endpoint>()
-                .ok_or(ResolveEndpointError::message("no endpoint present"))?;
+            // we need to do a little dance so that this works with retries.
+            // the first pass through, we convert the result into just an endpoint, early returning
+            // the error. Put the endpoint back in the bag in case this request gets retried.
+            //
+            // the next pass through, there is no result, so in that case, we'll look for the
+            // endpoint directly.
+            //
+            // In an ideal world, we would do this in make_operation, but it's much easier for
+            // certain protocol tests if we allow requests with invalid endpoint to be constructed.
+            if let Some(endpoint) = props.remove::<endpoint::Result>().transpose()? {
+                props.insert(endpoint);
+            };
+            let endpoint = props.get::<aws_smithy_types::endpoint::Endpoint>();
+            let endpoint =
+                endpoint.ok_or_else(|| ResolveEndpointError::message("no endpoint present"))?;
+
             let uri: Uri = endpoint.url().parse().map_err(|err| {
                 ResolveEndpointError::from_source("endpoint did not have a valid uri", err)
             })?;

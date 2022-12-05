@@ -74,7 +74,7 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig, operation)
+        return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
@@ -179,9 +179,7 @@ class EndpointConfigCustomization(
     }
 }
 
-// This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern
-
-class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) :
+class EndpointResolverFeature(runtimeConfig: RuntimeConfig) :
     OperationCustomization() {
     private val placeholderEndpointParams = runtimeConfig.awsEndpoint().toType().member("Params")
     private val codegenScope = arrayOf(
@@ -196,9 +194,9 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                     """
                     let endpoint_params = #{PlaceholderParams}::new(${section.config}.region.clone());
                     ${section.request}.properties_mut()
-                        .insert::<aws_smithy_types::endpoint::Endpoint>(
+                        .insert::<aws_smithy_http::endpoint::Result>(
                             ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params)
-                                .map_err(#{BuildError}::other)?);
+                        );
                     """,
                     *codegenScope,
                 )

@@ -5,8 +5,10 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -80,6 +82,10 @@ fn test_1() {
 class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "Region"
     override val order: Byte = 0
+
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return super.transformModel(service, model)
+    }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
