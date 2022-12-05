@@ -6,7 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -16,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -196,6 +200,7 @@ class ServerServiceGeneratorV2(
                 )
             }
         }
+
         rustTemplate(
             """
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
@@ -206,7 +211,6 @@ class ServerServiceGeneratorV2(
             /// unspecified route requested.
             pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
             {
-                #{TypeInitializations:W}
                 let router = {
                     use #{SmithyHttpServer}::operation::OperationShape;
                     let mut $missingOperationsVariableName = std::collections::HashMap::new();
@@ -217,6 +221,10 @@ class ServerServiceGeneratorV2(
                         });
                     }
                     let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
+
+                    // Eagerly initialize regexes for `@pattern` strings.
+                    #{PatternInitializations:W}
+
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
                 Ok($serviceName {
@@ -225,12 +233,29 @@ class ServerServiceGeneratorV2(
             }
             """,
             "Router" to protocol.routerType(),
-            "TypeInitializations" to typeInitializations,
             "NullabilityChecks" to nullabilityChecks,
             "RoutesArrayElements" to routesArrayElements,
             "SmithyHttpServer" to smithyHttpServer,
+            "PatternInitializations" to patternInitializations(),
         )
     }
+
+    /**
+     * Renders `PatternString::compile_regex()` function calls for every
+     * `@pattern`-constrained string shape in the service closure.
+     */
+    private fun patternInitializations(): Writable =
+        Walker(model).walkShapes(service).mapNotNull { shape ->
+            if (shape is StringShape && shape.hasTrait<PatternTrait>()) {
+                codegenContext.constrainedShapeSymbolProvider.toSymbol(shape)
+            } else {
+                null
+            }
+        }.map { symbol ->
+            writable {
+                rustTemplate("#{Type}::compile_regex();", "Type" to symbol)
+            }
+        }.join("")
 
     private fun buildUncheckedMethod(): Writable = writable {
         val pairs = writable {
