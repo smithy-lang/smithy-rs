@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -32,7 +31,6 @@ data class ServerCodegenContext(
     val constrainedShapeSymbolProvider: RustSymbolProvider,
     val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-    val typesToInit: MutableSet<Symbol> = setOf<Symbol>().toMutableSet(),
 ) : CodegenContext(
     model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
 )

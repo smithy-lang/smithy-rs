@@ -45,9 +45,6 @@ class ServerServiceGeneratorV2(
     private val symbolProvider = codegenContext.symbolProvider
     private val crateName = codegenContext.moduleUseName()
 
-    private val typeInitializations = codegenContext.typesToInit
-        .map { typeSymbol -> writable { rust("$typeSymbol::compile_regex();") } }
-        .join("\n")
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
