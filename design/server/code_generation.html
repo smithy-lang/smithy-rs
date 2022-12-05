@@ -1,0 +1,250 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Generating Common Service Code - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">6.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">6.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">6.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">6.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html" class="active"><strong aria-hidden="true">6.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">6.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">7.24.</strong> RFC-0024: RequestID</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="generating-common-service-code"><a class="header" href="#generating-common-service-code">Generating Common Service Code</a></h1>
+<p>How a service is constructed and how to plug in new business logic is described in <a href="./pokemon_service.html">Pokémon Service</a>.
+This document introduces the project and how code is being generated. It is written for developers who want to start contributing to <code>smithy-rs</code>.</p>
+<h2 id="folder-structure"><a class="header" href="#folder-structure">Folder structure</a></h2>
+<p>The project is divided in:</p>
+<ul>
+<li><code>/codegen</code>: it contains shared code for both client and server, but only generates a client</li>
+<li><code>/codegen-server</code>: server only. This project started with <code>codegen</code> to generate a client, but client and server share common code; that code lives in <code>codegen</code>, which <code>codegen-server</code> depends on</li>
+<li><code>/aws</code>: the AWS Rust SDK, it deals with AWS services specifically. The folder structure reflects the project's, with the <code>rust-runtime</code> and the <code>codegen</code></li>
+<li><code>/rust-runtime</code>: the generated client and server crates may depend on crates in this folder. Crates here are not code generated. The only crate that is not published is <code>inlineable</code>,
+which contains common functions used by other crates, <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/CargoDependency.kt#L95-L95">copied into</a> the source crate</li>
+</ul>
+<p><code>/rust-runtime</code> crates (&quot;runtime crates&quot;) are added to a crate's dependency only when used. If a model uses event streams, it will depend on <a href="https://docs.rs/aws-smithy-eventstream"><code>aws-smithy-eventstream</code></a>.</p>
+<h2 id="generating-code"><a class="header" href="#generating-code">Generating code</a></h2>
+<p><code>smithy-rs</code>'s entry points are Smithy code-generation plugins, and is not a command. One entry point is in <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L34">RustCodegenPlugin::execute</a> and
+inherits from <code>SmithyBuildPlugin</code> in <a href="https://github.com/awslabs/smithy/tree/main/smithy-build">smithy-build</a>. Code generation is in Kotlin and shared common, non-Rust specific code with the <a href="https://github.com/awslabs/smithy"><code>smithy</code> Java repository</a>. They plug into the <a href="https://awslabs.github.io/smithy/1.0/guides/building-models/gradle-plugin.html">Smithy gradle</a> plugin, which is a gradle plugin.</p>
+<p>The comment at the beginning of <code>execute</code> describes what a <code>Decorator</code> is and uses the following terms:</p>
+<ul>
+<li>Context: contains the model being generated, projection and settings for the build</li>
+<li>Decorator: (also referred to as customizations) customizes how code is being generated. AWS services are required to sign with the SigV4 protocol, and <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/SigV4SigningDecorator.kt#L45">a decorator</a> adds Rust code to sign requests and responses.
+Decorators are applied in reverse order of being added and have a priority order.</li>
+<li>Writer: creates files and adds content; it supports templating, using <code>#</code> for substitutions</li>
+<li>Location: the file where a symbol will be written to</li>
+</ul>
+<p>The only task of a <code>RustCodegenPlugin</code> is to construct a <code>CodegenVisitor</code> and call its <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L115-L115">execute()</a> method.</p>
+<p><code>CodegenVisitor::execute()</code> is given a <code>Context</code> and decorators, and calls a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L44">CodegenVisitor</a>.</p>
+<p>CodegenVisitor, RustCodegenPlugin, and wherever there are different implementations between client and server, such as in generating error types,
+have corresponding server versions.</p>
+<p>Objects used throughout code generation are:</p>
+<ul>
+<li>Symbol: a node in a graph, an abstraction that represents the qualified name of a type; symbols reference and depend on other symbols, and have some common properties among languages (such as a namespace or a definition file). For Rust, we add properties to include more metadata about a symbol, such as its <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt#L363-L363">type</a></li>
+<li><a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustTypes.kt#L25-L25">RustType</a>: <code>Option&lt;T&gt;</code>, <code>HashMap</code>, ... along with their namespaces of origin such as <code>std::collections</code></li>
+<li><a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RuntimeTypes.kt#L113-L113">RuntimeType</a>: the information to locate a type, plus the crates it depends on</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#shape-id">ShapeId</a>: an immutable object that identifies a <code>Shape</code></li>
+</ul>
+<p>Useful conversions are:</p>
+<pre><code class="language-kotlin">SymbolProvider.toSymbol(shape)
+</code></pre>
+<p>where <code>SymbolProvider</code> constructs symbols for shapes. Some symbols require to create other symbols and types;
+<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L65-L65">event streams</a> and <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/StreamingTraitSymbolProvider.kt#L26-L26">other streaming shapes</a> are an example.
+Symbol providers are all <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L62-L62">applied</a> in order; if a shape uses a reserved keyword in Rust, its name is converted to a new name by a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L26-L26">symbol provider</a>,
+and all other providers will work with this <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L38-L38">new</a> symbol.</p>
+<pre><code class="language-kotlin">Model.expectShape(shapeId)
+</code></pre>
+<p>Each model has a <code>shapeId</code> to <code>shape</code> map; this method returns the shape associated with this shapeId.</p>
+<p>Some objects implement a <code>transform</code> <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/OperationNormalizer.kt#L52-L52">method</a> that only change the input model, so that code generation will work on that new model. This is used to, for example, add a trait to a shape.</p>
+<p><code>CodegenVisitor</code> is a <code>ShapeVisitor</code>. For all services in the input model, shapes are <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L119-L119">converted into Rust</a>;
+<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L150-L150">here</a> is how a service is constructed,
+<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L172-L172">here</a> a structure and so on.</p>
+<p>Code generation flows from writer to files and entities are (mostly) generated only on a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L119-L126">need-by-need basis</a>.
+The complete result is a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L42-L42">Rust crate</a>,
+in which all dependencies are written into their modules and <code>lib.rs</code> is generated (<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L96-L107">here</a>).
+<code>execute()</code> ends by running <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L133-L133">cargo fmt</a>,
+to avoid having to format correctly Rust in <code>Writer</code>s and to be sure the generated code follows the styling rules.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../server/anatomy.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../server/pokemon_service.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../server/anatomy.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../server/pokemon_service.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>

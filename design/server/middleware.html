@@ -1,0 +1,501 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Middleware - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html" class="active"><strong aria-hidden="true">6.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">6.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">6.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">6.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">6.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">6.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">7.24.</strong> RFC-0024: RequestID</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="middleware"><a class="header" href="#middleware">Middleware</a></h1>
+<p>The following document provides a brief survey of the various positions middleware can be inserted in Smithy Rust.</p>
+<p>We use the <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy">Pokémon service</a> as a reference model throughout.</p>
+<pre><code class="language-smithy">/// A Pokémon species forms the basis for at least one Pokémon.
+@title(&quot;Pokémon Species&quot;)
+resource PokemonSpecies {
+    identifiers: {
+        name: String
+    },
+    read: GetPokemonSpecies,
+}
+
+/// A users current Pokémon storage.
+resource Storage {
+    identifiers: {
+        user: String
+    },
+    read: GetStorage,
+}
+
+/// The Pokémon Service allows you to retrieve information about Pokémon species.
+@title(&quot;Pokémon Service&quot;)
+@restJson1
+service PokemonService {
+    version: &quot;2021-12-01&quot;,
+    resources: [PokemonSpecies, Storage],
+    operations: [
+        GetServerStatistics,
+        DoNothing,
+        CapturePokemon,
+        CheckHealth
+    ],
+}
+</code></pre>
+<h2 id="introduction-to-tower"><a class="header" href="#introduction-to-tower">Introduction to Tower</a></h2>
+<p>Smithy Rust is built on top of <a href="https://github.com/tower-rs/tower"><code>tower</code></a>.</p>
+<blockquote>
+<p>Tower is a library of modular and reusable components for building robust networking clients and servers.</p>
+</blockquote>
+<p>The <code>tower</code> library is centered around two main interfaces, the <a href="https://docs.rs/tower/latest/tower/trait.Service.html"><code>Service</code></a> trait and the <a href="https://docs.rs/tower/latest/tower/trait.Layer.html"><code>Layer</code></a> trait.</p>
+<p>The <code>Service</code> trait can be thought of as an asynchronous function from a request to a response, <code>async fn(Request) -&gt; Result&lt;Response, Error&gt;</code>, coupled with a mechanism to <a href="https://docs.rs/tower/latest/tower/trait.Service.html#backpressure">handle back pressure</a>, while the <code>Layer</code> trait can be thought of as a way of decorating a <code>Service</code>, transforming either the request or response.</p>
+<p>Middleware in <code>tower</code> typically conforms to the following pattern, a <code>Service</code> implementation of the form</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct NewService&lt;S&gt; {
+    inner: S,
+    /* auxillary data */
+}
+<span class="boring">}</span></code></pre></pre>
+<p>and a complementary</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct NewLayer {
+    /* auxiliary data */
+}
+
+impl&lt;S&gt; Layer&lt;S&gt; for NewLayer {
+    type Service = NewService&lt;S&gt;;
+
+    fn layer(&amp;self, inner: S) -&gt; Self::Service {
+        NewService {
+            inner,
+            /* auxiliary fields */
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>NewService</code> modifies the behavior of the inner <code>Service</code> <code>S</code> while the <code>NewLayer</code> takes auxiliary data and constructs <code>NewService&lt;S&gt;</code> from <code>S</code>.</p>
+<p>Customers are then able to stack middleware by composing <code>Layer</code>s using combinators such as <a href="https://docs.rs/tower/latest/tower/struct.ServiceBuilder.html#method.layer"><code>ServiceBuilder::layer</code></a> and <a href="https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html"><code>Stack</code></a>.</p>
+<!-- TODO(Update documentation): There's a `Layer` implementation on tuples about to be merged, give it as an example here. -->
+<h2 id="applying-middleware"><a class="header" href="#applying-middleware">Applying Middleware</a></h2>
+<p>One of the primary goals is to provide configurability and extensibility through the application of middleware. The customer is able to apply <code>Layer</code>s in a variety of key places during the request/response lifecycle. The following schematic labels each configurable middleware position from A to D:</p>
+<pre class="mermaid">stateDiagram-v2
+    state in &lt;&lt;fork&gt;&gt;
+    state &quot;GetPokemonSpecies&quot; as C1
+    state &quot;GetStorage&quot; as C2
+    state &quot;DoNothing&quot; as C3
+    state &quot;...&quot; as C4
+    direction LR
+    [*] --&gt; in : HTTP Request
+    UpgradeLayer --&gt; [*]: HTTP Response
+    state A {
+        state PokemonService {
+            state RoutingService {
+                in --&gt; UpgradeLayer: HTTP Request
+                in --&gt; C2: HTTP Request
+                in --&gt; C3: HTTP Request
+                in --&gt; C4: HTTP Request
+                state B {
+                    state C1 {
+                        state C {
+                            state UpgradeLayer {
+                                direction LR
+                                [*] --&gt; Handler: Model Input
+                                Handler --&gt; [*] : Model Output
+                                state D {
+                                    Handler
+                                }
+                            }
+                        }
+                    }
+                    C2
+                    C3
+                    C4
+                }
+            }
+        }
+    }
+    C2 --&gt; [*]: HTTP Response
+    C3 --&gt; [*]: HTTP Response
+    C4 --&gt; [*]: HTTP Response
+</pre>
+<p>where <code>UpgradeLayer</code> is the <code>Layer</code> converting Smithy model structures to HTTP structures and the <code>RoutingService</code> is responsible for routing requests to the appropriate operation.</p>
+<h3 id="a-outer-middleware"><a class="header" href="#a-outer-middleware">A) Outer Middleware</a></h3>
+<p>The output of the Smithy service builder provides the user with a <code>Service&lt;http::Request, Response = http::Response&gt;</code> implementation. A <code>Layer</code> can be applied around the entire <code>Service</code>.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// This is a HTTP `Service`.
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+    .get_pokemon_species(/* handler */)
+    /* ... */
+    .build();
+
+// Construct `TimeoutLayer`.
+let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
+
+// Apply a 3 second timeout to all responses.
+let app = timeout_layer.layer(app);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="b-route-middleware"><a class="header" href="#b-route-middleware">B) Route Middleware</a></h3>
+<p>A <em>single</em> layer can be applied to <em>all</em> routes inside the <code>Router</code>. This exists as a method on the output of the service builder.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Construct `TraceLayer`.
+let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
+
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+    .get_pokemon_species(/* handler */)
+    /* ... */
+    .build()
+    // Apply HTTP logging after routing.
+    .layer(&amp;trace_layer);
+<span class="boring">}</span></code></pre></pre>
+<p>Note that requests pass through this middleware immediately <em>after</em> routing succeeds and therefore will <em>not</em> be encountered if routing fails. This means that the <a href="https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html">TraceLayer</a> in the example above does <em>not</em> provide logs unless routing has completed. This contrasts to <a href="#a-outer-middleware">middleware A</a>, which <em>all</em> requests/responses pass through when entering/leaving the service.</p>
+<h3 id="c-operation-specific-http-middleware"><a class="header" href="#c-operation-specific-http-middleware">C) Operation Specific HTTP Middleware</a></h3>
+<p>A &quot;HTTP layer&quot; can be applied to specific operations.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Construct `TraceLayer`.
+let trace_layer = TraceLayer::new_for_http(Duration::from_secs(3));
+
+// Apply HTTP logging to only the `GetPokemonSpecies` operation.
+let layered_handler = GetPokemonSpecies::from_handler(/* handler */).layer(trace_layer);
+
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+    .get_pokemon_species_operation(layered_handler)
+    /* ... */
+    .build();
+<span class="boring">}</span></code></pre></pre>
+<p>This middleware transforms the operations HTTP requests and responses.</p>
+<h3 id="d-operation-specific-model-middleware"><a class="header" href="#d-operation-specific-model-middleware">D) Operation Specific Model Middleware</a></h3>
+<p>A &quot;model layer&quot; can be applied to specific operations.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// A handler `Service`.
+let handler_svc = service_fn(/* handler */);
+
+// Construct `BufferLayer`.
+let buffer_layer = BufferLayer::new(3);
+
+// Apply a 3 item buffer to `handler_svc`.
+let handler_svc = buffer_layer.layer(handler_svc);
+
+let layered_handler = GetPokemonSpecies::from_service(handler_svc);
+
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+    .get_pokemon_species_operation(layered_handler)
+    /* ... */
+    .build();
+<span class="boring">}</span></code></pre></pre>
+<p>In contrast to <a href="#c-operation-specific-http-middleware">position C</a>, this middleware transforms the operations modelled inputs to modelled outputs.</p>
+<h2 id="plugin-system"><a class="header" href="#plugin-system">Plugin System</a></h2>
+<p>Suppose we want to apply a different <code>Layer</code> to every operation. In this case, position B (<code>PokemonService::layer</code>) will not suffice because it applies a single <code>Layer</code> to all routes and while position C (<code>Operation::layer</code>) would work, it'd require the customer constructs the <code>Layer</code> by hand for every operation.</p>
+<p>Consider the following middleware:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A [`Service`] that adds a print log.
+#[derive(Clone, Debug)]
+pub struct PrintService&lt;S&gt; {
+    inner: S,
+    name: &amp;'static str,
+}
+
+impl&lt;R, S&gt; Service&lt;R&gt; for PrintService&lt;S&gt;
+where
+    S: Service&lt;R&gt;,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&amp;mut self, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&amp;mut self, req: R) -&gt; Self::Future {
+        println!(&quot;Hi {}&quot;, self.name);
+        self.inner.call(req)
+    }
+}
+
+/// A [`Layer`] which constructs the [`PrintService`].
+#[derive(Debug)]
+pub struct PrintLayer {
+    name: &amp;'static str,
+}
+impl&lt;S&gt; Layer&lt;S&gt; for PrintLayer {
+    type Service = PrintService&lt;S&gt;;
+
+    fn layer(&amp;self, service: S) -&gt; Self::Service {
+        PrintService {
+            inner: service,
+            name: self.name,
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The plugin system provides a way to construct then apply <code>Layer</code>s in position <a href="#c-operation-specific-http-middleware">C</a> and <a href="#d-operation-specific-model-middleware">D</a>, using the <a href="https://awslabs.github.io/smithy/2.0/aws/protocols/index.html">protocol</a> and <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service-operations">operation shape</a> as parameters.</p>
+<p>An example of a <code>PrintPlugin</code> which applies a layer printing the operation name:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
+#[derive(Debug)]
+pub struct PrintPlugin;
+
+impl&lt;P, Op, S, L&gt; Plugin&lt;P, Op, S, L&gt; for PrintPlugin
+where
+    Op: OperationShape,
+{
+    type Service = S;
+    type Layer = Stack&lt;L, PrintLayer&gt;;
+
+    fn map(&amp;self, input: Operation&lt;S, L&gt;) -&gt; Operation&lt;Self::Service, Self::Layer&gt; {
+        input.layer(PrintLayer { name: Op::NAME })
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>An alternative example which applies a layer for a given protocol:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
+#[derive(Debug)]
+pub struct PrintPlugin;
+
+impl&lt;Op, S, L&gt; Plugin&lt;AwsRestJson1, Op, S, L&gt; for PrintPlugin
+{
+    type Service = S;
+    type Layer = Stack&lt;L, PrintLayer&gt;;
+
+    fn map(&amp;self, input: Operation&lt;S, L&gt;) -&gt; Operation&lt;Self::Service, Self::Layer&gt; {
+        input.layer(PrintLayer { name: &quot;AWS REST JSON v1&quot; })
+    }
+}
+
+impl&lt;Op, S, L&gt; Plugin&lt;AwsRestXml, Op, S, L&gt; for PrintPlugin
+{
+    type Service = S;
+    type Layer = Stack&lt;L, PrintLayer&gt;;
+
+    fn map(&amp;self, input: Operation&lt;S, L&gt;) -&gt; Operation&lt;Self::Service, Self::Layer&gt; {
+        input.layer(PrintLayer { name: &quot;AWS REST XML&quot; })
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>You can provide a custom method to add your plugin to a <code>PluginPipeline</code> via an extension trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
+pub trait PrintExt&lt;ExistingPlugins&gt; {
+    /// Causes all operations to print the operation name when called.
+    ///
+    /// This works by applying the [`PrintPlugin`].
+    fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, ExistingPlugins&gt;&gt;;
+}
+
+impl&lt;ExistingPlugins&gt; PrintExt&lt;ExistingPlugins&gt; for PluginPipeline&lt;ExistingPlugins&gt; {
+    fn print(self) -&gt; PluginPipeline&lt;PluginStack&lt;PrintPlugin, ExistingPlugins&gt;&gt; {
+        self.push(PrintPlugin)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This allows for:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let plugin_pipeline = PluginPipeline::new()
+    // [..other plugins..]
+    // The custom method!
+    .print();
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(plugin_pipeline)
+    .get_pokemon_species_operation(layered_handler)
+    /* ... */
+    .build();
+<span class="boring">}</span></code></pre></pre>
+<p>The custom <code>print</code> method hides the details of the <code>Plugin</code> trait from the average consumer.
+They interact with the utility methods on <code>PluginPipeline</code> and enjoy the self-contained documentation.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../server/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../server/instrumentation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../server/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../server/instrumentation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>

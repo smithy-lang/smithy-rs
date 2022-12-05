@@ -1,0 +1,880 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>The Anatomy of a Service - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">6.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">6.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">6.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html" class="active"><strong aria-hidden="true">6.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">6.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">6.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">7.24.</strong> RFC-0024: RequestID</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="the-anatomy-of-a-service"><a class="header" href="#the-anatomy-of-a-service">The Anatomy of a Service</a></h1>
+<p>What is <a href="https://awslabs.github.io/smithy/2.0/index.html">Smithy</a>? At a high-level, it's a grammar for specifying services while leaving the business logic undefined. A <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service">Smithy Service</a> specifies a collection of function signatures in the form of <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Operations</a>, their purpose is to encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.</p>
+<p>This survey is disinterested in the actual Kotlin implementation of the code generator, and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in internal details.</p>
+<p>During the survey we will use the <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy"><code>pokemon.smithy</code></a> model as a reference:</p>
+<pre><code class="language-smithy">/// A Pokémon species forms the basis for at least one Pokémon.
+@title(&quot;Pokémon Species&quot;)
+resource PokemonSpecies {
+    identifiers: {
+        name: String
+    },
+    read: GetPokemonSpecies,
+}
+
+/// A users current Pokémon storage.
+resource Storage {
+    identifiers: {
+        user: String
+    },
+    read: GetStorage,
+}
+
+/// The Pokémon Service allows you to retrieve information about Pokémon species.
+@title(&quot;Pokémon Service&quot;)
+@restJson1
+service PokemonService {
+    version: &quot;2021-12-01&quot;,
+    resources: [PokemonSpecies, Storage],
+    operations: [
+        GetServerStatistics,
+        DoNothing,
+        CapturePokemon,
+        CheckHealth
+    ],
+}
+</code></pre>
+<p>Smithy Rust will use this model to produce the following API:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
+async fn get_pokemon_species(input: GetPokemonSpeciesInput) -&gt; Result&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt; {
+    /* implementation */
+}
+
+// Apply a `tower::Layer` to a handler.
+let get_pokemon_species_op = GetPokemonSpecies::from_handler(get_pokemon_species).layer(/* some `tower::Layer` */);
+
+// Use the service builder to create `PokemonService`.
+let pokemon_service = PokemonService::builder_without_plugins()
+    // Pass the handler directly to the service builder...
+    .get_pokemon_species(get_pokemon_species)
+    // ...or pass the layered handler.
+    .get_pokemon_species_operation(get_pokemon_species_op)
+    /* other operation setters */
+    .build()
+    .expect(&quot;failed to create an instance of the Pokémon service&quot;);
+<span class="boring">}</span></code></pre></pre>
+<h2 id="operations"><a class="header" href="#operations">Operations</a></h2>
+<p>A <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Smithy Operation</a> specifies the input, output, and possible errors of an API operation. One might characterize a Smithy Operation as syntax for specifying a function type.</p>
+<p>We represent this in Rust using the <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/shape.rs#L8-L22"><code>OperationShape</code></a> trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub trait OperationShape {
+    /// The name of the operation.
+    const NAME: &amp;'static str;
+
+    /// The operation input.
+    type Input;
+    /// The operation output.
+    type Output;
+    /// The operation error. [`Infallible`](std::convert::Infallible) in the case where no error
+    /// exists.
+    type Error;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>For each Smithy Operation shape,</p>
+<pre><code class="language-smithy">/// Retrieve information about a Pokémon species.
+@readonly
+@http(uri: &quot;/pokemon-species/{name}&quot;, method: &quot;GET&quot;)
+operation GetPokemonSpecies {
+    input: GetPokemonSpeciesInput,
+    output: GetPokemonSpeciesOutput,
+    errors: [ResourceNotFoundException],
+}
+</code></pre>
+<p>the following implementation is generated</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Retrieve information about a Pokémon species.
+pub struct GetPokemonSpecies;
+
+impl OperationShape for GetPokemonSpecies {
+    const NAME: &amp;'static str = &quot;com.aws.example#GetPokemonSpecies&quot;;
+
+    type Input = GetPokemonSpeciesInput;
+    type Output = GetPokemonSpeciesOutput;
+    type Error = GetPokemonSpeciesError;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>where <code>GetPokemonSpeciesInput</code>, <code>GetPokemonSpeciesOutput</code> are both generated from the Smithy structures and <code>GetPokemonSpeciesError</code> is an enum generated from the <code>errors: [ResourceNotFoundException]</code>.</p>
+<p>Note that the <code>GetPokemonSpecies</code> marker structure is a zero-sized type (ZST), and therefore does not exist at runtime - it is a way to attach operation-specific data on an entity within the type system.</p>
+<p>The following nomenclature will aid us in our survey. We describe a <code>tower::Service</code> as a &quot;model service&quot; if its request and response are Smithy structures, as defined by the <code>OperationShape</code> trait - the <code>GetPokemonSpeciesInput</code>, <code>GetPokemonSpeciesOutput</code>, and <code>GetPokemonSpeciesError</code> described above. Similarly, we describe a <code>tower::Service</code> as a &quot;HTTP service&quot; if its request and response are <a href="https://github.com/hyperium/http"><code>http</code></a> structures - <code>http::Request</code> and <code>http::Response</code>.</p>
+<p>In contrast to the marker ZSTs above, the <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/mod.rs#L192-L198"><code>Operation&lt;S, L&gt;</code></a> structure holds the actual runtime behavior of an operation, which is specified, during construction, by the customer.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A Smithy operation, represented by a [`Service`](tower::Service) `S` and a [`Layer`](tower::Layer) `L`.
+///
+/// The `L` is held and applied lazily during [`Upgradable::upgrade`].
+pub struct Operation&lt;S, L = Identity&gt; {
+    inner: S,
+    layer: L,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>S</code> here is a model service, this is specified during construction of the <code>Operation&lt;S, L&gt;</code>. The constructors exist on the marker ZSTs as an extension trait to <code>OperationShape</code>, namely <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/shape.rs#L24-L45"><code>OperationShapeExt</code></a>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// An extension trait over [`OperationShape`].
+pub trait OperationShapeExt: OperationShape {
+    /// Creates a new [`Operation`] for well-formed [`Handler`]s.
+    fn from_handler&lt;H&gt;(handler: H) -&gt; Operation&lt;IntoService&lt;Self, H&gt;&gt;
+    where
+        H: Handler&lt;Self&gt;,
+        Self: Sized,
+    {
+        Operation::from_handler(handler)
+    }
+
+    /// Creates a new [`Operation`] for well-formed [`Service`](tower::Service)s.
+    fn from_service&lt;S&gt;(svc: S) -&gt; Operation&lt;Normalize&lt;Self, S&gt;&gt;
+    where
+        S: OperationService&lt;Self&gt;,
+        Self: Sized,
+    {
+        Operation::from_service(svc)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Observe that there are two constructors provided: <code>from_handler</code> which takes a <code>H: Handler</code> and <code>from_service</code> which takes a <code>S: OperationService</code>. In both cases <code>Self</code> is passed as a parameter to the traits - this constrains <code>handler: H</code> and <code>svc: S</code> to the signature given by the implementation of <code>OperationShape</code> on <code>Self</code>.</p>
+<p>The <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/handler.rs#L21-L29"><code>Handler</code></a> and <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/operation_service.rs#L15-L29"><code>OperationService</code></a> both serve a similar purpose - they provide a common interface for converting to a model service <code>S</code>.</p>
+<ul>
+<li>The <code>Handler&lt;GetPokemonSpecies&gt;</code> trait covers all async functions taking <code>GetPokemonSpeciesInput</code> and asynchronously returning a <code>Result&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;</code>.</li>
+<li>The <code>OperationService&lt;GetPokemonSpecies&gt;</code> trait covers all <code>tower::Service</code>s with request <code>GetPokemonSpeciesInput</code>, response <code>GetPokemonSpeciesOutput</code> and error <code>GetPokemonSpeciesOutput</code>.</li>
+</ul>
+<p>The <code>from_handler</code> constructor is used in the following way:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn get_pokemon_service(input: GetPokemonServiceInput) -&gt; Result&lt;GetPokemonServiceOutput, GetPokemonServiceError&gt; {
+    /* Handler logic */
+}
+
+let operation = GetPokemonService::from_handler(get_pokemon_service);
+<span class="boring">}</span></code></pre></pre>
+<p>Alternatively, <code>from_service</code> constructor:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct Svc {
+    /* ... */
+}
+
+impl Service&lt;GetPokemonServiceInput&gt; for Svc {
+    type Response = GetPokemonServiceOutput;
+    type Error = GetPokemonServiceError;
+
+    /* ... */
+}
+
+let svc: Svc = /* ... */;
+let operation = GetPokemonService::from_service(svc);
+<span class="boring">}</span></code></pre></pre>
+<p>To summarize, the <code>S</code>, in <code>Operation&lt;S, L&gt;</code>, is a <em>model service</em> constructed from a <code>Handler</code> or a <code>OperationService</code> subject to the constraints of an <code>OperationShape</code>. More detailed information on these conversions is provided in the <a href="https://github.com/awslabs/smithy-rs/blob/39c0096c33417d44f125a042c112b3c16918098a/rust-runtime/aws-smithy-http-server/src/operation/mod.rs#L50-L100">Handler and OperationService section</a> Rust docs.</p>
+<p>Now, what about the <code>L</code> in <code>Operation&lt;S, L&gt;</code>? The <code>L</code> is a <a href="https://docs.rs/tower/latest/tower/layer/trait.Layer.html"><code>tower::Layer</code></a>, or colloquially &quot;middleware&quot;, that is applied to a <em>HTTP service</em>. Note that this means that <code>L</code> is <em>not</em> applied directly to <code>S</code>. We can append to <code>L</code> using the <code>Operation::layer</code> method:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;S, L&gt; Operation&lt;S, L&gt; {
+    /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
+    pub fn layer&lt;NewL&gt;(self, layer: NewL) -&gt; Operation&lt;S, Stack&lt;L, NewL&gt;&gt; {
+        Operation {
+            inner: self.inner,
+            layer: Stack::new(self.layer, layer),
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>where <a href="https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html"><code>tower::layer::util::Stack</code></a> is used to chain layers together.</p>
+<p>A typical use of this might be:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let operation = GetPokemonSpecies::from_handler(handler).layer(RequestBodyLimitLayer::new(500));
+<span class="boring">}</span></code></pre></pre>
+<p>where <a href="https://docs.rs/tower-http/latest/tower_http/limit/struct.RequestBodyLimitLayer.html"><code>RequestBodyLimitLayer</code></a> limits the size of the HTTP request body to the <code>GetPokemonSpecies</code> operation.</p>
+<p>As mentioned, <code>L</code> is applied <em>after</em> the <code>Operation&lt;S, L&gt;</code> has been &quot;upgraded&quot; to a HTTP service. The procedure of upgrading a model service to a HTTP service is described in the <a href="#upgrading-a-model-service">Upgrading a Model Service</a> section below.</p>
+<h2 id="serialization-and-deserialization"><a class="header" href="#serialization-and-deserialization">Serialization and Deserialization</a></h2>
+<p>A <a href="https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits">Smithy protocol</a> specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/request.rs#L156-L164"><code>FromRequest</code></a> and <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44"><code>IntoResponse</code></a> traits:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Provides a protocol aware extraction from a [`Request`]. This consumes the
+/// [`Request`], in contrast to [`FromParts`].
+pub trait FromRequest&lt;Protocol&gt;: Sized {
+    type Rejection: IntoResponse&lt;Protocol&gt;;
+    type Future: Future&lt;Output = Result&lt;Self, Self::Rejection&gt;&gt;;
+
+    /// Extracts `self` from a [`Request`] asynchronously.
+    fn from_request(request: http::Request) -&gt; Self::Future;
+}
+
+/// A protocol aware function taking `self` to [`http::Response`].
+pub trait IntoResponse&lt;Protocol&gt; {
+    /// Performs a conversion into a [`http::Response`].
+    fn into_response(self) -&gt; http::Response&lt;BoxBody&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Note that both traits are parameterized by <code>Protocol</code>. These <a href="https://awslabs.github.io/smithy/2.0/aws/protocols/index.html">protocols</a> exist as ZST marker structs:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
+pub struct RestJson1;
+
+/// [AWS REST XML Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html).
+pub struct RestXml;
+
+/// [AWS JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html).
+pub struct AwsJson1_0;
+
+/// [AWS JSON 1.1 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html).
+pub struct AwsJson1_1;
+<span class="boring">}</span></code></pre></pre>
+<h2 id="upgrading-a-model-service"><a class="header" href="#upgrading-a-model-service">Upgrading a Model Service</a></h2>
+<p>We can &quot;upgrade&quot; a model service to a HTTP service using <code>FromRequest</code> and <code>IntoResponse</code> described in the prior section:</p>
+<pre class="mermaid">stateDiagram-v2
+    direction LR
+    HttpService: HTTP Service
+    [*] --&gt; from_request: HTTP Request
+    state HttpService {
+        direction LR
+        ModelService: Model Service
+        from_request --&gt; ModelService: Model Input
+        ModelService --&gt; into_response: Model Output
+    }
+    into_response --&gt; [*]: HTTP Response
+</pre>
+<p>This is formalized by the <a href="https://github.com/awslabs/smithy-rs/blob/9a6de1f533f8743dbbc3fa6ad974d104c8b841f4/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L74-L82"><code>Upgrade&lt;Protocol, Op, S&gt;</code></a> HTTP service. The <code>tower::Service</code> implementation is approximately:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;P, Op, S&gt; Service&lt;http::Request&gt; for Upgrade&lt;P, Op, S&gt;
+where
+    // `Op` is used to specify the operation shape
+    Op: OperationShape,
+    // Smithy input must convert from a HTTP request
+    Op::Input: FromRequest&lt;P&gt;,
+    // Smithy output must convert into a HTTP response
+    Op::Output: IntoResponse&lt;P&gt;,
+    // Smithy error must convert into a HTTP response
+    OpError: IntoResponse&lt;P&gt;,
+
+    // The signature of the inner service is correct
+    S: Service&lt;Op::Input, Response = Op::Output, Error = Op::Error&gt;,
+
+    async fn call(&amp;mut self, request: http::Request) -&gt; http::Response {
+        let model_request = match &lt;Op::Input as OperationShape&gt;::from_request(request).await {
+            Ok(ok) =&gt; ok,
+            Err(err) =&gt; return err.into_response()
+        };
+        let model_response = self.model_service.call(model_request).await;
+        model_response.into_response()
+    }
+<span class="boring">}</span></code></pre></pre>
+<p>When we <code>GetPokemonService::from_handler</code> or <code>GetPokemonService::from_service</code>, the model service produced, <code>S</code>, will meet the constraints above.</p>
+<p>There is an associated <code>Layer</code>, <code>UpgradeLayer&lt;P, Op, B&gt;</code> which constructs <code>Upgrade</code> from a service.</p>
+<p>The upgrade procedure is finalized by the application of the <code>Layer</code> <code>L</code>, referenced in <code>Operation&lt;S, L&gt;</code>. In this way the entire upgrade procedure takes an <code>Operation&lt;S, L&gt;</code> and returns a HTTP service.</p>
+<pre class="mermaid">stateDiagram-v2
+    direction LR
+    [*] --&gt; S: HTTP Request
+    state L {
+        state Upgrade {
+            S
+        }
+    }
+    S --&gt; [*]: HTTP Response
+</pre>
+<p>Note that the <code>S</code> and <code>L</code> are specified by logic written, in Rust, by the customer, whereas <code>Upgrade</code>/<code>UpgradeLayer</code> is specified entirely by Smithy model via the protocol, <a href="https://awslabs.github.io/smithy/2.0/spec/http-bindings.html">HTTP bindings</a>, etc.</p>
+<p>The procedure of taking a struct and transforming it into a HTTP service is formalized by the <a href="https://github.com/awslabs/smithy-rs/blob/9a6de1f533f8743dbbc3fa6ad974d104c8b841f4/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L220-L225"><code>Upgradable</code></a> trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// An interface to convert a representation of a Smithy operation into a [`Route`].
+pub trait Upgradable&lt;Protocol, Operation&gt; {
+    /// Upgrade the representation of a Smithy operation to a [`Route`].
+    fn upgrade(self, plugin: &amp;Plugin) -&gt; Route&lt;Body&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Why do we need a trait for this? Why not simply write an <code>upgrade</code> method on <code>Operation&lt;S, L&gt;</code>? The reason is that we might <em>not</em> want to supply an <code>Operation&lt;S, L&gt;</code> to the service builder, instead we might want to supply something that overrides the typical upgrade procedure.</p>
+<p>Below we give an example of a ZST which can be provided to the builder, which also satisfies <code>Upgradable</code> and returns a <code>MissingFailure</code> <code>tower::Service</code>. This <code>MissingFailure</code> service simply returns a status code 500.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A marker struct indicating an [`Operation`] has not been set in a builder.
+///
+/// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
+pub struct FailOnMissingOperation;
+
+impl&lt;Protocol, Operation&gt; Upgradable&lt;Protocol, Operation&gt; for FailOnMissingOperation
+where
+    InternalFailureException: IntoResponse&lt;Protocol&gt;,
+    Protocol: 'static,
+{
+    fn upgrade(self, _plugin: &amp;Plugin) -&gt; Route&lt;Body&gt; {
+        Route::new(MissingFailure { _protocol: PhantomData })
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>We go into more detail on how the <code>Upgradable</code> trait is used in conjunction with builders in the <a href="#builders">Builders</a> section below.</p>
+<h2 id="routers"><a class="header" href="#routers">Routers</a></h2>
+<p>Different protocols supported by Smithy enjoy different routing mechanisms, for example, <a href="https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html#protocol-behaviors">AWS JSON 1.0</a> uses the <code>X-Amz-Target</code> header to select an operation, whereas <a href="https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html">AWS REST XML</a> uses the <a href="https://awslabs.github.io/smithy/2.0/spec/http-bindings.html#httplabel-trait">HTTP label trait</a>.</p>
+<p>Despite their differences, all routing mechanisms satisfy a common interface. This is formalized using the <code>Router</code> trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// An interface for retrieving an inner [`Service`] given a [`http::Request`].
+pub trait Router {
+    type Service;
+    type Error;
+
+    /// Matches a [`http::Request`] to a target [`Service`].
+    fn match_route(&amp;self, request: &amp;http::Request) -&gt; Result&lt;Self::Service, Self::Error&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>which provides the ability to determine an inner HTTP service from a collection using a <code>&amp;http::Request</code>.</p>
+<p>Types which implement the <code>Router</code> trait are converted to a HTTP service via the <code>RoutingService</code> struct:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A [`Service`] using a [`Router`] `R` to redirect messages to specific routes.
+///
+/// The `Protocol` parameter is used to determine the serialization of errors.
+pub struct RoutingService&lt;R, Protocol&gt; {
+    router: R,
+    _protocol: PhantomData&lt;Protocol&gt;,
+}
+
+impl&lt;R, P&gt; Service&lt;http::Request&gt; for RoutingService&lt;R, P&gt;
+where
+    R: Router&lt;B&gt;,
+    R::Service: Service&lt;http::Request, Response = http::Response&gt;,
+    R::Error: IntoResponse&lt;P&gt; + Error,
+{
+    type Response = http::Response;
+    type Error = /* implementation detail */;
+
+    async fn call(&amp;mut self, req: http::Request&lt;B&gt;) -&gt; Result&lt;Self::Response, Self::Error&gt; {
+        match self.router.match_route(&amp;req) {
+            // Successfully routed, use the routes `Service::call`.
+            Ok(ok) =&gt; ok.oneshot(req).await,
+            // Failed to route, use the `R::Error`s `IntoResponse&lt;P&gt;`.
+            Err(error) =&gt; {
+                debug!(%error, &quot;failed to route&quot;);
+                Err(Box::new(error.into_response()))
+            }
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>RouterService</code> is the final piece necessary to form a functioning composition - it is used to aggregate together the HTTP services, created via the upgrade procedure, into a single HTTP service which can be presented to the customer.</p>
+<pre class="mermaid">stateDiagram
+state in &lt;&lt;fork&gt;&gt;
+    direction LR
+    [*] --&gt; in
+    state RouterService {
+        direction LR
+        in --&gt;  ServiceA
+        in --&gt; ServiceB
+        in --&gt; ServiceC
+    }
+    ServiceA --&gt; [*]
+    ServiceB --&gt; [*]
+    ServiceC --&gt; [*]
+</pre>
+<h2 id="builders"><a class="header" href="#builders">Builders</a></h2>
+<p>The service builder is the primary public API, generated for every <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html">Smithy Service</a>.
+At a high-level, the service builder takes as input a function for each Smithy Operation and returns a single HTTP service. The signature of each function, also known as <em>handlers</em>, must match the constraints of the corresponding Smithy model.</p>
+<p>You can create an instance of a service builder by calling either <code>builder_without_plugins</code> or <code>builder_with_plugins</code> on the corresponding service struct.</p>
+<blockquote>
+<p>Plugins? What plugins? Don't worry, they'll be covered in a <a href="#plugins">dedicated section</a> later on!</p>
+</blockquote>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// The service builder for [`PokemonService`].
+///
+/// Constructed via [`PokemonService::builder`].
+pub struct PokemonServiceBuilder&lt;Body, Plugin&gt; {
+    capture_pokemon_operation: Option&lt;Route&lt;Body&gt;&gt;,
+    empty_operation: Option&lt;Route&lt;Body&gt;&gt;,
+    get_pokemon_species: Option&lt;Route&lt;Body&gt;&gt;,
+    get_server_statistics: Option&lt;Route&lt;Body&gt;&gt;,
+    get_storage: Option&lt;Route&lt;Body&gt;&gt;,
+    health_check_operation: Option&lt;Route&lt;Body&gt;&gt;,
+    plugin: Plugin
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The builder has two setter methods for each <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Smithy Operation</a> in the <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service">Smithy Service</a>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>    /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
+    ///
+    /// This should be an async function satisfying the [`Handler`](aws_smithy_http_server::operation::Handler) trait.
+    /// See the [operation module documentation](aws_smithy_http_server::operation) for more information.
+    pub fn get_pokemon_species&lt;HandlerType, Extensions&gt;(
+        self,
+        handler: HandlerType,
+    ) -&gt; Self
+    where
+        HandlerType: Handler&lt;GetPokemonSpecies, Extensions&gt;,
+        Operation&lt;IntoService&lt;GetPokemonSpecies, HandlerType&gt;&gt;:
+            Upgradable&lt;RestJson1, GetPokemonSpecies, Extensions, Body, Plugin&gt;,
+    {
+        self.get_pokemon_species_operation(GetPokemonSpecies::from_handler(handler))
+    }
+
+    /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
+    ///
+    /// This should be an [`Operation`](aws_smithy_http_server::operation::Operation) created from
+    /// [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) using either
+    /// [`OperationShape::from_handler`](aws_smithy_http_server::operation::OperationShapeExt::from_handler) or
+    /// [`OperationShape::from_service`](aws_smithy_http_server::operation::OperationShapeExt::from_service).
+    pub fn get_pokemon_species_operation&lt;Operation, Extensions&gt;(
+        self,
+        operation: Operation,
+    ) -&gt; Self
+    where
+        Operation: Upgradable&lt;RestJson1, GetPokemonSpecies, Extensions, Body, Plugin&gt;,
+    {
+        self.get_pokemon_species = Some(operation.upgrade(&amp;self.plugin))
+    }
+<span class="boring">}</span></code></pre></pre>
+<p>Handlers and operations are upgraded to a <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52"><code>Route</code></a> as soon as they are registered against the service builder. You can think of <code>Route</code> as a boxing layer in disguise.</p>
+<p>You can transform a builder instance into a complete service (<code>PokemonService</code>) using one of the following methods:</p>
+<ul>
+<li><code>build</code>. The transformation fails if one or more operations do not have a registered handler;</li>
+<li><code>build_unchecked</code>. The transformation never fails, but we return <code>500</code>s for all operations that do not have a registered handler.</li>
+</ul>
+<p>Both builder methods take care of:</p>
+<ol>
+<li>Pair each handler with the routing information for the corresponding operation;</li>
+<li>Collect all <code>(routing_info, handler)</code> pairs into a <code>Router</code>;</li>
+<li>Transform the <code>Router</code> implementation into a HTTP service via <code>RouterService</code>;</li>
+<li>Wrap the <code>RouterService</code> in a newtype given by the service name, <code>PokemonService</code>.</li>
+</ol>
+<p>The final outcome, an instance of <code>PokemonService</code>, looks roughly like this:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// The Pokémon Service allows you to retrieve information about Pokémon species.
+#[derive(Clone)]
+pub struct PokemonService&lt;S&gt; {
+    router: RoutingService&lt;RestRouter&lt;S&gt;, RestJson1&gt;,
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The following schematic summarizes the composition:</p>
+<pre class="mermaid">stateDiagram-v2
+    state in &lt;&lt;fork&gt;&gt;
+    state &quot;GetPokemonSpecies&quot; as C1
+    state &quot;GetStorage&quot; as C2
+    state &quot;DoNothing&quot; as C3
+    state &quot;...&quot; as C4
+    direction LR
+    [*] --&gt; in : HTTP Request
+    UpgradeLayer --&gt; [*]: HTTP Response
+    state PokemonService {
+        state RoutingService {
+            in --&gt; UpgradeLayer: HTTP Request
+            in --&gt; C2: HTTP Request
+            in --&gt; C3: HTTP Request
+            in --&gt; C4: HTTP Request
+            state C1 {
+                state L {
+                    state UpgradeLayer {
+                        direction LR
+                        [*] --&gt; S: Model Input
+                        S --&gt; [*] : Model Output
+                    }
+                }
+            }
+            C2
+            C3
+            C4
+        }
+
+    }
+    C2 --&gt; [*]: HTTP Response
+    C3 --&gt; [*]: HTTP Response
+    C4 --&gt; [*]: HTTP Response
+</pre>
+<h2 id="plugins"><a class="header" href="#plugins">Plugins</a></h2>
+<!-- TODO(missing_doc): Link to "Write a Plugin" documentation -->
+<p>There are a variety of places in which the customer can apply middleware. During the build:</p>
+<ul>
+<li>For a specific operation, for example <code>GetPokemonSpecies</code>, the model service can be wrapped by a <code>Layer</code> before passing it to <code>GetPokemonSpecies::from_service</code> constructor.</li>
+<li>The <code>Operation::layer</code> method can be used to apply a <code>Layer</code> to a specific operation <em>after</em> it's been upgraded.</li>
+</ul>
+<p>After the build is finalized:</p>
+<ul>
+<li>The entire <code>PokemonService</code> HTTP service can be wrapped by a <code>Layer</code>.</li>
+<li>Every <code>Route</code> in the <code>Router</code> can be wrapped by a <code>Layer</code> using <code>PokemonService::layer</code>.</li>
+</ul>
+<p>Although this provides a reasonably &quot;complete&quot; API, it can be cumbersome in some use cases. Suppose a customer wants to log the operation name when a request is routed to said operation. Writing a <code>Layer</code>, <code>NameLogger</code>, to log an operation name is simple, however with the current API the customer is forced to do the following</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let get_pokemon_species = GetPokemonSpecies::from_handler(/* handler */).layer(NameLogger::new(&quot;GetPokemonSpecies&quot;));
+let get_storage = GetStorage::from_handler(/* handler */).layer(NameLogger::new(&quot;GetStorage&quot;));
+let do_nothing = DoNothing::from_handler(/* handler */).layer(NameLogger::new(&quot;DoNothing&quot;));
+/* Repeat for every route... */
+<span class="boring">}</span></code></pre></pre>
+<p>Note that <code>PokemonService::layer</code> cannot be used here because it applies a <em>single</em> layer uniformly across all <code>Route</code>s stored in the <code>Router</code>.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;S&gt; PokemonService&lt;S&gt; {
+    /// Applies a [`Layer`](tower::Layer) uniformly to all routes.
+    pub fn layer&lt;L&gt;(self, layer: &amp;L) -&gt; PokemonService&lt;L::Service&gt;
+    where
+        L: Layer&lt;S&gt;,
+    {
+        PokemonService {
+            router: self.router.map(|s| s.layer(layer)),
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The plugin system solves the general problem of modifying <code>Operation&lt;S, L&gt;</code> prior to the upgrade procedure in a way parameterized by the protocol and operation marker structures. This parameterization removes the excessive boilerplate above.</p>
+<p>The central trait is <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L31-L41"><code>Plugin</code></a>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A mapping from one [`Operation`] to another. Used to modify the behavior of
+/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder.
+///
+/// The generics `Protocol` and `Op` allow the behavior to be parameterized.
+pub trait Plugin&lt;Protocol, Op, S, L&gt; {
+    type Service;
+    type Layer;
+
+    /// Maps an [`Operation`] to another.
+    fn map(&amp;self, input: Operation&lt;S, L&gt;) -&gt; Operation&lt;Self::Service, Self::Layer&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>Upgradable::upgrade</code> method on <code>Operation&lt;S, L&gt;</code>, previously presented in <a href="#upgrading-a-model-service">Upgrading a Model Service</a>, is more accurately:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>    /// Takes the [`Operation&lt;S, L&gt;`](Operation), applies [`Plugin`], then applies [`UpgradeLayer`] to
+    /// the modified `S`, then finally applies the modified `L`.
+    ///
+    /// The composition is made explicit in the method constraints and return type.
+    fn upgrade(self, plugin: &amp;Pl) -&gt; Route&lt;B&gt; {
+        let mapped = plugin.map(self);
+        let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
+        Route::new(layer.layer(mapped.inner))
+    }
+<span class="boring">}</span></code></pre></pre>
+<pre class="mermaid">stateDiagram-v2
+    direction TB
+    Op1: Operation#60;S1, L1#62;
+    state Op1 {
+        direction LR
+        [*] --&gt; S1 : HTTP Request
+        S1 --&gt; [*]: HTTP Response
+        state L1 {
+            Upgrade1 : Upgrade
+            state Upgrade1 {
+                S1
+            }
+        }
+
+    }
+
+    Op2: Operation#60;S2, L2#62;
+    state Op2 {
+        direction LR
+        [*] --&gt; S2: HTTP Request
+        S2 --&gt; [*]: HTTP Response
+        state L2 {
+            Upgrade2 : Upgrade
+            state Upgrade2 {
+                S2
+            }
+        }
+    }
+
+    Op1 --&gt; Op2 : Plugin#colon;#colon;map
+</pre>
+<p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs">aws-smithy-http-server/examples/pokemon-service/src/plugin.rs</a>.</p>
+<p>The service builder API requires plugins to be specified upfront - they must be passed as an argument to <code>builder_with_plugins</code> and cannot be modified afterwards.
+This constraint is in place to ensure that all handlers are upgraded using the same set of plugins.</p>
+<p>You might find yourself wanting to apply <em>multiple</em> plugins to your service.
+This can be accommodated via [<code>PluginPipeline</code>].</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_smithy_http_server::plugin::PluginPipeline;
+<span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+</span><span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
+</span>
+let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
+<span class="boring">}</span></code></pre></pre>
+<p>The plugins' runtime logic is executed in registration order.
+In the example above, <code>LoggingPlugin</code> would run first, while <code>MetricsPlugin</code> is executed last.</p>
+<p>If you are vending a plugin, you can leverage <code>PluginPipeline</code> as an extension point: you can add custom methods to it using an extension trait.
+For example:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+<span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+</span><span class="boring">use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
+</span>
+pub trait AuthPluginExt&lt;CurrentPlugins&gt; {
+    fn with_auth(self) -&gt; PluginPipeline&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt;;
+}
+
+impl&lt;CurrentPlugins&gt; AuthPluginExt&lt;CurrentPlugins&gt; for PluginPipeline&lt;CurrentPlugins&gt; {
+    fn with_auth(self) -&gt; PluginPipeline&lt;PluginStack&lt;AuthPlugin, CurrentPlugins&gt;&gt; {
+        self.push(AuthPlugin)
+    }
+}
+
+let pipeline = PluginPipeline::new()
+    .push(LoggingPlugin)
+    // Our custom method!
+    .with_auth();
+<span class="boring">}</span></code></pre></pre>
+<h2 id="accessing-unmodelled-data"><a class="header" href="#accessing-unmodelled-data">Accessing Unmodelled Data</a></h2>
+<p>An additional omitted detail is that we provide an &quot;escape hatch&quot; allowing <code>Handler</code>s and <code>OperationService</code>s to accept data that isn't modelled. In addition to accepting <code>Op::Input</code> they can accept additional arguments which implement the <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/request.rs#L114-L121"><code>FromParts</code></a> trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use http::request::Parts;
+
+/// Provides a protocol aware extraction from a [`Request`]. This borrows the
+/// [`Parts`], in contrast to [`FromRequest`].
+pub trait FromParts&lt;Protocol&gt;: Sized {
+    /// The type of the failures yielded extraction attempts.
+    type Rejection: IntoResponse&lt;Protocol&gt;;
+
+    /// Extracts `self` from a [`Parts`] synchronously.
+    fn from_parts(parts: &amp;mut Parts) -&gt; Result&lt;Self, Self::Rejection&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This differs from <code>FromRequest</code> trait, introduced in <a href="#serialization-and-deserialization">Serialization and Deserialization</a>, as it's synchronous and has non-consuming access to <a href="https://docs.rs/http/0.2.8/http/request/struct.Parts.html"><code>Parts</code></a>, rather than the entire <a href="https://docs.rs/http/0.2.8/http/request/struct.Request.html">Request</a>.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct Parts {
+    pub method: Method,
+    pub uri: Uri,
+    pub version: Version,
+    pub headers: HeaderMap&lt;HeaderValue&gt;,
+    pub extensions: Extensions,
+    /* private fields */
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This is commonly used to access types stored within <a href="https://docs.rs/http/0.2.8/http/struct.Extensions.html"><code>Extensions</code></a> which have been inserted by a middleware. An <code>Extension</code> struct implements <code>FromParts</code> to support this use case:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Generic extension type stored in and extracted from [request extensions].
+///
+/// This is commonly used to share state across handlers.
+///
+/// If the extension is missing it will reject the request with a `500 Internal
+/// Server Error` response.
+///
+/// [request extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
+#[derive(Debug, Clone)]
+pub struct Extension&lt;T&gt;(pub T);
+
+impl&lt;Protocol, T&gt; FromParts&lt;Protocol&gt; for Extension&lt;T&gt;
+where
+    T: Clone + Send + Sync + 'static,
+{
+    type Rejection = MissingExtension;
+
+    fn from_parts(parts: &amp;mut http::request::Parts) -&gt; Result&lt;Self, Self::Rejection&gt; {
+        parts.extensions.remove::&lt;T&gt;().map(Extension).ok_or(MissingExtension)
+    }
+}
+
+/// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
+#[derive(Debug, Error)]
+#[error(&quot;the `Extension` is not present in the `http::Request`&quot;)]
+pub struct MissingExtension;
+
+impl&lt;Protocol&gt; IntoResponse&lt;Protocol&gt; for MissingExtension {
+    fn into_response(self) -&gt; http::Response&lt;BoxBody&gt; {
+        let mut response = http::Response::new(empty());
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        response
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../server/from_parts.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../server/code_generation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../server/from_parts.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../server/code_generation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
