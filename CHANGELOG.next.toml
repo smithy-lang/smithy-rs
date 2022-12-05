@@ -625,3 +625,9 @@ message = "Implementation of the Debug trait for container shapes now redacts wh
 references = ["smithy-rs#1983", "smithy-rs#2029"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Log an `info` on credentials cache miss and adjust level of some credential `tracing` spans/events."
+references = ["smithy-rs#2062"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
