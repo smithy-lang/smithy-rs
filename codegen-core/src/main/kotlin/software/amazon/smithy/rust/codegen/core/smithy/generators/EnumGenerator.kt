@@ -20,16 +20,19 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.doubleQuote
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
 class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
@@ -126,6 +129,10 @@ open class EnumGenerator(
             }
         } else {
             renderUnnamedEnum()
+        }
+
+        if (shape.shouldRedact(model)) {
+            renderDebugImplForSensitiveEnum()
         }
     }
 
@@ -227,6 +234,25 @@ open class EnumGenerator(
                 }
             }
         }
+    }
+
+    /**
+     * Manually implement the `Debug` trait for the enum if marked as sensitive.
+     *
+     * It prints the redacted text regardless of the variant it is asked to print.
+     */
+    private fun renderDebugImplForSensitiveEnum() {
+        writer.rustTemplate(
+            """
+            impl #{Debug} for $enumName {
+                fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
+                    write!(f, $REDACTION)
+                }
+            }
+            """,
+            "Debug" to RuntimeType.Debug,
+            "StdFmt" to RuntimeType.stdfmt,
+        )
     }
 
     protected open fun renderFromForStr() {
