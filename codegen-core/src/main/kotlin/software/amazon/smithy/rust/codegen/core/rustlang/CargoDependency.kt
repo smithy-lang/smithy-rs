@@ -191,7 +191,7 @@ data class CargoDependency(
         val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
-        val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.0.0"))
+        val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.0"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
@@ -210,21 +210,27 @@ data class CargoDependency(
         val AsyncStd: CargoDependency = CargoDependency("async-std", CratesIo("1.12.0"), DependencyScope.Dev)
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
-        val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.0"), DependencyScope.Dev)
-        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.0"), DependencyScope.Dev)
+        val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
+        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev)
+        val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"))
         val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
         val PrettyAssertions: CargoDependency =
-            CargoDependency("pretty_assertions", CratesIo("1.0.0"), DependencyScope.Dev)
+            CargoDependency("pretty_assertions", CratesIo("1.3.0"), DependencyScope.Dev)
         val SerdeJson: CargoDependency = CargoDependency("serde_json", CratesIo("1.0.0"), DependencyScope.Dev)
         val Smol: CargoDependency = CargoDependency("smol", CratesIo("1.2.0"), DependencyScope.Dev)
         val TempFile: CargoDependency = CargoDependency("tempfile", CratesIo("3.2.0"), DependencyScope.Dev)
         val Tokio: CargoDependency =
             CargoDependency("tokio", CratesIo("1.8.4"), DependencyScope.Dev, features = setOf("macros", "test-util", "rt-multi-thread"))
+        val TracingAppender: CargoDependency = CargoDependency(
+            "tracing-appender",
+            CratesIo("0.2.2"),
+            DependencyScope.Dev,
+        )
         val TracingSubscriber: CargoDependency = CargoDependency(
             "tracing-subscriber",
-            CratesIo("0.3.15"),
+            CratesIo("0.3.16"),
             DependencyScope.Dev,
-            features = setOf("env-filter"),
+            features = setOf("env-filter", "json"),
         )
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("async")

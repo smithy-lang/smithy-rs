@@ -3,6 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::fs::File;
+use std::future::Future;
+use std::iter::repeat_with;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use bytes::BytesMut;
+use futures_util::future;
+use hdrhistogram::sync::SyncHistogram;
+use hdrhistogram::Histogram;
+use tokio::sync::Semaphore;
+use tokio::time::{Duration, Instant};
+use tracing::{debug, debug_span, info, Dispatch, Instrument};
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{filter, EnvFilter, Layer};
+
 use aws_sdk_s3::model::{Delete, ObjectIdentifier};
 use aws_sdk_s3::types::ByteStream;
 use aws_sdk_s3::Client;
@@ -12,24 +30,8 @@ use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
 use aws_types::{Credentials, SdkConfig};
-use bytes::BytesMut;
-use futures::future;
-use hdrhistogram::sync::SyncHistogram;
-use hdrhistogram::Histogram;
-use std::fs::File;
-use std::future::Future;
-use std::iter::repeat_with;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
-use tokio::time::{Duration, Instant};
-use tracing::{debug, debug_span, info, Dispatch, Instrument};
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{filter, EnvFilter, Layer};
 
-#[tokio::test(flavor = "current_thread")]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_concurrency_on_multi_thread() {
     test_concurrency_with_dummy_server().await
 }
@@ -123,11 +125,6 @@ async fn start_agreeable_server() -> (impl Future<Output = ()>, SocketAddr) {
 
         loop {
             match socket.try_read_buf(&mut buf) {
-                // Ok(0) => {
-                //     unreachable!(
-                //         "The connection will be closed before this branch is ever reached"
-                //     );
-                // }
                 Ok(_) => {
                     // Check for CRLF to see if we've received the entire HTTP request.
                     if buf.ends_with(b"\r\n\r\n") {
@@ -175,7 +172,7 @@ async fn start_agreeable_server() -> (impl Future<Output = ()>, SocketAddr) {
 }
 
 #[ignore = "this test runs against S3 and requires credentials"]
-#[tokio::test(flavor = "current_thread")]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_concurrency_put_object_against_live() {
     const TASK_COUNT: usize = 10_000;
     const TASK_PAYLOAD_LENGTH: usize = 100_000;
@@ -335,13 +332,13 @@ async fn test_concurrency_put_object_against_live() {
 
     info!("test data has been deleted from S3");
 
-    display_histogram(
+    display_metrics(
         "Semaphore Latency",
         semaphore_histogram,
         "s",
         Duration::from_secs(1).as_nanos() as f64,
     );
-    display_histogram(
+    display_metrics(
         "Request Latency",
         req_histogram,
         "s",
@@ -349,7 +346,7 @@ async fn test_concurrency_put_object_against_live() {
     );
 }
 
-fn display_histogram(name: &str, mut h: SyncHistogram<u64>, unit: &str, scale: f64) {
+fn display_metrics(name: &str, mut h: SyncHistogram<u64>, unit: &str, scale: f64) {
     // Refreshing is required or else we won't see any results at all
     h.refresh();
     debug!("displaying {} results from {name} histogram", h.len());
