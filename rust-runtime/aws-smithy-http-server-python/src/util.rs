@@ -62,12 +62,17 @@ pub fn is_optional_of<T: PyTypeInfo>(py: Python, ty: &PyAny) -> PyResult<bool> {
     let none_ty = none.as_ref(py).get_type();
     let target_ty = py.get_type::<T>();
 
-    // `Union` should be tuple of `(T, NoneType)`
+    // `Union` should be tuple of `(T, NoneType)` or `(NoneType, T)`
     match ty
         .getattr("__args__")
         .and_then(|args| args.extract::<(&PyAny, &PyAny)>())
     {
-        Ok((first_ty, second_ty)) => Ok(first_ty.is(target_ty) && second_ty.is(none_ty)),
+        Ok((first_ty, second_ty)) => Ok(
+            // (T, NoneType)
+            (first_ty.is(target_ty) && second_ty.is(none_ty)) ||
+                // (NoneType, T)
+                (first_ty.is(none_ty) && second_ty.is(target_ty)),
+        ),
         // Here we can ignore errors because `__args__` is not present on all types
         // and it is not really an error, it is just a type we don't expect
         _ => Ok(false),
