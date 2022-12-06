@@ -67,14 +67,20 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::net::SocketAddr;
+    use std::pin::Pin;
     use std::sync::{mpsc, Arc};
+    use std::task::{Context, Poll};
     use std::thread;
 
-    use hyper::server::conn::AddrIncoming;
+    use futures::ready;
+    use hyper::server::conn::{AddrIncoming, AddrStream};
     use hyper::service::{make_service_fn, service_fn};
     use hyper::{Body, Client, Error, Response, Server, Uri};
     use hyper_rustls::HttpsConnectorBuilder;
+    use pin_project_lite::pin_project;
+    use tls_listener::AsyncAccept;
     use tokio_rustls::{
         rustls::{Certificate, ClientConfig, PrivateKey, RootCertStore, ServerConfig},
         TlsAcceptor,
@@ -82,12 +88,53 @@ mod tests {
 
     use super::Listener;
 
+    enum DummyListenerMode {
+        // Pass connection from inner `AddrIncoming` without any modification
+        Identity,
+        // Fail after accepting a connection from inner `AddrIncoming`
+        Fail,
+    }
+
+    pin_project! {
+        // A listener for testing that uses inner `AddrIncoming` to accept connections
+        // and depending on the mode it either returns that connection or fails.
+        struct DummyListener {
+            #[pin]
+            inner: AddrIncoming,
+            mode: DummyListenerMode,
+        }
+    }
+
+    impl AsyncAccept for DummyListener {
+        type Connection = AddrStream;
+        type Error = io::Error;
+
+        fn poll_accept(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<Self::Connection, Self::Error>>> {
+            let this = self.project();
+            let conn = match ready!(this.inner.poll_accept(cx)) {
+                Some(Ok(conn)) => conn,
+                Some(Err(err)) => return Poll::Ready(Some(Err(err))),
+                None => return Poll::Ready(None),
+            };
+
+            match &this.mode {
+                DummyListenerMode::Identity => Poll::Ready(Some(Ok(conn))),
+                DummyListenerMode::Fail => {
+                    Poll::Ready(Some(Err(io::ErrorKind::ConnectionAborted.into())))
+                }
+            }
+        }
+    }
+
     #[tokio::test]
     async fn server_doesnt_shutdown_after_bad_handshake() {
         let (_new_acceptor_tx, new_acceptor_rx) = mpsc::channel();
         let cert = valid_cert();
         let acceptor = acceptor_from_cert(&cert);
-        let addr = server(acceptor, new_acceptor_rx);
+        let (addr, _) = server(acceptor, new_acceptor_rx, DummyListenerMode::Identity);
 
         {
             // Here client only trusts the `different_cert` and fails for any other certificate even though they are valid
@@ -112,12 +159,30 @@ mod tests {
     }
 
     #[tokio::test]
+    #[should_panic(expected = "server error: error accepting connection: connection aborted")]
+    async fn server_shutdown_after_listener_error() {
+        let (_new_acceptor_tx, new_acceptor_rx) = mpsc::channel();
+        let cert = valid_cert();
+        let acceptor = acceptor_from_cert(&cert);
+        let (addr, server_thread_handle) =
+            server(acceptor, new_acceptor_rx, DummyListenerMode::Fail);
+
+        // Here server should get an error from listener
+        let config = client_config_with_cert(&cert);
+        let _ = make_req(config, &addr).await;
+
+        // Since we are just panicking in our test server, we just need to propogate that panic
+        // and `should_panic` will make sure it is the panic message we are expecting
+        std::panic::resume_unwind(server_thread_handle.join().unwrap_err());
+    }
+
+    #[tokio::test]
     async fn server_changes_tls_config() {
         let (new_acceptor_tx, new_acceptor_rx) = mpsc::channel();
 
         let invalid_cert = cert_with_invalid_date();
         let acceptor = acceptor_from_cert(&invalid_cert);
-        let addr = server(acceptor, new_acceptor_rx);
+        let (addr, _) = server(acceptor, new_acceptor_rx, DummyListenerMode::Identity);
 
         {
             // We have a certificate with invalid date, so request should fail
@@ -180,14 +245,23 @@ mod tests {
         ))
     }
 
-    fn server(acceptor: TlsAcceptor, new_acceptor_rx: mpsc::Receiver<TlsAcceptor>) -> SocketAddr {
+    fn server(
+        acceptor: TlsAcceptor,
+        new_acceptor_rx: mpsc::Receiver<TlsAcceptor>,
+        dummy_listener_mode: DummyListenerMode,
+    ) -> (SocketAddr, thread::JoinHandle<()>) {
         let addr = ([127, 0, 0, 1], 0).into();
         let (addr_tx, addr_rx) = mpsc::channel();
 
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             tokio_test::block_on(async move {
                 let incoming = AddrIncoming::bind(&addr).unwrap();
                 addr_tx.send(incoming.local_addr()).unwrap();
+
+                let incoming = DummyListener {
+                    inner: incoming,
+                    mode: dummy_listener_mode,
+                };
 
                 let listener = Listener::new(acceptor, incoming, new_acceptor_rx);
 
@@ -203,7 +277,7 @@ mod tests {
             });
         });
 
-        addr_rx.recv().unwrap()
+        (addr_rx.recv().unwrap(), handle)
     }
 
     async fn make_req(
