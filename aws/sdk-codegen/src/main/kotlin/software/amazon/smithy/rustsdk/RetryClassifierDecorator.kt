@@ -34,7 +34,7 @@ class RetryClassifierDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
 }
 
 class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    override fun retryType(): RuntimeType = runtimeConfig.awsHttp().toType().member("retry::AwsResponseRetryClassifier")
+    override fun retryType(): RuntimeType = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier")
     override fun section(section: OperationSection) = when (section) {
         is OperationSection.FinalizeOperation -> writable {
             rust(

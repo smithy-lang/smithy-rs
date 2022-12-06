@@ -112,7 +112,7 @@ class InlineDependency(
     }
 }
 
-fun InlineDependency.toType() = RuntimeType(name = null, dependency = this, namespace = module.fullyQualifiedPath())
+fun InlineDependency.toType() = RuntimeType(module.fullyQualifiedPath(), this)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
@@ -183,7 +183,7 @@ data class CargoDependency(
     }
 
     fun toType(): RuntimeType {
-        return RuntimeType(null, this, rustName)
+        return RuntimeType(rustName, this)
     }
 
     companion object {
@@ -233,12 +233,11 @@ data class CargoDependency(
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("eventstream")
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
         fun smithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
-        fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
+        fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("json")
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.runtimeCrate("protocol-test", scope = DependencyScope.Dev)
-
-        fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")
+        fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("query")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("types")
-        fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")
+        fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("xml")
     }
 }

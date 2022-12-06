@@ -226,7 +226,7 @@ open class SymbolVisitor(
     }
 
     override fun blobShape(shape: BlobShape?): Symbol {
-        return RuntimeType.Blob(config.runtimeConfig).toSymbol()
+        return RuntimeType.blob(config.runtimeConfig).toSymbol()
     }
 
     /**
@@ -290,7 +290,7 @@ open class SymbolVisitor(
     }
 
     override fun documentShape(shape: DocumentShape?): Symbol {
-        return RuntimeType.Document(config.runtimeConfig).toSymbol()
+        return RuntimeType.document(config.runtimeConfig).toSymbol()
     }
 
     override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {
@@ -356,7 +356,7 @@ open class SymbolVisitor(
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {
-        return RuntimeType.DateTime(config.runtimeConfig).toSymbol()
+        return RuntimeType.dateTime(config.runtimeConfig).toSymbol()
     }
 }
 

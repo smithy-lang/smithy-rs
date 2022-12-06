@@ -22,15 +22,15 @@ import software.amazon.smithy.rust.codegen.core.util.dq
  * Standard library functions available to all generated crates (e.g. not `aws.` specific / prefixed)
  */
 internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> = listOf(
-    SimpleRuntimeFunction("substring", endpointsLib("substring").toType().member("substring")),
-    SimpleRuntimeFunction("isValidHostLabel", endpointsLib("host").toType().member("is_valid_host_label")),
+    SimpleRuntimeFunction("substring", endpointsLib("substring").toType().resolve("substring")),
+    SimpleRuntimeFunction("isValidHostLabel", endpointsLib("host").toType().resolve("is_valid_host_label")),
     SimpleRuntimeFunction(
         "parseURL",
-        endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url).toType().member("parse_url"),
+        endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url).toType().resolve("parse_url"),
     ),
     SimpleRuntimeFunction(
         "uriEncode",
-        endpointsLib("uri_encode", CargoDependency.PercentEncoding).toType().member("uri_encode"),
+        endpointsLib("uri_encode", CargoDependency.PercentEncoding).toType().resolve("uri_encode"),
     ),
 )
 
@@ -40,7 +40,7 @@ internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> = listOf(
  * This is defined in client-codegen to support running tests—it is not used when generating smithy-native services.
  */
 fun awsStandardLib(runtimeConfig: RuntimeConfig, partitionsDotJson: Node) = listOf(
-    SimpleRuntimeFunction("aws.parseArn", endpointsLib("arn").toType().member("parse_arn")),
+    SimpleRuntimeFunction("aws.parseArn", endpointsLib("arn").toType().resolve("parse_arn")),
     SimpleRuntimeFunction(
         "aws.isVirtualHostableS3Bucket",
         endpointsLib(
@@ -48,7 +48,7 @@ fun awsStandardLib(runtimeConfig: RuntimeConfig, partitionsDotJson: Node) = list
             endpointsLib("host"),
             CargoDependency.OnceCell,
             CargoDependency.Regex,
-        ).toType().member("is_virtual_hostable_s3_bucket"),
+        ).toType().resolve("is_virtual_hostable_s3_bucket"),
     ),
     AwsPartitionResolver(
         runtimeConfig,
@@ -70,7 +70,7 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
             CargoDependency.smithyJson(runtimeConfig),
             CargoDependency.Regex,
         ).toType()
-            .member("PartitionResolver"),
+            .resolve("PartitionResolver"),
     )
 
     override fun structFieldInit() = writable {

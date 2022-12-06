@@ -66,8 +66,8 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
         .build()
 }
 
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("error::BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("error::SerializationError")
+fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
     fun missingField(field: String, details: String) = writable {
@@ -236,7 +236,7 @@ class BuilderGenerator(
 
     private fun renderDebugImpl(writer: RustWriter) {
         writer.rustBlock("impl #T for $builderName", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${builderName.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)

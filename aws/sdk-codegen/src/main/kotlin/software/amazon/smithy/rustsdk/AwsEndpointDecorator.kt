@@ -74,7 +74,7 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig, operation)
+        return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
@@ -94,18 +94,13 @@ class EndpointConfigCustomization(
 ) :
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().toType().copy(name = "ResolveAwsEndpoint")
-    private val smithyEndpointResolver =
-        CargoDependency.smithyHttp(runtimeConfig).toType().member("endpoint::ResolveEndpoint")
-    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().toType().member("Params")
-    private val endpointShim = runtimeConfig.awsEndpoint().toType().member("EndpointShim")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "SmithyResolver" to smithyEndpointResolver,
-        "PlaceholderParams" to placeholderEndpointParams,
-        "ResolveAwsEndpoint" to resolveAwsEndpoint,
-        "EndpointShim" to endpointShim,
-        "aws_types" to awsTypes(runtimeConfig).toType(),
+        "SmithyResolver" to RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint::ResolveEndpoint"),
+        "PlaceholderParams" to AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("Params"),
+        "ResolveAwsEndpoint" to AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("ResolveAwsEndpoint"),
+        "EndpointShim" to AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("EndpointShim"),
+        "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
     )
 
     override fun section(section: ServiceConfig): Writable = writable {
@@ -181,9 +176,9 @@ class EndpointConfigCustomization(
 
 // This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern
 
-class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) :
+class EndpointResolverFeature(runtimeConfig: RuntimeConfig) :
     OperationCustomization() {
-    private val placeholderEndpointParams = runtimeConfig.awsEndpoint().toType().member("Params")
+    private val placeholderEndpointParams = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("Params")
     private val codegenScope = arrayOf(
         "PlaceholderParams" to placeholderEndpointParams,
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -225,20 +220,20 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
 class EndpointResolverGenerator(codegenContext: CodegenContext, private val endpointData: ObjectNode) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val endpointPrefix = codegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
-    private val awsEndpoint = runtimeConfig.awsEndpoint().toType()
-    private val awsTypes = runtimeConfig.awsTypes().toType()
+    private val awsEndpoint = AwsRuntimeType.awsEndpoint(runtimeConfig)
+    private val awsTypes = AwsRuntimeType.awsTypes(runtimeConfig)
     private val codegenScope =
         arrayOf(
-            "Partition" to awsEndpoint.member("Partition"),
-            "endpoint" to awsEndpoint.member("partition::endpoint"),
-            "CredentialScope" to awsEndpoint.member("CredentialScope"),
-            "Regionalized" to awsEndpoint.member("partition::Regionalized"),
-            "Protocol" to awsEndpoint.member("partition::endpoint::Protocol"),
-            "SignatureVersion" to awsEndpoint.member("partition::endpoint::SignatureVersion"),
-            "PartitionResolver" to awsEndpoint.member("PartitionResolver"),
-            "ResolveAwsEndpoint" to awsEndpoint.member("ResolveAwsEndpoint"),
-            "SigningService" to awsTypes.member("SigningService"),
-            "SigningRegion" to awsTypes.member("region::SigningRegion"),
+            "Partition" to awsEndpoint.resolve("Partition"),
+            "endpoint" to awsEndpoint.resolve("partition::endpoint"),
+            "CredentialScope" to awsEndpoint.resolve("CredentialScope"),
+            "Regionalized" to awsEndpoint.resolve("partition::Regionalized"),
+            "Protocol" to awsEndpoint.resolve("partition::endpoint::Protocol"),
+            "SignatureVersion" to awsEndpoint.resolve("partition::endpoint::SignatureVersion"),
+            "PartitionResolver" to awsEndpoint.resolve("PartitionResolver"),
+            "ResolveAwsEndpoint" to awsEndpoint.resolve("ResolveAwsEndpoint"),
+            "SigningService" to awsTypes.resolve("SigningService"),
+            "SigningRegion" to awsTypes.resolve("region::SigningRegion"),
         )
 
     fun resolver(): RuntimeType {

@@ -62,7 +62,7 @@ class PubCrateConstrainedCollectionGenerator(
 
         val codegenScope = arrayOf(
             "InnerConstrainedSymbol" to innerConstrainedSymbol,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "UnconstrainedSymbol" to unconstrainedSymbol,
             "Symbol" to symbol,
             "From" to RuntimeType.From,

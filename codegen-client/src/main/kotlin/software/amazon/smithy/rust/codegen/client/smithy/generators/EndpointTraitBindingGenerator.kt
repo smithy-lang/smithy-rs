@@ -8,12 +8,12 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.rustFormatString
@@ -24,8 +24,6 @@ fun EndpointTrait.prefixFormatString(): String {
     return this.hostPrefix.rustFormatString("", "")
 }
 
-fun RuntimeConfig.smithyHttp() = CargoDependency.smithyHttp(this).toType()
-
 class EndpointTraitBindings(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
@@ -34,8 +32,7 @@ class EndpointTraitBindings(
     private val endpointTrait: EndpointTrait,
 ) {
     private val inputShape = operationShape.inputShape(model)
-    private val smithyHttp = runtimeConfig.smithyHttp()
-    private val endpointPrefix = smithyHttp.member("endpoint::EndpointPrefix")
+    private val endpointPrefix = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint::EndpointPrefix")
 
     /**
      * Render the `EndpointPrefix` struct. [input] refers to the symbol referring to the input of this operation.

@@ -26,14 +26,12 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
-import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -129,24 +127,24 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
-        "Cow" to ServerRuntimeType.Cow,
-        "DateTime" to RuntimeType.DateTime(runtimeConfig),
+        "Cow" to RuntimeType.Cow,
+        "DateTime" to RuntimeType.dateTime(runtimeConfig),
         "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
-        "HttpBody" to CargoDependency.HttpBody.toType(),
-        "header_util" to CargoDependency.smithyHttp(runtimeConfig).toType().member("header"),
-        "Hyper" to CargoDependency.Hyper.toType(),
-        "LazyStatic" to CargoDependency.LazyStatic.toType(),
+        "HttpBody" to RuntimeType.HttpBody,
+        "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
+        "Hyper" to RuntimeType.Hyper,
+        "LazyStatic" to RuntimeType.LazyStatic,
         "Mime" to ServerCargoDependency.Mime.toType(),
         "Nom" to ServerCargoDependency.Nom.toType(),
-        "OnceCell" to ServerCargoDependency.OnceCell.toType(),
-        "PercentEncoding" to CargoDependency.PercentEncoding.toType(),
-        "Regex" to CargoDependency.Regex.toType(),
-        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
+        "OnceCell" to RuntimeType.OnceCell,
+        "PercentEncoding" to RuntimeType.PercentEncoding,
+        "Regex" to RuntimeType.Regex,
+        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
-        "http" to RuntimeType.http,
+        "http" to RuntimeType.Http,
     )
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
@@ -983,7 +981,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 val targetSymbol = unconstrainedShapeSymbolProvider.toSymbol(target)
                 withBlock("let mut query_params: #T = ", ";", targetSymbol) {
                     conditionalBlock("#T(", ")", conditional = hasConstrainedTarget, targetSymbol) {
-                        rust("#T::new()", RustType.HashMap.RuntimeType)
+                        rust("#T::new()", RuntimeType.HashMap)
                     }
                 }
             }
@@ -1035,7 +1033,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                         it.location,
                                         protocol.defaultTimestampFormat,
                                     )
-                                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                                 rustTemplate(
                                     """
                                     let v = #{DateTime}::from_str(&v, #{format})?#{ConvertInto:W};
@@ -1050,7 +1048,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                     """
                                     let v = <_ as #T>::parse_smithy_primitive(&v)?;
                                     """.trimIndent(),
-                                    CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Parse"),
+                                    RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                                 )
                             }
                         }
@@ -1188,7 +1186,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 binding.location,
                                 protocol.defaultTimestampFormat,
                             )
-                        val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                        val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
 
                         if (percentDecoding) {
                             rustTemplate(
@@ -1248,10 +1246,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
         return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                CargoDependency.smithyJson(runtimeConfig).toType().member("deserialize::error::DeserializeError")
+                RuntimeType.smithyJson(runtimeConfig).resolve("deserialize::error::DeserializeError")
             }
             RestXmlTrait.ID -> {
-                CargoDependency.smithyXml(runtimeConfig).toType().member("decode").member("XmlDecodeError")
+                RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

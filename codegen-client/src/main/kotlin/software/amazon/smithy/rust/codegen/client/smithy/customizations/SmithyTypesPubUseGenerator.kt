@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -53,15 +52,15 @@ private fun hasDateTimes(model: Model): Boolean {
 internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<RuntimeType> {
     return (
         listOf(
-            PubUseType(RuntimeType.Blob(runtimeConfig), ::hasBlobs),
-            PubUseType(RuntimeType.DateTime(runtimeConfig), ::hasDateTimes),
-        ) + CargoDependency.smithyTypes(runtimeConfig).toType().let { types ->
-            listOf(PubUseType(types.member("error::display::DisplayErrorContext")) { true })
-        } + CargoDependency.smithyHttp(runtimeConfig).toType().let { http ->
+            PubUseType(RuntimeType.blob(runtimeConfig), ::hasBlobs),
+            PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
+        ) + RuntimeType.smithyTypes(runtimeConfig).let { types ->
+            listOf(PubUseType(types.resolve("error::display::DisplayErrorContext")) { true })
+        } + RuntimeType.smithyHttp(runtimeConfig).let { http ->
             listOf(
-                PubUseType(http.member("result::SdkError")) { true },
-                PubUseType(http.member("byte_stream::ByteStream"), ::hasStreamingOperations),
-                PubUseType(http.member("byte_stream::AggregatedBytes"), ::hasStreamingOperations),
+                PubUseType(http.resolve("result::SdkError")) { true },
+                PubUseType(http.resolve("byte_stream::ByteStream"), ::hasStreamingOperations),
+                PubUseType(http.resolve("byte_stream::AggregatedBytes"), ::hasStreamingOperations),
             )
         }
         ).filter { pubUseType -> pubUseType.shouldExport(model) }.map { it.type }

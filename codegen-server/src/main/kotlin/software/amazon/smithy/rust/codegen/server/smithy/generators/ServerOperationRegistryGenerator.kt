@@ -62,7 +62,7 @@ class ServerOperationRegistryGenerator(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.toType(),
-        "Phantom" to ServerRuntimeType.Phantom,
+        "Phantom" to RuntimeType.Phantom,
         "StdError" to RuntimeType.StdError,
         "Display" to RuntimeType.Display,
         "From" to RuntimeType.From,
@@ -402,6 +402,6 @@ ${operationImplementationStubs(operations)}
         this,
         symbolProvider.toSymbol(this).name,
         serviceName,
-        ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().member("routing::request_spec"),
+        ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().resolve("routing::request_spec"),
     )
 }

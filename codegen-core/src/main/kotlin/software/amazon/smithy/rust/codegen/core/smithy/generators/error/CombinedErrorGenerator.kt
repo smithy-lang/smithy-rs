@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -94,7 +93,7 @@ fun OperationShape.errorSymbol(
 
 fun UnionShape.eventStreamErrorSymbol(model: Model, symbolProvider: RustSymbolProvider, target: CodegenTarget): RuntimeType {
     val symbol = symbolProvider.toSymbol(this)
-    val errorSymbol = RuntimeType("${symbol.name}Error", null, "crate::error")
+    val errorSymbol = RuntimeType("crate::error::${symbol.name}Error")
     return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
         val errors = this@eventStreamErrorSymbol.eventStreamErrors().map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
         when (target) {
@@ -125,12 +124,12 @@ class CombinedErrorGenerator(
     private val errors: List<StructureShape>,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
-    private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
+    private val genericError = RuntimeType.genericError(symbolProvider.config().runtimeConfig)
     private val createUnhandledError =
-        CargoDependency.smithyHttp(runtimeConfig).toType().member("result::CreateUnhandledError")
+        RuntimeType.smithyHttp(runtimeConfig).resolve("result::CreateUnhandledError")
 
     fun render(writer: RustWriter) {
-        val errorSymbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+        val errorSymbol = RuntimeType("crate::error::${operationSymbol.name}Error")
         renderErrors(writer, errorSymbol, operationSymbol)
     }
 
@@ -155,7 +154,7 @@ class CombinedErrorGenerator(
                 /// Additional metadata about the error, including error code, message, and request ID.
                 pub (crate) meta: #T
                 """,
-                RuntimeType.GenericError(runtimeConfig),
+                RuntimeType.genericError(runtimeConfig),
             )
         }
         writer.rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {

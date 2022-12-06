@@ -78,7 +78,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained(),
+        "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
     fun render(writer: RustWriter) {

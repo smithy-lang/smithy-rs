@@ -87,7 +87,7 @@ class PythonApplicationGenerator(
             "hyper" to PythonServerCargoDependency.Hyper.toType(),
             "HashMap" to RustType.HashMap.RuntimeType,
             "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
-            "http" to RuntimeType.http,
+            "http" to RuntimeType.Http,
         )
 
     fun render(writer: RustWriter) {

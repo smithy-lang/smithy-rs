@@ -126,7 +126,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         "endpoint" to types.smithyHttpEndpointModule,
         "SmithyEndpoint" to types.smithyEndpoint,
         "EndpointError" to types.resolveEndpointError,
-        "DiagnosticCollector" to endpointsLib("diagnostic").toType().member("DiagnosticCollector"),
+        "DiagnosticCollector" to endpointsLib("diagnostic").toType().resolve("DiagnosticCollector"),
     )
     private val context = Context(registry, runtimeConfig)
 

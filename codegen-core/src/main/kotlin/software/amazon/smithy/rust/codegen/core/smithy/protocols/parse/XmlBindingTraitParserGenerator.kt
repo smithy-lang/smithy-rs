@@ -97,18 +97,18 @@ class XmlBindingTraitParserGenerator(
 
     private val symbolProvider = codegenContext.symbolProvider
     private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).toType()
-    private val xmlDecodeError = smithyXml.member("decode::XmlDecodeError")
+    private val xmlDecodeError = smithyXml.resolve("decode::XmlDecodeError")
 
-    private val scopedDecoder = smithyXml.member("decode::ScopedDecoder")
+    private val scopedDecoder = smithyXml.resolve("decode::ScopedDecoder")
     private val runtimeConfig = codegenContext.runtimeConfig
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType.Blob(runtimeConfig),
-        "Document" to smithyXml.member("decode::Document"),
+        "Blob" to RuntimeType.blob(runtimeConfig),
+        "Document" to smithyXml.resolve("decode::Document"),
         "XmlDecodeError" to xmlDecodeError,
-        "next_start_element" to smithyXml.member("decode::next_start_element"),
-        "try_data" to smithyXml.member("decode::try_data"),
+        "next_start_element" to smithyXml.resolve("decode::next_start_element"),
+        "try_data" to smithyXml.resolve("decode::try_data"),
         "ScopedDecoder" to scopedDecoder,
         "aws_smithy_types" to CargoDependency.smithyTypes(runtimeConfig).toType(),
     )
@@ -534,7 +534,7 @@ class XmlBindingTraitParserGenerator(
                 *codegenScope,
                 "Map" to symbolProvider.toSymbol(target),
             ) {
-                rust("let mut out = #T::new();", software.amazon.smithy.rust.codegen.core.rustlang.RustType.HashMap.RuntimeType)
+                rust("let mut out = #T::new();", RuntimeType.HashMap)
                 parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     rustBlock("s if ${XmlName("entry").matchExpression("s")} => ") {
                         rust("#T(&mut ${ctx.tag}, &mut out)?;", mapEntryParser(target, ctx))
@@ -633,8 +633,8 @@ class XmlBindingTraitParserGenerator(
                         HttpBinding.Location.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                withBlock("#T::from_str(", ")", RuntimeType.DateTime(runtimeConfig)) {
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                withBlock("#T::from_str(", ")", RuntimeType.dateTime(runtimeConfig)) {
                     provider()
                     rust(", #T", timestampFormatType)
                 }
@@ -644,7 +644,7 @@ class XmlBindingTraitParserGenerator(
                 )
             }
             is BlobShape -> {
-                withBlock("#T(", ")", RuntimeType.Base64Decode(runtimeConfig)) {
+                withBlock("#T(", ")", RuntimeType.base64Decode(runtimeConfig)) {
                     provider()
                 }
                 rustTemplate(

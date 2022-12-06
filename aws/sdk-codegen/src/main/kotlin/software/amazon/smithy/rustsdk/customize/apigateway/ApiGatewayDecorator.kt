@@ -50,7 +50,7 @@ class ApiGatewayAddAcceptHeader : OperationCustomization() {
                 .http_mut()
                 .headers_mut()
                 .insert("Accept", #T::HeaderValue::from_static("application/json"));""",
-                RuntimeType.http,
+                RuntimeType.Http,
             )
         }
         else -> emptySection

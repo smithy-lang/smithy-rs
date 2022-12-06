@@ -26,7 +26,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -168,14 +167,12 @@ class JsonSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
-    private val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
-        "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
+        "JsonObjectWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonObjectWriter"),
+        "JsonValueWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonValueWriter"),
         "ByteSlab" to RuntimeType.ByteSlab,
     )
     private val serializerUtil = SerializerUtil(model)
@@ -281,7 +278,7 @@ class JsonSerializerGenerator(
                     out.into_bytes()
                 }
                 """,
-                "Document" to RuntimeType.Document(runtimeConfig), *codegenScope,
+                "Document" to RuntimeType.document(runtimeConfig), *codegenScope,
             )
         }
     }
@@ -396,19 +393,19 @@ class JsonSerializerGenerator(
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number"),
+                    RuntimeType.smithyTypes(runtimeConfig).resolve("Number"),
                 )
             }
 
             is BlobShape -> rust(
                 "$writer.string_unchecked(&#T(${value.asRef()}));",
-                RuntimeType.Base64Encode(runtimeConfig),
+                RuntimeType.base64Encode(runtimeConfig),
             )
 
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rustTemplate(
                     "$writer.date_time(${value.asRef()}#{ConvertInto:W}, #{FormatType})?;",
                     "FormatType" to timestampFormatType,

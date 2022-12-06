@@ -21,7 +21,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -92,15 +91,15 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private val target = codegenContext.target
     private val serviceShape = codegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
-    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
-    private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).toType()
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
+    private val smithyQuery = RuntimeType.smithyQuery(runtimeConfig)
     private val serdeUtil = SerializerUtil(model)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "QueryWriter" to smithyQuery.member("QueryWriter"),
-        "QueryValueWriter" to smithyQuery.member("QueryValueWriter"),
+        "QueryWriter" to smithyQuery.resolve("QueryWriter"),
+        "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
     )
     private val operationSerModule = RustModule.private("operation_ser")
     private val querySerModule = RustModule.private("query_ser")
@@ -218,16 +217,16 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number"),
+                    smithyTypes.resolve("Number"),
                 )
             }
             is BlobShape -> rust(
                 "$writer.string(&#T(${value.name}));",
-                RuntimeType.Base64Encode(runtimeConfig),
+                RuntimeType.base64Encode(runtimeConfig),
             )
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rust("$writer.date_time(${value.name}, #T)?;", timestampFormatType)
             }
             is CollectionShape -> serializeCollection(context, Context(writer, context.valueExpression, target))

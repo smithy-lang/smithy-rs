@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -39,11 +38,11 @@ open class ServerOperationHandlerGenerator(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
         "Tower" to ServerCargoDependency.Tower.toType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
-        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
+        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
-        "Phantom" to ServerRuntimeType.Phantom,
+        "Phantom" to RuntimeType.Phantom,
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "http" to RuntimeType.http,
+        "http" to RuntimeType.Http,
     )
 
     open fun render(writer: RustWriter) {

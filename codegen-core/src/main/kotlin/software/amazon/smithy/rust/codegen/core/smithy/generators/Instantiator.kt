@@ -108,7 +108,7 @@ open class Instantiator(
             // Wrapped Shapes
             is TimestampShape -> writer.rust(
                 "#T::from_secs(${(data as NumberNode).value})",
-                RuntimeType.DateTime(runtimeConfig),
+                RuntimeType.dateTime(runtimeConfig),
             )
 
             /**
@@ -119,12 +119,12 @@ open class Instantiator(
             is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
                 writer.rust(
                     "#T::from_static(b${(data as StringNode).value.dq()})",
-                    RuntimeType.ByteStream(runtimeConfig),
+                    RuntimeType.byteStream(runtimeConfig),
                 )
             } else {
                 writer.rust(
                     "#T::new(${(data as StringNode).value.dq()})",
-                    RuntimeType.Blob(runtimeConfig),
+                    RuntimeType.blob(runtimeConfig),
                 )
             }
 
@@ -137,7 +137,7 @@ open class Instantiator(
                     writer.rust(
                         """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
-                        CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Parse"),
+                        RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                     )
                 }
 
@@ -153,8 +153,8 @@ open class Instantiator(
                     let mut tokens = #{json_token_iter}(json_bytes).peekable();
                     #{expect_document}(&mut tokens).expect("well formed json")
                     """,
-                    "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-                    "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
+                    "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
                 )
             }
 
@@ -217,10 +217,10 @@ open class Instantiator(
      */
     private fun renderMap(writer: RustWriter, shape: MapShape, data: ObjectNode, ctx: Ctx) {
         if (data.members.isEmpty()) {
-            writer.rust("#T::new()", RustType.HashMap.RuntimeType)
+            writer.rust("#T::new()", RuntimeType.HashMap)
         } else {
             writer.rustBlock("") {
-                rust("let mut ret = #T::new();", RustType.HashMap.RuntimeType)
+                rust("let mut ret = #T::new();", RuntimeType.HashMap)
                 for ((key, value) in data.members) {
                     withBlock("ret.insert(", ");") {
                         renderMember(this, shape.key, key, ctx)

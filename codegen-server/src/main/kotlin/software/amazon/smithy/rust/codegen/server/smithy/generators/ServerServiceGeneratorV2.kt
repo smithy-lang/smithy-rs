@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -17,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -30,12 +30,12 @@ class ServerServiceGeneratorV2(
     private val smithyHttpServer = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType()
     private val codegenScope =
         arrayOf(
-            "Bytes" to CargoDependency.Bytes.toType(),
-            "Http" to CargoDependency.Http.toType(),
-            "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
-            "HttpBody" to CargoDependency.HttpBody.toType(),
+            "Bytes" to RuntimeType.Bytes,
+            "Http" to RuntimeType.Http,
+            "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+            "HttpBody" to RuntimeType.HttpBody,
             "SmithyHttpServer" to smithyHttpServer,
-            "Tower" to CargoDependency.Tower.toType(),
+            "Tower" to RuntimeType.Tower,
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -76,7 +76,7 @@ class ServerServiceGeneratorV2(
                 operationShape,
                 operationName,
                 serviceName,
-                smithyHttpServer.member("routing::request_spec"),
+                smithyHttpServer.resolve("routing::request_spec"),
             )
             val functionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
             val functionBody = writable {
@@ -87,7 +87,7 @@ class ServerServiceGeneratorV2(
                     }
                     """,
                     "Spec" to spec,
-                    "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.member("routing::request_spec")),
+                    "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.resolve("routing::request_spec")),
                 )
             }
             Pair(functionName, functionBody)
@@ -414,7 +414,7 @@ class ServerServiceGeneratorV2(
             impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
             where
                 S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
-                RespB: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + Send + 'static,
+                RespB: #{HttpBody}::Body<Data = #{Bytes}> + Send + 'static,
                 RespB::Error: Into<Box<dyn std::error::Error + Send + Sync>>
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;

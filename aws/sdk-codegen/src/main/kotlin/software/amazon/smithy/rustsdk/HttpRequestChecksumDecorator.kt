@@ -36,8 +36,6 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
         CargoDependency.smithyTypes(this),
         CargoDependency.Bytes,
         CargoDependency.Tracing,
-        this.sigAuth(),
-        this.awsHttp(),
     ),
 )
 
@@ -104,7 +102,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             };
             """,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to CargoDependency.smithyChecksums(runtimeConfig).toType().member("ChecksumAlgorithm"),
+            "ChecksumAlgorithm" to RuntimeType.smithyChecksums(runtimeConfig).resolve("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing
@@ -159,7 +157,7 @@ class HttpRequestChecksumCustomization(
                                 operationShape,
                             ),
                             "add_checksum_calculation_to_request" to runtimeConfig.awsInlineableBodyWithChecksum()
-                                .member("add_checksum_calculation_to_request"),
+                                .resolve("add_checksum_calculation_to_request"),
                             "BuildError" to runtimeConfig.operationBuildError(),
                         )
                     }

@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -61,12 +60,11 @@ class XmlBindingTraitSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
-    private val smithyXml = CargoDependency.smithyXml(runtimeConfig).toType()
     private val codegenTarget = codegenContext.target
     private val codegenScope =
         arrayOf(
-            "XmlWriter" to smithyXml.member("encode::XmlWriter"),
-            "ElementWriter" to smithyXml.member("encode::ElWriter"),
+            "XmlWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::XmlWriter"),
+            "ElementWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Error" to runtimeConfig.serializationError(),
         )
@@ -302,10 +300,10 @@ class XmlBindingTraitSerializerGenerator(
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
-                    CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder"),
+                    RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder"),
                 )
             }
-            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
+            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(
@@ -313,7 +311,7 @@ class XmlBindingTraitSerializerGenerator(
                         HttpLocation.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rust("$input.fmt(#T)?.as_ref()", timestampFormatType)
             }
             else -> TODO(member.toString())

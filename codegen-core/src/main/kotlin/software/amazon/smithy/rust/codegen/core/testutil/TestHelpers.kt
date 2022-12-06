@@ -12,8 +12,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
@@ -114,11 +112,4 @@ fun StructureShape.renderWithModelBuilder(
     }
 }
 
-val TokioWithTestMacros = CargoDependency(
-    "tokio",
-    CratesIo("1"),
-    features = setOf("macros", "test-util", "rt", "rt-multi-thread"),
-    scope = DependencyScope.Dev,
-)
-
-val TokioTest = Attribute.Custom("tokio::test", listOf(TokioWithTestMacros.toType()))
+val TokioTest = Attribute.Custom("tokio::test", listOf(CargoDependency.Tokio.toType()))

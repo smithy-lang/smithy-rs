@@ -17,9 +17,9 @@ import software.amazon.smithy.rulesengine.language.syntax.expr.Template
 import software.amazon.smithy.rulesengine.language.syntax.fn.LibraryFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -94,7 +94,7 @@ internal class ExprGeneratorTest {
                 expected.insert("c".to_string(), #{Document}::Array(vec![true.into()]));
                 assert_eq!(expected, #{actual:W});
                 """,
-                "Document" to CargoDependency.smithyTypes(TestRuntimeConfig).toType().member("Document"),
+                "Document" to RuntimeType.document(TestRuntimeConfig),
                 "actual" to gen.generate(
                     Literal.fromNode(
                         Node.objectNode().withMember("a", true).withMember("b", "hello")

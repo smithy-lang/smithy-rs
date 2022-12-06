@@ -121,7 +121,8 @@ class ServerAwsJsonProtocol(
         }
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
+    override fun routerType() = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType()
+        .resolve("proto::aws_json::router::AwsJsonRouter")
 
     /**
      * Returns the operation name as required by the awsJson1.x protocols.
@@ -137,8 +138,7 @@ class ServerAwsJsonProtocol(
 
     override fun serverRouterRequestSpecType(
         requestSpecModule: RuntimeType,
-    ): RuntimeType =
-        RuntimeType("String", null, "std::string")
+    ): RuntimeType = RuntimeType.String
 
     override fun serverRouterRuntimeConstructor() = when (version) {
         AwsJsonVersion.Json10 -> "new_aws_json_10_router"
@@ -146,7 +146,9 @@ class ServerAwsJsonProtocol(
     }
 }
 
-private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::rest::router")
+private fun restRouterType(runtimeConfig: RuntimeConfig) =
+    ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType()
+        .resolve("proto::rest::router::RestRouter")
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
@@ -191,7 +193,7 @@ class ServerRestJsonProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        requestSpecModule.member("RequestSpec")
+        requestSpecModule.resolve("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 
@@ -215,7 +217,7 @@ class ServerRestXmlProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        requestSpecModule.member("RequestSpec")
+        requestSpecModule.resolve("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 

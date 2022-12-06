@@ -130,7 +130,7 @@ class ServerBuilderGenerator(
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained(),
+        "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
     fun render(writer: RustWriter) {
@@ -425,7 +425,7 @@ class ServerBuilderGenerator(
 
     private fun renderImplDebugForBuilder(writer: RustWriter) {
         writer.rustBlock("impl #T for Builder", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct("Builder");""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)

@@ -25,7 +25,6 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -91,7 +90,7 @@ class ServerProtocolTestGenerator(
         val outputT = if (it.errors.isEmpty()) {
             t
         } else {
-            val errorType = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
+            val errorType = RuntimeType("crate::error::${operationSymbol.name}Error")
             val e = errorType.fullyQualifiedName()
             "Result<$t, $e>"
         }
@@ -103,13 +102,13 @@ class ServerProtocolTestGenerator(
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "SmithyHttp" to CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType(),
-        "Http" to CargoDependency.Http.toType(),
-        "Hyper" to CargoDependency.Hyper.toType(),
+        "SmithyHttp" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
+        "Http" to RuntimeType.Http,
+        "Hyper" to RuntimeType.Hyper,
         "Tokio" to ServerCargoDependency.TokioDev.toType(),
-        "Tower" to CargoDependency.Tower.toType(),
+        "Tower" to RuntimeType.Tower,
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.toType().member("assert_eq!"),
+        "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
         "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
     )
 
@@ -699,7 +698,7 @@ class ServerProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals")
+                                RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals")
                                     .toSymbol(),
                             )
                             rustWriter.rust(
@@ -797,8 +796,8 @@ class ServerProtocolTestGenerator(
                     "#T(&body, ${
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType"),
+                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
+                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
                 )
             }
         }
@@ -851,7 +850,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             rust(
                 "#T($actualExpression, $variableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers"),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_headers"),
             )
         }
     }
@@ -872,7 +871,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             rustWriter.rust(
                 "#T($actualExpression, $expectedVariableName)",
-                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, checkFunction),
             )
         }
     }
@@ -882,7 +881,7 @@ class ServerProtocolTestGenerator(
      * for pretty printing protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: Writable) {
-        rustWriter.rust("#T(", RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.rust("#T(", RuntimeType.protocolTest(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }

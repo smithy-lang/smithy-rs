@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -46,10 +45,10 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val awsQueryErrors: RuntimeType = RuntimeType.wrappedXmlErrors(runtimeConfig)
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.GenericError(runtimeConfig),
-        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "Response" to RuntimeType.http.member("Response"),
-        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).toType().member("decode::XmlDecodeError"),
+        "Error" to RuntimeType.genericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.HttpHeaderMap,
+        "Response" to RuntimeType.HttpResponse,
+        "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")
 

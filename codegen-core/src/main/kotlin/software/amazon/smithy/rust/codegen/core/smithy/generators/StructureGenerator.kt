@@ -88,7 +88,7 @@ open class StructureGenerator(
      */
     private fun renderDebugImpl() {
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)

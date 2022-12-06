@@ -142,13 +142,13 @@ class UnionGenerator(
             }
             """,
             "Debug" to RuntimeType.Debug,
-            "StdFmt" to RuntimeType.stdfmt,
+            "StdFmt" to RuntimeType.stdFmt,
         )
     }
 
     private fun renderDebugImpl() {
         writer.rustBlock("impl #T for ${unionSymbol.name}", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rustBlock("match self") {
                     sortedMembers.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)

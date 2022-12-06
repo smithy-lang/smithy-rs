@@ -16,17 +16,17 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 object PythonServerRuntimeType {
 
     fun PySocket(runtimeConfig: RuntimeConfig) =
-        RuntimeType("PySocket", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python")
+        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::PySocket", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
 
     fun Blob(runtimeConfig: RuntimeConfig) =
-        RuntimeType("Blob", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")
+        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::types::Blob", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
 
     fun ByteStream(runtimeConfig: RuntimeConfig) =
-        RuntimeType("ByteStream", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")
+        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::types::ByteStream", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
 
     fun DateTime(runtimeConfig: RuntimeConfig) =
-        RuntimeType("DateTime", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")
+        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::types::DateTime", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
 
     fun PyError(runtimeConfig: RuntimeConfig) =
-        RuntimeType("Error", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python")
+        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::Error", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
 }

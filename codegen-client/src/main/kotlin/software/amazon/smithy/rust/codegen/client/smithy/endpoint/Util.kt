@@ -12,13 +12,13 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterTy
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -46,11 +46,11 @@ internal fun endpointsLib(name: String, vararg additionalDependency: RustDepende
 )
 
 class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyTypesEndpointModule = CargoDependency.smithyTypes(runtimeConfig).toType().member("endpoint")
-    val smithyHttpEndpointModule = CargoDependency.smithyHttp(runtimeConfig).toType().member("endpoint")
-    val resolveEndpoint = smithyHttpEndpointModule.member("ResolveEndpoint")
-    val smithyEndpoint = smithyTypesEndpointModule.member("Endpoint")
-    val resolveEndpointError = smithyHttpEndpointModule.member("ResolveEndpointError")
+    private val smithyTypesEndpointModule = RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
+    val smithyHttpEndpointModule = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint")
+    val resolveEndpoint = smithyHttpEndpointModule.resolve("ResolveEndpoint")
+    val smithyEndpoint = smithyTypesEndpointModule.resolve("Endpoint")
+    val resolveEndpointError = smithyHttpEndpointModule.resolve("ResolveEndpointError")
 }
 
 private fun String.stringToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())

@@ -10,12 +10,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDe
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyClient
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 class HttpConnectorDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
     override val name: String = "HttpConnectorDecorator"
@@ -38,7 +38,7 @@ class HttpConnectorConfigCustomization(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "HttpConnector" to smithyClient(runtimeConfig).toType().member("http_connector::HttpConnector"),
+        "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
     )
 
     override fun section(section: ServiceConfig): Writable {
