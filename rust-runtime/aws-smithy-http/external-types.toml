@@ -15,7 +15,6 @@ allowed_external_types = [
     "http::version::Version",
     "http_body::Body",
     "http_body::combinators::box_body::BoxBody",
-    "hyper::body::body::Body",
 
     # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Feature gate Tokio `AsyncRead`
     "tokio::io::async_read::AsyncRead",

@@ -7,8 +7,7 @@ use crate::body::SdkBody;
 use crate::byte_stream::{error::Error, error::ErrorKind, ByteStream};
 use bytes::Bytes;
 use futures_core::ready;
-use http::HeaderMap;
-use http_body::{Body, SizeHint};
+use http_body::{Body, Frame, SizeHint};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -197,12 +196,12 @@ impl FsBuilder {
             let body_loader = move || {
                 // If an offset was provided, seeking will be handled in `PathBody::poll_data` each
                 // time the file is loaded.
-                SdkBody::from_dyn(http_body::combinators::BoxBody::new(PathBody::from_path(
+                SdkBody::from_body(PathBody::from_path(
                     path.clone(),
                     length,
                     buffer_size,
                     self.offset,
-                )))
+                ))
             };
 
             Ok(ByteStream::new(SdkBody::retryable(body_loader)))
@@ -212,9 +211,7 @@ impl FsBuilder {
                 let _s = file.seek(std::io::SeekFrom::Start(offset)).await?;
             }
 
-            let body = SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-                PathBody::from_file(file, length, buffer_size),
-            ));
+            let body = SdkBody::from_body(PathBody::from_file(file, length, buffer_size));
 
             Ok(ByteStream::new(body))
         } else {
@@ -242,10 +239,10 @@ impl Body for PathBody {
     type Data = Bytes;
     type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-    fn poll_data(
+    fn poll_frame(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let offset = self.offset.unwrap_or(DEFAULT_OFFSET);
         loop {
             match self.state {
@@ -275,20 +272,13 @@ impl Body for PathBody {
                 State::Loaded(ref mut stream) => {
                     use futures_core::Stream;
                     return match ready!(Pin::new(stream).poll_next(cx)) {
-                        Some(Ok(bytes)) => Poll::Ready(Some(Ok(bytes))),
+                        Some(Ok(bytes)) => Poll::Ready(Some(Ok(Frame::data(bytes)))),
                         None => Poll::Ready(None),
                         Some(Err(e)) => Poll::Ready(Some(Err(e.into()))),
                     };
                 }
             };
         }
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        Poll::Ready(Ok(None))
     }
 
     fn is_end_stream(&self) -> bool {
@@ -307,6 +297,7 @@ mod test {
     use crate::byte_stream::{ByteStream, Length};
     use bytes::Buf;
     use http_body::Body;
+    use http_body_util::BodyExt;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -338,10 +329,12 @@ mod test {
         let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
         // read a little bit from one of the clones
         let some_data = body1
-            .data()
+            .frame()
             .await
             .expect("should have some data")
-            .expect("read should not fail");
+            .expect("read should not fail")
+            .into_data()
+            .unwrap();
         // The size of one read should be equal to that of the buffer size
         assert_eq!(some_data.len(), 16384);
 
@@ -394,7 +387,7 @@ mod test {
             .await
             .unwrap();
 
-        let data = body.collect().await.unwrap().into_bytes();
+        let data = body.collect().await.unwrap();
         let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(&data_str, line_0);
@@ -455,7 +448,7 @@ mod test {
             .await
             .unwrap();
 
-        let data = body.collect().await.unwrap().into_bytes();
+        let data = body.collect().await.unwrap();
         let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(&data_str, line_1);
@@ -485,7 +478,7 @@ mod test {
             .await
             .unwrap();
 
-        let data = body.collect().await.unwrap().into_bytes();
+        let data = body.collect().await.unwrap();
         let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(&data_str, line_1);
@@ -536,7 +529,7 @@ mod test {
             .await
             .unwrap();
 
-        let data = body.collect().await.unwrap().into_bytes();
+        let data = body.collect().await.unwrap();
         let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(data_str, format!("{}{}", line_0, line_1));
@@ -595,7 +588,7 @@ mod test {
         let mut collected_bytes = Vec::new();
 
         for byte_stream in byte_streams.into_iter() {
-            let bytes = byte_stream.collect().await.unwrap().into_bytes();
+            let bytes = byte_stream.collect().await.unwrap();
             collected_bytes.push(bytes);
         }
 

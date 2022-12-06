@@ -12,9 +12,7 @@ use crate::body::SdkBody;
 use crate::operation;
 use crate::response::ParseHttpResponse;
 use crate::result::{SdkError, SdkSuccess};
-use bytes::{Buf, Bytes};
-use http_body::Body;
-use pin_utils::pin_mut;
+use bytes::Bytes;
 use std::error::Error;
 use std::future::Future;
 use tracing::{debug_span, trace, Instrument};
@@ -140,16 +138,8 @@ where
 }
 
 async fn read_body<B: http_body::Body>(body: B) -> Result<Vec<u8>, B::Error> {
-    let mut output = Vec::new();
-    pin_mut!(body);
-    while let Some(buf) = body.data().await {
-        let mut buf = buf?;
-        while buf.has_remaining() {
-            output.extend_from_slice(buf.chunk());
-            buf.advance(buf.chunk().len())
-        }
-    }
-    Ok(output)
+    use http_body_util::BodyExt;
+    Ok(body.collect().await?.to_bytes().to_vec())
 }
 
 /// Convert a `Result<T, E>` into an `SdkResult` that includes the operation response
