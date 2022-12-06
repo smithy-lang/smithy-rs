@@ -55,6 +55,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 // The string argument is the name of the XML ScopedDecoder to continue parsing from
@@ -420,18 +421,22 @@ class XmlBindingTraitParserGenerator(
                     members.forEach { member ->
                         val variantName = symbolProvider.toMemberName(member)
                         case(member) {
-                            val current =
-                                """
-                                (match base.take() {
-                                    None => None,
-                                    Some(${format(symbol)}::$variantName(inner)) => Some(inner),
-                                    Some(_) => return Err(#{XmlDecodeError}::custom("mixed variants"))
-                                })
-                                """
-                            withBlock("let tmp =", ";") {
-                                parseMember(member, ctx.copy(accum = current.trim()))
+                            if (member.isTargetUnit()) {
+                                rust("base = Some(#T::$variantName);", symbol)
+                            } else {
+                                val current =
+                                    """
+                                    (match base.take() {
+                                        None => None,
+                                        Some(${format(symbol)}::$variantName(inner)) => Some(inner),
+                                        Some(_) => return Err(#{XmlDecodeError}::custom("mixed variants"))
+                                    })
+                                    """
+                                withBlock("let tmp =", ";") {
+                                    parseMember(member, ctx.copy(accum = current.trim()))
+                                }
+                                rust("base = Some(#T::$variantName(tmp));", symbol)
                             }
-                            rust("base = Some(#T::$variantName(tmp));", symbol)
                         }
                     }
                     when (target.renderUnknownVariant()) {

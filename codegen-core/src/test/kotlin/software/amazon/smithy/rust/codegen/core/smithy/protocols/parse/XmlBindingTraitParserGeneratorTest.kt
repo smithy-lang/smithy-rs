@@ -54,7 +54,9 @@ internal class XmlBindingTraitParserGeneratorTest {
 
             top: Top,
 
-            blob: Blob
+            blob: Blob,
+
+            unit: Unit,
         }
 
         @enum([{name: "FOO", value: "FOO"}])
