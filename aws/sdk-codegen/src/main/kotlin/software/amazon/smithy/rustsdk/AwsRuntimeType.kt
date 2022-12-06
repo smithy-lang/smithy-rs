@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.crateLocation
 import java.io.File
 import java.nio.file.Path
 
@@ -63,17 +62,4 @@ object AwsRuntimeType {
     fun awsSigAuthEventStream(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigAuthEventStream(runtimeConfig).toType()
     fun awsSigv4(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigv4(runtimeConfig).toType()
     fun awsTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsTypes(runtimeConfig).toType()
-}
-
-fun RuntimeConfig.awsRuntimeCrate(name: String, features: Set<String> = setOf()): CargoDependency =
-    CargoDependency(name, awsRoot().crateLocation(null), features = features)
-
-object AwsCargoDependency {
-    fun awsConfig(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-config")
-    fun awsEndpoint(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-endpoint")
-    fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-http")
-    fun awsSigAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-sig-auth")
-    fun awsSigAuthEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-sig-auth", setOf("sign-eventstream"))
-    fun awsSigv4(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-sigv4")
-    fun awsTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-types")
 }

@@ -70,7 +70,7 @@ value class CrateVersionMap(
  * Prefix & crate location for the runtime crates.
  */
 data class RuntimeConfig(
-    val cratePrefix: String = "aws-smithy",
+    val cratePrefix: String = "aws",
     val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.Path("../"),
 ) {
     companion object {
@@ -87,7 +87,7 @@ data class RuntimeConfig(
             val path = node.getStringMember("relativePath").orNull()?.value
             val runtimeCrateLocation = RuntimeCrateLocation(path = path, versions = crateVersionMap)
             return RuntimeConfig(
-                node.getStringMemberOrDefault("cratePrefix", "aws-smithy"),
+                node.getStringMemberOrDefault("cratePrefix", "aws"),
                 runtimeCrateLocation = runtimeCrateLocation,
             )
         }
@@ -95,7 +95,7 @@ data class RuntimeConfig(
 
     val crateSrcPrefix: String = cratePrefix.replace("-", "_")
 
-    fun runtimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency {
+    fun smithyRuntimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency {
         val crateName = "$cratePrefix-$runtimeCrateName"
         return CargoDependency(
             crateName,
