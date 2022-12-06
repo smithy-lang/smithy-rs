@@ -147,10 +147,13 @@ class UnionGenerator(
                 rustBlock("match self") {
                     sortedMembers.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
-                        if (member.shouldRedact(model)) {
-                            rust("${unionSymbol.name}::$memberName(_) => f.debug_tuple($REDACTION).finish(),")
-                        } else {
-                            rust("${unionSymbol.name}::$memberName(val) => f.debug_tuple(${memberName.dq()}).field(&val).finish(),")
+                        val shouldRedact = member.shouldRedact(model)
+                        val isTargetUnit = member.isTargetUnit()
+                        when {
+                            !shouldRedact && isTargetUnit -> rust("${unionSymbol.name}::$memberName => f.debug_tuple(${memberName.dq()}).finish(),")
+                            !shouldRedact && !isTargetUnit -> rust("${unionSymbol.name}::$memberName(val) => f.debug_tuple(${memberName.dq()}).field(&val).finish(),")
+                            // We can always render (_) because the Unit target in a Union cannot be marked as sensitive separately.
+                            else -> rust("${unionSymbol.name}::$memberName(_) => f.debug_tuple($REDACTION).finish(),")
                         }
                     }
                     if (renderUnknownVariant) {

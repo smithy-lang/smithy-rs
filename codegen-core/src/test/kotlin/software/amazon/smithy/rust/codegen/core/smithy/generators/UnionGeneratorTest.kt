@@ -188,6 +188,28 @@ class UnionGeneratorTest {
     }
 
     @Test
+    fun `impl debug for union with unit target should redact text for sensitive member target`() {
+        val writer = generateUnion(
+            """
+            @sensitive
+            string Bar
+
+            union MyUnion {
+                foo: Unit,
+                bar: Bar,
+            }
+            """,
+        )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo), "Foo");
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), $REDACTION);
+            """,
+        )
+    }
+
+    @Test
     fun `unit types should not appear in generated enum`() {
         val writer = generateUnion("union MyUnion { a: Unit, b: String }", unknownVariant = true)
         writer.compileAndTest(
