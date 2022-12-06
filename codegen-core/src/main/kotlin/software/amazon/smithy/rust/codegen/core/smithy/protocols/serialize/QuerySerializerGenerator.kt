@@ -152,6 +152,21 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     }
 
     private fun RustWriter.serializeStructure(context: Context<StructureShape>) {
+        // We proceed with the rest of the method only when context.shape.members() is nonempty.
+        // If it were empty, the method would generate the following code:
+        //   #[allow(unused_mut)]
+        //   pub fn serialize_structure_crate_model_unit(
+        //       mut writer: aws_smithy_query::QueryValueWriter,
+        //       input: &crate::model::Unit,
+        //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+        //       let (_, _) = (writer, input);
+        //       Ok(())
+        //   }
+        // However, this would cause a compilation error at a call site because it cannot
+        // extract data out of the Unit type that corresponds to the variable "input" above.
+        if (context.shape.members().isEmpty()) {
+            return
+        }
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) {
@@ -161,9 +176,6 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 "Input" to structureSymbol,
                 *codegenScope,
             ) {
-                if (context.shape.members().isEmpty()) {
-                    rust("let (_, _) = (writer, input);") // Suppress unused argument warnings
-                }
                 serializeStructureInner(context)
                 rust("Ok(())")
             }
