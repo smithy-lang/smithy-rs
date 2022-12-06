@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -17,10 +18,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 fun CodegenTarget.renderUnknownVariant() = when (this) {
@@ -49,17 +56,24 @@ class UnionGenerator(
     private val renderUnknownVariant: Boolean = true,
 ) {
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
+    private val unionSymbol = symbolProvider.toSymbol(shape)
 
     fun render() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
 
-        val unionSymbol = symbolProvider.toSymbol(shape)
         val containerMeta = unionSymbol.expectRustMetadata()
         containerMeta.render(writer)
 
         renderUnion(unionSymbol)
         renderImplBlock(unionSymbol)
+        if (!unionSymbol.expectRustMetadata().derives.derives.contains(RuntimeType.Debug)) {
+            if (shape.hasTrait<SensitiveTrait>()) {
+                renderFullyRedactedDebugImpl()
+            } else {
+                renderDebugImpl()
+            }
+        }
     }
 
     private fun renderUnion(unionSymbol: Symbol) {
@@ -108,6 +122,40 @@ class UnionGenerator(
                 rust("/// Returns true if the enum instance is the `Unknown` variant.")
                 rustBlock("pub fn is_unknown(&self) -> bool") {
                     rust("matches!(self, Self::Unknown)")
+                }
+            }
+        }
+    }
+
+    private fun renderFullyRedactedDebugImpl() {
+        writer.rustTemplate(
+            """
+            impl #{Debug} for ${unionSymbol.name} {
+                fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
+                    write!(f, $REDACTION)
+                }
+            }
+            """,
+            "Debug" to RuntimeType.Debug,
+            "StdFmt" to RuntimeType.stdfmt,
+        )
+    }
+
+    private fun renderDebugImpl() {
+        writer.rustBlock("impl #T for ${unionSymbol.name}", RuntimeType.Debug) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+                rustBlock("match self") {
+                    sortedMembers.forEach { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        if (member.shouldRedact(model)) {
+                            rust("${unionSymbol.name}::$memberName(_) => f.debug_tuple($REDACTION).finish(),")
+                        } else {
+                            rust("${unionSymbol.name}::$memberName(val) => f.debug_tuple(${memberName.dq()}).field(&val).finish(),")
+                        }
+                    }
+                    if (renderUnknownVariant) {
+                        rust("${unionSymbol.name}::$UnknownVariantName => f.debug_tuple(${UnknownVariantName.dq()}).finish(),")
+                    }
                 }
             }
         }

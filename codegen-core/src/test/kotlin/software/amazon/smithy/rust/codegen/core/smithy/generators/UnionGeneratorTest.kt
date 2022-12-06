@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class UnionGeneratorTest {
@@ -123,6 +124,67 @@ class UnionGeneratorTest {
         }
 
         project.compileAndTest()
+    }
+
+    @Test
+    fun `impl debug for non-sensitive union should implement the derived debug trait`() {
+        val writer = generateUnion(
+            """
+            union MyUnion {
+                foo: PrimitiveInteger
+                bar: String,
+            }
+            """,
+        )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), "Foo(3)");
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), "Bar(\"bar\")");
+            """,
+        )
+    }
+
+    @Test
+    fun `impl debug for sensitive union should redact text`() {
+        val writer = generateUnion(
+            """
+            @sensitive
+            union MyUnion {
+                foo: PrimitiveInteger,
+                bar: String,
+            }
+            """,
+        )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), $REDACTION);
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), $REDACTION);
+            """,
+        )
+    }
+
+    @Test
+    fun `impl debug for union should redact text for sensitive member target`() {
+        val writer = generateUnion(
+            """
+            @sensitive
+            string Bar
+
+            union MyUnion {
+                foo: PrimitiveInteger,
+                bar: Bar,
+            }
+            """,
+        )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), "Foo(3)");
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), $REDACTION);
+            """,
+        )
     }
 
     @Test

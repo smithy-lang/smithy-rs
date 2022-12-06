@@ -615,13 +615,29 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
 
 [[aws-sdk-rust]]
-message = "The Unit type for a Union member is no longer rendered."
+message = "Implementation of the Debug trait for container shapes now redacts what is printed per the sensitive trait."
+references = ["smithy-rs#1983", "smithy-rs#2029"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Implementation of the Debug trait for container shapes now redacts what is printed per the sensitive trait."
+references = ["smithy-rs#1983", "smithy-rs#2029"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = """
+The Unit type for a Union member is no longer rendered. The serializers and parsers generated now function accordingly in the absence of the inner data associated with the Unit type.
+"""
 references = ["smithy-rs#1989"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[smithy-rs]]
-message = "The Unit type for a Union member is no longer rendered."
+message = """
+The Unit type for a Union member is no longer rendered. The serializers and parsers generated now function accordingly in the absence of the inner data associated with the Unit type.
+"""
 references = ["smithy-rs#1989"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
