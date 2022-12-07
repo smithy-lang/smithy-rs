@@ -68,7 +68,7 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
                     logger.info("Adding AllowInvalidXmlRoot trait to $it")
                     (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
                 }
-            }
+            }.let(StripBucketFromHttpPath()::transform)
         }
     }
 
@@ -133,6 +133,7 @@ class S3PubUse : LibRsCustomization() {
                 AwsRuntimeType.S3Errors,
             )
         }
+
         else -> emptySection
     }
 }

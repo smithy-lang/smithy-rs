@@ -49,8 +49,12 @@ impl EndpointShim {
     }
 }
 
-impl ResolveEndpoint<Params> for EndpointShim {
-    fn resolve_endpoint(&self, params: &Params) -> Result<SmithyEndpoint, ResolveEndpointError> {
+impl<T> ResolveEndpoint<T> for EndpointShim
+where
+    T: Clone + Into<Params>,
+{
+    fn resolve_endpoint(&self, params: &T) -> Result<SmithyEndpoint, ResolveEndpointError> {
+        let params: Params = params.clone().into();
         let aws_endpoint = self
             .0
             .resolve_endpoint(

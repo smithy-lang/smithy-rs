@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodeg
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.DecoratableBuildPlugin
@@ -52,6 +53,7 @@ class RustCodegenPlugin : DecoratableBuildPlugin<ClientProtocolGenerator, Client
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
+                EndpointsDecorator(),
                 NoOpEventStreamSigningDecorator(),
                 *decorator,
             )
