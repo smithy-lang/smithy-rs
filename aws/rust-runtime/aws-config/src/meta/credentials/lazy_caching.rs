@@ -84,11 +84,11 @@ impl ProvideCredentials for LazyCachingCredentialsProvider {
                 // There may be other threads also loading simultaneously, but this is OK
                 // since the futures are not eagerly executed, and the cache will only run one
                 // of them.
-                let span = info_span!("lazy_load_credentials");
                 let future = Timeout::new(loader.provide_credentials(), timeout_future);
                 let start_time = Instant::now();
                 let result = cache
                     .get_or_load(|| {
+                        let span = info_span!("lazy_load_credentials");
                         async move {
                             let credentials = future.await.map_err(|_err| {
                                 CredentialsError::provider_timed_out(load_timeout)
