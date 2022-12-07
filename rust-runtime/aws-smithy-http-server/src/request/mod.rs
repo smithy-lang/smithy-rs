@@ -36,6 +36,14 @@
 //!
 //! See [Accessing Un-modelled data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
 //! a comprehensive overview.
+//!
+//! The following implementations exist:
+//! * Tuples up to size 8, extracting each component.
+//! * `Option<T>`: `Some(T)` if extracting `T` is successful, `None` otherwise.
+//! * `Result<T, T::Rejection>`: `Ok(T)` if extracting `T` is successful, `Err(T::Rejection)` otherwise.
+//!
+//! when `T: FromParts`.
+//!
 
 use std::{
     convert::Infallible,
@@ -70,6 +78,10 @@ fn internal_server_error() -> http::Response<BoxBody> {
 }
 
 #[doc(hidden)]
+#[deprecated(
+    since = "0.52.0",
+    note = "This is not used by the new service builder. We use the `http::Parts` struct directly."
+)]
 #[derive(Debug)]
 pub struct RequestParts<B> {
     uri: Uri,
@@ -78,6 +90,7 @@ pub struct RequestParts<B> {
     body: Option<B>,
 }
 
+#[allow(deprecated)]
 impl<B> RequestParts<B> {
     /// Create a new `RequestParts`.
     ///
@@ -135,9 +148,10 @@ impl<B> RequestParts<B> {
     }
 }
 
-// NOTE: We cannot reference `FromRequest` here, as a point of contrast, as it's `doc(hidden)`.
-/// Provides a protocol aware extraction from a requests [`Parts`].
+/// Provides a protocol aware extraction from a [`Request`]. This borrows the [`Parts`], in contrast to
+/// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
+    /// The type of the extraction failures.
     type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.
@@ -190,9 +204,14 @@ impl_from_parts!(Seven, A, B, C, D, E, F, G);
 impl_from_parts!(Eight, A, B, C, D, E, F, G, H);
 
 /// Provides a protocol aware extraction from a [`Request`]. This consumes the
-/// [`Request`], in contrast to [`FromParts`].
+/// [`Request`], including the body, in contrast to [`FromParts`] which borrows the [`Parts`].
+///
+/// This should not be implemented by hand. Code generation should implement this for your operations input. To extract
+/// items from a HTTP request [`FromParts`] should be used.
 pub trait FromRequest<Protocol, B>: Sized {
+    /// The type of the extraction failures.
     type Rejection: IntoResponse<Protocol>;
+    /// The type of the extraction [`Future`].
     type Future: Future<Output = Result<Self, Self::Rejection>>;
 
     /// Extracts `self` from a [`Request`] asynchronously.
@@ -226,5 +245,27 @@ where
             T1::from_request(Request::from_parts(parts, body)).map_err(any_rejections::Two::A),
             ready(t2_result),
         )
+    }
+}
+
+impl<P, T> FromParts<P> for Option<T>
+where
+    T: FromParts<P>,
+{
+    type Rejection = Infallible;
+
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        Ok(T::from_parts(parts).ok())
+    }
+}
+
+impl<P, T> FromParts<P> for Result<T, T::Rejection>
+where
+    T: FromParts<P>,
+{
+    type Rejection = Infallible;
+
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        Ok(T::from_parts(parts))
     }
 }

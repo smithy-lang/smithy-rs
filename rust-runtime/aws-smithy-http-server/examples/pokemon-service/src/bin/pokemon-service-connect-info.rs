@@ -90,10 +90,10 @@ async fn main() {
     )]));
 
     // Start the [`hyper::Server`].
-    let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
+    let bind: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()
         .expect("unable to parse the server bind address and port");
-    let server = hyper::Server::bind(&bind).serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>());
+    let server = hyper::Server::bind(&bind).serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
     // Run forever-ish...
     if let Err(err) = server.await {

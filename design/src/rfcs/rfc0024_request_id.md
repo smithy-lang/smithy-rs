@@ -38,7 +38,7 @@ RequestIDs are not to be used by multiple services, but only within a single ser
 The user experience if this RFC is implemented
 ----------------------------------------------
 
-The proposal is to implement a `RequestId` type and make it available to middleware and business logic handlers, through [FromParts](../server/from-parts.md) and as a `Service`.
+The proposal is to implement a `RequestId` type and make it available to middleware and business logic handlers, through [FromParts](../server/from_parts.md) and as a `Service`.
 To aid customers already relying on clients' request IDs, there will be two types: `ClientRequestId` and `ServerRequestId`.
 
 1. Implementing `FromParts` for `Extension<RequestId>` gives customers the ability to write their handlers:

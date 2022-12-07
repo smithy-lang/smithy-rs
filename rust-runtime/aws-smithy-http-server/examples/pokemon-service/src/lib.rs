@@ -19,7 +19,6 @@ use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, o
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
-#[doc(hidden)]
 pub mod plugin;
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -33,7 +32,7 @@ const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
 
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
-    let format = tracing_subscriber::fmt::layer().pretty();
+    let format = tracing_subscriber::fmt::layer().json();
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
@@ -58,7 +57,7 @@ struct PokemonTranslations {
 /// **NOTE: It is up to the implementation of the state structure to handle concurrency by protecting**
 /// **its attributes using synchronization mechanisms.**
 ///
-/// The framework stores the `Arc<T>` inside an [`http::Extensions`] and conveniently passes it to
+/// The framework stores the `Arc<T>` inside an `http::Extensions` and conveniently passes it to
 /// the operation's implementation, making it able to handle operations with two different async signatures:
 /// * `FnOnce(InputType) -> Future<OutputType>`
 /// * `FnOnce(InputType, Extension<Arc<T>>) -> Future<OutputType>`

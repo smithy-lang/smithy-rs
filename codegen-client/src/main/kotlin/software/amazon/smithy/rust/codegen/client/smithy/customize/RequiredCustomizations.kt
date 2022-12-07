@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.pubUseSm
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
