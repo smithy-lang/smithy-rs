@@ -142,8 +142,7 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                         """
                         let endpoint_params = #{Params}::builder()#{builderFields:W}.build()
                             .map_err(#{BuildError}::other)?;
-                        let endpoint_result = ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params)
-                            .map_err(#{BuildError}::other);
+                        let endpoint_result = ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params);
                         """,
                         "builderFields" to builderFields(typesGenerator.params, section),
                         *codegenScope,

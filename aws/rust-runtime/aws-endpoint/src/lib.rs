@@ -84,9 +84,9 @@ impl ResolveEndpoint<Params> for EndpointShim {
     }
 }
 
-/// Middleware Stage to convert a smithy into signing information
+/// Middleware Stage to add authentication information from a Smithy endpoint into the property bag
 ///
-/// AwsEndpointStage implements [`MapRequest`](aws_smithy_http::middleware::MapRequest). It will:
+/// AwsAuthStage implements [`MapRequest`](MapRequest). It will:
 /// 1. Load an endpoint from the property bag
 /// 2. Set the `SigningRegion` and `SigningService` in the property bag to drive downstream
 /// signing middleware.
@@ -94,19 +94,19 @@ impl ResolveEndpoint<Params> for EndpointShim {
 pub struct AwsAuthStage;
 
 #[derive(Debug)]
-enum AwsEndpointStageErrorKind {
+enum AwsAuthStageErrorKind {
     NoEndpointResolver,
     EndpointResolutionError(BoxError),
 }
 
 #[derive(Debug)]
-pub struct AwsEndpointStageError {
-    kind: AwsEndpointStageErrorKind,
+pub struct AwsAuthStageError {
+    kind: AwsAuthStageErrorKind,
 }
 
-impl fmt::Display for AwsEndpointStageError {
+impl fmt::Display for AwsAuthStageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use AwsEndpointStageErrorKind::*;
+        use AwsAuthStageErrorKind::*;
         match &self.kind {
             NoEndpointResolver => write!(f, "endpoint resolution failed: no endpoint present"),
             EndpointResolutionError(_) => write!(f, "endpoint resolution failed"),
@@ -114,9 +114,9 @@ impl fmt::Display for AwsEndpointStageError {
     }
 }
 
-impl Error for AwsEndpointStageError {
+impl Error for AwsAuthStageError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        use AwsEndpointStageErrorKind::*;
+        use AwsAuthStageErrorKind::*;
         match &self.kind {
             EndpointResolutionError(source) => Some(source.as_ref() as _),
             NoEndpointResolver => None,
@@ -124,22 +124,22 @@ impl Error for AwsEndpointStageError {
     }
 }
 
-impl From<AwsEndpointStageErrorKind> for AwsEndpointStageError {
-    fn from(kind: AwsEndpointStageErrorKind) -> Self {
+impl From<AwsAuthStageErrorKind> for AwsAuthStageError {
+    fn from(kind: AwsAuthStageErrorKind) -> Self {
         Self { kind }
     }
 }
 
 impl MapRequest for AwsAuthStage {
-    type Error = AwsEndpointStageError;
+    type Error = AwsAuthStageError;
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
         request.augment(|http_req, props| {
             let endpoint = props
                 .get::<aws_smithy_types::endpoint::Endpoint>()
-                .ok_or(AwsEndpointStageErrorKind::NoEndpointResolver)?;
+                .ok_or(AwsAuthStageErrorKind::NoEndpointResolver)?;
             let (signing_scope_override, signing_service_override) = smithy_to_aws(endpoint)
-                .map_err(|err| AwsEndpointStageErrorKind::EndpointResolutionError(err))?;
+                .map_err(|err| AwsAuthStageErrorKind::EndpointResolutionError(err))?;
 
             if let Some(signing_scope) = signing_scope_override {
                 props.insert(signing_scope);

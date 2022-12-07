@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::error::{Error as StdError, Error};
+use std::error::Error;
 use std::fmt;
 
 /// Endpoint resolution failed
@@ -42,8 +42,8 @@ impl fmt::Display for ResolveEndpointError {
     }
 }
 
-impl StdError for ResolveEndpointError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+impl Error for ResolveEndpointError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.source.as_ref().map(|err| err.as_ref() as _)
     }
 }
@@ -52,10 +52,10 @@ impl StdError for ResolveEndpointError {
 pub(super) enum InvalidEndpointErrorKind {
     EndpointMustHaveScheme,
     FailedToConstructAuthority {
-        source: Box<dyn StdError + Send + Sync + 'static>,
+        source: Box<dyn Error + Send + Sync + 'static>,
     },
     FailedToConstructUri {
-        source: Box<dyn StdError + Send + Sync + 'static>,
+        source: Box<dyn Error + Send + Sync + 'static>,
     },
 }
 
@@ -72,7 +72,7 @@ impl InvalidEndpointError {
     }
 
     pub(super) fn failed_to_construct_authority(
-        source: impl Into<Box<dyn StdError + Send + Sync + 'static>>,
+        source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
     ) -> Self {
         Self {
             kind: InvalidEndpointErrorKind::FailedToConstructAuthority {
@@ -82,7 +82,7 @@ impl InvalidEndpointError {
     }
 
     pub(super) fn failed_to_construct_uri(
-        source: impl Into<Box<dyn StdError + Send + Sync + 'static>>,
+        source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
     ) -> Self {
         Self {
             kind: InvalidEndpointErrorKind::FailedToConstructUri {
@@ -112,8 +112,8 @@ impl fmt::Display for InvalidEndpointError {
     }
 }
 
-impl StdError for InvalidEndpointError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+impl Error for InvalidEndpointError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         use InvalidEndpointErrorKind as ErrorKind;
         match &self.kind {
             ErrorKind::FailedToConstructUri { source }

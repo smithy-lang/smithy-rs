@@ -109,10 +109,11 @@ class EndpointsDecoratorTest {
                                 .bucket("bucket-name").build().expect("input is valid")
                                 .make_operation(&conf).await.expect("valid operation");
                             use $moduleName::endpoint::{Params};
-                            use aws_smithy_types::endpoint::Endpoint;
+                            use aws_smithy_http::endpoint::Result;
                             let props = operation.properties();
-                            let endpoint_params = props.get::<Params>().unwrap();
-                            let endpoint = props.get::<Endpoint>().unwrap();
+                            let endpoint_params = props.get::<Params>().expect("endpoint params in the bag");
+                            let endpoint_result = props.get::<Result>().expect("endpoint result in the bag");
+                            let endpoint = endpoint_result.as_ref().expect("endpoint resolved properly");
                             assert_eq!(
                                 endpoint_params,
                                 &Params::builder()
