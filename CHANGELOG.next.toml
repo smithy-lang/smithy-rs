@@ -649,3 +649,15 @@ message = "Added SmithyEndpointStage which can be used to set an endpoint for sm
 references = ["smithy-rs#2063"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The SDK clients now default max idle connections to 70 (previously unlimited) to reduce the likelihood of hitting max file handles in AWS Lambda."
+references = ["smithy-rs#2064", "aws-sdk-rust#632"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Clients now default max idle connections to 70 (previously unlimited) to reduce the likelihood of hitting max file handles in AWS Lambda."
+references = ["smithy-rs#2064", "aws-sdk-rust#632"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
