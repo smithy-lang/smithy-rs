@@ -26,14 +26,16 @@ cargo run -- build-bundle \
   --manifest-only
 ```
 
-Next, you can use `cargo run` in this directory in `--local` mode to invoke the canary:
+Next, come back to the `canary-lambda` directory where you can use `cargo run` in `--local` mode to
+invoke the canary:
 
 > Note: if your default configuration does not provide a region, you must provide a region via the `AWS_REGION`
 > environment variable.
 
 ```bash
 export CANARY_S3_BUCKET_NAME=<your bucket name>
-cargo run --local
+# run with `--all-features` so you run all canaries (including canaries that don't work against older versions)
+cargo run --all-features -- --local
 ```
 
 Building locally for Lambda from Amazon Linux 2
