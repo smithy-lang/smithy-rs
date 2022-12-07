@@ -5,7 +5,10 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -26,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 /* Example Generated Code */
 /*
@@ -79,6 +83,10 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
     override val name: String = "Region"
     override val order: Byte = 0
 
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return super.transformModel(service, model)
+    }
+
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
@@ -108,6 +116,19 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
                     return when (parameter) {
                         Builtins.REGION -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
                         else -> null
+                    }
+                }
+
+                override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                    if (name != Builtins.REGION.builtIn.get()) {
+                        println("not handling: $name")
+                        return null
+                    }
+                    return writable {
+                        rustTemplate(
+                            "let $configBuilderRef = $configBuilderRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
+                            "Region" to region(codegenContext.runtimeConfig).member("Region"),
+                        )
                     }
                 }
 
@@ -167,6 +188,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                 """region: self.region,""",
                 *codegenScope,
             )
+            else -> emptySection
         }
     }
 }

@@ -56,7 +56,7 @@ author = "david-perez"
 [[smithy-rs]]
 message = "Fix bug that can cause panics in paginators"
 references = ["smithy-rs#1903", "smithy-rs#1902"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
 
 [[smithy-rs]]
@@ -65,13 +65,13 @@ Operation metadata is now added to the property bag before sending requests allo
 differently depending on the operation being sent.
 """
 references = ["smithy-rs#1919"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "Velfi"
 
 [[smithy-rs]]
 message = "Upgrade Smithy to v1.26"
 references = ["smithy-rs#1929"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all"}
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 author = "Velfi"
 
 [[smithy-rs]]
@@ -392,7 +392,7 @@ match some_enum {
 This is forward-compatible because the execution will hit the second last match arm regardless of whether the enum defines `SomeEnum::NewVariant` or not.
 """
 references = ["smithy-rs#1945"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
 
 [[aws-sdk-rust]]
@@ -635,5 +635,17 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "`SdkBody` callbacks have been removed. If you were using these, please [file an issue](https://github.com/awslabs/smithy-rs/issues/new) so that we can better understand your use-case and provide the support you need."
 references = ["smithy-rs#2065"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`AwsEndpointStage`, a middleware which set endpoints and auth has been split into `AwsAuthStage` and `SmithyEndpointStage`. Related types have also been renamed."
+references = ["smithy-rs#2063"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Added SmithyEndpointStage which can be used to set an endpoint for smithy-native clients"
+references = ["smithy-rs#2063"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
