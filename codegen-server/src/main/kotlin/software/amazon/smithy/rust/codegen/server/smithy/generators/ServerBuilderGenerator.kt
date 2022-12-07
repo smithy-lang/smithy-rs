@@ -39,8 +39,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
@@ -166,8 +168,8 @@ class ServerBuilderGenerator(
         // Matching derives to the main structure, - `PartialEq` (see class documentation for why), + `Default`
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = derives).render(writer)
+        val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
+        baseDerives.copy(derives = builderDerives).render(writer)
         writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate)" else "" } struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }
@@ -183,6 +185,10 @@ class ServerBuilderGenerator(
                 }
             }
             renderBuildFn(this)
+        }
+
+        if (!builderDerives.contains(RuntimeType.Debug)) {
+            renderImplDebugForBuilder(writer)
         }
     }
 
@@ -415,6 +421,23 @@ class ServerBuilderGenerator(
             """,
             *codegenScope,
         )
+    }
+
+    private fun renderImplDebugForBuilder(writer: RustWriter) {
+        writer.rustBlock("impl #T for Builder", RuntimeType.Debug) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+                rust("""let mut formatter = f.debug_struct("Builder");""")
+                members.forEach { member ->
+                    val memberName = symbolProvider.toMemberName(member)
+                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+
+                    rust(
+                        "formatter.field(${memberName.dq()}, &$fieldValue);",
+                    )
+                }
+                rust("formatter.finish()")
+            }
+        }
     }
 
     /**

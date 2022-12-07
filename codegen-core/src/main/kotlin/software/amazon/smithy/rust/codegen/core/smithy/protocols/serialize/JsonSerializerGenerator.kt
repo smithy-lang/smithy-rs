@@ -51,6 +51,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -447,8 +448,22 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("object").also { objectName ->
+            rust("##[allow(unused_mut)]")
             rust("let mut $objectName = ${context.writerExpression}.start_object();")
-            inner(objectName)
+            // We call inner only when context's shape is not the Unit type.
+            // If it were, calling inner would generate the following function:
+            //   pub fn serialize_structure_crate_model_unit(
+            //       object: &mut aws_smithy_json::serialize::JsonObjectWriter,
+            //       input: &crate::model::Unit,
+            //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+            //       let (_, _) = (object, input);
+            //       Ok(())
+            //   }
+            // However, this would cause a compilation error at a call site because it cannot
+            // extract data out of the Unit type that corresponds to the variable "input" above.
+            if (!context.shape.isTargetUnit()) {
+                inner(objectName)
+            }
             rust("$objectName.finish();")
         }
     }
@@ -488,8 +503,12 @@ class JsonSerializerGenerator(
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
+                        } else {
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName => {", "},", unionSymbol) {
                             serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
                         }
                     }
