@@ -112,15 +112,14 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
         return listOf(
             object : EndpointCustomization {
                 override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
-                    return when (parameter) {
-                        Builtins.REGION -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
+                    return when (parameter.builtIn) {
+                        Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
                         else -> null
                     }
                 }
 
                 override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
                     if (name != Builtins.REGION.builtIn.get()) {
-                        println("not handling: $name")
                         return null
                     }
                     return writable {
