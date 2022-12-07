@@ -241,9 +241,10 @@ class ServerServiceGeneratorV2(
      * Renders `PatternString::compile_regex()` function calls for every
      * `@pattern`-constrained string shape in the service closure.
      */
+    @Suppress("DEPRECATION")
     private fun patternInitializations(): Writable =
         Walker(model).walkShapes(service).mapNotNull { shape ->
-            if (shape is StringShape && shape.hasTrait<PatternTrait>()) {
+            if (shape is StringShape && shape.hasTrait<PatternTrait>() && !shape.hasTrait<software.amazon.smithy.model.traits.EnumTrait>()) {
                 codegenContext.constrainedShapeSymbolProvider.toSymbol(shape)
             } else {
                 null
