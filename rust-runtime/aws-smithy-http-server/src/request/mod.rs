@@ -59,6 +59,8 @@ pub mod extension;
 #[cfg(feature = "aws-lambda")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub mod lambda;
+#[cfg(feature = "request-id")]
+#[cfg_attr(docsrs, doc(cfg(feature = "request-id")))]
 pub mod request_id;
 
 fn internal_server_error() -> http::Response<BoxBody> {

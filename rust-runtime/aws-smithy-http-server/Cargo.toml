@@ -15,6 +15,7 @@ publish = true
 [features]
 aws-lambda = ["dep:lambda_http"]
 unredacted-logging = []
+request-id = ["dep:uuid"]
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
@@ -41,7 +42,7 @@ tracing = "0.1.35"
 tokio = { version = "1.8.4", features = ["full"] }
 tower = { version = "0.4.11", features = ["util", "make"], default-features = false }
 tower-http = { version = "0.3", features = ["add-extension", "map-response-body"] }
-uuid = { version = "1", features = ["v4", "fast-rng", "macro-diagnostics"] }
+uuid = { version = "1", features = ["v4", "fast-rng", "macro-diagnostics"], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1"
