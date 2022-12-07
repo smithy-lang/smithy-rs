@@ -12,7 +12,7 @@ aws-endpoint = { path = "../../build/aws-sdk/sdk/aws-endpoint"}
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-iam = { path = "../../build/aws-sdk/sdk/iam" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
-aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 bytes = "1.0.0"
 http = "0.2.0"
 tokio = { version = "1.8.4", features = ["full", "test-util"]}

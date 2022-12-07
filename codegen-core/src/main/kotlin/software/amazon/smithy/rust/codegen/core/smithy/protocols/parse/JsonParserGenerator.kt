@@ -54,6 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
@@ -311,6 +312,7 @@ class JsonParserGenerator(
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
                 }
+
                 else -> rust("u.into_owned()")
             }
         }
@@ -510,9 +512,19 @@ class JsonParserGenerator(
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
-                                        withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
-                                            deserializeMember(member)
-                                            unwrapOrDefaultOrError(member)
+                                        if (member.isTargetUnit()) {
+                                            rustTemplate(
+                                                """
+                                                #{skip_value}(tokens)?;
+                                                Some(#{Union}::$variantName)
+                                                """,
+                                                "Union" to returnSymbolToParse.symbol, *codegenScope,
+                                            )
+                                        } else {
+                                            withBlock("Some(#T::$variantName(", "))", returnSymbolToParse.symbol) {
+                                                deserializeMember(member)
+                                                unwrapOrDefaultOrError(member)
+                                            }
                                         }
                                     }
                                 }
