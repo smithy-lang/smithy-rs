@@ -661,3 +661,19 @@ message = "Clients now default max idle connections to 70 (previously unlimited)
 references = ["smithy-rs#2064", "aws-sdk-rust#632"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+The Unit type for a Union member is no longer rendered. The serializers and parsers generated now function accordingly in the absence of the inner data associated with the Unit type.
+"""
+references = ["smithy-rs#1989"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+The Unit type for a Union member is no longer rendered. The serializers and parsers generated now function accordingly in the absence of the inner data associated with the Unit type.
+"""
+references = ["smithy-rs#1989"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
