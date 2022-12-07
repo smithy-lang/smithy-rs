@@ -689,3 +689,15 @@ message = "Fixed and improved the request `tracing` span hierarchy to improve lo
 references = ["smithy-rs#2044", "smithy-rs#371"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Add more `tracing` events to signing and event streams"
+references = ["smithy-rs#2057", "smithy-rs#371"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Add more `tracing` events to signing and event streams"
+references = ["smithy-rs#2057", "smithy-rs#371"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
