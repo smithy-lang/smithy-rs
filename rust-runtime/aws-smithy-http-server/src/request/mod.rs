@@ -37,11 +37,10 @@
 //! See [Accessing Un-modelled data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
 //! a comprehensive overview.
 //!
-//! Implementations exist for:
-//!
-//! * tuples up to size 8.
-//! * `Option<T>`: extracts `T` if it exists, otherwise `None`.
-//! * `Result<T, T::Rejection>`: extracts `T` if it exists, otherwise the corresponding error.
+//! The following implementations exist:
+//! * Tuples up to size 8, extracting each component.
+//! * `Option<T>`: `Some(T)` if extracting `T` is successful, `None` otherwise.
+//! * `Result<T, T::Rejection>`: `Ok(T)` if extracting `T` is successful, `Err(T::Rejection)` otherwise.
 //!
 //! when `T: FromParts`.
 //!
