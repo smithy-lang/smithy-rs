@@ -175,7 +175,7 @@ class ProtocolTestGenerator(
             writable {
                 val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
                 params.getObjectMember("builtInParams").orNull()?.members?.forEach { (name, value) ->
-                    customizations.firstNotNullOf { it.applyBuiltIn(name.value, value, "builder") }(this)
+                    customizations.firstNotNullOf { it.setBuiltInOnConfig(name.value, value, "builder") }(this)
                 }
             }
         } ?: writable { }

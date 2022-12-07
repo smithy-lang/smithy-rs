@@ -41,14 +41,32 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
  * If this resolver does not recognize the value, it MUST return `null`.
  */
 interface EndpointCustomization {
+    /**
+     * Provide the default value for [parameter] given a reference to the service config struct ([configRef])
+     *
+     * If this parameter is not recognized, return null.
+     */
     fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? = null
+
+    /**
+     * Provide a list of additional endpoints standard library functions that rules can use
+     */
     fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> = listOf()
 
-    fun applyBuiltIn(name: String, value: Node, configRef: String): Writable? = null
+    /**
+     * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
+     */
+    fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
 }
 
 /**
- * Decorator that injects endpoints 2.0 resolvers throughout the entire client.
+ * Decorator that injects endpoints 2.0 resolvers throughout the client.
+ *
+ * 1. Add ClientContext params to the config struct
+ * 2. Inject params / endpoint results into the operation properties
+ * 3. Set a default endpoint resolver (when available)
+ * 4. Create an endpoint params structure/builder
+ * 5. Generate endpoint tests (when available)
  *
  * This decorator installs the core standard library functions. It DOES NOT inject the AWS specific functions which
  * must be injected separately.

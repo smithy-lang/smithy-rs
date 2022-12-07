@@ -119,14 +119,14 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
                     }
                 }
 
-                override fun applyBuiltIn(name: String, value: Node, configRef: String): Writable? {
+                override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
                     if (name != Builtins.REGION.builtIn.get()) {
                         println("not handling: $name")
                         return null
                     }
                     return writable {
                         rustTemplate(
-                            "let $configRef = $configRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
+                            "let $configBuilderRef = $configBuilderRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
                             "Region" to region(codegenContext.runtimeConfig).member("Region"),
                         )
                     }
