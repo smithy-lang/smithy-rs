@@ -14,6 +14,9 @@ pub(crate) struct Url<'a> {
     raw: &'a str,
 }
 
+// individual methods on parse_url might not be used (although the [`parse_url`] itself _MUST_ be used
+// since stdlib functions are pulled into crate lazily)
+#[allow(unused)]
 impl<'a> Url<'a> {
     pub(crate) fn is_ip(&self) -> bool {
         matches!(self.url.host(), Some(Host::Ipv4(_) | Host::Ipv6(_)))
