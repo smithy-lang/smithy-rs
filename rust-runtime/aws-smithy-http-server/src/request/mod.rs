@@ -36,6 +36,14 @@
 //!
 //! See [Accessing Un-modelled data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
 //! a comprehensive overview.
+//!
+//! The following implementations exist:
+//! * Tuples up to size 8, extracting each component.
+//! * `Option<T>`: `Some(T)` if extracting `T` is successful, `None` otherwise.
+//! * `Result<T, T::Rejection>`: `Ok(T)` if extracting `T` is successful, `Err(T::Rejection)` otherwise.
+//!
+//! when `T: FromParts`.
+//!
 
 use std::{
     convert::Infallible,
@@ -234,5 +242,27 @@ where
             T1::from_request(Request::from_parts(parts, body)).map_err(any_rejections::Two::A),
             ready(t2_result),
         )
+    }
+}
+
+impl<P, T> FromParts<P> for Option<T>
+where
+    T: FromParts<P>,
+{
+    type Rejection = Infallible;
+
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        Ok(T::from_parts(parts).ok())
+    }
+}
+
+impl<P, T> FromParts<P> for Result<T, T::Rejection>
+where
+    T: FromParts<P>,
+{
+    type Rejection = Infallible;
+
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        Ok(T::from_parts(parts))
     }
 }
