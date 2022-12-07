@@ -109,7 +109,7 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
         documentation: "This test validates that the content md5 header is set correctly",
         method: "PUT",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket",
+        uri: "/",
         headers: {
             // we can assert this, but when this test is promoted, it can't assert
             // on the exact contents
@@ -151,7 +151,7 @@ apply CreateMultipartUpload @httpRequestTests([
         documentation: "This test validates that the URI for CreateMultipartUpload is created correctly",
         method: "POST",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/object.txt",
+        uri: "/object.txt",
         queryParams: [
             "uploads",
             "x-id=CreateMultipartUpload"
@@ -176,7 +176,7 @@ apply PutObject @httpRequestTests([
         documentation: "This test validates that if a content-type is specified, that only one content-type header is sent",
         method: "PUT",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/test-key",
+        uri: "/test-key",
         headers: { "content-type": "text/html" },
         params: {
             Bucket: "test-bucket",
@@ -196,7 +196,7 @@ apply PutObject @httpRequestTests([
         documentation: "This test validates that if a content-length is specified, that only one content-length header is sent",
         method: "PUT",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/test-key",
+        uri: "/test-key",
         headers: { "content-length": "2" },
         params: {
             Bucket: "test-bucket",
@@ -221,7 +221,7 @@ apply HeadObject @httpRequestTests([
 
         method: "HEAD",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/%3C%3E%20%60%3F%F0%9F%90%B1",
+        uri: "/%3C%3E%20%60%3F%F0%9F%90%B1",
         params: {
             Bucket: "test-bucket",
             Key: "<> `?🐱",

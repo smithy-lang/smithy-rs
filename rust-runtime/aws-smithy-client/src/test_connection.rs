@@ -201,6 +201,7 @@ impl<B> TestConnection<B> {
         self.requests.lock().unwrap()
     }
 
+    #[track_caller]
     pub fn assert_requests_match(&self, ignore_headers: &[HeaderName]) {
         for req in self.requests().iter() {
             req.assert_matches(ignore_headers)
