@@ -5,8 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import io.kotest.inspectors.forOne
 import io.kotest.inspectors.forSome
 import io.kotest.inspectors.shouldForAll
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveAtLeastSize
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -14,8 +16,11 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 import java.util.logging.Level
 
 internal class ValidateUnsupportedConstraintsAreNotUsedTest {
@@ -130,24 +135,37 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
             @streaming
             union EventStream {
-                message: Message
+                message: Message,
+                error: Error
             }
 
             structure Message {
                 lengthString: LengthString
             }
+            
+            structure Error {
+                @required
+                message: String
+            }
 
             @length(min: 1)
             string LengthString
             """.asSmithyModel()
-        val validationResult = validateModel(model)
+        val validationResult = validateModel(EventStreamNormalizer.transform(model))
 
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain
+        validationResult.messages shouldHaveSize 2
+        validationResult.messages.forOne { it.message shouldContain
             """
             The string shape `test#LengthString` has the constraint trait `smithy.api#length` attached.
             This shape is also part of an event stream; it is unclear what the semantics for constrained shapes in event streams are.
             """.trimIndent().replace("\n", " ")
+        }
+        validationResult.messages.forOne { it.message shouldContain
+            """
+            The member shape `test#Error${"$"}message` has the constraint trait `smithy.api#required` attached.
+            This shape is also part of an event stream; it is unclear what the semantics for constrained shapes in event streams are.
+            """.trimIndent().replace("\n", " ")
+        }
     }
 
     @Test
