@@ -51,7 +51,7 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val smithyClientBuilder = smithyClient.resolve("Builder")
     val smithyClientRetry = smithyClient.resolve("retry")
     val smithyConnector = smithyClient.resolve("bounds::SmithyConnector")
-    val timeoutConfig = smithyClient.resolve("timeout::TimeoutConfig")
+    val timeoutConfig = smithyTypes.resolve("timeout::TimeoutConfig")
 }
 
 private class AwsClientGenerics(private val types: Types) : FluentClientGenerics {

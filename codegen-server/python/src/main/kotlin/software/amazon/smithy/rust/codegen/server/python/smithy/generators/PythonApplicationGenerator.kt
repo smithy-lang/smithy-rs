@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -85,7 +84,7 @@ class PythonApplicationGenerator(
             "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
             "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
             "hyper" to PythonServerCargoDependency.Hyper.toType(),
-            "HashMap" to RustType.HashMap.RuntimeType,
+            "HashMap" to RuntimeType.HashMap,
             "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
             "http" to RuntimeType.Http,
         )

@@ -53,6 +53,9 @@ object AwsRuntimeType {
             CargoDependency.smithyHttpTower(this),
             CargoDependency.smithyClient(this),
             CargoDependency.Tower,
+            AwsCargoDependency.awsSigAuth(this),
+            AwsCargoDependency.awsHttp(this),
+            AwsCargoDependency.awsEndpoint(this),
         ),
     ).resolve("DefaultMiddleware")
 
