@@ -17,18 +17,18 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 object ServerRuntimeType {
     fun forInlineDependency(inlineDependency: InlineDependency) = RuntimeType("crate::${inlineDependency.name}", inlineDependency)
 
-    fun Router(runtimeConfig: RuntimeConfig) = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().resolve("routing::Router")
+    fun router(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("routing::Router")
 
-    fun OperationHandler(runtimeConfig: RuntimeConfig) =
+    fun operationHandler(runtimeConfig: RuntimeConfig) =
         forInlineDependency(ServerInlineDependency.serverOperationHandler(runtimeConfig))
 
-    fun RuntimeError(runtimeConfig: RuntimeConfig) = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().resolve("runtime_error::RuntimeError")
+    fun runtimeError(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("runtime_error::RuntimeError")
 
-    fun RequestRejection(runtimeConfig: RuntimeConfig) = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().resolve("rejection::RequestRejection")
+    fun requestRejection(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("rejection::RequestRejection")
 
-    fun ResponseRejection(runtimeConfig: RuntimeConfig) = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().resolve("rejection::ResponseRejection")
+    fun responseRejection(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("rejection::ResponseRejection")
 
-    fun Protocol(name: String, path: String, runtimeConfig: RuntimeConfig) = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().resolve("proto::$path::$name")
+    fun protocol(name: String, path: String, runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("proto::$path::$name")
 
-    fun Protocol(runtimeConfig: RuntimeConfig) = Protocol("Protocol", "", runtimeConfig)
+    fun protocol(runtimeConfig: RuntimeConfig) = protocol("Protocol", "", runtimeConfig)
 }

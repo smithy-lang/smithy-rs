@@ -10,23 +10,16 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
  * Object used *exclusively* in the runtime of the Python server, for separation concerns.
- * Analogous to the companion object in [RuntimeType] and [ServerRuntimeType]; see its documentation for details.
+ * Analogous to the companion object in [RuntimeType] and [software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType]; see its documentation for details.
  * For a runtime type that is used in the client, or in both the client and the server, use [RuntimeType] directly.
  */
 object PythonServerRuntimeType {
+    fun blob(runtimeConfig: RuntimeConfig) =
+        PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::Blob")
 
-    fun PySocket(runtimeConfig: RuntimeConfig) =
-        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::PySocket", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
+    fun byteStream(runtimeConfig: RuntimeConfig) =
+        PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::ByteStream")
 
-    fun Blob(runtimeConfig: RuntimeConfig) =
-        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::types::Blob", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
-
-    fun ByteStream(runtimeConfig: RuntimeConfig) =
-        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::types::ByteStream", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
-
-    fun DateTime(runtimeConfig: RuntimeConfig) =
-        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::types::DateTime", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
-
-    fun PyError(runtimeConfig: RuntimeConfig) =
-        RuntimeType("${runtimeConfig.crateSrcPrefix}_http_server_python::Error", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig))
+    fun dateTime(runtimeConfig: RuntimeConfig) =
+        PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::DateTime")
 }

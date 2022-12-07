@@ -113,15 +113,15 @@ class ServerAwsJsonProtocol(
     override fun markerStruct(): RuntimeType {
         return when (version) {
             is AwsJsonVersion.Json10 -> {
-                ServerRuntimeType.Protocol("AwsJson1_0", "aws_json_10", runtimeConfig)
+                ServerRuntimeType.protocol("AwsJson1_0", "aws_json_10", runtimeConfig)
             }
             is AwsJsonVersion.Json11 -> {
-                ServerRuntimeType.Protocol("AwsJson1_1", "aws_json_11", runtimeConfig)
+                ServerRuntimeType.protocol("AwsJson1_1", "aws_json_11", runtimeConfig)
             }
         }
     }
 
-    override fun routerType() = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType()
+    override fun routerType() = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
         .resolve("proto::aws_json::router::AwsJsonRouter")
 
     /**
@@ -147,7 +147,7 @@ class ServerAwsJsonProtocol(
 }
 
 private fun restRouterType(runtimeConfig: RuntimeConfig) =
-    ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType()
+    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
         .resolve("proto::rest::router::RestRouter")
 
 class ServerRestJsonProtocol(
@@ -181,7 +181,7 @@ class ServerRestJsonProtocol(
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestJson1", "rest_json_1", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.protocol("RestJson1", "rest_json_1", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -205,7 +205,7 @@ class ServerRestXmlProtocol(
 ) : RestXml(codegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestXml", "rest_xml", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.protocol("RestXml", "rest_xml", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 

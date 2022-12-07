@@ -64,18 +64,18 @@ class PythonServerSymbolVisitor(
         // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
         // become a ByteStream.
         return if (target is BlobShape && shape.isStreaming(model)) {
-            PythonServerRuntimeType.ByteStream(config().runtimeConfig).toSymbol()
+            PythonServerRuntimeType.byteStream(config().runtimeConfig).toSymbol()
         } else {
             initial
         }
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {
-        return PythonServerRuntimeType.DateTime(runtimeConfig).toSymbol()
+        return PythonServerRuntimeType.dateTime(runtimeConfig).toSymbol()
     }
 
     override fun blobShape(shape: BlobShape?): Symbol {
-        return PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()
+        return PythonServerRuntimeType.blob(runtimeConfig).toSymbol()
     }
 }
 

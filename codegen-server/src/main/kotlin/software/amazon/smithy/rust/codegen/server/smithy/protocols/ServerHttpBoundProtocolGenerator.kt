@@ -140,10 +140,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "PercentEncoding" to RuntimeType.PercentEncoding,
         "Regex" to RuntimeType.Regex,
         "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
-        "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
-        "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
-        "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "RuntimeError" to ServerRuntimeType.runtimeError(runtimeConfig),
+        "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
+        "ResponseRejection" to ServerRuntimeType.responseRejection(runtimeConfig),
         "http" to RuntimeType.Http,
     )
 
@@ -1242,7 +1242,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         check(binding.location == HttpLocation.PAYLOAD)
 
         if (model.expectShape(binding.member.target) is StringShape) {
-            return ServerRuntimeType.RequestRejection(runtimeConfig)
+            return ServerRuntimeType.requestRejection(runtimeConfig)
         }
         return when (codegenContext.protocol) {
             RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {

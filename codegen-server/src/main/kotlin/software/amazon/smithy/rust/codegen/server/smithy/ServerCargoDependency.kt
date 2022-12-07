@@ -28,26 +28,26 @@ object ServerCargoDependency {
     val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.8.4"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
 
-    fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
 }
 
 /**
  * A dependency on a snippet of code
  *
  * ServerInlineDependency should not be instantiated directly, rather, it should be constructed with
- * [software.amazon.smithy.rust.codegen.smithy.RuntimeType.forInlineFun]
+ * [software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.forInlineFun]
  *
  * ServerInlineDependencies are created as private modules within the main crate. This is useful for any code that
  * doesn't need to exist in a shared crate, but must still be generated exactly once during codegen.
  *
- * CodegenVisitor deduplicates inline dependencies by (module, name) during code generation.
+ * CodegenVisitor de-duplicates inline dependencies by (module, name) during code generation.
  */
 object ServerInlineDependency {
     fun serverOperationHandler(runtimeConfig: RuntimeConfig): InlineDependency =
         InlineDependency.forRustFile(
             RustModule.private("server_operation_handler_trait"),
             "/inlineable/src/server_operation_handler_trait.rs",
-            ServerCargoDependency.SmithyHttpServer(runtimeConfig),
+            ServerCargoDependency.smithyHttpServer(runtimeConfig),
             CargoDependency.Http,
             ServerCargoDependency.PinProjectLite,
             ServerCargoDependency.Tower,

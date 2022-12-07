@@ -107,9 +107,9 @@ class ServerProtocolTestGenerator(
         "Hyper" to RuntimeType.Hyper,
         "Tokio" to ServerCargoDependency.TokioDev.toType(),
         "Tower" to RuntimeType.Tower,
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
         "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
-        "Router" to ServerRuntimeType.Router(codegenContext.runtimeConfig),
+        "Router" to ServerRuntimeType.router(codegenContext.runtimeConfig),
     )
 
     sealed class TestCase {

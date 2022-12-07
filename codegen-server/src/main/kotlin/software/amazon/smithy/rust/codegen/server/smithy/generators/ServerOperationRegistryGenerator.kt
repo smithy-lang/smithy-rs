@@ -58,9 +58,9 @@ class ServerOperationRegistryGenerator(
     private val operationNames = operations.map { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "Router" to ServerRuntimeType.Router(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
-        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
+        "Router" to ServerRuntimeType.router(runtimeConfig),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "ServerOperationHandler" to ServerRuntimeType.operationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.toType(),
         "Phantom" to RuntimeType.Phantom,
         "StdError" to RuntimeType.StdError,
@@ -155,7 +155,7 @@ ${operationImplementationStubs(operations)}
 /// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
 /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
 """,
-            "Router" to ServerRuntimeType.Router(runtimeConfig),
+            "Router" to ServerRuntimeType.router(runtimeConfig),
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
@@ -402,6 +402,6 @@ ${operationImplementationStubs(operations)}
         this,
         symbolProvider.toSymbol(this).name,
         serviceName,
-        ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType().resolve("routing::request_spec"),
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("routing::request_spec"),
     )
 }

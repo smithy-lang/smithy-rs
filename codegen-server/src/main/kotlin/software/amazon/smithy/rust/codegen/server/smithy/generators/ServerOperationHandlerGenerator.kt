@@ -39,9 +39,9 @@ open class ServerOperationHandlerGenerator(
         "Tower" to ServerCargoDependency.Tower.toType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
         "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         "Phantom" to RuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
+        "ServerOperationHandler" to ServerRuntimeType.operationHandler(runtimeConfig),
         "http" to RuntimeType.Http,
     )
 

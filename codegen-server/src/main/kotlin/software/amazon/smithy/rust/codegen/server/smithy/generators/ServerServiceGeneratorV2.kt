@@ -27,7 +27,7 @@ class ServerServiceGeneratorV2(
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyHttpServer = ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType()
+    private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
     private val codegenScope =
         arrayOf(
             "Bytes" to RuntimeType.Bytes,

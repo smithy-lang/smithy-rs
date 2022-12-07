@@ -126,7 +126,7 @@ class ServerBuilderGenerator(
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes)
 
     private val codegenScope = arrayOf(
-        "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
+        "RequestRejection" to ServerRuntimeType.requestRejection(runtimeConfig),
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,

@@ -60,8 +60,8 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
             is LibRsSection.Body -> writable {
                 docs("Re-exported Python types from supporting crates.")
                 rustBlock("pub mod python_types") {
-                    rust("pub use #T;", PythonServerRuntimeType.Blob(codegenContext.runtimeConfig).toSymbol())
-                    rust("pub use #T;", PythonServerRuntimeType.DateTime(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.dateTime(codegenContext.runtimeConfig).toSymbol())
                 }
             }
             else -> emptySection

@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
@@ -25,7 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * Rust application), which are built into a `Router` by [PythonApplicationGenerator].
  *
  * To call a Python function from Rust, anything dealing with Python runs inside an async
- * block that allows to catch stacktraces. The handler function is extracted from `PyHandler`
+ * block that allows to catch stack traces. The handler function is extracted from `PyHandler`
  * and called with the necessary arguments inside a blocking Tokio task.
  * At the end the block is awaited and errors are collected and reported.
  *
@@ -40,8 +39,8 @@ class PythonServerOperationHandlerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to PythonServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "pyo3" to PythonServerCargoDependency.PyO3.toType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
             "tokio" to PythonServerCargoDependency.Tokio.toType(),
