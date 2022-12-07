@@ -20,11 +20,12 @@ use hdrhistogram::sync::SyncHistogram;
 use hdrhistogram::Histogram;
 use tokio::sync::Semaphore;
 use tokio::time::{Duration, Instant};
+use tracing::debug;
 
 const TASK_COUNT: usize = 10_000;
 // Larger requests take longer to send, which means we'll consume more network resources per
 // request, which means we can't support as many concurrent connections to S3.
-const TASK_PAYLOAD_LENGTH: usize = 100_000;
+const TASK_PAYLOAD_LENGTH: usize = 10_000;
 // At 130 and above, this test will fail with a `ConnectorError` from `hyper`. I've seen:
 // - ConnectorError { kind: Io, source: hyper::Error(Canceled, hyper::Error(Io, Os { code: 54, kind: ConnectionReset, message: "Connection reset by peer" })) }
 // - ConnectorError { kind: Io, source: hyper::Error(BodyWrite, Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }) }
@@ -51,7 +52,7 @@ async fn test_concurrency_on_multi_thread_against_dummy_server() {
         )
         .build();
 
-    test_concurrency(sdk_config).await
+    test_concurrency(sdk_config).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -72,7 +73,7 @@ async fn test_concurrency_on_single_thread_against_dummy_server() {
         )
         .build();
 
-    test_concurrency(sdk_config).await
+    test_concurrency(sdk_config).await;
 }
 
 #[ignore = "this test runs against S3 and requires credentials"]
@@ -88,7 +89,13 @@ async fn test_concurrency_on_multi_thread_against_s3() {
         .load()
         .await;
 
-    test_concurrency(sdk_config).await
+    test_concurrency(sdk_config).await;
+}
+
+#[derive(Clone, Copy)]
+enum State {
+    Listening,
+    Speaking,
 }
 
 // This server is agreeable because it always replies with `OK`
@@ -100,35 +107,45 @@ async fn start_agreeable_server() -> (impl Future<Output = ()>, SocketAddr) {
         .await
         .expect("socket is free");
     let bind_addr = listener.local_addr().unwrap();
-
-    async fn process_socket(socket: TcpStream) {
+    async fn handle_tcp_stream(tcp_stream: TcpStream) {
         let mut buf = BytesMut::new();
+        let mut state = State::Listening;
+
         let response: &[u8] = b"HTTP/1.1 200 OK\r\n\r\n";
-        let mut time_to_respond = false;
         let mut bytes_left_to_write = response.len();
 
         loop {
-            match socket.try_read_buf(&mut buf) {
-                Ok(_) => {
-                    // Check for CRLF to see if we've received the entire HTTP request.
-                    if buf.ends_with(b"\r\n\r\n") {
-                        time_to_respond = true;
+            match state {
+                State::Listening => {
+                    match tcp_stream.try_read_buf(&mut buf) {
+                        Ok(_) => {
+                            // Check for CRLF to see if we've received the entire HTTP request.
+                            let s = String::from_utf8_lossy(&buf);
+                            if let Some(content_length) = discern_content_length(&s) {
+                                if let Some(body_length) = discern_body_length(&s) {
+                                    if body_length == content_length {
+                                        state = State::Speaking;
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            // reading would block, sleeping for 1ms and then trying again
+                            sleep(Duration::from_millis(1)).await;
+                        }
+                        Err(err) => {
+                            panic!("{}", err)
+                        }
                     }
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // reading would block, sleeping for 1ms and then trying again
-                    sleep(Duration::from_millis(1)).await;
-                }
-                Err(err) => {
-                    panic!("{}", err)
-                }
-            }
-
-            if socket.writable().await.is_ok() && time_to_respond {
-                let bytes_written = socket.try_write(response).unwrap();
-                bytes_left_to_write -= bytes_written;
-                if bytes_left_to_write == 0 {
-                    break;
+                State::Speaking => {
+                    if tcp_stream.writable().await.is_ok() {
+                        let bytes_written = tcp_stream.try_write(response).unwrap();
+                        bytes_left_to_write -= bytes_written;
+                        if bytes_left_to_write == 0 {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -136,15 +153,37 @@ async fn start_agreeable_server() -> (impl Future<Output = ()>, SocketAddr) {
 
     let fut = async move {
         loop {
-            let (socket, _addr) = listener
+            let (tcp_stream, _addr) = listener
                 .accept()
                 .await
                 .expect("listener can accept new connections");
-            process_socket(socket).await;
+            handle_tcp_stream(tcp_stream).await;
         }
     };
 
     (fut, bind_addr)
+}
+
+fn discern_content_length(s: &str) -> Option<usize> {
+    // split on newlines
+    s.split("\r\n")
+        // throw out all lines that aren't the content-length header
+        .find(|s| s.contains("content-length: "))
+        // attempt to parse the numeric part of the header as a usize
+        .and_then(|s| s.trim_start_matches("content-length: ").parse().ok())
+}
+
+fn discern_body_length(s: &str) -> Option<usize> {
+    // If the request doesn't have a double CRLF, then we haven't finished reading it yet
+    if !s.contains("\r\n\r\n") {
+        return None;
+    }
+    // starting from end, split on the double CRLF that separates the body from the header
+    s.rsplit("\r\n\r\n")
+        // get the body, which must be the first element (we don't send trailers with PutObject requests)
+        .next()
+        // get the length of the body, in bytes, being sure to trim off the final newline
+        .map(|s| s.trim_end().len())
 }
 
 async fn test_concurrency(sdk_config: SdkConfig) {
@@ -155,6 +194,7 @@ async fn test_concurrency(sdk_config: SdkConfig) {
             .unwrap()
             .into_sync();
 
+    debug!("creating futures");
     // This semaphore ensures we only run up to <CONCURRENCY_LIMIT> requests at once.
     let semaphore = Arc::new(Semaphore::new(CONCURRENCY_LIMIT));
     let futures = (0..TASK_COUNT).map(|i| {
@@ -189,6 +229,7 @@ async fn test_concurrency(sdk_config: SdkConfig) {
         }
     });
 
+    debug!("joining futures");
     let res: Vec<_> = future::join_all(futures).await;
     // Assert we ran all the tasks
     assert_eq!(TASK_COUNT, res.len());
@@ -204,8 +245,8 @@ async fn test_concurrency(sdk_config: SdkConfig) {
 fn display_metrics(name: &str, mut h: SyncHistogram<u64>, unit: &str, scale: f64) {
     // Refreshing is required or else we won't see any results at all
     h.refresh();
-    println!("displaying {} results from {name} histogram", h.len());
-    println!(
+    debug!("displaying {} results from {name} histogram", h.len());
+    debug!(
         "{name}\n\
         \tmean:\t{:.1}{unit},\n\
         \tp50:\t{:.1}{unit},\n\
