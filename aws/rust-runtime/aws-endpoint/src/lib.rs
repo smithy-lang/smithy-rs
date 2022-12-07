@@ -3,13 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[doc(hidden)]
-pub mod partition;
-
-#[doc(hidden)]
-pub use partition::Partition;
-#[doc(hidden)]
-pub use partition::PartitionResolver;
 use std::collections::HashMap;
 
 use aws_smithy_http::endpoint::error::ResolveEndpointError;

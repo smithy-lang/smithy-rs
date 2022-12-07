@@ -11,10 +11,12 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -107,6 +109,18 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
         }
     }
 
+    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
+        return listOf(object : EndpointCustomization {
+            override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
+                return when (parameter.builtIn) {
+                    Builtins.SDK_ENDPOINT.builtIn -> writable { rust("$configRef.endpoint_url().map(|url|url.to_string())") }
+                    else -> null
+                }
+            }
+        },
+        )
+    }
+
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
@@ -158,11 +172,34 @@ class EndpointConfigCustomization(
                     self.endpoint_resolver = endpoint_resolver.map(|res|std::sync::Arc::new(#{EndpointShim}::from_arc(res) ) as _);
                     self
                 }
+
+                /// Sets the endpoint url used to communicate with this service
+                ///
+                /// Note: this may be used in combination with other endpoint rules. To fully override the endpoint
+                /// resolver, use [`endpoint_resolver`].
+                pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
+                    self.endpoint_url = Some(endpoint_url.into());
+                    self
+                }
+
+                /// Sets the endpoint url used to communicate with this service
+                ///
+                /// Note: this may be used in combination with other endpoint rules. To fully override the endpoint
+                /// resolver, use [`endpoint_resolver`].
+                pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
+                    self.endpoint_url = endpoint_url;
+                    self
+                }
                 """,
                 *codegenScope,
             )
 
-            else -> emptySection
+            ServiceConfig.BuilderBuild -> rust("endpoint_url: self.endpoint_url")
+            ServiceConfig.BuilderStruct -> rust("endpoint_url: Option<String>")
+            ServiceConfig.ConfigImpl -> rust("pub(crate) fn endpoint_url(&self) -> Option<&str> { self.endpoint_url.as_deref() }")
+            ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>")
+            ServiceConfig.ConfigStructAdditionalDocs -> emptySection
+            ServiceConfig.Extras -> emptySection
         }
     }
 }
