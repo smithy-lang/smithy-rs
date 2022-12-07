@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Request IDs
+//! # Request IDs
 //!
 //! RequestID is an element that uniquely identifies a client request. RequestID is used by services to map all logs, events and
 //! specific data to a single operation. This RFC discusses whether and how smithy-rs can make that value available to customers.
