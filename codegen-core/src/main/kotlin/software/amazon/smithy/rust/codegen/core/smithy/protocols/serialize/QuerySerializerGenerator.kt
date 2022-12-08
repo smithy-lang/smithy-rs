@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
@@ -150,6 +151,21 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     }
 
     private fun RustWriter.serializeStructure(context: Context<StructureShape>) {
+        // We proceed with the rest of the method only when context.shape.members() is nonempty.
+        // If it were empty, the method would generate the following code:
+        //   #[allow(unused_mut)]
+        //   pub fn serialize_structure_crate_model_unit(
+        //       mut writer: aws_smithy_query::QueryValueWriter,
+        //       input: &crate::model::Unit,
+        //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+        //       let (_, _) = (writer, input);
+        //       Ok(())
+        //   }
+        // However, this would cause a compilation error at a call site because it cannot
+        // extract data out of the Unit type that corresponds to the variable "input" above.
+        if (context.shape.members().isEmpty()) {
+            return
+        }
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) {
@@ -159,9 +175,6 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 "Input" to structureSymbol,
                 *codegenScope,
             ) {
-                if (context.shape.members().isEmpty()) {
-                    rust("let (_, _) = (writer, input);") // Suppress unused argument warnings
-                }
                 serializeStructureInner(context)
                 rust("Ok(())")
             }
@@ -310,8 +323,12 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
+                        } else {
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName => {", "},", unionSymbol) {
                             serializeMember(
                                 MemberContext.unionMember(
                                     context.copy(writerExpression = "writer"),

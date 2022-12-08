@@ -174,8 +174,6 @@ class EndpointConfigCustomization(
     }
 }
 
-// This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern
-
 class EndpointResolverFeature(runtimeConfig: RuntimeConfig) :
     OperationCustomization() {
     private val placeholderEndpointParams = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("Params")
@@ -191,9 +189,9 @@ class EndpointResolverFeature(runtimeConfig: RuntimeConfig) :
                     """
                     let endpoint_params = #{PlaceholderParams}::new(${section.config}.region.clone());
                     ${section.request}.properties_mut()
-                        .insert::<aws_smithy_http::endpoint::Result>(${section.config}
-                            .endpoint_resolver
-                            .resolve_endpoint(&endpoint_params));
+                        .insert::<aws_smithy_http::endpoint::Result>(
+                            ${section.config}.endpoint_resolver.resolve_endpoint(&endpoint_params)
+                        );
                     """,
                     *codegenScope,
                 )
