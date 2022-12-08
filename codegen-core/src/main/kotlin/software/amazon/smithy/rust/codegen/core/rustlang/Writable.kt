@@ -83,7 +83,7 @@ fun Array<Writable>.join(separator: Writable) = asIterable().join(separator)
  *     "type_params" to rustTypeParameters(
  *         symbolProvider.toSymbol(operation),
  *         RustType.Unit,
- *         runtimeConfig.smithyHttp().member("body::SdkBody"),
+ *         runtimeConfig.smithyHttp().resolve("body::SdkBody"),
  *         GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
  *     )
  * )

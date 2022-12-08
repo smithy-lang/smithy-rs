@@ -126,7 +126,7 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
                     return writable {
                         rustTemplate(
                             "let $configBuilderRef = $configBuilderRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
-                            "Region" to region(codegenContext.runtimeConfig).member("Region"),
+                            "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
                         )
                     }
                 }
