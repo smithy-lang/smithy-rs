@@ -47,7 +47,7 @@ match result {
 ```
 
 The refactor that implemented [RFC-0022] added the `into_service_error()` method on `SdkError` that
-infallibly converts the `SdkError` into the generic error type for the `SdkError::ServiceError` variant.
+infallibly converts the `SdkError` into the concrete error type held by the `SdkError::ServiceError` variant.
 This improvement let customers discard the transient failures to immediately handle modeled errors
 returned by the service.
 
