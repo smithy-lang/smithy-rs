@@ -140,7 +140,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     /// ##     */
                     /// ##     .middleware_fn(|r| r)
                     ///       .build();
-                    /// let config = Config::builder().build();
+                    /// let config = Config::builder().endpoint_resolver("https://www.myurl.com").build();
                     /// let client = Client::with_config(smithy_client, config);
                     /// ```
                     ///

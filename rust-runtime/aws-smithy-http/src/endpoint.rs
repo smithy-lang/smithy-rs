@@ -21,6 +21,14 @@ pub trait ResolveEndpoint<Params>: Send + Sync {
     fn resolve_endpoint(&self, params: &Params) -> Result;
 }
 
+impl<T> ResolveEndpoint<T> for &'static str {
+    fn resolve_endpoint(&self, _params: &T) -> Result {
+        Ok(aws_smithy_types::endpoint::Endpoint::builder()
+            .url(*self)
+            .build())
+    }
+}
+
 /// API Endpoint
 ///
 /// This implements an API endpoint as specified in the
