@@ -174,18 +174,7 @@ fun Project.registerGenerateCargoConfigTomlTask(
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
         doFirst {
-            try {
-                outputDir.resolve(".cargo").mkdir()
-            } catch (ex: Exception) {
-                println("failed to write to '.cargo/config.toml' with exception $ex")
-            }
-
-            if (outputDir.resolve(".cargo/config.toml").createNewFile()) {
-                println("created '.cargo/config.toml'")
-            } else {
-                println("failed to create '.cargo/config.toml'")
-            }
-
+            outputDir.resolve(".cargo").mkdir()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """
