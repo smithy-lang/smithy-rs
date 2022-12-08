@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -52,6 +51,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -62,8 +62,8 @@ class XmlBindingTraitSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
-    private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
-    private val target = codegenContext.target
+    private val smithyXml = CargoDependency.smithyXml(runtimeConfig).toType()
+    private val codegenTarget = codegenContext.target
     private val codegenScope =
         arrayOf(
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
@@ -291,12 +291,19 @@ class XmlBindingTraitSerializerGenerator(
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
         when (model.expectShape(member.target)) {
             is StringShape -> {
-                rust("$input.as_str()")
+                // The `input` expression always evaluates to a reference type at this point, but if it does so because
+                // it's preceded by the `&` operator, calling `as_str()` on it will upset Clippy.
+                val dereferenced = if (input.startsWith("&")) {
+                    autoDeref(input)
+                } else {
+                    input
+                }
+                rust("$dereferenced.as_str()")
             }
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
-                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder"),
+                    CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder"),
                 )
             }
             is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
@@ -340,12 +347,30 @@ class XmlBindingTraitSerializerGenerator(
                     serializeMap(target, "entry", Ctx.Scope("inner_writer", ctx.input))
                 }
                 is StructureShape -> {
-                    rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
-                    serializeStructure(
-                        target,
-                        XmlMemberIndex.fromMembers(target.members().toList()),
-                        Ctx.Element("inner_writer", ctx.input),
-                    )
+                    // We call serializeStructure only when target.members() is nonempty.
+                    // If it were empty, serializeStructure would generate the following code:
+                    //   pub fn serialize_structure_crate_model_unit(
+                    //       input: &crate::model::Unit,
+                    //       writer: aws_smithy_xml::encode::ElWriter,
+                    //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+                    //       let _ = input;
+                    //       #[allow(unused_mut)]
+                    //       let mut scope = writer.finish();
+                    //       scope.finish();
+                    //       Ok(())
+                    //   }
+                    // However, this would cause a compilation error at a call site because it cannot
+                    // extract data out of the Unit type that corresponds to the variable "input" above.
+                    if (target.members().isEmpty()) {
+                        rust("${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
+                    } else {
+                        rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
+                        serializeStructure(
+                            target,
+                            XmlMemberIndex.fromMembers(target.members().toList()),
+                            Ctx.Element("inner_writer", ctx.input),
+                        )
+                    }
                 }
                 is UnionShape -> {
                     rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
@@ -393,13 +418,17 @@ class XmlBindingTraitSerializerGenerator(
                 rustBlock("match input") {
                     val members = unionShape.members()
                     members.forEach { member ->
-                        val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) =>", ",", unionSymbol) {
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
+                        } else {
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName =>", ",", unionSymbol) {
                             serializeMember(member, Ctx.Scope("scope_writer", "inner"))
                         }
                     }
 
-                    if (target.renderUnknownVariant()) {
+                    if (codegenTarget.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,
@@ -459,7 +488,20 @@ class XmlBindingTraitSerializerGenerator(
         val memberSymbol = symbolProvider.toSymbol(member)
         if (memberSymbol.isOptional()) {
             val tmp = safeName()
-            rustBlock("if let Some($tmp) = ${ctx.input}") {
+            val target = model.expectShape(member.target)
+            val pattern = if (target.isStructureShape && target.members().isEmpty()) {
+                // In this case, we mark a variable captured in the if-let
+                // expression as unused to prevent the warning coming
+                // from the following code generated by handleOptional:
+                //   if let Some(var_2) = &input.input {
+                //       scope.start_el("input").finish();
+                //   }
+                // where var_2 above is unused.
+                "Some(_$tmp)"
+            } else {
+                "Some($tmp)"
+            }
+            rustBlock("if let $pattern = ${ctx.input}") {
                 inner(Ctx.updateInput(ctx, tmp))
             }
         } else {

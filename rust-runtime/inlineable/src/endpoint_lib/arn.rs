@@ -96,7 +96,6 @@ pub(crate) fn parse_arn<'a, 'b>(input: &'a str, e: &'b mut DiagnosticCollector) 
 #[cfg(test)]
 mod test {
     use super::Arn;
-    use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 
     #[test]
     fn arn_parser() {

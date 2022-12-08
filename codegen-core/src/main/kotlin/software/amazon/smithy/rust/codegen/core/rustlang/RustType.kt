@@ -148,6 +148,12 @@ sealed class RustType {
         }
     }
 
+    data class MaybeConstrained(override val member: RustType) : RustType(), Container {
+        val runtimeType: RuntimeType = RuntimeType.MaybeConstrained()
+        override val name = runtimeType.name!!
+        override val namespace = runtimeType.namespace
+    }
+
     data class Box(override val member: RustType) : RustType(), Container {
         override val name = "Box"
         override val namespace = "std::boxed"
@@ -237,6 +243,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
         is RustType.Opaque -> this.name
+        is RustType.MaybeConstrained -> "${this.name}<${this.member.render(fullyQualified)}>"
     }
     return "$namespace$base"
 }
@@ -318,7 +325,23 @@ fun RustType.isCopy(): Boolean = when (this) {
 enum class Visibility {
     PRIVATE,
     PUBCRATE,
-    PUBLIC
+    PUBLIC;
+
+    companion object {
+        fun publicIf(condition: Boolean, ifNot: Visibility): Visibility =
+            if (condition) {
+                PUBLIC
+            } else {
+                ifNot
+            }
+    }
+
+    fun toRustQualifier(): String =
+        when (this) {
+            PRIVATE -> ""
+            PUBCRATE -> "pub(crate)"
+            PUBLIC -> "pub"
+        }
 }
 
 /**
@@ -359,6 +382,15 @@ data class RustMetadata(
         renderAttributes(writer)
         renderVisibility(writer)
     }
+
+    companion object {
+        val TestModule = RustMetadata(
+            visibility = Visibility.PRIVATE,
+            additionalAttributes = listOf(
+                Attribute.Cfg("test"),
+            ),
+        )
+    }
 }
 
 /**
@@ -380,6 +412,7 @@ sealed class Attribute {
     companion object {
         val AllowDeadCode = Custom("allow(dead_code)")
         val AllowDeprecated = Custom("allow(deprecated)")
+        val AllowUnused = Custom("allow(unused)")
         val AllowUnusedMut = Custom("allow(unused_mut)")
         val DocHidden = Custom("doc(hidden)")
         val DocInline = Custom("doc(inline)")
@@ -389,6 +422,28 @@ sealed class Attribute {
          * indicates that more fields may be added in the future
          */
         val NonExhaustive = Custom("non_exhaustive")
+    }
+
+    data class Deprecated(val since: String?, val note: String?) : Attribute() {
+        override fun render(writer: RustWriter) {
+            writer.raw("#[deprecated")
+            if (since != null || note != null) {
+                writer.raw("(")
+                if (since != null) {
+                    writer.raw("""since = "$since"""")
+
+                    if (note != null) {
+                        writer.raw(", ")
+                    }
+                }
+
+                if (note != null) {
+                    writer.raw("""note = "$note"""")
+                }
+                writer.raw(")")
+            }
+            writer.raw("]")
+        }
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {

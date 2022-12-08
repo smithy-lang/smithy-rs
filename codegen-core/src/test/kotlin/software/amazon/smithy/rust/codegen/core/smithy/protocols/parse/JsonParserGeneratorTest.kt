@@ -6,12 +6,14 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
@@ -48,6 +50,7 @@ class JsonParserGeneratorTest {
             number: Double,
             s: String,
             top: Top,
+            unit: Unit,
         }
 
         @enum([{name: "FOO", value: "FOO"}])
@@ -115,10 +118,14 @@ class JsonParserGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
+        fun builderSymbol(shape: StructureShape): Symbol =
+            shape.builderSymbol(symbolProvider)
+
         val parserGenerator = JsonParserGenerator(
             codegenContext,
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
             ::restJsonFieldName,
+            ::builderSymbol,
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
         val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))

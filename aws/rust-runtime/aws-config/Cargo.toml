@@ -17,21 +17,20 @@ rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 default = ["client-hyper", "rustls", "rt-tokio"]
 
 [dependencies]
-aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
+aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", default-features = false }
-aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
-aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
-time = { version = "0.3.4", features = ["parsing"] }
-tokio = { version = "1.8.4", features = ["sync"] }
-tracing = { version = "0.1" }
-hyper = { version = "0.14.12", default-features = false }
-
-aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-tower" }
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
+aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
+aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
+hyper = { version = "0.14.12", default-features = false }
+time = { version = "0.3.4", features = ["parsing"] }
+tokio = { version = "1.8.4", features = ["sync"] }
+tracing = { version = "0.1" }
 
 # implementation detail of SSO credential caching
 ring = "0.16"

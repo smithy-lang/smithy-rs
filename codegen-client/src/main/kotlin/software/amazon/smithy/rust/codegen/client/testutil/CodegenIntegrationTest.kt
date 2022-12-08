@@ -34,6 +34,7 @@ fun clientIntegrationTest(
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
+    command: ((Path) -> Unit)? = null,
     test: (ClientCodegenContext, RustCrate) -> Unit,
 ): Path {
     return codegenIntegrationTest(
@@ -45,6 +46,7 @@ fun clientIntegrationTest(
         runtimeConfig = runtimeConfig,
         additionalSettings = additionalSettings,
         test = test,
+        command = command,
     )
 }
 
@@ -75,6 +77,7 @@ private fun <T, C : CodegenContext> codegenIntegrationTest(
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
     overrideTestDir: File? = null, test: (C, RustCrate) -> Unit,
+    command: ((Path) -> Unit)? = null,
 ): Path {
     val (ctx, testDir) = generatePluginContext(
         model,
@@ -99,6 +102,6 @@ private fun <T, C : CodegenContext> codegenIntegrationTest(
     }
     buildPlugin.executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
     ctx.fileManifest.printGeneratedFiles()
-    "cargo test".runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
+    command?.invoke(testDir) ?: "cargo test".runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
     return testDir
 }

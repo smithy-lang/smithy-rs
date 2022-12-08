@@ -48,7 +48,7 @@ class NoOpEventStreamSigningConfig(
     private val serviceHasEventStream: Boolean,
     runtimeConfig: RuntimeConfig,
 ) : EventStreamSigningConfig(runtimeConfig) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
         "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
     )

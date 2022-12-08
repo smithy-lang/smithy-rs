@@ -18,12 +18,12 @@ open class EventStreamSigningConfig(
     private val codegenScope = arrayOf(
         "SharedPropertyBag" to RuntimeType(
             "SharedPropertyBag",
-            CargoDependency.SmithyHttp(runtimeConfig),
+            CargoDependency.smithyHttp(runtimeConfig),
             "aws_smithy_http::property_bag",
         ),
         "SignMessage" to RuntimeType(
             "SignMessage",
-            CargoDependency.SmithyEventStream(runtimeConfig),
+            CargoDependency.smithyEventStream(runtimeConfig),
             "aws_smithy_eventstream::frame",
         ),
     )

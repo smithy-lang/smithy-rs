@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#[allow(unused)]
+mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
 #[allow(dead_code)]

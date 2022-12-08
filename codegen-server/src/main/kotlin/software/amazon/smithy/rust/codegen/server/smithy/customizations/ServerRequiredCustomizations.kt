@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.CrateVersionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.SmithyTypesPubUseGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -31,11 +31,13 @@ class ServerRequiredCustomizations : RustCodegenDecorator<ServerProtocolGenerato
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
+        baseCustomizations + CrateVersionGenerator() + AllowLintsGenerator()
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
+
+        pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
     }
 
     override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =

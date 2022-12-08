@@ -75,19 +75,18 @@ async fn test_error() {
         start_request("us-east-1", include_str!("error.json"), input_stream).await;
 
     match output.transcript_result_stream.recv().await {
-        Err(SdkError::ServiceError {
-            err:
-                TranscriptResultStreamError {
-                    kind: TranscriptResultStreamErrorKind::BadRequestException(err),
-                    ..
-                },
-            ..
-        }) => {
-            assert_eq!(
-                Some("A complete signal was sent without the preceding empty frame."),
-                err.message()
-            );
-        }
+        Err(SdkError::ServiceError(context)) => match context.err() {
+            TranscriptResultStreamError {
+                kind: TranscriptResultStreamErrorKind::BadRequestException(err),
+                ..
+            } => {
+                assert_eq!(
+                    Some("A complete signal was sent without the preceding empty frame."),
+                    err.message()
+                );
+            }
+            otherwise => panic!("Expected BadRequestException, got: {:?}", otherwise),
+        },
         otherwise => panic!("Expected BadRequestException, got: {:?}", otherwise),
     }
 
@@ -110,9 +109,10 @@ async fn start_request(
     let credentials = Credentials::new("test", "test", None, None, "test");
     let config = Config::builder()
         .region(region)
+        .http_connector(replayer.clone())
         .credentials_provider(credentials)
         .build();
-    let client = Client::from_conf_conn(config, replayer.clone());
+    let client = Client::from_conf(config);
 
     let output = client
         .start_stream_transcription()

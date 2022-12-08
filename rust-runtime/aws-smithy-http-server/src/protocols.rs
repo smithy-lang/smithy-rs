@@ -5,10 +5,12 @@
 
 //! Protocol helpers.
 use crate::rejection::MissingContentTypeReason;
+#[allow(deprecated)]
 use crate::request::RequestParts;
 
 /// When there are no modeled inputs,
 /// a request body is empty and the content-type request header must not be set
+#[allow(deprecated)]
 pub fn content_type_header_empty_body_no_modeled_input<B>(
     req: &RequestParts<B>,
 ) -> Result<(), MissingContentTypeReason> {
@@ -34,6 +36,7 @@ pub fn content_type_header_empty_body_no_modeled_input<B>(
 }
 
 /// Checks that the content-type in request headers is valid
+#[allow(deprecated)]
 pub fn content_type_header_classifier<B>(
     req: &RequestParts<B>,
     expected_content_type: Option<&'static str>,
@@ -76,6 +79,7 @@ pub fn content_type_header_classifier<B>(
     Ok(())
 }
 
+#[allow(deprecated)]
 pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static str) -> bool {
     // Allow no ACCEPT header
     if req.headers().is_none() {
@@ -119,6 +123,7 @@ pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static
         })
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use super::*;

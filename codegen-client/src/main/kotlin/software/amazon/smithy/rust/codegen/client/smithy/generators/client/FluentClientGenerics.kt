@@ -28,7 +28,7 @@ interface FluentClientGenerics {
     val bounds: Writable
 
     /** Bounds for generated `send()` functions */
-    fun sendBounds(operation: Symbol, output: Symbol, error: RuntimeType, retryClassifier: RuntimeType): Writable
+    fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable
 
     /** Convert this `FluentClientGenerics` into the more general `RustGenerics` */
     fun toRustGenerics(): RustGenerics

@@ -32,7 +32,9 @@ val AllowedClippyLints = listOf(
     "should_implement_trait",
 
     // Protocol tests use silly names like `baz`, don't flag that.
+    // TODO(msrv_upgrade): switch
     "blacklisted_name",
+    // "disallowed_names",
 
     // Forcing use of `vec![]` can make codegen harder in some cases.
     "vec_init_then_push",
@@ -42,6 +44,14 @@ val AllowedClippyLints = listOf(
 
     // Determining if the expression is the last one (to remove return) can make codegen harder in some cases.
     "needless_return",
+
+    // For backwards compatibility, we often don't derive Eq
+    // TODO(msrv_upgrade): enable
+    // "derive_partial_eq_without_eq",
+
+    // Keeping errors small in a backwards compatible way is challenging
+    // TODO(msrv_upgrade): enable
+    // "result_large_err",
 )
 
 val AllowedRustdocLints = listOf(

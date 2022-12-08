@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -26,8 +25,8 @@ class PythonServerModuleGenerator(
     private val serviceShapes: Set<Shape>,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(codegenContext.runtimeConfig).asType(),
-        "pyo3" to PythonServerCargoDependency.PyO3.asType(),
+        "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(codegenContext.runtimeConfig).toType(),
+        "pyo3" to PythonServerCargoDependency.PyO3.toType(),
     )
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
@@ -65,7 +64,7 @@ class PythonServerModuleGenerator(
             """,
             *codegenScope,
         )
-        serviceShapes.forEach() { shape ->
+        serviceShapes.forEach { shape ->
             val moduleType = moduleType(shape)
             if (moduleType != null) {
                 rustTemplate(
@@ -152,7 +151,6 @@ class PythonServerModuleGenerator(
             middleware.add_class::<#{SmithyPython}::PyRequest>()?;
             middleware.add_class::<#{SmithyPython}::PyResponse>()?;
             middleware.add_class::<#{SmithyPython}::PyMiddlewareException>()?;
-            middleware.add_class::<#{SmithyPython}::PyHttpVersion>()?;
             pyo3::py_run!(
                 py,
                 middleware,

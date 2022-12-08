@@ -3,15 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Provides an example [`Plugin`] implementation - [`PrintPlugin`].
+
 use aws_smithy_http_server::{
     operation::{Operation, OperationShape},
-    plugin::{Pluggable, Plugin},
+    plugin::{Plugin, PluginPipeline, PluginStack},
 };
 use tower::{layer::util::Stack, Layer, Service};
 
 use std::task::{Context, Poll};
 
-/// A [`Service`] that adds a print log.
+/// A [`Service`] that prints a given string.
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
@@ -68,19 +70,16 @@ where
     }
 }
 
-/// An extension trait of [`Pluggable`].
-///
-/// This provides a [`print`](PrintExt::print) method to all service builders.
-pub trait PrintExt: Pluggable<PrintPlugin> {
+/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
+pub trait PrintExt<ExistingPlugins> {
     /// Causes all operations to print the operation name when called.
     ///
     /// This works by applying the [`PrintPlugin`].
-    fn print(self) -> Self::Output
-    where
-        Self: Sized,
-    {
-        self.apply(PrintPlugin)
-    }
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>>;
 }
 
-impl<Builder> PrintExt for Builder where Builder: Pluggable<PrintPlugin> {}
+impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugins> {
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>> {
+        self.push(PrintPlugin)
+    }
+}

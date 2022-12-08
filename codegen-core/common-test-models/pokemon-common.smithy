@@ -2,6 +2,8 @@ $version: "1.0"
 
 namespace com.aws.example
 
+use smithy.framework#ValidationException
+
 /// A Pokémon species forms the basis for at least one Pokémon.
 @title("Pokémon Species")
 resource PokemonSpecies {
@@ -17,7 +19,7 @@ resource PokemonSpecies {
 operation GetPokemonSpecies {
     input: GetPokemonSpeciesInput,
     output: GetPokemonSpeciesOutput,
-    errors: [ResourceNotFoundException],
+    errors: [ResourceNotFoundException, ValidationException],
 }
 
 @input

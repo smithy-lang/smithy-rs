@@ -10,6 +10,7 @@
 use std::time::Duration;
 
 use crate::helpers::{client, PokemonService};
+use aws_smithy_types::error::display::DisplayErrorContext;
 use tokio::time;
 
 mod helpers;
@@ -40,9 +41,12 @@ async fn simple_integration_test() {
         .send()
         .await
         .unwrap_err();
-    assert_eq!(
-        r#"ResourceNotFoundError [ResourceNotFoundException]: Requested Pokémon not available"#,
-        pokemon_species_error.to_string()
+    let message = DisplayErrorContext(pokemon_species_error).to_string();
+    let expected =
+        r#"ResourceNotFoundError [ResourceNotFoundException]: Requested Pokémon not available"#;
+    assert!(
+        message.contains(expected),
+        "expected '{message}' to contain '{expected}'"
     );
 
     let service_statistics_out = client().get_server_statistics().send().await.unwrap();

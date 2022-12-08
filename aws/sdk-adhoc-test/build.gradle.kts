@@ -9,8 +9,7 @@ extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 tasks["jar"].enabled = false
 
 plugins {
-    val smithyGradlePluginVersion: String by project
-    id("software.amazon.smithy").version(smithyGradlePluginVersion)
+    id("software.amazon.smithy")
 }
 
 val smithyVersion: String by project

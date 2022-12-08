@@ -218,7 +218,7 @@ internal class AwsSdkReadmeGenerator {
     private fun Element.normalizeLists() {
         (getElementsByTag("ul") + getElementsByTag("ol"))
             // Only operate on lists that are top-level (are not nested within other lists)
-            .filter { list -> list.parents().none() { it.isList() } }
+            .filter { list -> list.parents().none { it.isList() } }
             .forEach { list -> list.normalizeList() }
     }
 

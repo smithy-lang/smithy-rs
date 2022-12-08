@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -139,6 +138,11 @@ fun disableDoubleEncode(service: ServiceShape) = when (service.id) {
     else -> false
 }
 
+fun disableUriPathNormalization(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+    else -> false
+}
+
 class SigV4SigningFeature(
     private val model: Model,
     private val operation: OperationShape,
@@ -147,7 +151,7 @@ class SigV4SigningFeature(
 ) :
     OperationCustomization() {
     private val codegenScope =
-        arrayOf("sig_auth" to runtimeConfig.sigAuth().asType(), "aws_types" to awsTypes(runtimeConfig).asType())
+        arrayOf("sig_auth" to runtimeConfig.sigAuth().toType(), "aws_types" to awsTypes(runtimeConfig).toType())
 
     private val serviceIndex = ServiceIndex.of(model)
 
@@ -163,6 +167,9 @@ class SigV4SigningFeature(
                 }
                 if (disableDoubleEncode(service)) {
                     rust("signing_config.signing_options.double_uri_encode = false;")
+                }
+                if (disableUriPathNormalization(service)) {
+                    rust("signing_config.signing_options.normalize_uri_path = false;")
                 }
                 if (operation.hasTrait<UnsignedPayloadTrait>()) {
                     rust("signing_config.signing_options.content_sha256_header = true;")
