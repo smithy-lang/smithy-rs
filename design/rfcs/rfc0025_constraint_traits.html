@@ -1,0 +1,505 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0025: Constraint traits - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">6.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">6.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">6.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">6.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">6.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">6.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">7.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html" class="active"><strong aria-hidden="true">7.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">7.26.</strong> RFC-0026: Client Crate Organization</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-constraint-traits"><a class="header" href="#rfc-constraint-traits">RFC: Constraint traits</a></h1>
+<blockquote>
+<p>Status: Implemented.</p>
+<p>See the description of <a href="https://github.com/awslabs/smithy-rs/pull/1342">the PR</a> that laid the
+foundation for the implementation of constraint traits for a complete
+reference. See the <a href="https://github.com/awslabs/smithy-rs/pull/2040">Better Constraint Violations</a> RFC too for subsequent
+improvements to this design.</p>
+<p>See the uber <a href="https://github.com/awslabs/smithy-rs/issues/1401">tracking issue</a> for pending work.</p>
+</blockquote>
+<p><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html">Constraint traits</a> are used to constrain the values that can be provided for a
+shape.</p>
+<p>For example, given the following Smithy model,</p>
+<pre><code class="language-smithy">@length(min: 18)
+Integer Age
+</code></pre>
+<p>the integer <code>Age</code> must take values greater than or equal to 18.</p>
+<p>Constraint traits are most useful when enforced as part of <em>input</em> model
+validation to a service. When a server receives a request whose contents
+deserialize to input data that violates the modeled constraints, the operation
+execution's preconditions are not met, and as such rejecting the request
+without executing the operation is expected behavior.</p>
+<p>Constraint traits can also be applied to operation output member shapes, but
+the expectation is that service implementations <em>not fail</em> to render a response
+when an output value does not meet the specified constraints. From
+<a href="https://github.com/awslabs/smithy/issues/1039">awslabs/smithy#1039</a>:</p>
+<blockquote>
+<p>This might seem counterintuitive, but our philosophy is that a change in
+server-side state should not be hidden from the caller unless absolutely
+necessary. Refusing to service an invalid request should always prevent
+server-side state changes, but refusing to send a response will not, as
+there's generally no reasonable route for a server implementation to unwind
+state changes due to a response serialization failure.</p>
+</blockquote>
+<p><em>In general</em>, clients should not enforce constraint traits in generated code.
+Clients must also never enforce constraint traits when sending requests. This
+is because:</p>
+<ul>
+<li>addition and removal of constraint traits are backwards-compatible from a
+client's perspective (although this is <em>not</em> documented anywhere in the
+Smithy specification),</li>
+<li>the client may have been generated with an older version of the model; and</li>
+<li>the most recent model version might have lifted some constraints.</li>
+</ul>
+<p>On the other hand, server SDKs constitute <em>the</em> source of truth for the
+service's behavior, so they interpret the model in all its strictness.</p>
+<p>The Smithy spec defines 8 constraint traits:</p>
+<ul>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#enum-trait"><code>enum</code></a>,</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#idref-trait"><code>idRef</code></a>,</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait"><code>length</code></a>,</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#pattern-trait"><code>pattern</code></a>,</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#private-trait"><code>private</code></a>,</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#range-trait"><code>range</code></a>,</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#required-trait"><code>required</code></a>; and</li>
+<li><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#uniqueItems-trait"><code>uniqueItems</code></a>.</li>
+</ul>
+<p>The <code>idRef</code> and <code>private</code> traits are enforced at SDK generation time by the
+<a href="https://github.com/awslabs/smithy"><code>awslabs/smithy</code></a> libraries and bear no relation to generated Rust code.</p>
+<p>The only constraint trait enforcement that is generated by smithy-rs clients
+should be and is the <code>enum</code> trait, which renders Rust <code>enum</code>s.</p>
+<p>The <code>required</code> trait is already and only enforced by smithy-rs servers since
+<a href="https://github.com/awslabs/smithy-rs/pull/1148">#1148</a>.</p>
+<p>That leaves 4 traits: <code>length</code>, <code>pattern</code>, <code>range</code>, and <code>uniqueItems</code>.</p>
+<h2 id="implementation"><a class="header" href="#implementation">Implementation</a></h2>
+<p>This section addresses how to implement and enforce the <code>length</code>, <code>pattern</code>,
+<code>range</code>, and <code>uniqueItems</code> traits. We will use the <code>length</code> trait applied to a
+<code>string</code> shape as a running example. The implementation of this trait mostly
+carries over to the other three.</p>
+<h3 id="example-implementation-for-the-length-trait"><a class="header" href="#example-implementation-for-the-length-trait">Example implementation for the <code>length</code> trait</a></h3>
+<p>Consider the following Smithy model:</p>
+<pre><code class="language-smithy">@length(min: 1, max: 69)
+string NiceString
+</code></pre>
+<p>The central idea to the implementation of constraint traits is: <a href="https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/">parse, don't
+validate</a>. Instead of code-generating a Rust <code>String</code> to represent <code>NiceString</code>
+values and perform the <em>validation</em> at request deserialization, we can
+<a href="https://www.lpalmieri.com/posts/2020-12-11-zero-to-production-6-domain-modelling/">leverage Rust's type system to guarantee domain invariants</a>. We can generate a
+wrapper <a href="https://doc.rust-lang.org/1.9.0/book/structs.html#tuple-structs">tuple struct</a> that <em>parses</em> the string's value and is &quot;tight&quot; in the
+set of values it can accept:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct NiceString(String);
+
+impl TryFrom&lt;String&gt; for NiceString {
+    type Error = nice_string::ConstraintViolation;
+
+    fn try_from(value: String) -&gt; Result&lt;Self, Self::Error&gt; {
+        let num_code_points = value.chars().count();
+        if 1 &lt;= num_code_points &amp;&amp; num_code_points &lt;= 69 {
+            Ok(Self(value))
+        } else {
+            Err(nice_string::ConstraintViolation::Length(num_code_points))
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>(Note that we're using the <em>linear</em> time check <code>chars().count()</code> instead of
+<code>len()</code> on the input value, since the Smithy specification says the <code>length</code>
+trait counts <a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait">the number of <em>Unicode code points</em> when applied to string
+shapes</a>.)</p>
+<p>The goal is to enforce, at the type-system level, that these constrained
+structs always hold valid data. It should be impossible for the service
+implementer, without resorting to <code>unsafe</code> Rust, to construct a <code>NiceString</code>
+that violates the model. The actual check is performed in the implementation of
+<a href="https://doc.rust-lang.org/std/convert/trait.TryFrom.html"><code>TryFrom</code></a><code>&lt;InnerType&gt;</code> for the generated struct, which makes it convenient to use
+the <a href="https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html#a-shortcut-for-propagating-errors-the--operator"><code>?</code> operator for error propagation</a>. Each constrained struct will have a
+related <code>std::error::Error</code> enum type to signal the <em>first</em> parsing failure,
+with one enum variant per applied constraint trait:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod nice_string {
+    pub enum ConstraintViolation {
+        /// Validation error holding the number of Unicode code points found, when a value between `1` and
+        /// `69` (inclusive) was expected.
+        Length(usize),
+    }
+
+    impl std::error::Error for ConstraintViolation {}
+}
+<span class="boring">}</span></code></pre></pre>
+<p><a href="https://doc.rust-lang.org/nightly/std/error/trait.Error.html"><code>std::error::Error</code></a> requires <a href="https://doc.rust-lang.org/std/fmt/trait.Display.html"><code>Display</code></a> and <a href="https://doc.rust-lang.org/std/fmt/trait.Debug.html"><code>Debug</code></a>. We will
+<code>#[derive(Debug)]</code>, unless the shape also has the <a href="https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait"><code>sensitive</code> trait</a>, in which
+case we will just print the name of the struct:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl std::fmt::Debug for ConstraintViolation {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        let mut formatter = f.debug_struct(&quot;ConstraintViolation&quot;);
+        formatter.finish()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><code>Display</code> is used to produce human-friendlier representations. Its
+implementation might be called when formatting a <a href="https://developer.mozilla.org/en-US/docs/web/http/status/400">400 HTTP response message</a> in
+certain protocols, for example.</p>
+<h3 id="request-deserialization"><a class="header" href="#request-deserialization">Request deserialization</a></h3>
+<p>We will continue to deserialize the different parts of the HTTP message into
+the regular Rust standard library types. However, just before the
+deserialization function returns, we will convert the type into the wrapper
+tuple struct that will eventually be handed over to the operation handler. This
+is what we're <em>already</em> doing when deserializing strings into <code>enums</code>. For
+example, given the Smithy model:</p>
+<pre><code class="language-smithy">@enum([
+    { name: &quot;Spanish&quot;, value: &quot;es&quot; },
+    { name: &quot;English&quot;, value: &quot;en&quot; },
+    { name: &quot;Japanese&quot;, value: &quot;jp&quot; },
+])
+string Language
+</code></pre>
+<p>the code the client generates when deserializing a string from a JSON document
+into the <code>Language</code> enum is (excerpt):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>...
+match key.to_unescaped()?.as_ref() {
+    &quot;language&quot; =&gt; {
+        builder = builder.set_language(
+            aws_smithy_json::deserialize::token::expect_string_or_null(
+                tokens.next(),
+            )?
+            .map(|s| {
+                s.to_unescaped()
+                    .map(|u| crate::model::Language::from(u.as_ref()))
+            })
+            .transpose()?,
+        );
+    }
+    _ =&gt; aws_smithy_json::deserialize::token::skip_value(tokens)?,
+}
+...
+<span class="boring">}</span></code></pre></pre>
+<p>Note how the <code>String</code> gets converted to the enum via <code>Language::from()</code>.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl std::convert::From&lt;&amp;str&gt; for Language {
+    fn from(s: &amp;str) -&gt; Self {
+        match s {
+            &quot;es&quot; =&gt; Language::Spanish,
+            &quot;en&quot; =&gt; Language::English,
+            &quot;jp&quot; =&gt; Language::Japanese,
+            other =&gt; Language::Unknown(other.to_owned()),
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>For constrained shapes we would do the same to parse the inner deserialized
+value into the wrapper tuple struct, except for these differences:</p>
+<ol>
+<li>For enums, the client generates an <code>Unknown</code> variant that &quot;contains new
+variants that have been added since this code was generated&quot;. The server
+does not need such a variant (<a href="https://github.com/awslabs/smithy-rs/issues/1187">#1187</a>).</li>
+<li>Conversions into the tuple struct are fallible (<code>try_from()</code> instead of
+<code>from()</code>). These errors will result in a <code>my_struct::ConstraintViolation</code>.</li>
+</ol>
+<h2 id="length-trait"><a class="header" href="#length-trait"><code>length</code> trait</a></h2>
+<p>We will enforce the length constraint by calling <code>len()</code> on Rust's <code>Vec</code>
+(<code>list</code> and <code>set</code> shapes), <code>HashMap</code> (<code>map</code> shapes) and our
+<a href="https://docs.rs/aws-smithy-types/latest/aws_smithy_types/struct.Blob.html"><code>aws_smithy_types::Blob</code></a> (<code>bytes</code> shapes).</p>
+<p>We will enforce the length constraint trait on <code>String</code> (<code>string</code> shapes) by
+calling <code>.chars().count()</code>.</p>
+<h2 id="pattern-trait"><a class="header" href="#pattern-trait"><code>pattern</code> trait</a></h2>
+<p>The <a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#pattern-trait"><code>pattern</code> trait</a></p>
+<blockquote>
+<p>restricts string shape values to a specified regular expression.</p>
+</blockquote>
+<p>We will implement this by using the <code>regex</code>'s crate <a href="https://docs.rs/regex/latest/regex/struct.Regex.html#method.is_match"><code>is_match</code></a>. We will use
+<a href="https://docs.rs/once_cell/latest/once_cell/"><code>once_cell</code></a> to compile the regex only the first time it is required.</p>
+<h2 id="uniqueitems-trait"><a class="header" href="#uniqueitems-trait"><code>uniqueItems</code> trait</a></h2>
+<p>The <a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#uniqueitems-trait"><code>uniqueItems</code> trait</a></p>
+<blockquote>
+<p>indicates that the items in a <a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#list"><code>List</code></a> MUST be unique.</p>
+</blockquote>
+<p>If the list shape is <code>sparse</code>, more than one <code>null</code> value violates this
+constraint.</p>
+<p>We will enforce this by copying <em>references</em> to the <code>Vec</code>'s elements into a
+<code>HashSet</code> and checking that the sizes of both containers coincide.</p>
+<h2 id="trait-precedence-and-naming-of-the-tuple-struct"><a class="header" href="#trait-precedence-and-naming-of-the-tuple-struct">Trait precedence and naming of the tuple struct</a></h2>
+<p>From <a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html?highlight=enum#trait-precedence">the spec</a>:</p>
+<blockquote>
+<p>Some constraints can be applied to shapes as well as structure members. If a
+constraint of the same type is applied to a structure member and the shape
+that the member targets, the trait applied to the member takes precedence.</p>
+</blockquote>
+<pre><code class="language-smithy">structure ShoppingCart {
+    @range(min: 7, max:12)
+    numberOfItems: PositiveInteger
+}
+
+@range(min: 1)
+integer PositiveInteger
+</code></pre>
+<p>In the above example,</p>
+<blockquote>
+<p>the range trait applied to numberOfItems takes precedence over the one
+applied to PositiveInteger. The resolved minimum will be 7, and the maximum
+12.</p>
+</blockquote>
+<p>When the constraint trait is applied to a member shape, the tuple struct's name
+will be the PascalCased name of the member shape, <code>NumberOfItems</code>.</p>
+<h2 id="unresolved-questions"><a class="header" href="#unresolved-questions">Unresolved questions</a></h2>
+<ol>
+<li>Should we code-generate unsigned integer types (<code>u16</code>, <code>u32</code>, <code>u64</code>) when
+the <code>range</code> trait is applied with <code>min</code> set to a value greater than or equal
+to 0?
+<ul>
+<li>A user has even suggested to use the <code>std::num::NonZeroUX</code> types (e.g.
+<a href="https://doc.rust-lang.org/std/num/struct.NonZeroU64.html"><code>NonZeroU64</code></a>) when <code>range</code> is applied with <code>min</code> set to a value greater
+than 0.</li>
+<li>UPDATE: This requires further design work. There are interoperability
+concerns: for example, the positive range of a
+<code>u32</code> is strictly greater than that of an <code>i32</code>, so clients wouldn't be
+able to receive values within the non-overlapping range.</li>
+</ul>
+</li>
+<li>In request deserialization, should we fail with the first violation and
+immediately render a response, or attempt to parse the entire request and
+provide a complete and structured report?
+<ul>
+<li>UPDATE: We will provide a response containing all violations. See the
+&quot;Collecting Constraint Violations&quot; section in the <a href="https://github.com/awslabs/smithy-rs/pull/2040">Better Constraint
+Violations</a> RFC.</li>
+</ul>
+</li>
+<li>Should we provide a mechanism for the service implementer to construct a
+Rust type violating the modeled constraints in their business logic e.g. a
+<code>T::new_unchecked()</code> constructor? This could be useful (1) when the user
+<em>knows</em> the provided inner value does not violate the constraints and
+doesn't want to incur the performance penalty of the check; (2) when the
+struct is in a transient invalid state. However:
+<ul>
+<li>(2) is arguably a modelling mistake and a separate struct to represent
+the transient state would be a better approach,</li>
+<li>the user could use <code>unsafe</code> Rust to bypass the validation; and</li>
+<li>adding this constructor is a backwards-compatible change, so it can
+always be added later if this feature is requested.</li>
+<li>UPDATE: We decided to punt on this until users express interest.</li>
+</ul>
+</li>
+</ol>
+<h2 id="alternative-design"><a class="header" href="#alternative-design">Alternative design</a></h2>
+<p>An alternative design with less public API surface would be to perform
+constraint validation at request deserialization, but hand over a regular
+&quot;loose&quot; type (e.g. <code>String</code> instead of <code>NiceString</code>) that allows for values
+violating the constraints. If we were to implement this approach, we can
+implement it by wrapping the incoming value in the aforementioned tuple struct
+to perform the validation, and immediately unwrap it.</p>
+<p>Comparative advantages:</p>
+<ul>
+<li>Validation remains an internal detail of the framework. If the semantics of a
+constraint trait change, the behavior of the service is still
+backwards-incompatibly affected, but user code is not.</li>
+<li>Less &quot;invasive&quot;. Baking validation in the generated type might be deemed as
+the service framework overreaching responsibilities.</li>
+</ul>
+<p>Comparative disadvantages:</p>
+<ul>
+<li>It becomes <em>possible</em> to send responses with invalid operation outputs. All
+the service framework could do is log the validation errors.</li>
+<li>Baking validation at the type-system level gets rid of an entire class of
+logic errors.</li>
+<li>Less idiomatic (this is subjective). The pattern of wrapping a more primitive
+type to guarantee domain invariants is widespread in the Rust ecosystem. The
+standard library makes use of it extensively.</li>
+</ul>
+<p>Note that <em>both</em> designs are backwards incompatible in the sense that you can't
+migrate from one to the other without breaking user code.</p>
+<p>UPDATE: We ended up implementing both designs, adding a flag to opt into the
+alternative design. Refer to the mentions of the <code>publicConstrainedTypes</code> flag
+in the description of the <a href="https://github.com/awslabs/smithy-rs/pull/1342">Builders of builders PR</a>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0024_request_id.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../rfcs/rfc0026_client_crate_organization.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0024_request_id.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../rfcs/rfc0026_client_crate_organization.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
