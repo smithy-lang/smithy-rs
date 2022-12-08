@@ -239,8 +239,8 @@ where
         );
         let (mut req, parts) = op.into_request_response();
         if let Some(metadata) = &parts.metadata {
-            span.record("operation", &metadata.name());
-            span.record("service", &metadata.service());
+            span.record("operation", metadata.name());
+            span.record("service", metadata.service());
             // This will clone two `Cow::<&'static str>::Borrow`s in the vast majority of cases
             req.properties_mut().insert(metadata.clone());
         }
@@ -251,12 +251,12 @@ where
             .await;
         match &result {
             Ok(_) => {
-                span.record("status", &"ok");
+                span.record("status", "ok");
             }
             Err(err) => {
                 span.record(
                     "status",
-                    &match err {
+                    match err {
                         SdkError::ConstructionFailure(_) => "construction_failure",
                         SdkError::DispatchFailure(_) => "dispatch_failure",
                         SdkError::ResponseError(_) => "response_error",
