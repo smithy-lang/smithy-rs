@@ -132,16 +132,15 @@ common location for now. If operation feature gating occurs in the future, furth
 optimization can be done to track which of these are used by feature, or they can
 be reorganized (this would be discussed in a future RFC and is out of scope here).
 
+With code generated operations living in `crate::operation`, there is a high chance of name
+collision with the `customize` module. To resolve this, `customize` will be moved into
+`crate::client`.
+
 The new `crate::operation` module will look as follows:
 
 ```text
 .
 └── operation
-    ├── customize
-    |   ├── ClassifyRetry
-    |   ├── CustomizableOperation
-    |   ├── Operation
-    |   └── RetryKind
     └── <One module per operation named after the operation in lower_snake_case>
         ├── paginator
         |   ├── `${operation}Paginator`
@@ -155,10 +154,6 @@ The new `crate::operation` module will look as follows:
         ├── `${operation}Output`
         └── `${operation}Parser` (private/doc hidden)
 ```
-
-The existing `customize` module that holds re-exports needed for operation customization in
-the fluent builders will remain, and the code generator will need to handle naming conflicts
-with operations named "customize".
 
 ### Reorganize the crate root
 
@@ -307,6 +302,11 @@ All combined, the following is the new publicly visible organization:
 ```text
 .
 ├── client
+|   ├── customize
+|   |   ├── ClassifyRetry (*)
+|   |   ├── CustomizableOperation
+|   |   ├── Operation (*)
+|   |   └── RetryKind (*)
 |   ├── Builder (only in non-SDK crates) (*)
 |   └── Client
 ├── config
@@ -334,11 +334,6 @@ All combined, the following is the new publicly visible organization:
 ├── middleware
 |   └── DefaultMiddleware
 ├── operation
-|   ├── customize
-|   |   ├── ClassifyRetry (*)
-|   |   ├── CustomizableOperation
-|   |   ├── Operation (*)
-|   |   └── RetryKind (*)
 |   └── <One module per operation named after the operation in lower_snake_case>
 |       ├── paginator
 |       |   ├── `${operation}Paginator`
@@ -381,6 +376,7 @@ Changes Checklist
 
 - [ ] Move `crate::AppName`, `crate::Endpoint`, `crate::Credentials`, and `crate::Region` into `crate::config`
 - [ ] Move `crate::PKG_VERSION` into a new `crate::meta` module
+- [ ] Move `crate::operation::customize` into `crate::client`
 - [ ] Organize code generated types by operation
 - [ ] Reorganize builders that aren't per-operation
 - [ ] Only re-export `aws_smithy_client::client::Builder` for non-SDK clients (remove from SDK clients)
