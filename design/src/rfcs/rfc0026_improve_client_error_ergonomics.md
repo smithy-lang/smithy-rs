@@ -25,25 +25,17 @@ let result = client
     .key("some-key")
     .send()
     .await;
-match result {
-    Ok(_output) => { /* Do something with the output */ }
-    Err(err) => match err.into_service_error() {
-        GetObjectError {
-            kind: GetObjectErrorKind::InvalidObjectState(value),
-            ..
-        } => {
-            println!("invalid object state: {:?}", value);
-        }
-        GetObjectError {
-            kind: GetObjectErrorKind::NoSuchKey(_),
-            ..
-        } => {
-            println!("object didn't exist");
-        }
-        err @ GetObjectError { .. } if err.code() == Some("SomeUnmodeledError") => {}
-        err @ _ => return Err(err.into()),
-    },
-}
+    match result {
+        Ok(_output) => { /* Do something with the output */ }
+        Err(err) => match err.into_service_error() {
+            GetObjectError { kind, .. } => match kind {
+                GetObjectErrorKind::InvalidObjectState(value) => println!("invalid object state: {:?}", value),
+                GetObjectErrorKind::NoSuchKey(_) => println!("object didn't exist"),
+            }
+            err @ GetObjectError { .. } if err.code() == Some("SomeUnmodeledError") => {}
+            err @ _ => return Err(err.into()),
+        },
+    }
 ```
 
 The refactor that implemented [RFC-0022] added the `into_service_error()` method on `SdkError` that
