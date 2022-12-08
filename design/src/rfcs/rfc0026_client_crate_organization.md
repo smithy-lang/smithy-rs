@@ -1,9 +1,9 @@
 RFC: Client Crate Organization
 ==============================
 
-> Status: RFC
+> Status: Accepted
 >
-> Applies to: clients (and impacts servers due to shared codegen)
+> Applies to: clients (and may impact servers due to shared codegen)
 
 This RFC proposes changing the organization structure of the generated client crates to:
 
