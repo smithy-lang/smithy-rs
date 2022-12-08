@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -43,11 +44,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamN
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedBlobGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedNumberGenerator
@@ -496,5 +499,18 @@ open class ServerCodegenVisitor(
             codegenContext,
         )
             .render()
+    }
+
+    override fun blobShape(shape: BlobShape) {
+        logger.info("[rust-server-codegen] Generating a service $shape")
+        if (shape.hasEventStreamMember(model)) {
+            return super.blobShape(shape)
+        }
+
+        if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+            rustCrate.withModule(ModelsModule) {
+                ConstrainedBlobGenerator(codegenContext, this, shape).render()
+            }
+        }
     }
 }
