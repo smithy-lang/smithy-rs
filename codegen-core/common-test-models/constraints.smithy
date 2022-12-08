@@ -10,7 +10,6 @@ use smithy.framework#ValidationException
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
-        // TODO Rename as {Verb}[{Qualifier}]{Noun}: https://github.com/awslabs/smithy-rs/pull/1342#discussion_r980936650
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedRecursiveShapesOperation,
@@ -876,10 +875,8 @@ map ConBMap {
 
 @error("client")
 structure ErrorWithLengthStringMessage {
-    // TODO Doesn't work yet because constrained string types don't implement
-    // `AsRef<str>`.
-    // @required
-    // message: LengthString
+    @required
+    message: LengthString
 }
 
 map MapOfMapOfListOfListOfConB {
