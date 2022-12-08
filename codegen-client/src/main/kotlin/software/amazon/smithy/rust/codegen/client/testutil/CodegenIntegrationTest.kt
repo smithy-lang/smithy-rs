@@ -29,7 +29,7 @@ import java.nio.file.Path
  */
 fun clientIntegrationTest(
     model: Model,
-    addtionalDecorators: List<RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>> = listOf(),
+    additionalDecorators: List<RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>> = listOf(),
     addModuleToEventStreamAllowList: Boolean = false,
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
@@ -40,7 +40,7 @@ fun clientIntegrationTest(
     return codegenIntegrationTest(
         model,
         RustCodegenPlugin(),
-        addtionalDecorators,
+        additionalDecorators,
         addModuleToEventStreamAllowList = addModuleToEventStreamAllowList,
         service = service,
         runtimeConfig = runtimeConfig,

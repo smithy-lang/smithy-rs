@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.End
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -149,6 +150,8 @@ class EndpointConfigCustomization(
                 """
                 /// Overrides the endpoint resolver to use when making requests.
                 ///
+                /// This method is deprecated, use [`Builder::endpoint_url`] or [`Builder::endpoint_resolver`] instead.
+                ///
                 /// When unset, the client will used a generated endpoint resolver based on the endpoint metadata
                 /// for `$moduleUseName`.
                 ///
@@ -170,8 +173,11 @@ class EndpointConfigCustomization(
                     self.endpoint_resolver = Some(std::sync::Arc::new(#{EndpointShim}::from_resolver(endpoint_resolver)) as _);
                     self
                 }
+
                 ##[deprecated(note = "use endpoint_url or set the endpoint resolver directly")]
                 /// Sets the endpoint resolver to use when making requests.
+                ///
+                /// This method is deprecated, use [`Builder::endpoint_url`] or [`Builder::endpoint_resolver`] instead.
                 pub fn set_aws_endpoint_resolver(&mut self, endpoint_resolver: Option<std::sync::Arc<dyn #{ResolveAwsEndpoint}>>) -> &mut Self {
                     self.endpoint_resolver = endpoint_resolver.map(|res|std::sync::Arc::new(#{EndpointShim}::from_arc(res) ) as _);
                     self
@@ -179,8 +185,9 @@ class EndpointConfigCustomization(
 
                 /// Sets the endpoint url used to communicate with this service
                 ///
-                /// Note: this may be used in combination with other endpoint rules. To fully override the endpoint
-                /// resolver, use [`endpoint_resolver`].
+                /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
+                /// will be prefixed onto this URL. To fully override the endpoint resolver, use
+                /// [`Builder::endpoint_resolver`].
                 pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
                     self.endpoint_url = Some(endpoint_url.into());
                     self
@@ -188,8 +195,9 @@ class EndpointConfigCustomization(
 
                 /// Sets the endpoint url used to communicate with this service
                 ///
-                /// Note: this may be used in combination with other endpoint rules. To fully override the endpoint
-                /// resolver, use [`endpoint_resolver`].
+                /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
+                /// will be prefixed onto this URL. To fully override the endpoint resolver, use
+                /// [`Builder::endpoint_resolver`].
                 pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
                     self.endpoint_url = endpoint_url;
                     self
@@ -200,7 +208,10 @@ class EndpointConfigCustomization(
 
             ServiceConfig.BuilderBuild -> rust("endpoint_url: self.endpoint_url")
             ServiceConfig.BuilderStruct -> rust("endpoint_url: Option<String>")
-            ServiceConfig.ConfigImpl -> rust("pub(crate) fn endpoint_url(&self) -> Option<&str> { self.endpoint_url.as_deref() }")
+            ServiceConfig.ConfigImpl -> {
+                Attribute.AllowDeadCode.render(this)
+                rust("pub(crate) fn endpoint_url(&self) -> Option<&str> { self.endpoint_url.as_deref() }")
+            }
             ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>")
             ServiceConfig.ConfigStructAdditionalDocs -> emptySection
             ServiceConfig.Extras -> emptySection

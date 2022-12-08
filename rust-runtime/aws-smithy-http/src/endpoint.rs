@@ -205,6 +205,7 @@ fn merge_paths<'a>(endpoint: &'a Uri, uri: &'a Uri) -> Cow<'a, str> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod test {
     use crate::endpoint::error::{InvalidEndpointError, InvalidEndpointErrorKind};
     use crate::endpoint::{Endpoint, EndpointPrefix};

@@ -335,6 +335,7 @@ mod loader {
         ///     .await;
         /// # Ok(())
         /// # }
+        #[deprecated(note = "use `.endpoint_url(...)` instead")]
         pub fn endpoint_resolver(
             mut self,
             endpoint_resolver: impl ResolveAwsEndpoint + 'static,
