@@ -87,7 +87,11 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
     }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val paramsStruct = EndpointTypesGenerator.fromContext(codegenContext)?.paramsStruct() ?: return
+        val epTypes = EndpointTypesGenerator.fromContext(codegenContext)
+        // generate a region converter if params has a region
+        if (!epTypes.params.toList().any { it.builtIn == Builtins.REGION.builtIn }) {
+            return
+        }
         rustCrate.withModule(EndpointsModule) {
             rustTemplate(
                 """
@@ -102,7 +106,7 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
                     }
                 }
                 """,
-                "Params" to paramsStruct,
+                "Params" to epTypes.paramsStruct(),
                 "Region" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("region::Region"),
                 "PlaceholderParams" to AwsRuntimeType.awsEndpoint(codegenContext.runtimeConfig).resolve("Params"),
             )

@@ -126,7 +126,7 @@ internal class EndpointConfigCustomization(
                     } else {
                         rustTemplate(
                             """
-                            endpoint_resolver: self.endpoint_resolver.expect("an endpoint resolver must be provided")
+                            endpoint_resolver: self.endpoint_resolver.expect("an endpoint resolver must be provided"),
                             """,
                         )
                     }

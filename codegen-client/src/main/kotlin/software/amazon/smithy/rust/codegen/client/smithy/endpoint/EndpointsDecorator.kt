@@ -85,15 +85,11 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return listOfNotNull(
-            EndpointTypesGenerator.fromContext(codegenContext)?.let { endpointTypes ->
-                InjectEndpointInMakeOperation(
-                    codegenContext,
-                    endpointTypes,
-                    operation,
-                )
-            },
-        ) + baseCustomizations
+        return baseCustomizations + InjectEndpointInMakeOperation(
+            codegenContext,
+            EndpointTypesGenerator.fromContext(codegenContext),
+            operation,
+        )
     }
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
@@ -110,19 +106,15 @@ class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + ClientContextDecorator(codegenContext) + listOfNotNull(
-            EndpointTypesGenerator.fromContext(
-                codegenContext,
-            )?.let { EndpointConfigCustomization(codegenContext, it) },
-        )
+        return baseCustomizations + ClientContextDecorator(codegenContext) +
+            EndpointConfigCustomization(codegenContext, EndpointTypesGenerator.fromContext(codegenContext))
     }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        EndpointTypesGenerator.fromContext(codegenContext)?.also { generator ->
-            rustCrate.withModule(EndpointsModule) {
-                withInlineModule(EndpointTests) {
-                    generator.testGenerator()(this)
-                }
+        val generator = EndpointTypesGenerator.fromContext(codegenContext)
+        rustCrate.withModule(EndpointsModule) {
+            withInlineModule(EndpointTests) {
+                generator.testGenerator()(this)
             }
         }
     }
