@@ -181,10 +181,11 @@ Previously, the following were exported in root:
 └── Region
 ```
 
-The `AppName` is infrequently set, and should be moved into `crate::config`. The `aws-config` crate
-drastically reduces the usefulness of `Credentials`, `Endpoint`, and `Region`, so these can move
-into `crate::config`. `ErrorExt` should be moved into `crate::error`, but `Error` should stay in
-the crate root so that customers that alias the SDK crate can easily reference it in their `Result`s:
+The `AppName` is infrequently set, and will be moved into `crate::config`. Customers are encouraged
+to use `aws-config` crate to resolve credentials, region, and endpoint. Thus, these types no longer
+need to be at the top-level, and will be moved into `crate::config`. `ErrorExt` will be moved into
+`crate::error`, but `Error` will stay in the crate root so that customers that alias the SDK crate
+can easily reference it in their `Result`s:
 
 ```rust
 use aws_sdk_s3 as s3;
