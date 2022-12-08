@@ -701,3 +701,9 @@ message = "Add more `tracing` events to signing and event streams"
 references = ["smithy-rs#2057", "smithy-rs#371"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Log an `info` on credentials cache miss and adjust level of some credential `tracing` spans/events."
+references = ["smithy-rs#2062"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"

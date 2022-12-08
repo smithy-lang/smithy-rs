@@ -35,4 +35,5 @@
 - [RFC-0023: Evolving the new service builder API](./rfc0023_refine_builder.md)
 - [RFC-0024: RequestID](./rfc0024_request_id.md)
 - [RFC-0025: Constraint traits](./rfc0025_constraint_traits.md)
-- [RFC-0026: Improve client error ergonomics](./rfc0026_improve_client_error_ergonomics.md)
+- [RFC-0026: Client Crate Organization](./rfc0026_client_crate_organization.md)
+- [RFC-0027: Improve client error ergonomics](./rfc0027_improve_client_error_ergonomics.md)
