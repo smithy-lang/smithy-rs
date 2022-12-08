@@ -212,7 +212,7 @@ data class CargoDependency(
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
         val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev)
-        val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"))
+        val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"), DependencyScope.Dev)
         val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
         val PrettyAssertions: CargoDependency =
             CargoDependency("pretty_assertions", CratesIo("1.3.0"), DependencyScope.Dev)
