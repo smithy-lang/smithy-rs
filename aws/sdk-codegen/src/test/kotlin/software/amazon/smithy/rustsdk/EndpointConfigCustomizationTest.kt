@@ -9,19 +9,19 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import java.io.File
 
 internal class EndpointConfigCustomizationTest {
-    private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().toType().member("Params")
+    private val placeholderEndpointParams = AwsRuntimeType.awsEndpoint(AwsTestRuntimeConfig).resolve("Params")
     private val codegenScope = arrayOf(
-        "http" to CargoDependency.Http.toType(),
+        "http" to RuntimeType.Http,
         "PlaceholderParams" to placeholderEndpointParams,
-        "aws_types" to awsTypes(AwsTestRuntimeConfig).toType(),
+        "aws_types" to AwsRuntimeType.awsTypes(AwsTestRuntimeConfig),
     )
 
     private val model = """

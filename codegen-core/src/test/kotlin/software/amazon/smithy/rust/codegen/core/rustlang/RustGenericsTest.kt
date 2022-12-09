@@ -125,5 +125,5 @@ class RustGenericsTest {
         }
     }
 
-    private fun testRT(name: String): RuntimeType = RuntimeType(name, null, "test")
+    private fun testRT(name: String): RuntimeType = RuntimeType("test::$name")
 }
