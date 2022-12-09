@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -94,7 +96,16 @@ class UnconstrainedCollectionGenerator(
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
                 if (innerShape.canReachConstrainedShape(model, symbolProvider)) {
-                    val innerConstrainedSymbol = constrainedShapeSymbolProvider.toSymbol(innerShape)
+                    val resolvesToNonPublicConstrainedValueType =
+                        innerShape.canReachConstrainedShape(model, symbolProvider) &&
+                        !innerShape.isDirectlyConstrained(symbolProvider) &&
+                        innerShape !is StructureShape &&
+                        innerShape !is UnionShape
+                    val innerConstrainedSymbol = if (resolvesToNonPublicConstrainedValueType) {
+                        pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
+                    } else {
+                        constrainedShapeSymbolProvider.toSymbol(innerShape)
+                    }
 
                     rustTemplate(
                         """
