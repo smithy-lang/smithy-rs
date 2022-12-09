@@ -59,17 +59,17 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerato
 class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val defaultProvider = defaultProvider()
     private val codegenScope = arrayOf(
-        "credentials" to awsTypes(runtimeConfig).toType().member("credentials"),
+        "credentials" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("credentials"),
         "DefaultProvider" to defaultProvider,
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate(
+            ServiceConfig.ConfigStruct -> rustTemplate(
                 """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> rustTemplate(
+            ServiceConfig.ConfigImpl -> rustTemplate(
                 """
                 /// Returns the credentials provider.
                 pub fn credentials_provider(&self) -> #{credentials}::SharedCredentialsProvider {
@@ -78,7 +78,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 """,
                 *codegenScope,
             )
-            is ServiceConfig.BuilderStruct ->
+            ServiceConfig.BuilderStruct ->
                 rustTemplate("credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,", *codegenScope)
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
@@ -103,6 +103,8 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
                 *codegenScope,
             )
+
+            else -> emptySection
         }
     }
 }
@@ -130,7 +132,7 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::Credentials;",
-                    awsTypes(runtimeConfig).toType(),
+                    AwsRuntimeType.awsTypes(runtimeConfig),
                 )
             }
 
@@ -139,10 +141,7 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     }
 }
 
-fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-http")
-
 fun defaultProvider() =
-    RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).member("NoCredentials")
+    RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).resolve("NoCredentials")
 
-fun setProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("set_provider", awsHttp(runtimeConfig), "aws_http::auth")
+fun setProvider(runtimeConfig: RuntimeConfig) = AwsRuntimeType.awsHttp(runtimeConfig).resolve("auth::set_provider")

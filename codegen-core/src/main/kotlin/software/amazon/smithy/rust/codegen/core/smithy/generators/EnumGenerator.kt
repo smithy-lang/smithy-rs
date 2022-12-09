@@ -251,7 +251,7 @@ open class EnumGenerator(
             }
             """,
             "Debug" to RuntimeType.Debug,
-            "StdFmt" to RuntimeType.stdfmt,
+            "StdFmt" to RuntimeType.stdFmt,
         )
     }
 

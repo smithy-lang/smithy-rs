@@ -120,7 +120,7 @@ class UnconstrainedUnionGenerator(
                 }
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
             "ConstrainedSymbol" to constrainedSymbol,
             "UnconstrainedSymbol" to symbol,
