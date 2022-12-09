@@ -140,7 +140,7 @@ pub trait PyApp: Clone + pyo3::IntoPy<PyObject> {
     /// Other signals are NOOP.
     fn block_on_rust_signals(&self) {
         let mut signals =
-            Signals::new(&[SIGINT, SIGHUP, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2, SIGWINCH])
+            Signals::new([SIGINT, SIGHUP, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2, SIGWINCH])
                 .expect("Unable to register signals");
         for sig in signals.forever() {
             match sig {
@@ -226,7 +226,7 @@ event_loop.add_signal_handler(signal.SIGINT,
     ) -> PyResult<()> {
         // Clone the socket.
         let borrow = socket.try_borrow_mut()?;
-        let held_socket: &PySocket = &*borrow;
+        let held_socket: &PySocket = &borrow;
         let raw_socket = held_socket.get_socket()?;
         // Register signals on the Python event loop.
         self.register_python_signals(py, event_loop.to_object(py))?;
