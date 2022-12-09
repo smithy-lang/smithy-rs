@@ -8,7 +8,6 @@
 use http::Extensions;
 use pyo3::{PyObject, PyResult, Python, ToPyObject};
 
-#[cfg(feature = "aws-lambda")]
 mod lambda;
 pub mod layer;
 #[cfg(test)]
@@ -35,21 +34,18 @@ pub struct PyContext {
     // We could introduce a registry to keep track of every injectable type but I'm not sure that is the best way to do it,
     // so until we found a good way to achive that, I didn't want to introduce any abstraction here and
     // keep it simple because we only have one field that is injectable.
-    #[cfg(feature = "aws-lambda")]
     lambda_ctx: lambda::PyContextLambda,
 }
 
 impl PyContext {
     pub fn new(inner: PyObject) -> PyResult<Self> {
         Ok(Self {
-            #[cfg(feature = "aws-lambda")]
             lambda_ctx: lambda::PyContextLambda::new(inner.clone())?,
             inner,
         })
     }
 
     pub fn populate_from_extensions(&self, _ext: &Extensions) {
-        #[cfg(feature = "aws-lambda")]
         self.lambda_ctx
             .populate_from_extensions(self.inner.clone(), _ext);
     }

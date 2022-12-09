@@ -12,12 +12,9 @@ Python server runtime for Smithy Rust Server Framework.
 """
 publish = true
 
-[features]
-aws-lambda = ["aws-smithy-http-server/aws-lambda", "dep:lambda_http"]
-
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
@@ -29,6 +26,7 @@ lambda_http = { version = "0.7.1", optional = true }
 tls-listener = { version = "0.5.1", features = ["rustls", "hyper-h2"] }
 rustls-pemfile = "1.0.1"
 tokio-rustls = "0.23.4"
+lambda_http = { version = "0.7.1" }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2"

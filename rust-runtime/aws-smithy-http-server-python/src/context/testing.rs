@@ -5,6 +5,7 @@
 
 //! Testing utilities for [PyContext].
 
+use http::{header::HeaderName, HeaderMap, HeaderValue};
 use pyo3::{
     types::{PyDict, PyModule},
     IntoPy, PyErr, Python,
@@ -16,7 +17,6 @@ pub fn get_context(code: &str) -> PyContext {
     let inner = Python::with_gil(|py| {
         let globals = PyModule::import(py, "__main__")?.dict();
         globals.set_item("typing", py.import("typing")?)?;
-        #[cfg(feature = "aws-lambda")]
         globals.set_item(
             "LambdaContext",
             py.get_type::<crate::lambda::PyLambdaContext>(),
@@ -33,10 +33,7 @@ pub fn get_context(code: &str) -> PyContext {
     PyContext::new(inner).unwrap()
 }
 
-#[cfg(feature = "aws-lambda")]
 pub fn lambda_ctx(req_id: &'static str, deadline_ms: &'static str) -> lambda_http::Context {
-    use http::{header::HeaderName, HeaderMap, HeaderValue};
-
     let headers = HeaderMap::from_iter([
         (
             HeaderName::from_static("lambda-runtime-aws-request-id"),

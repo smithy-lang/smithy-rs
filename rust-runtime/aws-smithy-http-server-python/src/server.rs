@@ -447,8 +447,6 @@ event_loop.add_signal_handler(signal.SIGINT,
     }
 
     /// Lambda main entrypoint: start the handler on Lambda.
-    #[cfg(feature = "aws-lambda")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
     fn run_lambda_handler(&mut self, py: Python) -> PyResult<()> {
         use aws_smithy_http_server::routing::LambdaHandler;
 
