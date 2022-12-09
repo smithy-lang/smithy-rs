@@ -14,7 +14,7 @@ pub mod layer;
 mod testing;
 
 /// PyContext is a wrapper for context object provided by the user.
-/// It injects some values (currently only [PyLambdaContext]) that is type-hinted by the user.
+/// It injects some values (currently only [super::lambda::PyLambdaContext]) that is type-hinted by the user.
 ///
 ///
 /// PyContext is initialised during the startup, it inspects the provided context object for fields

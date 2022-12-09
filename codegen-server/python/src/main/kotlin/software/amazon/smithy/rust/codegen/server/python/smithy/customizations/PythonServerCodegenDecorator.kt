@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
