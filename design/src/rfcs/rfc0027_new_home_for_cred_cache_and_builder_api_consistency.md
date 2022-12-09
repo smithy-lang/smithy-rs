@@ -128,7 +128,7 @@ We propose to move types and traits for credentials caching to a separate crate 
 - All items in `aws_types::credentials` and their dependencies
 - All items in `aws_config::meta::credentials` and their dependencies
 
-The new crate will be the home for `ProvideCachedCredentials` discussed above as well as `CredentialsCache` with its `Lazy` variant and builder. Crucially, `CredentialsCache::create_cahe` will be marked as `pub`. The `aws-XXX` crate itself depends on `aws_smithy_types` and `aws_smithy_async`, among others, for the items in it to be able to compile. There is one wrinkle, however, that is `LazyCredentialsCache` depends on `aws_types::os_shim_internal::TimeSource`; it does not feel right to move `TimeSource` to `aws-XXX` just because `LazyCredentialsCache` requires it. There are two ways to work around it.
+The new crate will be the home for `ProvideCachedCredentials` discussed above as well as `CredentialsCache` with its `Lazy` variant and builder. Crucially, `CredentialsCache::create_cache` will be marked as `pub`. The `aws-XXX` crate itself depends on `aws_smithy_types` and `aws_smithy_async`, among others, for the items in it to be able to compile. There is one wrinkle, however, that is `LazyCredentialsCache` depends on `aws_types::os_shim_internal::TimeSource`; it does not feel right to move `TimeSource` to `aws-XXX` just because `LazyCredentialsCache` requires it. There are two ways to work around it.
 
 #### Option A: Moving `aws_types::sdk_config` to `aws-XXX`
 
