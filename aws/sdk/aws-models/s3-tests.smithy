@@ -1,6 +1,7 @@
 $version: "1.0"
 
 namespace com.amazonaws.s3
+
 use smithy.test#httpResponseTests
 use smithy.test#httpRequestTests
 
@@ -84,20 +85,20 @@ apply ListObjects @httpResponseTests([
             Name: "bucketname",
             Prefix: "",
             Contents: [{
-                Key: "    ",
-                LastModified: 1626452453,
-                ETag: "\"etag123\"",
-                Size: 0,
-                Owner: { ID: "owner" },
-                StorageClass: "STANDARD"
-            }, {
-               Key: " a ",
-               LastModified: 1626451330,
-               ETag: "\"etag123\"",
-               Size: 0,
-               Owner: { ID: "owner" },
-               StorageClass: "STANDARD"
-           }]
+                           Key: "    ",
+                           LastModified: 1626452453,
+                           ETag: "\"etag123\"",
+                           Size: 0,
+                           Owner: { ID: "owner" },
+                           StorageClass: "STANDARD"
+                       }, {
+                           Key: " a ",
+                           LastModified: 1626451330,
+                           ETag: "\"etag123\"",
+                           Size: 0,
+                           Owner: { ID: "owner" },
+                           StorageClass: "STANDARD"
+                       }]
         }
     }
 ])
@@ -133,6 +134,13 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
                     {"Expiration": { "Days": 1 }, "Status": "Enabled", "ID": "Expire" },
                 ]
             }
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
         }
     }
 ])
@@ -151,6 +159,13 @@ apply CreateMultipartUpload @httpRequestTests([
         params: {
             "Bucket": "test-bucket",
             "Key": "object.txt"
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
         }
     }
 ])
@@ -167,6 +182,13 @@ apply PutObject @httpRequestTests([
             Bucket: "test-bucket",
             Key: "test-key",
             ContentType: "text/html"
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
         }
     },
     {
@@ -181,6 +203,13 @@ apply PutObject @httpRequestTests([
             Key: "test-key",
             ContentLength: 2,
             Body: "ab"
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
         }
     }
 ])
@@ -196,6 +225,13 @@ apply HeadObject @httpRequestTests([
         params: {
             Bucket: "test-bucket",
             Key: "<> `?🐱",
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
         }
     }
 ])
