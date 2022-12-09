@@ -55,6 +55,8 @@ Proposed Changes
 
 First, we'll explore making it easier to retrieve a request ID from errors,
 and then look at making it possible to retrieve them from successful responses.
+To see the customer experience of these changes, see the **Example Interactions**
+section below.
 
 ### Make request ID retrieval on errors consistent
 
@@ -143,6 +145,66 @@ be easy to retrieve a request ID. To do this, `aws-http` will provide `RequestId
 implementations for `Operation` and `operation::Response`. These implementations
 will likely make the other `RequestId` implementations easier to implement as well.
 
+### Implement `RequestId` for `Result`
+
+The `Result` returned by the SDK should directly implement `RequestId` when both
+its `Ok` and `Err` variants implement `RequestId`. This will make it possible
+for a customer to feed the return value from `send()` directly to a request ID logger.
+
+Example Interactions
+--------------------
+
+### Generic Handling Case
+
+```rust
+// A re-export of the RequestId trait
+use aws_sdk_service::primitives::RequestId;
+
+fn my_request_id_logging_fn(request_id: &dyn RequestId) {
+    println!("request ID: {:?}", request_id.request_id());
+}
+
+let result = client.some_operation().send().await?;
+my_request_id_logging_fn(&result);
+```
+
+### Success Case
+
+```rust
+// A re-export of the RequestId trait
+use aws_sdk_service::primitives::RequestId;
+
+let output = client.some_operation().send().await?;
+println!("request ID: {:?}", output.request_id())
+```
+
+### Error Case with `SdkError`
+
+```rust
+use aws_sdk_service::primitives::RequestId;
+
+match client.some_operation().send().await {
+    Ok(_) => { /* handle OK */ }
+    Err(err) => {
+        println!("request ID: {:?}", output.request_id());
+    }
+}
+```
+
+### Error Case with operation error
+
+```rust
+use aws_sdk_service::primitives::RequestId;
+
+match client.some_operation().send().await {
+    Ok(_) => { /* handle OK */ }
+    Err(err) => match err.into_service_err() {
+        err @ SomeOperationError::SomeError(_) => { println!("request ID: {:?}", output.request_id()); }
+        _ => { /* don't care */ }
+    }
+}
+```
+
 Changes Checklist
 -----------------
 
@@ -158,6 +220,8 @@ Changes Checklist
   - [ ] Customize output structure code gen in `sdk-codegen` to add either a request ID or a response field
   - [ ] Customize `ParseResponse` in `sdk-codegen` to populate the outputs
 - [ ] Implement `RequestId` for `Operation` and `operation::Response`
+- [ ] Implement `RequestId` for `Result<O, E>` where `O` and `E` both implement `RequestId`
+- [ ] Re-export `RequestId` in generated crates
 - [ ] Add integration tests for each request ID access point
 
 Appendix A: Alternate solution for access on successful responses
