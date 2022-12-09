@@ -171,11 +171,10 @@ my_request_id_logging_fn(&result);
 ### Success Case
 
 ```rust
-// A re-export of the RequestId trait
 use aws_sdk_service::primitives::RequestId;
 
 let output = client.some_operation().send().await?;
-println!("request ID: {:?}", output.request_id())
+println!("request ID: {:?}", output.request_id());
 ```
 
 ### Error Case with `SdkError`
@@ -199,7 +198,7 @@ use aws_sdk_service::primitives::RequestId;
 match client.some_operation().send().await {
     Ok(_) => { /* handle OK */ }
     Err(err) => match err.into_service_err() {
-        err @ SomeOperationError::SomeError(_) => { println!("request ID: {:?}", output.request_id()); }
+        err @ SomeOperationError::SomeError(_) => { println!("request ID: {:?}", err.request_id()); }
         _ => { /* don't care */ }
     }
 }
