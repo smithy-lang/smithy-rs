@@ -13,7 +13,7 @@
 
 [[smithy-rs]]
 message = "Upgrade Rust MSRV to 1.62.1"
-references = ["smithy-rs#0"]
+references = ["smithy-rs#1938"]
 meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
 author = "jjantdev"
 

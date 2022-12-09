@@ -13,14 +13,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStream
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.BytesUtils
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Criterion
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FastRand
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FuturesCore
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FuturesUtil
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HdrHistogram
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Hound
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.SerdeJson
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Smol
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TempFile
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tokio
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tracing
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingAppender
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -117,7 +120,10 @@ class S3TestDependencies : LibRsCustomization() {
         writable {
             addDependency(AsyncStd)
             addDependency(BytesUtils)
+            addDependency(FastRand)
+            addDependency(HdrHistogram)
             addDependency(Smol)
             addDependency(TempFile)
+            addDependency(TracingAppender)
         }
 }
