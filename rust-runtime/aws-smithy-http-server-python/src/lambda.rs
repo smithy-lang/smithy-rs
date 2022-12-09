@@ -96,7 +96,7 @@ pub struct PyLambdaContext {
     invoked_function_arn: String,
     /// The X-Ray trace ID for the current invocation.
     #[pyo3(get)]
-    xray_trace_id: String,
+    xray_trace_id: Option<String>,
     /// The client context object sent by the AWS mobile SDK. This field is
     /// empty unless the function is invoked using an AWS mobile SDK.
     #[pyo3(get)]
