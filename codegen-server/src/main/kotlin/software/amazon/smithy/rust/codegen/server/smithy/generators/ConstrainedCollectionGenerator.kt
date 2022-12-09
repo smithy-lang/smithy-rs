@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -23,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.supportedCollectionConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -132,7 +135,12 @@ class ConstrainedCollectionGenerator(
             "ValidationFunctions" to constraintsInfo.map { it.validationFunctionDefinition(constraintViolation, inner) }.join("\n"),
         )
 
-        if (!publicConstrainedTypes && isValueConstrained(shape, model, symbolProvider)) {
+        val innerShape = model.expectShape(shape.member.target)
+        if (!publicConstrainedTypes
+            && innerShape.canReachConstrainedShape(model, symbolProvider)
+            && innerShape !is StructureShape
+            && innerShape !is UnionShape
+        ) {
             writer.rustTemplate(
                 """
                 impl #{From}<$name> for #{FullyUnconstrainedSymbol} {

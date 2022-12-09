@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -115,7 +117,12 @@ class ConstrainedMapGenerator(
             *codegenScope,
         )
 
-        if (!publicConstrainedTypes && isValueConstrained(shape, model, symbolProvider)) {
+        val valueShape = model.expectShape(shape.value.target)
+        if (!publicConstrainedTypes
+            && isValueConstrained(valueShape, model, symbolProvider)
+            && valueShape !is StructureShape
+            && valueShape !is UnionShape
+        ) {
             writer.rustTemplate(
                 """
                 impl #{From}<$name> for #{FullyUnconstrainedSymbol} {
