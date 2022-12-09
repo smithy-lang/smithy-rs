@@ -104,21 +104,6 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerProtocolGenerator,
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
-/**
- * Decorator adding an `aws-lambda` feature to the generated crate.
- */
-class PythonFeatureFlagsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
-    override val name: String = "PythonFeatureFlagsDecorator"
-    override val order: Byte = 0
-
-    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
-        rustCrate.mergeFeature(Feature("aws-lambda", true, listOf("aws-smithy-http-server-python/aws-lambda")))
-    }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
-}
-
 val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
@@ -131,6 +116,4 @@ val DECORATORS = listOf(
     PubUsePythonTypesDecorator(),
     // Render the Python shared library export.
     PythonExportModuleDecorator(),
-    // Add the `aws-lambda` feature flag
-    PythonFeatureFlagsDecorator(),
 )
