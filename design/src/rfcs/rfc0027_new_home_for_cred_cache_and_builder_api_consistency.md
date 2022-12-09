@@ -177,6 +177,6 @@ The following list does not repeat what is listed in the preceding RFC but does 
 - [ ] Update `SharedCredentialsCache` to be a newtype wrapper around `Arc<dyn ProvideCachedCredentials>`
 - [ ] Implement `ProvideCachedCredentials` for `SharedCredentialsCache`
 - [ ] Implement `ProvideCachedCredentials` for `LazyCredentialsCache`
-- [ ] Add `credentials_cahce` & `set_credentials_cache` to both `sdk_config::Builder` and service clients' `config::Builder`s
+- [ ] Add `credentials_cache` & `set_credentials_cache` to both `sdk_config::Builder` and service clients' `config::Builder`s
 - [ ] Move `aws_types::sdk_config` to the appropriate place based on either option A or option B discussed above.
 - [ ] Make changes to `CredentialsStage` accordingly using `SharedCredentialsCache`
