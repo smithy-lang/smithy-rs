@@ -15,6 +15,7 @@
 
 pub mod context;
 mod error;
+#[cfg(feature = "aws-lambda")]
 pub mod lambda;
 pub mod logging;
 pub mod middleware;

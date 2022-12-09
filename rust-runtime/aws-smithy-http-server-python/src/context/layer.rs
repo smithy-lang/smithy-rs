@@ -8,10 +8,7 @@
 use std::task::{Context, Poll};
 
 use http::{Request, Response};
-use lambda_http::Context as LambdaContext;
 use tower::{Layer, Service};
-
-use crate::lambda::PyLambdaContext;
 
 use super::PyContext;
 
@@ -58,15 +55,7 @@ where
     }
 
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
-        if self.ctx.has_lambda_context_fields() {
-            let py_lambda_ctx = req
-                .extensions()
-                .get::<LambdaContext>()
-                .cloned()
-                .map(PyLambdaContext::new);
-            self.ctx.set_lambda_context(py_lambda_ctx);
-        }
-
+        self.ctx.populate_from_extensions(req.extensions());
         req.extensions_mut().insert(self.ctx.clone());
         self.inner.call(req)
     }
@@ -74,60 +63,109 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
     use http::{Request, Response};
     use hyper::Body;
     use pyo3::prelude::*;
     use pyo3::types::IntoPyDict;
-    use std::convert::Infallible;
     use tower::{service_fn, ServiceBuilder, ServiceExt};
 
+    use crate::context::testing::get_context;
+
     use super::*;
-    use crate::context::testing::{get_context, lambda_ctx};
 
     #[tokio::test]
-    async fn populates_lambda_context() {
+    async fn injects_context_to_req_extensions() {
         pyo3::prepare_freethreaded_python();
 
         let ctx = get_context(
             r#"
 class Context:
     counter: int = 42
-    lambda_ctx: typing.Optional[LambdaContext] = None
 
 ctx = Context()
-"#,
+    "#,
         );
 
         let svc = ServiceBuilder::new()
             .layer(AddPyContextLayer::new(ctx))
             .service(service_fn(|req: Request<Body>| async move {
                 let ctx = req.extensions().get::<PyContext>().unwrap();
-                let (req_id, counter) = Python::with_gil(|py| {
+                let counter = Python::with_gil(|py| {
                     let locals = [("ctx", ctx)].into_py_dict(py);
                     py.run(
                         r#"
-req_id = ctx.lambda_ctx.request_id
 ctx.counter += 1
 counter = ctx.counter
-"#,
+    "#,
                         None,
                         Some(locals),
                     )
                     .unwrap();
 
-                    (
-                        locals.get_item("req_id").unwrap().to_string(),
-                        locals.get_item("counter").unwrap().to_string(),
-                    )
+                    locals.get_item("counter").unwrap().to_string()
                 });
-                Ok::<_, Infallible>(Response::new((req_id, counter)))
+                Ok::<_, Infallible>(Response::new(counter))
             }));
 
-        let mut req = Request::new(Body::empty());
-        req.extensions_mut().insert(lambda_ctx("my-req-id", "178"));
-
+        let req = Request::new(Body::empty());
         let res = svc.oneshot(req).await.unwrap().into_body();
+        assert_eq!("43".to_string(), res);
+    }
 
-        assert_eq!(("my-req-id".to_string(), "43".to_string()), res);
+    #[cfg(feature = "aws-lambda")]
+    mod lambda {
+
+        use crate::context::testing::lambda_ctx;
+
+        use super::*;
+
+        #[tokio::test]
+        async fn populates_lambda_context() {
+            pyo3::prepare_freethreaded_python();
+
+            let ctx = get_context(
+                r#"
+class Context:
+    counter: int = 42
+    lambda_ctx: typing.Optional[LambdaContext] = None
+
+ctx = Context()
+    "#,
+            );
+
+            let svc = ServiceBuilder::new()
+                .layer(AddPyContextLayer::new(ctx))
+                .service(service_fn(|req: Request<Body>| async move {
+                    let ctx = req.extensions().get::<PyContext>().unwrap();
+                    let (req_id, counter) = Python::with_gil(|py| {
+                        let locals = [("ctx", ctx)].into_py_dict(py);
+                        py.run(
+                            r#"
+req_id = ctx.lambda_ctx.request_id
+ctx.counter += 1
+counter = ctx.counter
+    "#,
+                            None,
+                            Some(locals),
+                        )
+                        .unwrap();
+
+                        (
+                            locals.get_item("req_id").unwrap().to_string(),
+                            locals.get_item("counter").unwrap().to_string(),
+                        )
+                    });
+                    Ok::<_, Infallible>(Response::new((req_id, counter)))
+                }));
+
+            let mut req = Request::new(Body::empty());
+            req.extensions_mut().insert(lambda_ctx("my-req-id", "178"));
+
+            let res = svc.oneshot(req).await.unwrap().into_body();
+
+            assert_eq!(("my-req-id".to_string(), "43".to_string()), res);
+        }
     }
 }

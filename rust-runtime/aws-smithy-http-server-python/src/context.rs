@@ -5,14 +5,11 @@
 
 //! Python context definition.
 
-use std::collections::HashSet;
+use http::Extensions;
+use pyo3::{PyObject, PyResult, Python, ToPyObject};
 
-use pyo3::{types::PyDict, PyObject, PyResult, Python, ToPyObject};
-
-use crate::{rich_py_err, util::is_optional_of};
-
-use super::lambda::PyLambdaContext;
-
+#[cfg(feature = "aws-lambda")]
+mod lambda;
 pub mod layer;
 #[cfg(test)]
 mod testing;
@@ -38,38 +35,23 @@ pub struct PyContext {
     // We could introduce a registry to keep track of every injectable type but I'm not sure that is the best way to do it,
     // so until we found a good way to achive that, I didn't want to introduce any abstraction here and
     // keep it simple because we only have one field that is injectable.
-    lambda_ctx_fields: HashSet<String>,
+    #[cfg(feature = "aws-lambda")]
+    lambda_ctx: lambda::PyContextLambda,
 }
 
 impl PyContext {
     pub fn new(inner: PyObject) -> PyResult<Self> {
-        let lambda_ctx_fields = Python::with_gil(|py| get_lambda_ctx_fields(py, &inner))?;
         Ok(Self {
+            #[cfg(feature = "aws-lambda")]
+            lambda_ctx: lambda::PyContextLambda::new(inner.clone())?,
             inner,
-            lambda_ctx_fields,
         })
     }
 
-    /// Returns true if custom context class provided by the user injects [PyLambdaContext].
-    pub fn has_lambda_context_fields(&self) -> bool {
-        !self.lambda_ctx_fields.is_empty()
-    }
-
-    /// Sets given `lambda_ctx` to user provided context class.
-    pub fn set_lambda_context(&self, lambda_ctx: Option<PyLambdaContext>) {
-        if !self.has_lambda_context_fields() {
-            // Return early without acquiring GIL
-            return;
-        }
-
-        let inner = &self.inner;
-        Python::with_gil(|py| {
-            for field in self.lambda_ctx_fields.iter() {
-                if let Err(err) = inner.setattr(py, field.as_str(), lambda_ctx.clone()) {
-                    tracing::warn!(field = ?field, error = ?rich_py_err(err), "could not inject `LambdaContext` to context")
-                }
-            }
-        });
+    pub fn populate_from_extensions(&self, _ext: &Extensions) {
+        #[cfg(feature = "aws-lambda")]
+        self.lambda_ctx
+            .populate_from_extensions(self.inner.clone(), _ext);
     }
 }
 
@@ -79,39 +61,15 @@ impl ToPyObject for PyContext {
     }
 }
 
-// Inspects the given `PyObject` to detect fields that type-hinted `PyLambdaContext`.
-fn get_lambda_ctx_fields(py: Python, ctx: &PyObject) -> PyResult<HashSet<String>> {
-    let typing = py.import("typing")?;
-    let hints = match typing
-        .call_method1("get_type_hints", (ctx,))
-        .and_then(|res| res.extract::<&PyDict>())
-    {
-        Ok(hints) => hints,
-        Err(_) => {
-            // `get_type_hints` could fail if `ctx` is `None`, which is the default value
-            // for the context if user does not provide a custom class.
-            // In that case, this is not really an error and we should just return an empty set.
-            return Ok(HashSet::new());
-        }
-    };
-
-    let mut fields = HashSet::new();
-    for (key, value) in hints {
-        if is_optional_of::<PyLambdaContext>(py, value)? {
-            fields.insert(key.to_string());
-        }
-    }
-    Ok(fields)
-}
-
 #[cfg(test)]
 mod tests {
+    use http::Extensions;
     use pyo3::{prelude::*, py_run};
 
-    use crate::context::testing::{get_context, py_lambda_ctx};
+    use super::testing::get_context;
 
     #[test]
-    fn py_context_with_lambda_context() -> PyResult<()> {
+    fn py_context() -> PyResult<()> {
         pyo3::prepare_freethreaded_python();
 
         let ctx = get_context(
@@ -119,7 +77,6 @@ mod tests {
 class Context:
     foo: int = 0
     bar: str = 'qux'
-    lambda_ctx: typing.Optional[LambdaContext]
 
 ctx = Context()
 ctx.foo = 42
@@ -132,19 +89,6 @@ ctx.foo = 42
                 r#"
 assert ctx.foo == 42
 assert ctx.bar == 'qux'
-assert not hasattr(ctx, 'lambda_ctx')
-"#
-            );
-        });
-
-        ctx.set_lambda_context(Some(py_lambda_ctx("my-req-id", "123")));
-        Python::with_gil(|py| {
-            py_run!(
-                py,
-                ctx,
-                r#"
-assert ctx.lambda_ctx.request_id == "my-req-id"
-assert ctx.lambda_ctx.deadline == 123
 # Make some modifications
 ctx.foo += 1
 ctx.bar = 'baz'
@@ -152,15 +96,13 @@ ctx.bar = 'baz'
             );
         });
 
-        // Assume we are getting a new request but that one doesn't have a `LambdaContext`,
-        // in that case we should make fields `None` and shouldn't leak the previous `LambdaContext`.
-        ctx.set_lambda_context(None);
+        ctx.populate_from_extensions(&Extensions::new());
+
         Python::with_gil(|py| {
             py_run!(
                 py,
                 ctx,
                 r#"
-assert ctx.lambda_ctx is None
 # Make sure we are preserving any modifications
 assert ctx.foo == 43
 assert ctx.bar == 'baz'
@@ -179,7 +121,6 @@ assert ctx.bar == 'baz'
         pyo3::prepare_freethreaded_python();
 
         let ctx = get_context("ctx = None");
-        ctx.set_lambda_context(Some(py_lambda_ctx("my-req-id", "123")));
         Python::with_gil(|py| {
             py_run!(py, ctx, "assert ctx is None");
         });

@@ -5,20 +5,22 @@
 
 //! Testing utilities for [PyContext].
 
-use http::{header::HeaderName, HeaderMap, HeaderValue};
-use lambda_http::Context;
 use pyo3::{
     types::{PyDict, PyModule},
     IntoPy, PyErr, Python,
 };
 
-use super::{PyContext, PyLambdaContext};
+use super::PyContext;
 
 pub fn get_context(code: &str) -> PyContext {
     let inner = Python::with_gil(|py| {
         let globals = PyModule::import(py, "__main__")?.dict();
         globals.set_item("typing", py.import("typing")?)?;
-        globals.set_item("LambdaContext", py.get_type::<PyLambdaContext>())?;
+        #[cfg(feature = "aws-lambda")]
+        globals.set_item(
+            "LambdaContext",
+            py.get_type::<crate::lambda::PyLambdaContext>(),
+        )?;
         let locals = PyDict::new(py);
         py.run(code, Some(globals), Some(locals))?;
         let context = locals
@@ -31,7 +33,10 @@ pub fn get_context(code: &str) -> PyContext {
     PyContext::new(inner).unwrap()
 }
 
-pub fn lambda_ctx(req_id: &'static str, deadline_ms: &'static str) -> Context {
+#[cfg(feature = "aws-lambda")]
+pub fn lambda_ctx(req_id: &'static str, deadline_ms: &'static str) -> lambda_http::Context {
+    use http::{header::HeaderName, HeaderMap, HeaderValue};
+
     let headers = HeaderMap::from_iter([
         (
             HeaderName::from_static("lambda-runtime-aws-request-id"),
@@ -42,9 +47,5 @@ pub fn lambda_ctx(req_id: &'static str, deadline_ms: &'static str) -> Context {
             HeaderValue::from_static(deadline_ms),
         ),
     ]);
-    Context::try_from(headers).unwrap()
-}
-
-pub fn py_lambda_ctx(req_id: &'static str, deadline_ms: &'static str) -> PyLambdaContext {
-    PyLambdaContext::new(lambda_ctx(req_id, deadline_ms))
+    lambda_http::Context::try_from(headers).unwrap()
 }
