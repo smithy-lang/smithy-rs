@@ -98,9 +98,9 @@ class UnconstrainedCollectionGenerator(
                 if (innerShape.canReachConstrainedShape(model, symbolProvider)) {
                     val resolvesToNonPublicConstrainedValueType =
                         innerShape.canReachConstrainedShape(model, symbolProvider) &&
-                        !innerShape.isDirectlyConstrained(symbolProvider) &&
-                        innerShape !is StructureShape &&
-                        innerShape !is UnionShape
+                            !innerShape.isDirectlyConstrained(symbolProvider) &&
+                            innerShape !is StructureShape &&
+                            innerShape !is UnionShape
                     val innerConstrainedSymbol = if (resolvesToNonPublicConstrainedValueType) {
                         pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
                     } else {

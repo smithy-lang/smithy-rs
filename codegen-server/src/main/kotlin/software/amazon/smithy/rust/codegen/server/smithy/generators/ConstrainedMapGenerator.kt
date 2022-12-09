@@ -118,10 +118,10 @@ class ConstrainedMapGenerator(
         )
 
         val valueShape = model.expectShape(shape.value.target)
-        if (!publicConstrainedTypes
-            && isValueConstrained(valueShape, model, symbolProvider)
-            && valueShape !is StructureShape
-            && valueShape !is UnionShape
+        if (!publicConstrainedTypes &&
+            isValueConstrained(valueShape, model, symbolProvider) &&
+            valueShape !is StructureShape &&
+            valueShape !is UnionShape
         ) {
             writer.rustTemplate(
                 """

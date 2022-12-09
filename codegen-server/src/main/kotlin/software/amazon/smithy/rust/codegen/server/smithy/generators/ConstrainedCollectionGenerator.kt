@@ -136,10 +136,10 @@ class ConstrainedCollectionGenerator(
         )
 
         val innerShape = model.expectShape(shape.member.target)
-        if (!publicConstrainedTypes
-            && innerShape.canReachConstrainedShape(model, symbolProvider)
-            && innerShape !is StructureShape
-            && innerShape !is UnionShape
+        if (!publicConstrainedTypes &&
+            innerShape.canReachConstrainedShape(model, symbolProvider) &&
+            innerShape !is StructureShape &&
+            innerShape !is UnionShape
         ) {
             writer.rustTemplate(
                 """
