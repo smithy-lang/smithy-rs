@@ -206,6 +206,21 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val SerdeSerialize = RuntimeType("Serialize", dependency = null, namespace = "serde")
         val SerdeDeserialize = RuntimeType("Deserialize", dependency = null, namespace = "serde")
 
+        // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
+        val AttrUnstableSerdeAny = """##[cfg(all(feature = "unstable", any(feature = "serialize", feature = "deserialize")))]"""
+        val AttrUnstableSerdeBoth = """
+            all(feature = "unstable", all(feature = "serialize", feature = "deserialize"))
+        """
+        val AttrUnstableSerialize = """
+            all(feature = "unstable", feature = "serialize")
+        """
+        val AttrUnstableDeserialize = """
+            all(feature = "unstable", feature = "deserialize")
+        """ 
+        // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
+        val UnstableDerive = """##[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(serde::Serialize))]
+##[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(serde::Deserialize))]"""
+
         fun DateTime(runtimeConfig: RuntimeConfig) =
             RuntimeType("DateTime", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
 

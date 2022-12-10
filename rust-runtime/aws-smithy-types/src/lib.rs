@@ -15,14 +15,15 @@
 
 #[cfg(test)]
 #[cfg(all(
-    feature = "unstable-serde-serialize",
-    feature = "unstable-serde-deserialize"
+    feature = "unstable",
+    feature = "serialize",
+    feature = "deserialize"
 ))]
 mod test;
 
-#[cfg(feature = "unstable-serde-serialize")]
+#[cfg(all(feature= "unstable", feature = "serialize"))]
 use serde::Serialize;
-#[cfg(feature = "unstable-serde-deserialize")]
+#[cfg(all(feature= "unstable", feature = "deerialize"))]
 use serde::{de::Visitor, Deserialize};
 use std::collections::HashMap;
 pub mod base64;
@@ -42,7 +43,7 @@ pub struct Blob {
     inner: Vec<u8>,
 }
 
-#[cfg(feature = "unstable-serde-serialize")]
+#[cfg(all(feature = "unstable", feature = "serialize"))]
 impl Serialize for Blob {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -56,10 +57,10 @@ impl Serialize for Blob {
     }
 }
 
-#[cfg(feature = "unstable-serde-deserialize")]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 struct HumanReadableBlobVisitor;
 
-#[cfg(feature = "unstable-serde-deserialize")]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
     type Value = Blob;
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -77,10 +78,10 @@ impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
     }
 }
 
-#[cfg(feature = "unstable-serde-deserialize")]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 struct NotHumanReadableBlobVisitor;
 
-#[cfg(feature = "unstable-serde-deserialize")]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
     type Value = Blob;
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -95,7 +96,7 @@ impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
     }
 }
 
-#[cfg(feature = "unstable-serde-deserialize")]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 impl<'de> Deserialize<'de> for Blob {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -138,12 +139,12 @@ impl AsRef<[u8]> for Blob {
 /// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
 /// The serialization format of a document is an implementation detail of a protocol.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "unstable-serde-serialize", derive(Serialize))]
-#[cfg_attr(feature = "unstable-serde-deserialize", derive(Deserialize))]
+#[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(Serialize))]
+#[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(Deserialize))]
 #[cfg_attr(
     any(
-        feature = "unstable-serde-deserialize",
-        feature = "unstable-serde-serialize"
+        all(feature = "unstable", feature = "deserialize"),
+        all(feature = "unstable", feature = "serialize")
     ),
     serde(untagged)
 )]
@@ -189,8 +190,8 @@ impl From<HashMap<String, Document>> for Document {
 /// checks if a) serialization of json suceeds and b) it is compatible with serde_json
 #[test]
 #[cfg(all(
-    feature = "unstable-serde-serialize",
-    feature = "unstable-serde-deserialize"
+    all(feature = "unstable", feature = "serialize"),
+    all(feature = "unstable", feature = "deserialize")
 ))]
 fn serialize_json() {
     let mut map: HashMap<String, Document> = HashMap::new();
@@ -235,12 +236,12 @@ fn serialize_json() {
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "unstable-serde-deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "unstable-serde-serialize", derive(Serialize))]
+#[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(Deserialize))]
+#[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(Serialize))]
 #[cfg_attr(
     any(
-        feature = "unstable-serde-deserialize",
-        feature = "unstable-serde-serialize"
+        all(feature = "unstable", feature = "deserialize"),
+        all(feature = "unstable", feature = "serialize")
     ),
     serde(untagged)
 )]
@@ -278,8 +279,8 @@ impl Number {
 
 #[test]
 #[cfg(all(
-    feature = "unstable-serde-deserialize",
-    feature = "unstable-serde-serialize"
+    all(feature = "unstable", feature = "deserialize"),
+    all(feature = "unstable", feature = "serialize")
 ))]
 /// ensures that numbers are deserialized as expected
 /// 0 <= PosInt  

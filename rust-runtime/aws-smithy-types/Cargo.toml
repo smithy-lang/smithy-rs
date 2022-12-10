@@ -28,5 +28,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
 [features]
-"unstable-serde-serialize" = []
-"unstable-serde-deserialize" = []
+"unstable" = []
+"serialize" = []
+"deserialize" = []

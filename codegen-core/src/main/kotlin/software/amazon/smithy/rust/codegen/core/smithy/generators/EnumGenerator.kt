@@ -130,8 +130,7 @@ open class EnumGenerator(
         writer.deprecatedShape(shape)
 
         // add serde
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", derive(#T))]\n", RuntimeType.SerdeSerialize)
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", derive(#T))]\n", RuntimeType.SerdeDeserialize)
+        writer.writeInline(RuntimeType.UnstableDerive)
         
         meta.render(writer)
 
@@ -171,8 +170,7 @@ open class EnumGenerator(
         writer.deprecatedShape(shape)
 
         // add serde
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", derive(#T))]\n", RuntimeType.SerdeSerialize)
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", derive(#T))]\n", RuntimeType.SerdeDeserialize)
+        writer.writeInline(RuntimeType.UnstableDerive)
 
         meta.render(writer)
 

@@ -318,14 +318,14 @@ class FluentClientGenerator(
 
                         /// Replaces the parameter
                         /// Returns the existing data.
-                        ##[cfg(any(feature = "unstable-serde-serialize", feature = "unstable-serde-deserialize"))]
+                        ${RuntimeType.AttrUnstableSerdeAny}
                         pub fn replace_parameter(&mut self, new_parameter: #{Inner}) -> #{Inner} {
                             std::mem::replace(&mut self.inner, new_parameter)
                         }
 
                         /// This method sends a request with given input.  
                         /// Method ignores any data that can be found in the builder type held on this struct.
-                        ##[cfg(any(feature = "unstable-serde-serialize", feature = "unstable-serde-deserialize"))]
+                        ${RuntimeType.AttrUnstableSerdeAny}
                         pub async fn send_with(self, input: $outputShapePath) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
                             let op = input
                                 .make_operation(&self.handle.conf)

@@ -60,8 +60,7 @@ class UnionGenerator(
         val unionSymbol = symbolProvider.toSymbol(shape)
         val containerMeta = unionSymbol.expectRustMetadata()
 
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", derive(#T))]\n", RuntimeType.SerdeSerialize)
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", derive(#T))]\n", RuntimeType.SerdeDeserialize)
+        writer.writeInline(RuntimeType.UnstableDerive)
 
         containerMeta.render(writer)
         writer.rustBlock("enum ${unionSymbol.name}") {

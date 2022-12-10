@@ -125,8 +125,8 @@ class BuilderGenerator(
         
         for (path in dataTypesToSkip) {
             if (argPath.contains(path)) {
-                writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", serde(skip_serializing))]\n")
-                writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", serde(skip_deserializing))]\n")
+                writer.writeInline("##[cfg_attr(${RuntimeType.AttrUnstableSerialize}, serde(skip_serializing))]\n")
+                writer.writeInline("##[cfg_attr(${RuntimeType.AttrUnstableDeserialize}, serde(skip_deserializing))]\n")
             }
         }
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
@@ -173,7 +173,7 @@ class BuilderGenerator(
     // This function creates fluent builder
     private fun renderBuilder(writer: RustWriter) {
         val builderName = "Builder"
-        writer.writeInline("##[cfg(any(feature = \"unstable-serde-serialize\", feature = \"unstable-serde-deserialize\"))]")
+        
         writer.writeInline("/// This is the datatype that Builder of this module build itself into.\n")
         writer.writeInline("pub type OutputShape = $structureSymbol;")
 
@@ -183,8 +183,7 @@ class BuilderGenerator(
         val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
 
         // add serde
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", derive(#T))]\n", RuntimeType.SerdeSerialize)
-        writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", derive(#T))]\n", RuntimeType.SerdeDeserialize)
+        writer.writeInline(RuntimeType.UnstableDerive)
 
         baseDerives.copy(derives = derives).render(writer)
         writer.rustBlock("pub struct $builderName") {

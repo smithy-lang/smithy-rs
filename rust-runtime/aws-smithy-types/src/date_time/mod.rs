@@ -52,7 +52,7 @@ pub struct DateTime {
     subsecond_nanos: u32,
 }
 
-#[cfg(feature = "unstable-serde-serialize")]
+#[cfg(all(feature = "unstable", feature = "serialize"))]
 impl serde::Serialize for DateTime {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -65,7 +65,7 @@ impl serde::Serialize for DateTime {
     }
 }
 
-#[cfg(feature = "unstable-serde-deserialize")]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 mod der {
     use super::*;
     use serde::de::Visitor;
