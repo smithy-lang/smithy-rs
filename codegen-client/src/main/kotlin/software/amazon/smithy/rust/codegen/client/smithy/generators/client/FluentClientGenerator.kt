@@ -316,11 +316,11 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
 
-                        /// This method replaces the existing parameter set on this data with the 2nd argument.  
-                        /// Existing parameters set on this data will be lost.  
+                        /// Replaces the parameter
+                        /// Returns the existing data.
                         ##[cfg(any(feature = "unstable-serde-serialize", feature = "unstable-serde-deserialize"))]
-                        pub fn replace_parameter(&mut self, new_parameter: #{Inner}) {
-                            let _ = std::mem::replace(&mut self.inner, new_parameter);
+                        pub fn replace_parameter(&mut self, new_parameter: #{Inner}) -> #{Inner} {
+                            std::mem::replace(&mut self.inner, new_parameter)
                         }
 
                         /// This method sends a request with given input.  
