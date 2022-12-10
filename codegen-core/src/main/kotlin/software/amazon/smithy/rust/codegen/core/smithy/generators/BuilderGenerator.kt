@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolWriter
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -114,6 +116,19 @@ class BuilderGenerator(
     private fun renderBuilderMember(writer: RustWriter, memberName: String, memberSymbol: Symbol) {
         // Builder members are crate-public to enable using them directly in serializers/deserializers.
         // During XML deserialization, `builder.<field>.take` is used to append to lists and maps.
+        val argPath = memberSymbol.rustType().render(true)
+        val dataTypesToSkip = listOf(
+            "aws_smithy_http::byte_stream::ByteStream",
+            "aws_smithy_http::event_stream::Receiver<TranscriptResultStream, TranscriptResultStreamError>",
+            "aws_smithy_http::event_stream::EventStreamSender<AudioStream, AudioStreamError>"
+        )
+        
+        for (path in dataTypesToSkip) {
+            if (argPath.contains(path)) {
+                writer.writeInline("##[cfg_attr(feature = \"unstable-serde-serialize\", serde(skip_serializing))]\n")
+                writer.writeInline("##[cfg_attr(feature = \"unstable-serde-deserialize\", serde(skip_deserializing))]\n")
+            }
+        }
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
     }
 
@@ -175,6 +190,7 @@ class BuilderGenerator(
         writer.rustBlock("pub struct $builderName") {
             // writes struct fields
             for (member in members) {
+
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
