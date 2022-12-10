@@ -23,7 +23,7 @@ mod test;
 
 #[cfg(all(feature= "unstable", feature = "serialize"))]
 use serde::Serialize;
-#[cfg(all(feature= "unstable", feature = "deerialize"))]
+#[cfg(all(feature= "unstable", feature = "deserialize"))]
 use serde::{de::Visitor, Deserialize};
 use std::collections::HashMap;
 pub mod base64;
