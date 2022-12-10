@@ -30,6 +30,10 @@ pub mod response;
 pub mod result;
 pub mod retry;
 
+// TODO XXX: This will get removed if `hyper-util` gets a hyper client that
+// supports our needs, or renamed and polished up otherwise
+pub mod tmp_hyper_client;
+
 #[cfg(feature = "event-stream")]
 pub mod event_stream;
 

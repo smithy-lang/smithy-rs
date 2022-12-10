@@ -55,7 +55,7 @@ pub use timeout::TimeoutLayer;
 #[allow(missing_docs)]
 pub mod conns {
     #[cfg(feature = "rustls")]
-    pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
+    pub type Https = hyper_rustls::HttpsConnector<hyper_util::client::connect::HttpConnector>;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
@@ -82,11 +82,12 @@ pub mod conns {
     }
 
     #[cfg(feature = "native-tls")]
-    pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
+    pub type NativeTls = hyper_tls::HttpsConnector<hyper_util::client::connect::HttpConnector>;
 
     #[cfg(feature = "rustls")]
-    pub type Rustls =
-        crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
+    pub type Rustls = crate::hyper_ext::Adapter<
+        hyper_rustls::HttpsConnector<hyper_util::client::connect::HttpConnector>,
+    >;
 }
 
 use aws_smithy_async::rt::sleep::AsyncSleep;

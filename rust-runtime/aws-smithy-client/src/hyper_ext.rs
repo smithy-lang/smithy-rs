@@ -86,10 +86,11 @@ use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
+use aws_smithy_http::tmp_hyper_client::{Builder as HyperClientBuilder, Client as HyperClient};
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
 use http::Uri;
-use hyper::client::connect::{Connected, Connection};
+use hyper_util::client::connect::{Connected, Connection};
 use std::error::Error;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -101,7 +102,7 @@ use tower::{BoxError, Service};
 /// see [the module documentation](crate::hyper_ext).
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Adapter<C>(HttpReadTimeout<hyper::Client<ConnectTimeout<C>, SdkBody>>);
+pub struct Adapter<C>(HttpReadTimeout<HyperClient<ConnectTimeout<C>, SdkBody>>);
 
 impl<C> Service<http::Request<SdkBody>> for Adapter<C>
 where
@@ -222,7 +223,7 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 pub struct Builder {
     connector_settings: Option<ConnectorSettings>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    client_builder: Option<hyper::client::Builder>,
+    client_builder: Option<HyperClientBuilder>,
 }
 
 impl Builder {
@@ -306,7 +307,7 @@ impl Builder {
     /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
-    pub fn hyper_builder(mut self, hyper_builder: hyper::client::Builder) -> Self {
+    pub fn hyper_builder(mut self, hyper_builder: HyperClientBuilder) -> Self {
         self.client_builder = Some(hyper_builder);
         self
     }
@@ -314,10 +315,7 @@ impl Builder {
     /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
-    pub fn set_hyper_builder(
-        &mut self,
-        hyper_builder: Option<hyper::client::Builder>,
-    ) -> &mut Self {
+    pub fn set_hyper_builder(&mut self, hyper_builder: Option<HyperClientBuilder>) -> &mut Self {
         self.client_builder = hyper_builder;
         self
     }
@@ -639,7 +637,7 @@ mod test {
     use crate::hyper_ext::Adapter;
     use aws_smithy_http::body::SdkBody;
     use http::Uri;
-    use hyper::client::connect::{Connected, Connection};
+    use hyper_util::client::connect::{Connected, Connection};
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
     use std::task::{Context, Poll};
@@ -713,7 +711,7 @@ mod test {
 
     impl<T> tower::Service<Uri> for TestConnection<T>
     where
-        T: Clone + hyper::client::connect::Connection,
+        T: Clone + hyper_util::client::connect::Connection,
     {
         type Response = T;
         type Error = BoxError;
