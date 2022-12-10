@@ -326,7 +326,7 @@ class FluentClientGenerator(
                         /// This method sends a request with given input.  
                         /// Method ignores any data that can be found in the builder type held on this struct.
                         ##[cfg(any(feature = "unstable-serde-serialize", feature = "unstable-serde-deserialize"))]
-                        pub async fn send_with_input(self, input: $outputShapePath) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
+                        pub async fn send_with(self, input: $outputShapePath) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
                             let op = input
                                 .make_operation(&self.handle.conf)
                                 .await
