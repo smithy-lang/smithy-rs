@@ -5,15 +5,14 @@
 # on if a pull request is being checked, or if the `main` branch is being checked after merge.
 
 name: Test
-inputs:
-  run_sdk_examples:
-    description: Whether to run the SDK example checks or not.
-    required: false
-    default: false
 
 on:
   workflow_call:
-
+    inputs:
+      run_sdk_examples:
+        description: Whether to run the SDK example checks or not.
+        required: false
+        default: false
 env:
   rust_version: 1.62.1
   rust_toolchain_components: clippy,rustfmt
