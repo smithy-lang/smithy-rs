@@ -11,7 +11,7 @@ It is assumed that the primary motivation behind the introduction of type safe c
 
 Assumptions
 -----------
-This document assumes that the following items in the changes checklist in the preceding RFC have been implemented.
+This document assumes that the following items in the changes checklist in the preceding RFC have been implemented:
 - [x] Implement `CredentialsCache` with its `Lazy` variant and builder
 - [x] Add the `credentials_cache` method to `ConfigLoader`
 - [x] Rename `SharedCredentialsProvider` to `SharedCredentialsCache`
@@ -124,37 +124,23 @@ We propose to have `sdk_config::Builder` and service clients' `config::Builder`s
 - :-1: It will require some duplicate code across those places, although it's rather an insignificant amount.
 
 ### Creating credentials caches outside the `aws-config` crate
-We propose to move types and traits for credentials caching to a separate crate (tentatively called `aws-XXX`). Specifically, the following items will be moved to `aws-XXX`:
-- All items in `aws_types::credentials` and their dependencies
+We propose to move the following items to a separate crate (tentatively called `aws-XXX`):
+- `aws_types::sdk_config::Builder`
 - All items in `aws_config::meta::credentials` and their dependencies
 
-The new crate will be the home for `ProvideCachedCredentials` discussed above as well as `CredentialsCache` with its `Lazy` variant and builder. Crucially, `CredentialsCache::create_cache` will be marked as `pub`. The `aws-XXX` crate itself depends on `aws_smithy_types` and `aws_smithy_async`, among others, for the items in it to be able to compile. There is one wrinkle, however, that is `LazyCredentialsCache` depends on `aws_types::os_shim_internal::TimeSource`; it does not feel right to move `TimeSource` to `aws-XXX` just because `LazyCredentialsCache` requires it. There are two ways to work around it.
+For the first bullet point, our rationale is that we want to move things out of the `aws-types` crate as little as possible. We'd rather not move `aws_types::sdk_config::SdkConfig`, and if moving `aws_types::sdk_config::Builder` to `aws-XXX` gives us what we want, that's what should do.
 
-#### Option A: Moving `aws_types::sdk_config` to `aws-XXX`
+For the second bullet point, the new crate will be the home for `CredentialsCache` with its `Lazy` variant and builder. Crucially, `CredentialsCache::create_cahe` will be marked as `pub`. The `aws-XXX` crate itself depends on `aws_smithy_types` and `aws_smithy_async`, among others, for the items in it to be able to compile.
 
-A result of this arrangement will give us the following module interdependencies:
+A result of the above arrangement will give us the following module interdependencies:
 <p align="center">
-  <img width="800" alt="Option A" src="https://user-images.githubusercontent.com/15333866/206587781-6eca3662-5096-408d-a435-d4023929e727.png">
+  <img width="800" alt="with new crate" src="https://user-images.githubusercontent.com/15333866/207161137-e5f18d16-3635-49d9-9a68-90c8197233c9.png">
 </p>
 
 - :+1: `aws-XXX::sdk_config::Builder` and a service client `config::Builder` can create a `SharedCredentialsCache` with a concrete type of credentials cache.
 - :+1: It avoids cyclic crate dependencies.
 - :-1: There is one more crate to maintain and version.
-- :-1: `aws-XXX::sdk_config` sitting together with the types and traits for credentials provider & caching may not give us a coherent mental model for the `aws-XXX` crate, making it difficult to choose the right name for `XXX`.
-
-#### Option B: Moving `aws_types::sdk_config` to yet another new crate
-
-A result of this arrangement will give us the following module interdependencies:
-<p align="center">
-  <img width="800" alt="Option B" src="https://user-images.githubusercontent.com/15333866/206587806-fe720118-e3d4-4dc9-9b33-5f65fc1a445c.png">
-</p>
-
-- :+1: `aws-XXX::sdk_config::Builder` and a service client `config::Builder` can create a `SharedCredentialsCache` with a concrete type of credentials cache.
-- :+1: It avoids cyclic crate dependencies.
-- :+1: The scope of `aws-XXX` is more focused, concerned primarily with credentials.
-- :-1: There are two more crates to maintain and version.
-- :-1: :-1: The scope of the new crate for `aws_types::sdk_config` seems too narrow and therefore having a separate crate may not be worth it.
-
+- :-1: `aws-XXX::sdk_config::Builder` sitting together with the code for credentials caching may not give us a coherent mental model for the `aws-XXX` crate, making it difficult to choose the right name for `XXX`.
 
 Rejected Ideas
 --------------
@@ -171,12 +157,11 @@ Changes Checklist
 The following list does not repeat what is listed in the preceding RFC but does include those new mentioned in the `Assumptions` section:
 
 - [ ] Create and name the `aws-XXX` crate
-- [ ] Move all items in `aws_types::credentials` and their dependencies to the `aws-XXX` crate
+- [ ] Move `aws_types::sdk_config::Builder` to the `aws-XXX` crate
 - [ ] Move all items in `aws_config::meta::credentials` and their dependencies to the `aws-XXX` crate
-- [ ] Add a new `pub` trait `ProvideCachedCredentials` in the `aws-XXX` crate that has a single method `fn provide_cached_credentials<'a>(&'a self) -> future::ProvideCredentials<'a> where Self: 'a`
+- [ ] Add a new `pub` trait `ProvideCachedCredentials` in the `aws-types` crate that has a single method `fn provide_cached_credentials<'a>(&'a self) -> future::ProvideCredentials<'a> where Self: 'a`
 - [ ] Update `SharedCredentialsCache` to be a newtype wrapper around `Arc<dyn ProvideCachedCredentials>`
 - [ ] Implement `ProvideCachedCredentials` for `SharedCredentialsCache`
 - [ ] Implement `ProvideCachedCredentials` for `LazyCredentialsCache`
 - [ ] Add `credentials_cache` & `set_credentials_cache` to both `sdk_config::Builder` and service clients' `config::Builder`s
-- [ ] Move `aws_types::sdk_config` to the appropriate place based on either option A or option B discussed above.
 - [ ] Make changes to `CredentialsStage` accordingly using `SharedCredentialsCache`
