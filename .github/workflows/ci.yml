@@ -5,13 +5,13 @@
 # on if a pull request is being checked, or if the `main` branch is being checked after merge.
 
 name: Test
-on:
-  workflow_call:
-
 inputs:
   run_sdk_examples:
     required: false
     default: false
+
+on:
+  workflow_call:
 
 env:
   rust_version: 1.62.1
