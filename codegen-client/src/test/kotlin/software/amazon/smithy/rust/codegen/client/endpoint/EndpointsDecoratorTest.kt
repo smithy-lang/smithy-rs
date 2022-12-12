@@ -35,7 +35,11 @@ class EndpointsDecoratorTest {
         @endpointRuleSet({
             "version": "1.0",
             "rules": [{
-                "conditions": [{"fn": "isSet", "argv": [{"ref":"Region"}]}],
+                "conditions": [
+                    {"fn": "isSet", "argv": [{"ref":"Region"}]},
+                    {"fn": "isSet", "argv": [{"ref":"ABoolParam"}]},
+                    {"fn": "booleanEquals", "argv": [{"ref": "ABoolParam"}, false]}
+                ],
                 "type": "endpoint",
                 "endpoint": {
                     "url": "https://www.{Region}.example.com"
