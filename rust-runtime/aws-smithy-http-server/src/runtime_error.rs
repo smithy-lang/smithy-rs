@@ -126,8 +126,7 @@ impl IntoResponse<RestXml> for RuntimeError {
             // TODO(https://github.com/awslabs/smithy/issues/1446) The Smithy spec does not yet
             // define constraint violation HTTP body responses for RestXml.
             RuntimeError::Validation(_reason) => todo!("https://github.com/awslabs/smithy/issues/1446"),
-            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
-            _ => crate::body::to_boxed("{}"),
+            _ => crate::body::to_boxed(""),
         };
 
         res
@@ -145,7 +144,7 @@ impl IntoResponse<AwsJson1_0> for RuntimeError {
 
         let body = match self {
             RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            // See https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
+            // See https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
             _ => crate::body::to_boxed("{}"),
         };
 
@@ -164,7 +163,7 @@ impl IntoResponse<AwsJson1_1> for RuntimeError {
 
         let body = match self {
             RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            // https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html#empty-body-serialization
+            // https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html#empty-body-serialization
             _ => crate::body::to_boxed(""),
         };
 

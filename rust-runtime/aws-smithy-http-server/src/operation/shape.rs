@@ -7,7 +7,7 @@ use super::{Handler, IntoService, Normalize, Operation, OperationService};
 
 /// Models the [Smithy Operation shape].
 ///
-/// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
+/// [Smithy Operation shape]: https://smithy.io/2.0/spec/service-types.html#operation
 pub trait OperationShape {
     /// The name of the operation.
     const NAME: &'static str;
