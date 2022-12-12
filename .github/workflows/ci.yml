@@ -5,8 +5,15 @@
 # on if a pull request is being checked, or if the `main` branch is being checked after merge.
 
 name: Test
+
 on:
   workflow_call:
+    inputs:
+      run_sdk_examples:
+        description: Whether to run the SDK example checks or not.
+        required: false
+        default: false
+        type: boolean
 
 env:
   rust_version: 1.62.1
@@ -244,6 +251,7 @@ jobs:
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
+    if: ${{ inputs.run_sdk_examples == 'true' }}
     needs: generate
     runs-on: ubuntu-latest
     steps:
