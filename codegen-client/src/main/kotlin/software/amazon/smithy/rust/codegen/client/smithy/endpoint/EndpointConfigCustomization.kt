@@ -138,7 +138,7 @@ internal class EndpointConfigCustomization(
                                 """,
                                 "ResolveEndpoint" to types.resolveEndpoint,
                                 "ResolveEndpointError" to types.resolveEndpointError,
-                                "Result" to types.smithyHttpEndpointModule.member("Result"),
+                                "Result" to types.smithyHttpEndpointModule.resolve("Result"),
                             )
                         }
                         // To keep this diff under control, rather than `.expect` here, insert a resolver that will
