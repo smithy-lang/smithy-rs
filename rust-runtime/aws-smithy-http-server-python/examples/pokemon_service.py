@@ -12,6 +12,7 @@ from typing import List, Optional, Callable, Awaitable
 
 from libpokemon_service_server_sdk import App
 from libpokemon_service_server_sdk.tls import TlsConfig  # type: ignore
+from libpokemon_service_server_sdk.aws_lambda import LambdaContext  # type: ignore
 from libpokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
 from libpokemon_service_server_sdk.input import (  # type: ignore
     DoNothingInput,
@@ -80,6 +81,10 @@ class SafeCounter:
 #   https://docs.python.org/3/library/multiprocessing.html#sharing-state-between-processes
 @dataclass
 class Context:
+    # Inject Lambda context if service is running on Lambda
+    # NOTE: All the values that will be injected by the framework should be wrapped with `Optional`
+    lambda_ctx: Optional[LambdaContext] = None
+
     # In our case it simulates an in-memory database containing the description of Pikachu in multiple
     # languages.
     _pokemon_database = {
@@ -156,7 +161,7 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
         logging.debug("Found valid `application/json` content type")
     else:
         logging.warning(
-            f"Invalid content type {content_type}, dumping headers: {request.headers}"
+            f"Invalid content type {content_type}, dumping headers: {request.headers.items()}"
         )
     return await next(request)
 
@@ -197,6 +202,18 @@ def do_nothing(_: DoNothingInput) -> DoNothingOutput:
 def get_pokemon_species(
     input: GetPokemonSpeciesInput, context: Context
 ) -> GetPokemonSpeciesOutput:
+    if context.lambda_ctx is not None:
+        logging.debug(
+            "Lambda Context: %s",
+            dict(
+                request_id=context.lambda_ctx.request_id,
+                deadline=context.lambda_ctx.deadline,
+                invoked_function_arn=context.lambda_ctx.invoked_function_arn,
+                function_name=context.lambda_ctx.env_config.function_name,
+                memory=context.lambda_ctx.env_config.memory,
+                version=context.lambda_ctx.env_config.version,
+            ),
+        )
     context.increment_calls_count()
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:
