@@ -94,12 +94,13 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
             return
         }
         rustCrate.withModule(EndpointsModule) {
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1784) cleanup task
             rustTemplate(
                 """
                 /// Temporary shim to allow new and old endpoint resolvers to co-exist
                 ///
-                /// This enables converting from the actual parameters type to the placehold parameters type that
-                /// solely holds a region
+                /// This enables converting from the actual parameters type to the placeholder parameters type that
+                /// contains a region
                 ##[doc(hidden)]
                 impl From<#{Params}> for #{PlaceholderParams} {
                     fn from(params: #{Params}) -> Self {

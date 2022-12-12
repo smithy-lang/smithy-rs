@@ -35,7 +35,7 @@ fun clientIntegrationTest(
     runtimeConfig: RuntimeConfig? = null,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
     command: ((Path) -> Unit)? = null,
-    test: (ClientCodegenContext, RustCrate) -> Unit,
+    test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ): Path {
     return codegenIntegrationTest(
         model,

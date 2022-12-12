@@ -236,7 +236,7 @@ class ProtocolTestGeneratorTest {
             override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
-        return clientIntegrationTest(model, additionalDecorators = listOf(codegenDecorator)) { _, _ -> }
+        return clientIntegrationTest(model, additionalDecorators = listOf(codegenDecorator))
     }
 
     @Test
