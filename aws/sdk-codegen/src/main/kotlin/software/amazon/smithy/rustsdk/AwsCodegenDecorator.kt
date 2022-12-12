@@ -16,6 +16,7 @@ import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.route53.Route53Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
+import software.amazon.smithy.rustsdk.customize.s3control.S3ControlDecorator
 import software.amazon.smithy.rustsdk.customize.sts.STSDecorator
 
 val DECORATORS = listOf(
@@ -45,6 +46,7 @@ val DECORATORS = listOf(
     GlacierDecorator(),
     Route53Decorator(),
     S3Decorator(),
+    S3ControlDecorator(),
     STSDecorator(),
 
     // Only build docs-rs for linux to reduce load on docs.rs
