@@ -147,7 +147,7 @@ class ConstrainedMapGenerator(
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
                 """,
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
                 "UnconstrainedSymbol" to unconstrainedSymbol,
             )
         }

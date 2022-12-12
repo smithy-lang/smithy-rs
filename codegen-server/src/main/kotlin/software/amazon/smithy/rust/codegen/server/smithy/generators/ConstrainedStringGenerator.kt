@@ -134,7 +134,7 @@ class ConstrainedStringGenerator(
                 }
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "ConstraintViolation" to constraintViolation,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,

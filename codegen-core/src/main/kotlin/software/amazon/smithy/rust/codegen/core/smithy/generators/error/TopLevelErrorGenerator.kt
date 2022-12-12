@@ -9,7 +9,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -51,7 +50,8 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
         .map { codegenContext.model.expectShape(it, StructureShape::class.java) }
         .sortedBy { it.id.getName(codegenContext.serviceShape) }
 
-    private val sdkError = CargoDependency.smithyHttp(codegenContext.runtimeConfig).toType().member("result::SdkError")
+    private val sdkError = RuntimeType.sdkError(codegenContext.runtimeConfig)
+
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.private("error_meta")) {
             renderDefinition()

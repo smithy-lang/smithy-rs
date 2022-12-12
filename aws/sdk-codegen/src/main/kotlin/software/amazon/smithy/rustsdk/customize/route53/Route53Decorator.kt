@@ -77,7 +77,7 @@ class TrimResourceIdCustomization(private val fieldName: String) : OperationCust
         RuntimeType.forInlineDependency(
             InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
         )
-            .member("trim_resource_id")
+            .resolve("trim_resource_id")
 
     override fun section(section: OperationSection): Writable {
         return when (section) {
