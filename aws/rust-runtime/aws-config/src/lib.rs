@@ -316,7 +316,7 @@ mod loader {
 
         /// Override the endpoint resolver used for **all** AWS Services
         ///
-        /// This method is deprecated. Use [`endpoint_url`] instead.
+        /// This method is deprecated. Use [`Self::endpoint_url`] instead.
         ///
         /// This method will override the endpoint resolver used for **all** AWS services. This mainly
         /// exists to set a static endpoint for tools like `LocalStack`. For live traffic, AWS services

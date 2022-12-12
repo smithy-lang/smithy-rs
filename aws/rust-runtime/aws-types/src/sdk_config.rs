@@ -90,7 +90,7 @@ impl Builder {
 
     /// Set the endpoint resolver to use when making requests
     ///
-    /// This method is deprecated. Use [`endpoint_url`] instead.
+    /// This method is deprecated. Use [`Self::endpoint_url`] instead.
     ///
     /// # Examples
     /// ```
