@@ -467,13 +467,14 @@ structure ConA {
     fixedValueByte: FixedValueByte,
 
     conBList: ConBList,
-    conBList2: ConBList2,
+    lengthList: LengthList,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // conBSet: ConBSet,
 
     conBMap: ConBMap,
+    lengthMap: LengthMap,
 
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
@@ -837,14 +838,11 @@ list RecursiveList {
 }
 
 list ConBList {
-    member: NestedList
+    member: LengthList
 }
 
-list ConBList2 {
-    member: ConB
-}
-
-list NestedList {
+@length(max: 69)
+list LengthList {
     member: ConB
 }
 
@@ -872,6 +870,12 @@ map MapOfLengthPatternString {
 map ConBMap {
     key: String,
     value: LengthString
+}
+
+@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: String
 }
 
 @error("client")

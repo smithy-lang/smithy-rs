@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
@@ -25,7 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * Rust application), which are built into a `Router` by [PythonApplicationGenerator].
  *
  * To call a Python function from Rust, anything dealing with Python runs inside an async
- * block that allows to catch stacktraces. The handler function is extracted from `PyHandler`
+ * block that allows to catch stack traces. The handler function is extracted from `PyHandler`
  * and called with the necessary arguments inside a blocking Tokio task.
  * At the end the block is awaited and errors are collected and reported.
  *
@@ -40,8 +39,8 @@ class PythonServerOperationHandlerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to PythonServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "pyo3" to PythonServerCargoDependency.PyO3.toType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
             "tokio" to PythonServerCargoDependency.Tokio.toType(),
@@ -66,7 +65,7 @@ class PythonServerOperationHandlerGenerator(
                 /// Python handler for operation `$operationName`.
                 pub(crate) async fn $fnName(
                     input: $input,
-                    state: #{SmithyServer}::Extension<#{pyo3}::PyObject>,
+                    state: #{SmithyServer}::Extension<#{SmithyPython}::context::PyContext>,
                     handler: #{SmithyPython}::PyHandler,
                 ) -> std::result::Result<$output, $error> {
                     // Async block used to run the handler and catch any Python error.
@@ -96,7 +95,7 @@ class PythonServerOperationHandlerGenerator(
                     let output = if handler.args == 1 {
                         pyhandler.call1((input,))?
                     } else {
-                        pyhandler.call1((input, state.0))?
+                        pyhandler.call1((input, #{pyo3}::ToPyObject::to_object(&state.0, py)))?
                     };
                     output.extract::<$output>()
                 })
@@ -115,7 +114,7 @@ class PythonServerOperationHandlerGenerator(
                     let coroutine = if handler.args == 1 {
                         pyhandler.call1((input,))?
                     } else {
-                        pyhandler.call1((input, state.0))?
+                        pyhandler.call1((input, #{pyo3}::ToPyObject::to_object(&state.0, py)))?
                     };
                     #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;

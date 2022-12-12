@@ -19,13 +19,13 @@ import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShortShape
-import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -213,15 +213,24 @@ fun validateUnsupportedConstraints(
 
     // 3. Constraint traits in event streams are used. Their semantics are unclear.
     // TODO(https://github.com/awslabs/smithy/issues/1388)
-    val unsupportedConstraintOnShapeReachableViaAnEventStreamSet = walker
+    val eventStreamShapes = walker
         .walkShapes(service)
         .asSequence()
-        .filterIsInstance<UnionShape>()
-        .filter { it.hasTrait<StreamingTrait>() }
+        .filter { it.hasTrait<SyntheticEventStreamUnionTrait>() }
+    val unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet = eventStreamShapes
         .flatMap { walker.walkShapes(it) }
         .filterMapShapesToTraits(allConstraintTraits)
         .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
         .toSet()
+    val eventStreamErrors = eventStreamShapes.map { it.expectTrait<SyntheticEventStreamUnionTrait>() }.map { it.errorMembers }
+    val unsupportedConstraintErrorShapeReachableViaAnEventStreamSet = eventStreamErrors
+        .flatMap { it }
+        .flatMap { walker.walkShapes(it) }
+        .filterMapShapesToTraits(allConstraintTraits)
+        .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
+        .toSet()
+    val unsupportedConstraintShapeReachableViaAnEventStreamSet =
+        unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet + unsupportedConstraintErrorShapeReachableViaAnEventStreamSet
 
     // 4. Length trait on blob shapes is used. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
@@ -261,7 +270,7 @@ fun validateUnsupportedConstraints(
     val messages =
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedConstraintOnShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+            unsupportedConstraintShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedUniqueItemsTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }

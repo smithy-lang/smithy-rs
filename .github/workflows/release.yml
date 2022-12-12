@@ -64,6 +64,8 @@ jobs:
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
+    with:
+      run_sdk_examples: false
 
   release:
     name: Release

@@ -26,7 +26,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -51,6 +50,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -168,14 +168,12 @@ class JsonSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
-    private val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
-        "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
+        "JsonObjectWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonObjectWriter"),
+        "JsonValueWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonValueWriter"),
         "ByteSlab" to RuntimeType.ByteSlab,
     )
     private val serializerUtil = SerializerUtil(model)
@@ -281,7 +279,7 @@ class JsonSerializerGenerator(
                     out.into_bytes()
                 }
                 """,
-                "Document" to RuntimeType.Document(runtimeConfig), *codegenScope,
+                "Document" to RuntimeType.document(runtimeConfig), *codegenScope,
             )
         }
     }
@@ -396,19 +394,19 @@ class JsonSerializerGenerator(
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number"),
+                    RuntimeType.smithyTypes(runtimeConfig).resolve("Number"),
                 )
             }
 
             is BlobShape -> rust(
                 "$writer.string_unchecked(&#T(${value.asRef()}));",
-                RuntimeType.Base64Encode(runtimeConfig),
+                RuntimeType.base64Encode(runtimeConfig),
             )
 
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rustTemplate(
                     "$writer.date_time(${value.asRef()}#{ConvertInto:W}, #{FormatType})?;",
                     "FormatType" to timestampFormatType,
@@ -447,8 +445,22 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.jsonObjectWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
         safeName("object").also { objectName ->
+            rust("##[allow(unused_mut)]")
             rust("let mut $objectName = ${context.writerExpression}.start_object();")
-            inner(objectName)
+            // We call inner only when context's shape is not the Unit type.
+            // If it were, calling inner would generate the following function:
+            //   pub fn serialize_structure_crate_model_unit(
+            //       object: &mut aws_smithy_json::serialize::JsonObjectWriter,
+            //       input: &crate::model::Unit,
+            //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+            //       let (_, _) = (object, input);
+            //       Ok(())
+            //   }
+            // However, this would cause a compilation error at a call site because it cannot
+            // extract data out of the Unit type that corresponds to the variable "input" above.
+            if (!context.shape.isTargetUnit()) {
+                inner(objectName)
+            }
             rust("$objectName.finish();")
         }
     }
@@ -488,8 +500,12 @@ class JsonSerializerGenerator(
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
+                        } else {
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName => {", "},", unionSymbol) {
                             serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
                         }
                     }

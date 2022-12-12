@@ -64,6 +64,12 @@ fun MemberShape.isOutputEventStream(model: Model): Boolean {
     return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticOutputTrait>()
 }
 
+private val unitShapeId = ShapeId.from("smithy.api#Unit")
+
+fun MemberShape.isTargetUnit(): Boolean {
+    return this.target == unitShapeId
+}
+
 fun Shape.hasEventStreamMember(model: Model): Boolean {
     return members().any { it.isEventStream(model) }
 }
