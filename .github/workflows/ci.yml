@@ -7,6 +7,7 @@
 name: Test
 inputs:
   run_sdk_examples:
+    description: Whether to run the SDK example checks or not.
     required: false
     default: false
 
