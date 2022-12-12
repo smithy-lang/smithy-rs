@@ -5,7 +5,7 @@
 
 use aws_config::SdkConfig;
 use aws_sdk_s3::config::Builder;
-use aws_sdk_s3::{Client, Config, Credentials, Region};
+use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
 use aws_types::credentials::SharedCredentialsProvider;
 

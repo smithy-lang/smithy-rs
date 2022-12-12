@@ -48,6 +48,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
                         let mut builder = Builder::default();
                         builder = builder.region(input.region().cloned());
                         builder.set_aws_endpoint_resolver(input.endpoint_resolver().clone());
+                        builder.set_endpoint_url(input.endpoint_url().map(|url|url.to_string()));
                         builder.set_retry_config(input.retry_config().cloned());
                         builder.set_timeout_config(input.timeout_config().cloned());
                         builder.set_sleep_impl(input.sleep_impl());
