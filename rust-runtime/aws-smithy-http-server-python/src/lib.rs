@@ -18,6 +18,7 @@ pub mod logging;
 pub mod middleware;
 mod server;
 mod socket;
+pub mod tls;
 pub mod types;
 mod util;
 

@@ -48,6 +48,7 @@ class PythonServerModuleGenerator(
                 renderPySocketType()
                 renderPyLogging()
                 renderPyMiddlewareTypes()
+                renderPyTlsTypes()
                 renderPyApplicationType()
             }
         }
@@ -157,6 +158,22 @@ class PythonServerModuleGenerator(
                 "import sys; sys.modules['$libName.middleware'] = middleware"
             );
             m.add_submodule(middleware)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.renderPyTlsTypes() {
+        rustTemplate(
+            """
+            let tls = #{pyo3}::types::PyModule::new(py, "tls")?;
+            tls.add_class::<#{SmithyPython}::tls::PyTlsConfig>()?;
+            pyo3::py_run!(
+                py,
+                tls,
+                "import sys; sys.modules['$libName.tls'] = tls"
+            );
+            m.add_submodule(tls)?;
             """,
             *codegenScope,
         )

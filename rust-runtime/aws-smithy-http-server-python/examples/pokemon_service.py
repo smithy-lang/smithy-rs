@@ -3,6 +3,7 @@
 #  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #  SPDX-License-Identifier: Apache-2.0
 
+import argparse
 import logging
 import random
 from threading import Lock
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Callable, Awaitable
 
 from libpokemon_service_server_sdk import App
+from libpokemon_service_server_sdk.tls import TlsConfig  # type: ignore
 from libpokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
 from libpokemon_service_server_sdk.input import (  # type: ignore
     DoNothingInput,
@@ -245,7 +247,20 @@ async def stream_pokemon_radio(
 # Run the server.
 ###########################################################
 def main() -> None:
-    app.run(workers=1)
+    parser = argparse.ArgumentParser(description="PokémonService")
+    parser.add_argument("--enable-tls", action="store_true")
+    parser.add_argument("--tls-key-path")
+    parser.add_argument("--tls-cert-path")
+    args = parser.parse_args()
+
+    config = dict(workers=1)
+    if args.enable_tls:
+        config["tls"] = TlsConfig(
+            key_path=args.tls_key_path,
+            cert_path=args.tls_cert_path,
+        )
+
+    app.run(**config)
 
 
 if __name__ == "__main__":

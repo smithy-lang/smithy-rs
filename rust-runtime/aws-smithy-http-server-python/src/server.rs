@@ -3,7 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{collections::HashMap, convert::Infallible, ops::Deref, process, thread};
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::net::TcpListener as StdTcpListener;
+use std::ops::Deref;
+use std::process;
+use std::sync::{mpsc, Arc};
+use std::thread;
 
 use aws_smithy_http_server::{
     body::{Body, BoxBody},
@@ -11,13 +17,17 @@ use aws_smithy_http_server::{
     AddExtensionLayer,
 };
 use http::{Request, Response};
+use hyper::server::conn::AddrIncoming;
 use parking_lot::Mutex;
 use pyo3::{prelude::*, types::IntoPyDict};
 use signal_hook::{consts::*, iterator::Signals};
-use tokio::runtime;
+use socket2::Socket;
+use tokio::{net::TcpListener, runtime};
+use tokio_rustls::TlsAcceptor;
 use tower::{util::BoxCloneService, ServiceBuilder};
 
 use crate::{
+    tls::{listener::Listener as TlsListener, PyTlsConfig},
     util::{error::rich_py_err, func_metadata},
     PySocket,
 };
@@ -223,11 +233,13 @@ event_loop.add_signal_handler(signal.SIGINT,
         event_loop: &PyAny,
         service: Service,
         worker_number: isize,
+        tls: Option<PyTlsConfig>,
     ) -> PyResult<()> {
         // Clone the socket.
         let borrow = socket.try_borrow_mut()?;
         let held_socket: &PySocket = &borrow;
         let raw_socket = held_socket.get_socket()?;
+
         // Register signals on the Python event loop.
         self.register_python_signals(py, event_loop.to_object(py))?;
 
@@ -239,20 +251,29 @@ event_loop.add_signal_handler(signal.SIGINT,
                 .enable_all()
                 .thread_name(format!("smithy-rs-tokio[{worker_number}]"))
                 .build()
-                .expect("Unable to start a new tokio runtime for this process");
+                .expect("unable to start a new tokio runtime for this process");
             rt.block_on(async move {
-                let server = hyper::Server::from_tcp(
-                    raw_socket
-                        .try_into()
-                        .expect("Unable to convert socket2::Socket into std::net::TcpListener"),
-                )
-                .expect("Unable to create hyper server from shared socket")
-                .serve(IntoMakeService::new(service));
+                let addr = addr_incoming_from_socket(raw_socket);
 
-                tracing::trace!("started hyper server from shared socket");
-                // Run forever-ish...
-                if let Err(err) = server.await {
-                    tracing::error!(error = ?err, "server error");
+                if let Some(config) = tls {
+                    let (acceptor, acceptor_rx) = tls_config_reloader(config);
+                    let listener = TlsListener::new(acceptor, addr, acceptor_rx);
+                    let server =
+                        hyper::Server::builder(listener).serve(IntoMakeService::new(service));
+
+                    tracing::trace!("started tls hyper server from shared socket");
+                    // Run forever-ish...
+                    if let Err(err) = server.await {
+                        tracing::error!(error = ?err, "server error");
+                    }
+                } else {
+                    let server = hyper::Server::builder(addr).serve(IntoMakeService::new(service));
+
+                    tracing::trace!("started hyper server from shared socket");
+                    // Run forever-ish...
+                    if let Err(err) = server.await {
+                        tracing::error!(error = ?err, "server error");
+                    }
                 }
             });
         });
@@ -347,16 +368,17 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///
     ///     #[pymethods]
     ///     impl App {
-    ///     #[pyo3(text_signature = "($self, socket, worker_number)")]
+    ///     #[pyo3(text_signature = "($self, socket, worker_number, tls)")]
     ///         pub fn start_worker(
     ///             &mut self,
     ///             py: pyo3::Python,
     ///             socket: &pyo3::PyCell<aws_smithy_http_server_python::PySocket>,
     ///             worker_number: isize,
+    ///             tls: Option<aws_smithy_http_server_python::tls::PyTlsConfig>,
     ///         ) -> pyo3::PyResult<()> {
     ///             let event_loop = self.configure_python_event_loop(py)?;
     ///             let service = self.build_service(event_loop)?;
-    ///             self.start_hyper_worker(py, socket, event_loop, service, worker_number)
+    ///             self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
     ///         }
     ///     }
     /// ```
@@ -369,6 +391,7 @@ event_loop.add_signal_handler(signal.SIGINT,
         port: Option<i32>,
         backlog: Option<i32>,
         workers: Option<usize>,
+        tls: Option<PyTlsConfig>,
     ) -> PyResult<()> {
         // Setup multiprocessing environment, allowing connections and socket
         // sharing between processes.
@@ -401,12 +424,13 @@ event_loop.add_signal_handler(signal.SIGINT,
         // Start all the workers as new Python processes and store the in the `workers` attribute.
         for idx in 1..workers.unwrap_or_else(num_cpus::get) + 1 {
             let sock = socket.try_clone()?;
+            let tls = tls.clone();
             let process = mp.getattr("Process")?;
             let handle = process.call1((
                 py.None(),
                 self.clone().into_py(py).getattr(py, "start_worker")?,
                 format!("smithy-rs-worker[{idx}]"),
-                (sock.into_py(py), idx),
+                (sock.into_py(py), idx, tls.into_py(py)),
             ))?;
             handle.call_method0("start")?;
             active_workers.push(handle.to_object(py));
@@ -459,4 +483,47 @@ event_loop.add_signal_handler(signal.SIGINT,
             .service(service);
         Ok(service)
     }
+}
+
+fn addr_incoming_from_socket(socket: Socket) -> AddrIncoming {
+    let std_listener: StdTcpListener = socket
+        .try_into()
+        .expect("unable to convert `socket2::Socket` into `std::net::TcpListener`");
+    // StdTcpListener::from_std doesn't set O_NONBLOCK
+    std_listener
+        .set_nonblocking(true)
+        .expect("unable to set `O_NONBLOCK=true` on `std::net::TcpListener`");
+    let listener = TcpListener::from_std(std_listener)
+        .expect("unable to create `tokio::net::TcpListener` from `std::net::TcpListener`");
+    AddrIncoming::from_listener(listener)
+        .expect("unable to create `AddrIncoming` from `TcpListener`")
+}
+
+// Builds `TlsAcceptor` from given `config` and also creates a background task
+// to reload certificates and returns a channel to receive new `TlsAcceptor`s.
+fn tls_config_reloader(config: PyTlsConfig) -> (TlsAcceptor, mpsc::Receiver<TlsAcceptor>) {
+    let reload_dur = config.reload_duration();
+    let (tx, rx) = mpsc::channel();
+    let acceptor = TlsAcceptor::from(Arc::new(config.build().expect("invalid tls config")));
+
+    tokio::spawn(async move {
+        tracing::trace!(dur = ?reload_dur, "starting timer to reload tls config");
+        loop {
+            tokio::time::sleep(reload_dur).await;
+            tracing::trace!("reloading tls config");
+            match config.build() {
+                Ok(config) => {
+                    let new_config = TlsAcceptor::from(Arc::new(config));
+                    // Note on expect: `tx.send` can only fail if the receiver is dropped,
+                    // it probably a bug if that happens
+                    tx.send(new_config).expect("could not send new tls config")
+                }
+                Err(err) => {
+                    tracing::error!(error = ?err, "could not reload tls config because it is invalid");
+                }
+            }
+        }
+    });
+
+    (acceptor, rx)
 }
