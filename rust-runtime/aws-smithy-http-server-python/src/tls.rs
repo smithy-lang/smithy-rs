@@ -10,6 +10,7 @@
 
 use std::fs::File;
 use std::io::{self, BufReader, Read};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use pyo3::{pyclass, pymethods};
@@ -26,10 +27,10 @@ pub mod listener;
 #[derive(Clone)]
 pub struct PyTlsConfig {
     /// Absolute path of the RSA or PKCS private key.
-    key_path: String,
+    key_path: PathBuf,
 
     /// Absolute path of the x509 certificate.
-    cert_path: String,
+    cert_path: PathBuf,
 
     /// Duration to reloading certificates.
     reload_secs: u64,
@@ -94,7 +95,7 @@ impl PyTlsConfig {
 impl PyTlsConfig {
     #[new]
     #[args(reload_secs = "86400")] // <- 1 Day by default
-    fn py_new(key_path: String, cert_path: String, reload_secs: u64) -> Self {
+    fn py_new(key_path: PathBuf, cert_path: PathBuf, reload_secs: u64) -> Self {
         // TODO(BugOnUpstream): `reload: &PyDelta` segfaults, create an issue on PyO3
         Self {
             key_path,
@@ -123,6 +124,8 @@ pub enum PyTlsConfigError {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use pyo3::{
         prelude::*,
         types::{IntoPyDict, PyDict},
@@ -161,8 +164,8 @@ config = TlsConfig(key_path=TEST_KEY, cert_path=TEST_CERT, reload_secs=1000)
             locals.get_item("config").unwrap().extract::<PyTlsConfig>()
         })?;
 
-        assert_eq!(TEST_KEY, config.key_path);
-        assert_eq!(TEST_CERT, config.cert_path);
+        assert_eq!(PathBuf::from_str(TEST_KEY).unwrap(), config.key_path);
+        assert_eq!(PathBuf::from_str(TEST_CERT).unwrap(), config.cert_path);
         assert_eq!(1000, config.reload_secs);
 
         // Make sure build succeeds
