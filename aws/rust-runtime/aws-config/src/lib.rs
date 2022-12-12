@@ -346,17 +346,18 @@ mod loader {
 
         /// Override the endpoint URL used for **all** AWS services.
         ///
-        /// This method will override the endpoint URL used for **all** AWS services. This mainly
-        /// exists to set a static endpoint for tools like `LocalStack`. For live traffic, AWS services
-        /// require the service-specific endpoint resolver they provide.
+        /// This method will override the endpoint URL used for **all** AWS services. This primarily
+        /// exists to set a static endpoint for tools like `LocalStack`. When sending requests to
+        /// production AWS services, this method should only be used for service-specific behavior.
+        ///
+        /// When this method is used, the [`Region`](aws_types::region::Region) is only used for
+        /// signing; it is not used to route the request.
         ///
         /// # Examples
         ///
         /// Use a static endpoint for all services
         /// ```no_run
         /// # async fn create_config() {
-        /// use aws_config::endpoint::Endpoint;
-        ///
         /// let sdk_config = aws_config::from_env()
         ///     .endpoint_url("http://localhost:1234")
         ///     .load()
