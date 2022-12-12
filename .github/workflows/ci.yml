@@ -13,6 +13,8 @@ on:
         description: Whether to run the SDK example checks or not.
         required: false
         default: false
+        type: boolean
+
 env:
   rust_version: 1.62.1
   rust_toolchain_components: clippy,rustfmt
