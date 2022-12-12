@@ -8,6 +8,11 @@ name: Test
 on:
   workflow_call:
 
+inputs:
+  run_sdk_examples:
+    required: false
+    default: false
+
 env:
   rust_version: 1.62.1
   rust_toolchain_components: clippy,rustfmt
