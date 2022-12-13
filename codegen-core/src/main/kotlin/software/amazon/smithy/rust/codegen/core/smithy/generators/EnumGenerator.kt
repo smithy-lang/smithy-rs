@@ -21,14 +21,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
-import software.amazon.smithy.rust.codegen.core.util.doubleQuote
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -97,6 +96,7 @@ open class EnumGenerator(
     protected val meta = symbol.expectRustMetadata()
     protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
+    private val memberList = sortedMembers.joinToString(", ") { it.value.dq() }
     protected open var target: CodegenTarget = CodegenTarget.CLIENT
 
     companion object {
@@ -140,27 +140,28 @@ open class EnumGenerator(
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
         meta.render(writer)
-        writer.write("struct $enumName(String);")
-        writer.rustBlock("impl $enumName") {
-            docs("Returns the `&str` value of the enum member.")
-            rustBlock("pub fn as_str(&self) -> &str") {
-                rust("&self.0")
+        writer.rust("struct $enumName(String);")
+        writer.rustTemplate(
+            """
+            impl $enumName {
+                ///  Returns the `&str` value of the enum member.
+                pub fn as_str(&self) -> &str {
+                    &self.0
+                }
+                
+                #{ValuesMethod:W}
             }
-
-            docs("Returns all the `&str` representations of the enum members.")
-            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
-                withBlock("&[", "]") {
-                    val memberList = sortedMembers.joinToString(", ") { it.value.dq() }
-                    rust(memberList)
+            
+            impl <T> #{From}<T> for $enumName where T: #{AsRef}<str> {
+                fn from(s: T) -> Self {
+                    $enumName(s.as_ref().to_owned())
                 }
             }
-        }
-
-        writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
-            rustBlock("fn from(s: T) -> Self") {
-                rust("$enumName(s.as_ref().to_owned())")
-            }
-        }
+            """,
+            "From" to RuntimeType.From,
+            "AsRef" to RuntimeType.AsRef,
+            "ValuesMethod" to valuesMethod(),
+        )
     }
 
     private fun renderEnum() {
@@ -204,14 +205,19 @@ open class EnumGenerator(
                 }
             }
 
-            rust("/// Returns all the `&str` values of the enum members.")
-            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
-                withBlock("&[", "]") {
-                    val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
-                    write(memberList)
-                }
-            }
+            rust("#{T}", valuesMethod())
         }
+    }
+
+    private fun valuesMethod() = writable {
+        rust(
+            """
+            /// Returns all the `&str` representations of the enum members.
+            pub const fn $Values() -> &'static [&'static str] {
+                &[$memberList]
+            }
+            """,
+        )
     }
 
     private fun unknownVariantValue(): RuntimeType {
@@ -219,20 +225,24 @@ open class EnumGenerator(
             docs(
                 """
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
-                the crate
+                the crate.
 
                 While this is not intended to be used directly, it is marked as `pub` because it is
                 part of the enums that are public interface.
-                """.trimIndent(),
+                """,
             )
             meta.render(this)
-            rust("struct $UnknownVariantValue(pub(crate) String);")
-            rustBlock("impl $UnknownVariantValue") {
-                // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
-                rustBlock("pub(crate) fn as_str(&self) -> &str") {
-                    rust("&self.0")
+            // The generated `as_str` is not `pub` as we need to prevent users from calling it on this opaque struct.
+            rust(
+                """
+                struct $UnknownVariantValue(pub(crate) String);
+                impl $UnknownVariantValue {
+                    pub(crate) fn as_str(&self) -> &str {
+                        &self.0
+                    }
                 }
-            }
+                """,
+            )
         }
     }
 
@@ -299,7 +309,7 @@ private fun RustWriter.renderForwardCompatibilityNote(
         variant in a current version of SDK, your code should continue to work when you
         upgrade SDK to a future version in which the enum does include a variant for that
         feature.
-        """.trimIndent(),
+        """,
     )
     docs("")
     docs("Here is an example of how you can make a match expression forward-compatible:")
@@ -328,7 +338,7 @@ private fun RustWriter.renderForwardCompatibilityNote(
         Specifically, when `${enumName.lowercase()}` represents `NewFeature`,
         the execution path will hit the second last match arm as before by virtue of
         calling `as_str` on `$enumName::NewFeature` also yielding `"NewFeature"`.
-        """.trimIndent(),
+        """,
     )
     docs("")
     docs(
@@ -337,6 +347,6 @@ private fun RustWriter.renderForwardCompatibilityNote(
         be avoided for two reasons:
         - The inner data `$unknownVariantValue` is opaque, and no further information can be extracted.
         - It might inadvertently shadow other intended match arms.
-        """.trimIndent(),
+        """,
     )
 }
