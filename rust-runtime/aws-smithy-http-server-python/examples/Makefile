@@ -25,18 +25,18 @@ endif
 # Note on `--compatibility linux`: Maturin by default uses `manylinux_x_y` but it is not supported 
 # by our current CI version (3.7.10), we can drop `--compatibility linux` when we switch to higher Python version.
 # For more detail: https://github.com/pypa/manylinux
-build-wheel: ensure-maturin
+build-wheel: ensure-maturin codegen
 	maturin build --manifest-path $(SERVER_SDK_DST)/Cargo.toml --out $(WHEELS) --compatibility linux
 
-build-wheel-release: ensure-maturin
+build-wheel-release: ensure-maturin codegen
 	maturin build --manifest-path $(SERVER_SDK_DST)/Cargo.toml --out $(WHEELS) --compatibility linux --release
 
 install-wheel:
 	find $(WHEELS) -type f -name '*.whl' | xargs python3 -m pip install --user --force-reinstall
 
-build: codegen build-wheel install-wheel
+build: build-wheel install-wheel
 
-release: codegen build-wheel-release install-wheel
+release: build-wheel-release install-wheel
 
 run: build
 	python3 $(CUR_DIR)/pokemon_service.py
