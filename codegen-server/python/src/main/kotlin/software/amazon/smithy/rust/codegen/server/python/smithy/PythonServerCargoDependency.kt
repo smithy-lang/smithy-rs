@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
  * Object used *exclusively* in the runtime of the Python server, for separation concerns.
- * Analogous to the companion object in [CargoDependency] and [ServerCargoDependency]; see its documentation for details.
+ * Analogous to the companion object in [CargoDependency] and [software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency]; see its documentation for details.
  * For a dependency that is used in the client, or in both the client and the server, use [CargoDependency] directly.
  */
 object PythonServerCargoDependency {
@@ -25,6 +25,6 @@ object PythonServerCargoDependency {
     val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
     val ParkingLot: CargoDependency = CargoDependency("parking_lot", CratesIo("0.12"))
 
-    fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
-    fun SmithyHttpServerPython(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server-python")
+    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+    fun smithyHttpServerPython(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server-python")
 }

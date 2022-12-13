@@ -9,13 +9,12 @@ import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
 import software.amazon.smithy.rulesengine.language.syntax.expr.Template
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import java.util.stream.Stream
 
@@ -27,8 +26,10 @@ import java.util.stream.Stream
 class LiteralGenerator(private val ownership: Ownership, private val context: Context) :
     Literal.Vistor<Writable> {
     private val runtimeConfig = context.runtimeConfig
-    private val document = CargoDependency.smithyTypes(runtimeConfig).toType().member("Document")
-    private val codegenScope = arrayOf("Document" to document, "HashMap" to RustType.HashMap.RuntimeType)
+    private val codegenScope = arrayOf(
+        "Document" to RuntimeType.document(runtimeConfig),
+        "HashMap" to RuntimeType.HashMap,
+    )
     override fun visitBool(b: Boolean) = writable {
         rust(b.toString())
     }

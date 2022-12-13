@@ -10,7 +10,6 @@ use smithy.framework#ValidationException
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
-        // TODO Rename as {Verb}[{Qualifier}]{Noun}: https://github.com/awslabs/smithy-rs/pull/1342#discussion_r980936650
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedRecursiveShapesOperation,
@@ -467,13 +466,14 @@ structure ConA {
     fixedValueByte: FixedValueByte,
 
     conBList: ConBList,
-    conBList2: ConBList2,
+    lengthList: LengthList,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // conBSet: ConBSet,
 
     conBMap: ConBMap,
+    lengthMap: LengthMap,
 
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
@@ -837,14 +837,11 @@ list RecursiveList {
 }
 
 list ConBList {
-    member: NestedList
+    member: LengthList
 }
 
-list ConBList2 {
-    member: ConB
-}
-
-list NestedList {
+@length(max: 69)
+list LengthList {
     member: ConB
 }
 
@@ -874,12 +871,16 @@ map ConBMap {
     value: LengthString
 }
 
+@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: String
+}
+
 @error("client")
 structure ErrorWithLengthStringMessage {
-    // TODO Doesn't work yet because constrained string types don't implement
-    // `AsRef<str>`.
-    // @required
-    // message: LengthString
+    @required
+    message: LengthString
 }
 
 map MapOfMapOfListOfListOfConB {
