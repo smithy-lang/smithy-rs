@@ -4,6 +4,7 @@
  */
 
 use crate::result::SdkError;
+use aws_smithy_eventstream::frame::UnmarshallMessage;
 use aws_smithy_eventstream::frame::{MarshallMessage, SignMessage};
 use bytes::Bytes;
 use futures_core::Stream;
@@ -13,7 +14,6 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tracing::trace;
 
 /// Input type for Event Streams.
 pub struct EventStreamSender<T, E> {
@@ -26,7 +26,41 @@ impl<T, E> Debug for EventStreamSender<T, E> {
     }
 }
 
-impl<T, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
+#[cfg(all(
+    feature = "unstable",
+    feature = "deserialize"
+))]
+pub use deserialized_stream::*;
+#[cfg(all(
+    feature = "unstable",
+    feature = "deserialize"
+))]
+mod deserialized_stream {
+    use super::*;
+    /// Data type for deserialized stream.
+    pub struct DeserializedSenderStream<T, E>(PhantomData<(T, E)>);
+    impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> DeserializedSenderStream<T, E> {
+        pub fn new() -> impl Stream<Item = Result<T, E>> + Send {
+            Self(PhantomData::<(T, E)>)
+        }
+    }
+    impl<T, E: StdError + Send + Sync + 'static> futures_core::Stream
+        for DeserializedSenderStream<T, E>
+    {
+        type Item = std::result::Result<T, E>;
+        fn poll_next(
+            self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Self::Item>> {
+            std::task::Poll::Ready(None)
+        }
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, None)
+        }
+    }
+}
+
+impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
     #[doc(hidden)]
     pub fn into_body_stream(
         self,
@@ -35,6 +69,12 @@ impl<T, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
         signer: impl SignMessage + Send + Sync + 'static,
     ) -> MessageStreamAdapter<T, E> {
         MessageStreamAdapter::new(marshaller, error_marshaller, signer, self.input_stream)
+    }
+
+    pub fn deserialized_sender() -> Self {
+        EventStreamSender {
+            input_stream: Box::pin(DeserializedSenderStream::new()),
+        }
     }
 }
 
@@ -56,7 +96,7 @@ pub struct MessageStreamError {
 }
 
 #[derive(Debug)]
-enum MessageStreamErrorKind {
+pub enum MessageStreamErrorKind {
     Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
@@ -84,18 +124,11 @@ impl MessageStreamError {
     }
 }
 
-impl StdError for MessageStreamError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match &self.kind {
-            MessageStreamErrorKind::Unhandled(source) => Some(source.as_ref() as _),
-        }
-    }
-}
-
+impl StdError for MessageStreamError {}
 impl fmt::Display for MessageStreamError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            MessageStreamErrorKind::Unhandled(_) => write!(f, "message stream error"),
+            MessageStreamErrorKind::Unhandled(inner) => std::fmt::Display::fmt(inner, f),
         }
     }
 }
@@ -145,34 +178,29 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
                         Ok(message) => self
                             .marshaller
                             .marshall(message)
-                            .map_err(SdkError::construction_failure)?,
+                            .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?,
                         Err(message) => self
                             .error_marshaller
                             .marshall(message)
-                            .map_err(SdkError::construction_failure)?,
+                            .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?,
                     };
-
-                    trace!(unsigned_message = ?message, "signing event stream message");
                     let message = self
                         .signer
                         .sign(message)
-                        .map_err(SdkError::construction_failure)?;
-
+                        .map_err(|err| SdkError::ConstructionFailure(err))?;
                     let mut buffer = Vec::new();
                     message
                         .write_to(&mut buffer)
-                        .map_err(SdkError::construction_failure)?;
-                    trace!(signed_message = ?buffer, "sending signed event stream message");
+                        .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
                     Poll::Ready(Some(Ok(Bytes::from(buffer))))
                 } else if !self.end_signal_sent {
                     self.end_signal_sent = true;
                     let mut buffer = Vec::new();
                     match self.signer.sign_empty() {
                         Some(sign) => {
-                            sign.map_err(SdkError::construction_failure)?
+                            sign.map_err(|err| SdkError::ConstructionFailure(err))?
                                 .write_to(&mut buffer)
-                                .map_err(SdkError::construction_failure)?;
-                            trace!(signed_message = ?buffer, "sending signed empty message to terminate the event stream");
+                                .map_err(|err| SdkError::ConstructionFailure(Box::new(err)))?;
                             Poll::Ready(Some(Ok(Bytes::from(buffer))))
                         }
                         None => Poll::Ready(None),
@@ -228,9 +256,7 @@ mod tests {
         type Input = TestServiceError;
 
         fn marshall(&self, _input: Self::Input) -> Result<Message, EventStreamError> {
-            Err(Message::read_from(&b""[..])
-                .err()
-                .expect("this should always fail"))
+            Err(EventStreamError::InvalidMessageLength)
         }
     }
 

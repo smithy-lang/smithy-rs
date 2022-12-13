@@ -8,6 +8,11 @@
 use crate::date_time::format::DateTimeParseErrorKind;
 use num_integer::div_mod_floor;
 use num_integer::Integer;
+
+#[cfg(any(
+    all(feature = "unstable", feature = "serialize"),
+    all(feature = "unstable", feature = "deserialize")
+))]
 use serde::ser::SerializeTuple;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
