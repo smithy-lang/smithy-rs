@@ -323,66 +323,6 @@ fn number_deserialization_works() {
     assert_eq!("-1", serde_json::to_string(&Number::NegInt(-1)).unwrap());
 }
 
-/// The error type returned when conversion into an integer type or floating point type is lossy.
-#[derive(Debug)]
-pub enum TryFromNumberError {
-    /// Used when the conversion from an integer type into a smaller integer type would be lossy.
-    OutsideIntegerRange(std::num::TryFromIntError),
-    /// Used when the conversion from an `u64` into a floating point type would be lossy.
-    U64ToFloatLossyConversion(u64),
-    /// Used when the conversion from an `i64` into a floating point type would be lossy.
-    I64ToFloatLossyConversion(i64),
-    /// Used when attempting to convert an `f64` into an `f32`.
-    F64ToF32LossyConversion(f64),
-    /// Used when attempting to convert a decimal, infinite, or `NaN` floating point type into an
-    /// integer type.
-    FloatToIntegerLossyConversion(f64),
-    /// Used when attempting to convert a negative [`Number`] into an unsigned integer type.
-    NegativeToUnsignedLossyConversion(i64),
-}
-
-impl std::fmt::Display for TryFromNumberError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TryFromNumberError::OutsideIntegerRange(err) => write!(f, "integer too large: {}", err),
-            TryFromNumberError::FloatToIntegerLossyConversion(v) => write!(
-                f,
-                "cannot convert floating point number {} into an integer",
-                v
-            ),
-            TryFromNumberError::NegativeToUnsignedLossyConversion(v) => write!(
-                f,
-                "cannot convert negative integer {} into an unsigned integer type",
-                v
-            ),
-            TryFromNumberError::U64ToFloatLossyConversion(v) => {
-                write!(
-                    f,
-                    "cannot convert {}u64 into a floating point type without precision loss",
-                    v
-                )
-            }
-            TryFromNumberError::I64ToFloatLossyConversion(v) => {
-                write!(
-                    f,
-                    "cannot convert {}i64 into a floating point type without precision loss",
-                    v
-                )
-            }
-            TryFromNumberError::F64ToF32LossyConversion(v) => {
-                write!(f, "will not attempt to convert {}f64 into a f32", v)
-            }
-        }
-    }
-}
-
-impl std::error::Error for TryFromNumberError {}
-
-impl From<std::num::TryFromIntError> for TryFromNumberError {
-    fn from(value: std::num::TryFromIntError) -> Self {
-        Self::OutsideIntegerRange(value)
-    }
-}
 
 macro_rules! to_unsigned_integer_converter {
     ($typ:ident, $styp:expr) => {
