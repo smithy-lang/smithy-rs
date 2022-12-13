@@ -28,16 +28,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
@@ -68,20 +64,6 @@ open class StructureGenerator(
         }
     }
 
-    companion object {
-        /** Returns whether a structure shape requires a fallible builder to be generated. */
-        fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
-            // All operation inputs should have fallible builders in case a new required field is added in the future.
-            structureShape.hasTrait<SyntheticInputTrait>() ||
-                structureShape
-                    .allMembers
-                    .values.map { symbolProvider.toSymbol(it) }.any {
-                        // If any members are not optional && we can't use a default, we need to
-                        // generate a fallible builder
-                        !it.isOptional() && !it.canUseDefault()
-                    }
-    }
-
     /**
      * Search for lifetimes used by the members of the struct and generate a declaration.
      * e.g. `<'a, 'b>`
@@ -100,12 +82,13 @@ open class StructureGenerator(
         } else ""
     }
 
-    /** Render a custom debug implementation
+    /**
+     * Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
     private fun renderDebugImpl() {
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
@@ -163,7 +146,8 @@ open class StructureGenerator(
         writer.deprecatedShape(shape)
         writer.writeInline(RuntimeType.UnstableDerive)
         val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
-        containerMeta.copy(derives = withoutDebug).render(writer)
+
+        containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
@@ -172,7 +156,9 @@ open class StructureGenerator(
         }
 
         renderStructureImpl()
-        renderDebugImpl()
+        if (!containerMeta.derives.derives.contains(RuntimeType.Debug)) {
+            renderDebugImpl()
+        }
     }
 
     protected fun RustWriter.forEachMember(

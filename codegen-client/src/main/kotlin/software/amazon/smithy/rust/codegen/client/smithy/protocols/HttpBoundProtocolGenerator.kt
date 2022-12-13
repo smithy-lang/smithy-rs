@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.ResponseBindingGenerator
@@ -76,8 +76,8 @@ class HttpBoundProtocolTraitImplGenerator(
 
     private val codegenScope = arrayOf(
         "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
-        "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
-        "http" to RuntimeType.http,
+        "ParseResponse" to RuntimeType.parseHttpResponse(runtimeConfig),
+        "http" to RuntimeType.Http,
         "operation" to RuntimeType.operationModule(runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
     )
@@ -332,7 +332,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }
         }
 
-        val err = if (StructureGenerator.hasFallibleBuilder(outputShape, symbolProvider)) {
+        val err = if (BuilderGenerator.hasFallibleBuilder(outputShape, symbolProvider)) {
             ".map_err(${format(errorSymbol)}::unhandled)?"
         } else ""
 

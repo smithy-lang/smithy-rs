@@ -19,6 +19,8 @@ use tower::Service;
 use super::{OperationError, OperationShape};
 
 /// A utility trait used to provide an even interface for all operation handlers.
+///
+/// See [`operation`](crate::operation) documentation for more info.
 pub trait Handler<Op, Exts>
 where
     Op: OperationShape,
@@ -62,35 +64,36 @@ where
     }
 }
 
-// fn(Input, Ext0) -> Output
-impl<Op, F, Fut, Ext0> Handler<Op, (Ext0,)> for F
-where
-    Op: OperationShape,
-    F: Fn(Op::Input, Ext0) -> Fut,
-    Fut: Future,
-    Fut::Output: IntoResult<Op::Output, Op::Error>,
-{
-    type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
+// fn(Input, Ext_i) -> Output
+macro_rules! impl_handler {
+    ($($var:ident),+) => (
+        impl<Op, F, Fut, $($var,)*> Handler<Op, ($($var,)*)> for F
+        where
+            Op: OperationShape,
+            F: Fn(Op::Input, $($var,)*) -> Fut,
+            Fut: Future,
+            Fut::Output: IntoResult<Op::Output, Op::Error>,
+        {
+            type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
 
-    fn call(&mut self, input: Op::Input, exts: (Ext0,)) -> Self::Future {
-        (self)(input, exts.0).map(IntoResult::into_result)
-    }
+            fn call(&mut self, input: Op::Input, exts: ($($var,)*)) -> Self::Future {
+                #[allow(non_snake_case)]
+                let ($($var,)*) = exts;
+                (self)(input, $($var,)*).map(IntoResult::into_result)
+            }
+        }
+    )
 }
 
-// fn(Input, Ext0, Ext1) -> Output
-impl<Op, F, Fut, Ext0, Ext1> Handler<Op, (Ext0, Ext1)> for F
-where
-    Op: OperationShape,
-    F: Fn(Op::Input, Ext0, Ext1) -> Fut,
-    Fut: Future,
-    Fut::Output: IntoResult<Op::Output, Op::Error>,
-{
-    type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
-
-    fn call(&mut self, input: Op::Input, exts: (Ext0, Ext1)) -> Self::Future {
-        (self)(input, exts.0, exts.1).map(IntoResult::into_result)
-    }
-}
+impl_handler!(Exts0);
+impl_handler!(Exts0, Exts1);
+impl_handler!(Exts0, Exts1, Exts2);
+impl_handler!(Exts0, Exts1, Exts2, Exts3);
+impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4);
+impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5);
+impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5, Exts6);
+impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5, Exts6, Exts7);
+impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5, Exts6, Exts7, Exts8);
 
 /// An extension trait for [`Handler`].
 pub trait HandlerExt<Op, Exts>: Handler<Op, Exts>

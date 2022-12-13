@@ -6,121 +6,133 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 class ServerServiceGeneratorV2(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val protocol: ServerProtocol,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
     private val codegenScope =
         arrayOf(
-            "Bytes" to CargoDependency.Bytes.asType(),
-            "Http" to CargoDependency.Http.asType(),
-            "HttpBody" to CargoDependency.HttpBody.asType(),
-            "SmithyHttpServer" to
-                ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "Tower" to CargoDependency.Tower.asType(),
+            "Bytes" to RuntimeType.Bytes,
+            "Http" to RuntimeType.Http,
+            "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+            "HttpBody" to RuntimeType.HttpBody,
+            "SmithyHttpServer" to smithyHttpServer,
+            "Tower" to RuntimeType.Tower,
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val crateName = codegenContext.moduleUseName()
 
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
+    private val builderPluginGenericTypeName = "Plugin"
+    private val builderBodyGenericTypeName = "Body"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
-    private val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
+    private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
 
-    /** The sequence of builder generics: `Op1`, ..., `OpN`. */
-    private val builderOps = (1..operations.size).map { "Op$it" }
+    /** Associate each operation with the corresponding field names in the builder struct. */
+    private val builderFieldNames =
+        operations.associateWith { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
+            .toSortedMap(
+                compareBy { it.id },
+            )
 
-    /** The sequence of extension types: `Ext1`, ..., `ExtN`. */
-    private val extensionTypes = (1..operations.size).map { "Exts$it" }
-
-    /** The sequence of field names for the builder. */
-    private val builderFieldNames = operations.map { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
-
-    /** The sequence of operation struct names. */
-    private val operationStructNames = operations.map { symbolProvider.toSymbol(it).name.toPascalCase() }
+    /** Associate each operation with the name of the corresponding Zero-Sized Type (ZST) struct name. */
+    private val operationStructNames = operations.associateWith { symbolProvider.toSymbol(it).name.toPascalCase() }
 
     /** A `Writable` block of "field: Type" for the builder. */
-    private val builderFields = builderFieldNames.zip(builderOps).map { (name, type) -> "$name: $type" }
+    private val builderFields =
+        builderFieldNames.values.map { name -> "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>" }
+
+    /** The name of the local private module containing the functions that return the request for each operation */
+    private val requestSpecsModuleName = "request_specs"
+
+    /** Associate each operation with a function that returns its request spec. */
+    private val requestSpecMap: Map<OperationShape, Pair<String, Writable>> =
+        operations.associateWith { operationShape ->
+            val operationName = symbolProvider.toSymbol(operationShape).name
+            val spec = protocol.serverRouterRequestSpec(
+                operationShape,
+                operationName,
+                serviceName,
+                smithyHttpServer.resolve("routing::request_spec"),
+            )
+            val functionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
+            val functionBody = writable {
+                rustTemplate(
+                    """
+                    fn $functionName() -> #{SpecType} {
+                        #{Spec:W}
+                    }
+                    """,
+                    "Spec" to spec,
+                    "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.resolve("routing::request_spec")),
+                )
+            }
+            Pair(functionName, functionBody)
+        }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable = writable {
-        val pluginType = listOf("Pl")
-        for ((index, pair) in builderFieldNames.zip(operationStructNames).withIndex()) {
-            val (fieldName, structName) = pair
-
-            // The new generics for the operation setter, using `NewOp` where appropriate.
-            val replacedOpGenerics = builderOps.withIndex().map { (innerIndex, item) ->
-                if (innerIndex == index) {
-                    "NewOp"
-                } else {
-                    item
-                }
-            }
-
-            // The new generics for the operation setter, using `NewOp` where appropriate.
-            val replacedExtGenerics = extensionTypes.withIndex().map { (innerIndex, item) ->
-                if (innerIndex == index) {
-                    "NewExts"
-                } else {
-                    item
-                }
-            }
-
-            // The new generics for the handler setter, using `NewOp` where appropriate.
-            val replacedOpServiceGenerics = builderOps.withIndex().map { (innerIndex, item) ->
-                if (innerIndex == index) writable {
-                    rustTemplate(
-                        """
-                        #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, H>>
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    writable(item)
-                }
-            }
-
-            // The assignment of fields, using value where appropriate.
-            val switchedFields = builderFieldNames.withIndex().map { (innerIndex, item) ->
-                if (index == innerIndex) {
-                    "$item: value"
-                } else {
-                    "$item: self.$item"
-                }
-            }
-
+        for ((operationShape, structName) in operationStructNames) {
+            val fieldName = builderFieldNames[operationShape]
             rustTemplate(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
                 ///
                 /// This should be an async function satisfying the [`Handler`](#{SmithyHttpServer}::operation::Handler) trait.
                 /// See the [operation module documentation](#{SmithyHttpServer}::operation) for more information.
-                pub fn $fieldName<H, NewExts>(self, value: H) -> $builderName<#{HandlerSetterGenerics:W}>
+                ///
+                /// ## Example
+                ///
+                /// ```no_run
+                /// use $crateName::$serviceName;
+                ///
+                #{Handler:W}
+                ///
+                /// let app = $serviceName::builder_without_plugins()
+                ///     .$fieldName(handler)
+                ///     /* Set other handlers */
+                ///     .build()
+                ///     .unwrap();
+                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ```
+                ///
+                pub fn $fieldName<HandlerType, Extensions>(self, handler: HandlerType) -> Self
                 where
-                    H: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, NewExts>
+                    HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, Extensions>,
+                    #{SmithyHttpServer}::operation::Operation<#{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>>:
+                        #{SmithyHttpServer}::operation::Upgradable<
+                            #{Protocol},
+                            crate::operation_shape::$structName,
+                            Extensions,
+                            $builderBodyGenericTypeName,
+                            $builderPluginGenericTypeName,
+                        >
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
-                    self.${fieldName}_operation(crate::operation_shape::$structName::from_handler(value))
+                    self.${fieldName}_operation(crate::operation_shape::$structName::from_handler(handler))
                 }
 
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -129,17 +141,22 @@ class ServerServiceGeneratorV2(
                 /// [`$structName`](crate::operation_shape::$structName) using either
                 /// [`OperationShape::from_handler`](#{SmithyHttpServer}::operation::OperationShapeExt::from_handler) or
                 /// [`OperationShape::from_service`](#{SmithyHttpServer}::operation::OperationShapeExt::from_service).
-                pub fn ${fieldName}_operation<NewOp, NewExts>(self, value: NewOp) -> $builderName<${(replacedOpGenerics + replacedExtGenerics + pluginType).joinToString(", ")}>
+                pub fn ${fieldName}_operation<Operation, Extensions>(mut self, operation: Operation) -> Self
+                where
+                    Operation: #{SmithyHttpServer}::operation::Upgradable<
+                        #{Protocol},
+                        crate::operation_shape::$structName,
+                        Extensions,
+                        $builderBodyGenericTypeName,
+                        $builderPluginGenericTypeName,
+                    >
                 {
-                    $builderName {
-                        ${switchedFields.joinToString(", ")},
-                        _exts: std::marker::PhantomData,
-                        plugin: self.plugin,
-                    }
+                    self.$fieldName = Some(operation.upgrade(&self.plugin));
+                    self
                 }
                 """,
                 "Protocol" to protocol.markerStruct(),
-                "HandlerSetterGenerics" to (replacedOpServiceGenerics + ((replacedExtGenerics + pluginType).map { writable(it) })).join(", "),
+                "Handler" to DocHandlerGenerator(codegenContext, operationShape, "handler", "///")::render,
                 *codegenScope,
             )
 
@@ -148,61 +165,128 @@ class ServerServiceGeneratorV2(
         }
     }
 
-    /** Returns the constraints required for the `build` method. */
-    private val buildConstraints = operations.zip(builderOps).zip(extensionTypes).map { (first, exts) ->
-        val (operation, type) = first
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1713#issue-1365169734): The `Error = Infallible` is an
-        //  excess requirement to stay at parity with existing builder.
-        writable {
-            rustTemplate(
-                """
-                $type: #{SmithyHttpServer}::operation::Upgradable<
-                    #{Marker},
-                    crate::operation_shape::${symbolProvider.toSymbol(operation).name.toPascalCase()},
-                    $exts,
-                    B,
-                    Pl,
-                >
-                """,
-                "Marker" to protocol.markerStruct(),
-                *codegenScope,
-            )
+    private fun buildMethod(): Writable = writable {
+        val missingOperationsVariableName = "missing_operation_names"
+        val expectMessageVariableName = "unexpected_error_msg"
+
+        val nullabilityChecks = writable {
+            for (operationShape in operations) {
+                val fieldName = builderFieldNames[operationShape]!!
+                val operationZstTypeName = operationStructNames[operationShape]!!
+                rust(
+                    """
+                    if self.$fieldName.is_none() {
+                        $missingOperationsVariableName.insert(crate::operation_shape::$operationZstTypeName::NAME, ".$fieldName()");
+                    }
+                    """,
+                )
+            }
         }
+        val routesArrayElements = writable {
+            for (operationShape in operations) {
+                val fieldName = builderFieldNames[operationShape]!!
+                val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
+                rust(
+                    """
+                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
+                    """,
+                )
+            }
+        }
+        rustTemplate(
+            """
+            /// Constructs a [`$serviceName`] from the arguments provided to the builder.
+            ///
+            /// Forgetting to register a handler for one or more operations will result in an error.
+            ///
+            /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
+            /// unspecified route requested.
+            pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
+            {
+                let router = {
+                    use #{SmithyHttpServer}::operation::OperationShape;
+                    let mut $missingOperationsVariableName = std::collections::HashMap::new();
+                    #{NullabilityChecks:W}
+                    if !$missingOperationsVariableName.is_empty() {
+                        return Err(MissingOperationsError {
+                            operation_names2setter_methods: $missingOperationsVariableName,
+                        });
+                    }
+                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
+                    #{Router}::from_iter([#{RoutesArrayElements:W}])
+                };
+                Ok($serviceName {
+                    router: #{SmithyHttpServer}::routers::RoutingService::new(router),
+                })
+            }
+            """,
+            "Router" to protocol.routerType(),
+            "NullabilityChecks" to nullabilityChecks,
+            "RoutesArrayElements" to routesArrayElements,
+            "SmithyHttpServer" to smithyHttpServer,
+        )
+    }
+
+    private fun buildUncheckedMethod(): Writable = writable {
+        val pairs = writable {
+            for (operationShape in operations) {
+                val fieldName = builderFieldNames[operationShape]!!
+                val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
+                val operationZstTypeName = operationStructNames[operationShape]!!
+                rustTemplate(
+                    """
+                    (
+                        $requestSpecsModuleName::$specBuilderFunctionName(),
+                        self.$fieldName.unwrap_or_else(|| {
+                            #{SmithyHttpServer}::routing::Route::new(<#{SmithyHttpServer}::operation::FailOnMissingOperation as #{SmithyHttpServer}::operation::Upgradable<
+                                #{Protocol},
+                                crate::operation_shape::$operationZstTypeName,
+                                (),
+                                _,
+                                _,
+                            >>::upgrade(#{SmithyHttpServer}::operation::FailOnMissingOperation, &self.plugin))
+                        })
+                    ),
+                    """,
+                    "SmithyHttpServer" to smithyHttpServer,
+                    "Protocol" to protocol.markerStruct(),
+                )
+            }
+        }
+        rustTemplate(
+            """
+            /// Constructs a [`$serviceName`] from the arguments provided to the builder.
+            /// Operations without a handler default to returning 500 Internal Server Error to the caller.
+            ///
+            /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
+            /// not have a registered handler.
+            pub fn build_unchecked(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>
+            where
+                $builderBodyGenericTypeName: Send + 'static
+            {
+                let router = #{Router}::from_iter([#{Pairs:W}]);
+                $serviceName {
+                    router: #{SmithyHttpServer}::routers::RoutingService::new(router),
+                }
+            }
+            """,
+            "Router" to protocol.routerType(),
+            "Pairs" to pairs,
+            "SmithyHttpServer" to smithyHttpServer,
+        )
     }
 
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
-        val extensionTypesDefault = extensionTypes.map { "$it = ()" }
-        val pluginName = "Pl"
-        val pluginTypeList = listOf(pluginName)
-        val newPluginType = "New$pluginName"
-        val pluginTypeDefault = listOf("$pluginName = #{SmithyHttpServer}::plugin::IdentityPlugin")
-        val structGenerics = (builderOps + extensionTypesDefault + pluginTypeDefault).joinToString(", ")
-        val builderGenerics = (builderOps + extensionTypes + pluginTypeList).joinToString(", ")
-        val builderGenericsNoPlugin = (builderOps + extensionTypes).joinToString(", ")
-
-        // Generate router construction block.
-        val router = protocol
-            .routerConstruction(
-                builderFieldNames
-                    .map {
-                        writable { rustTemplate("self.$it.upgrade(&self.plugin)") }
-                    }
-                    .asIterable(),
-            )
-        val setterFields = builderFieldNames.map { item ->
-            "$item: self.$item"
-        }.joinToString(", ")
+        val builderGenerics = listOf(builderBodyGenericTypeName, builderPluginGenericTypeName).joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
             ///
-            /// Constructed via [`$serviceName::builder`].
-            pub struct $builderName<$structGenerics> {
+            /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
+            pub struct $builderName<$builderGenerics> {
                 ${builderFields.joinToString(", ")},
-                ##[allow(unused_parens)]
-                _exts: std::marker::PhantomData<(${extensionTypes.joinToString(", ")})>,
-                plugin: $pluginName,
+                plugin: $builderPluginGenericTypeName,
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -210,70 +294,57 @@ class ServerServiceGeneratorV2(
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
-                /// Constructs a [`$serviceName`] from the arguments provided to the builder.
-                pub fn build<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
-                where
-                    #{BuildConstraints:W}
-                {
-                    let router = #{Router:W};
-                    $serviceName {
-                        router: #{SmithyHttpServer}::routers::RoutingService::new(router),
-                    }
-                }
-            }
+                #{BuildMethod:W}
 
-            impl<$builderGenerics, $newPluginType> #{SmithyHttpServer}::plugin::Pluggable<$newPluginType> for $builderName<$builderGenerics> {
-                type Output = $builderName<$builderGenericsNoPlugin, #{SmithyHttpServer}::plugin::PluginStack<$pluginName, $newPluginType>>;
-                fn apply(self, plugin: $newPluginType) -> Self::Output {
-                    $builderName {
-                        $setterFields,
-                        _exts: self._exts,
-                        plugin: #{SmithyHttpServer}::plugin::PluginStack::new(self.plugin, plugin),
-                    }
-                }
+                #{BuildUncheckedMethod:W}
             }
             """,
             "Setters" to builderSetters(),
-            "BuildConstraints" to buildConstraints.join(", "),
-            "Router" to router,
+            "BuildMethod" to buildMethod(),
+            "BuildUncheckedMethod" to buildUncheckedMethod(),
             *codegenScope,
         )
     }
 
-    /** A `Writable` comma delimited sequence of `MissingOperation`. */
-    private val notSetGenerics = (1..operations.size).map {
-        writable { rustTemplate("#{SmithyHttpServer}::operation::MissingOperation", *codegenScope) }
-    }
-
-    /** Returns a `Writable` comma delimited sequence of `builder_field: MissingOperation`. */
-    private val notSetFields = builderFieldNames.map {
-        writable {
-            rustTemplate(
-                "$it: #{SmithyHttpServer}::operation::MissingOperation",
-                *codegenScope,
-            )
+    private fun requestSpecsModule(): Writable = writable {
+        val functions = writable {
+            for ((_, function) in requestSpecMap.values) {
+                rustTemplate(
+                    """
+                    pub(super) #{Function:W}
+                    """,
+                    "Function" to function,
+                )
+            }
         }
+        rustTemplate(
+            """
+            mod $requestSpecsModuleName {
+                #{SpecFunctions:W}
+            }
+            """,
+            "SpecFunctions" to functions,
+        )
     }
 
-    /** A `Writable` comma delimited sequence of `DummyOperation`. */
-    private val internalFailureGenerics = (1..operations.size).map { writable { rustTemplate("#{SmithyHttpServer}::operation::FailOnMissingOperation", *codegenScope) } }
-
-    /** A `Writable` comma delimited sequence of `builder_field: DummyOperation`. */
-    private val internalFailureFields = builderFieldNames.map {
+    /** Returns a `Writable` comma delimited sequence of `builder_field: None`. */
+    private val notSetFields = builderFieldNames.values.map {
         writable {
             rustTemplate(
-                "$it: #{SmithyHttpServer}::operation::FailOnMissingOperation",
+                "$it: None",
                 *codegenScope,
             )
         }
     }
 
     /** Returns a `Writable` containing the service struct definition and its implementations. */
-    private fun struct(): Writable = writable {
+    private fun serviceStruct(): Writable = writable {
         documentShape(service, model)
 
         rustTemplate(
             """
+            ///
+            /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
             pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
                 router: #{SmithyHttpServer}::routers::RoutingService<#{Router}<S>, #{Protocol}>,
@@ -281,24 +352,24 @@ class ServerServiceGeneratorV2(
 
             impl $serviceName<()> {
                 /// Constructs a builder for [`$serviceName`].
-                pub fn builder() -> $builderName<#{NotSetGenerics:W}> {
+                /// You must specify what plugins should be applied to the operations in this service.
+                ///
+                /// Use [`$serviceName::builder_without_plugins`] if you don't need to apply plugins.
+                ///
+                /// Check out [`PluginPipeline`](#{SmithyHttpServer}::plugin::PluginPipeline) if you need to apply
+                /// multiple plugins.
+                pub fn builder_with_plugins<Body, Plugin>(plugin: Plugin) -> $builderName<Body, Plugin> {
                     $builderName {
                         #{NotSetFields:W},
-                        _exts: std::marker::PhantomData,
-                        plugin: #{SmithyHttpServer}::plugin::IdentityPlugin
+                        plugin
                     }
                 }
 
-                /// Constructs an unchecked builder for [`$serviceName`].
+                /// Constructs a builder for [`$serviceName`].
                 ///
-                /// This will not enforce that all operations are set, however if an unset operation is used at runtime
-                /// it will return status code 500 and log an error.
-                pub fn unchecked_builder() -> $builderName<#{InternalFailureGenerics:W}> {
-                    $builderName {
-                        #{InternalFailureFields:W},
-                        _exts: std::marker::PhantomData,
-                        plugin: #{SmithyHttpServer}::plugin::IdentityPlugin
-                    }
+                /// Use [`$serviceName::builder_with_plugins`] if you need to specify plugins.
+                pub fn builder_without_plugins<Body>() -> $builderName<Body, #{SmithyHttpServer}::plugin::IdentityPlugin> {
+                    Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin)
                 }
             }
 
@@ -306,6 +377,12 @@ class ServerServiceGeneratorV2(
                 /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService).
                 pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
+                }
+
+
+                /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
+                pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
+                    #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
                 }
 
                 /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
@@ -320,7 +397,7 @@ class ServerServiceGeneratorV2(
 
                 /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
                 ///
-                /// This has the effect of erasing all types accumulated via [`layer`].
+                /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
                 pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
                 where
                     S: #{Tower}::Service<
@@ -337,7 +414,7 @@ class ServerServiceGeneratorV2(
             impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
             where
                 S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
-                RespB: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + Send + 'static,
+                RespB: #{HttpBody}::Body<Data = #{Bytes}> + Send + 'static,
                 RespB::Error: Into<Box<dyn std::error::Error + Send + Sync>>
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
@@ -353,13 +430,44 @@ class ServerServiceGeneratorV2(
                 }
             }
             """,
-            "InternalFailureGenerics" to internalFailureGenerics.join(", "),
-            "InternalFailureFields" to internalFailureFields.join(", "),
-            "NotSetGenerics" to notSetGenerics.join(", "),
             "NotSetFields" to notSetFields.join(", "),
             "Router" to protocol.routerType(),
             "Protocol" to protocol.markerStruct(),
             *codegenScope,
+        )
+    }
+
+    private fun missingOperationsError(): Writable = writable {
+        rust(
+            """
+            /// The error encountered when calling the [`$builderName::build`] method if one or more operation handlers are not
+            /// specified.
+            ##[derive(Debug)]
+            pub struct MissingOperationsError {
+                operation_names2setter_methods: std::collections::HashMap<&'static str, &'static str>,
+            }
+
+            impl std::fmt::Display for MissingOperationsError {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(
+                        f,
+                        "You must specify a handler for all operations attached to `$serviceName`.\n\
+                        We are missing handlers for the following operations:\n",
+                    )?;
+                    for operation_name in self.operation_names2setter_methods.keys() {
+                        writeln!(f, "- {}", operation_name)?;
+                    }
+
+                    writeln!(f, "\nUse the dedicated methods on `$builderName` to register the missing handlers:")?;
+                    for setter_name in self.operation_names2setter_methods.values() {
+                        writeln!(f, "- {}", setter_name)?;
+                    }
+                    Ok(())
+                }
+            }
+
+            impl std::error::Error for MissingOperationsError {}
+            """,
         )
     }
 
@@ -368,10 +476,17 @@ class ServerServiceGeneratorV2(
             """
             #{Builder:W}
 
+            #{MissingOperationsError:W}
+
+            #{RequestSpecs:W}
+
             #{Struct:W}
             """,
             "Builder" to builder(),
-            "Struct" to struct(),
+            "MissingOperationsError" to missingOperationsError(),
+            "RequestSpecs" to requestSpecsModule(),
+            "Struct" to serviceStruct(),
+            *codegenScope,
         )
     }
 }

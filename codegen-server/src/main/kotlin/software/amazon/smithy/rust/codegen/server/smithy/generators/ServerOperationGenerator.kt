@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -25,7 +24,7 @@ class ServerOperationGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to
-                ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         )
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -38,7 +37,8 @@ class ServerOperationGenerator(
         if (operation.errors.isEmpty()) {
             rust("std::convert::Infallible")
         } else {
-            rust("crate::error::${operationName}Error")
+            // Name comes from [ServerCombinedErrorGenerator].
+            rust("crate::error::${symbolProvider.toSymbol(operation).name}Error")
         }
     }
 

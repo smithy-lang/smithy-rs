@@ -7,16 +7,14 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.Errors
-import software.amazon.smithy.rust.codegen.core.smithy.Inputs
-import software.amazon.smithy.rust.codegen.core.smithy.Outputs
+import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
+import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
+import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -60,7 +58,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  *   of `App` called `register_service()` that can be used to decorate the Python implementation
  *   of this operation.
  *
- * This class also renders the implementation of the `aws_smity_http_server_python::PyServer` trait,
+ * This class also renders the implementation of the `aws_smithy_http_server_python::PyServer` trait,
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
@@ -76,19 +74,19 @@ class PythonApplicationGenerator(
     private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
-            "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType(),
-            "tower" to PythonServerCargoDependency.Tower.asType(),
-            "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
-            "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
-            "hyper" to PythonServerCargoDependency.Hyper.asType(),
-            "HashMap" to RustType.HashMap.RuntimeType,
-            "parking_lot" to PythonServerCargoDependency.ParkingLot.asType(),
-            "http" to RuntimeType.http,
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
+            "tokio" to PythonServerCargoDependency.Tokio.toType(),
+            "tracing" to PythonServerCargoDependency.Tracing.toType(),
+            "tower" to PythonServerCargoDependency.Tower.toType(),
+            "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
+            "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
+            "hyper" to PythonServerCargoDependency.Hyper.toType(),
+            "HashMap" to RuntimeType.HashMap,
+            "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
+            "http" to RuntimeType.Http,
         )
 
     fun render(writer: RustWriter) {
@@ -107,7 +105,7 @@ class PythonApplicationGenerator(
             ##[derive(Debug)]
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
-                middlewares: #{SmithyPython}::PyMiddlewares,
+                middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
                 context: Option<#{pyo3}::PyObject>,
                 workers: #{parking_lot}::Mutex<Vec<#{pyo3}::PyObject>>,
             }
@@ -141,7 +139,7 @@ class PythonApplicationGenerator(
                 fn default() -> Self {
                     Self {
                         handlers: Default::default(),
-                        middlewares: #{SmithyPython}::PyMiddlewares::new::<#{Protocol}>(vec![]),
+                        middlewares: vec![],
                         context: None,
                         workers: #{parking_lot}::Mutex::new(vec![]),
                     }
@@ -171,9 +169,6 @@ class PythonApplicationGenerator(
                 fn handlers(&mut self) -> &mut #{HashMap}<String, #{SmithyPython}::PyHandler> {
                     &mut self.handlers
                 }
-                fn middlewares(&mut self) -> &mut #{SmithyPython}::PyMiddlewares {
-                    &mut self.middlewares
-                }
                 """,
                 *codegenScope,
             )
@@ -182,8 +177,8 @@ class PythonApplicationGenerator(
                 """
                 fn build_service(&mut self, event_loop: &#{pyo3}::PyAny) -> #{pyo3}::PyResult<
                     #{tower}::util::BoxCloneService<
-                        #{http}::Request<#{SmithyServer}::body::Body>, 
-                        #{http}::Response<#{SmithyServer}::body::BoxBody>, 
+                        #{http}::Request<#{SmithyServer}::body::Body>,
+                        #{http}::Response<#{SmithyServer}::body::BoxBody>,
                         std::convert::Infallible
                     >
                 >
@@ -192,7 +187,7 @@ class PythonApplicationGenerator(
             ) {
                 rustTemplate(
                     """
-                    let builder = crate::service::$serviceName::builder();
+                    let builder = crate::service::$serviceName::builder_without_plugins();
                     """,
                     *codegenScope,
                 )
@@ -212,13 +207,21 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let middleware_locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
-                    let service = #{tower}::ServiceBuilder::new()
-                        .boxed_clone()
-                        .layer(
-                            #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(self.middlewares.clone(), middleware_locals),
-                        )
-                        .service(builder.build());
+                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
+
+                    {
+                        use #{tower}::Layer;
+                        #{tracing}::trace!("adding middlewares to rust python router");
+                        let mut middlewares = self.middlewares.clone();
+                        // Reverse the middlewares, so they run with same order as they defined
+                        middlewares.reverse();
+                        for handler in middlewares {
+                            #{tracing}::trace!(name = &handler.name, "adding python middleware");
+                            let locals = #{pyo3_asyncio}::TaskLocals::new(event_loop);
+                            let layer = #{SmithyPython}::PyMiddlewareLayer::<#{Protocol}>::new(handler, locals);
+                            service = #{tower}::util::BoxCloneService::new(layer.layer(service));
+                        }
+                    }
                     Ok(service)
                     """,
                     "Protocol" to protocol.markerStruct(),
@@ -248,14 +251,20 @@ class PythonApplicationGenerator(
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
                    self.context = Some(context);
                 }
-                /// Register a request middleware function that will be run inside a Tower layer, without cloning the body.
+                /// Register a Python function to be executed inside a Tower middleware layer.
                 ##[pyo3(text_signature = "(${'$'}self, func)")]
-                pub fn request_middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
-                    use #{SmithyPython}::PyApp;
-                    self.register_middleware(py, func, #{SmithyPython}::PyMiddlewareType::Request)
+                pub fn middleware(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    let handler = #{SmithyPython}::PyMiddlewareHandler::new(py, func)?;
+                    #{tracing}::trace!(
+                        name = &handler.name,
+                        is_coroutine = handler.is_coroutine,
+                        "registering middleware function",
+                    );
+                    self.middlewares.push(handler);
+                    Ok(())
                 }
                 /// Main entrypoint: start the server on multiple workers.
-                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]
+                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers, tls)")]
                 pub fn run(
                     &mut self,
                     py: #{pyo3}::Python,
@@ -263,11 +272,13 @@ class PythonApplicationGenerator(
                     port: Option<i32>,
                     backlog: Option<i32>,
                     workers: Option<usize>,
+                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
                 ) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
-                    self.run_server(py, address, port, backlog, workers)
+                    self.run_server(py, address, port, backlog, workers, tls)
                 }
                 /// Lambda entrypoint: start the server on Lambda.
+                ##[cfg(feature = "aws-lambda")]
                 ##[pyo3(text_signature = "(${'$'}self)")]
                 pub fn run_lambda(
                     &mut self,
@@ -277,17 +288,18 @@ class PythonApplicationGenerator(
                     self.run_lambda_handler(py)
                 }
                 /// Build the service and start a single worker.
-                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number)")]
+                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls)")]
                 pub fn start_worker(
                     &mut self,
                     py: pyo3::Python,
                     socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
                     worker_number: isize,
+                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
                 ) -> pyo3::PyResult<()> {
                     use #{SmithyPython}::PyApp;
                     let event_loop = self.configure_python_event_loop(py)?;
                     let service = self.build_and_configure_service(py, event_loop)?;
-                    self.start_hyper_worker(py, socket, event_loop, service, worker_number)
+                    self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
                 }
                 """,
                 *codegenScope,
@@ -327,12 +339,12 @@ class PythonApplicationGenerator(
         )
         writer.rust(
             """
-            /// from $libName import ${Inputs.namespace}
-            /// from $libName import ${Outputs.namespace}
+            /// from $libName import ${InputsModule.name}
+            /// from $libName import ${OutputsModule.name}
             """.trimIndent(),
         )
         if (operations.any { it.errors.isNotEmpty() }) {
-            writer.rust("""/// from $libName import ${Errors.namespace}""".trimIndent())
+            writer.rust("""/// from $libName import ${ErrorsModule.name}""".trimIndent())
         }
         writer.rust(
             """
@@ -386,8 +398,8 @@ class PythonApplicationGenerator(
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val inputT = "${Inputs.namespace}::${inputSymbol.name}"
-        val outputT = "${Outputs.namespace}::${outputSymbol.name}"
+        val inputT = "${InputsModule.name}::${inputSymbol.name}"
+        val outputT = "${OutputsModule.name}::${outputSymbol.name}"
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
         return "@app.$operationName\n/// def $operationName(input: $inputT, ctx: Context) -> $outputT"
     }

@@ -57,16 +57,16 @@ private class TestProtocolTraitImplGenerator(
         operationWriter.rustTemplate(
             """
             impl #{parse_strict} for ${operationShape.id.name}{
-                type Output = Result<#{output}, #{error}>;
-                fn parse(&self, _response: &#{response}<#{bytes}>) -> Self::Output {
+                type Output = Result<#{Output}, #{Error}>;
+                fn parse(&self, _response: &#{Response}<#{Bytes}>) -> Self::Output {
                     ${operationWriter.escape(correctResponse)}
                 }
                     }""",
             "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
-            "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
-            "error" to operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target),
-            "response" to RuntimeType.Http("Response"),
-            "bytes" to RuntimeType.Bytes,
+            "Output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
+            "Error" to operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target),
+            "Response" to RuntimeType.HttpResponse,
+            "Bytes" to RuntimeType.Bytes,
         )
     }
 }

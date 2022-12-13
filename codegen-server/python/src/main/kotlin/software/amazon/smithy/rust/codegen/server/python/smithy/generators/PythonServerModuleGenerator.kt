@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -26,8 +25,8 @@ class PythonServerModuleGenerator(
     private val serviceShapes: Set<Shape>,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(codegenContext.runtimeConfig).asType(),
-        "pyo3" to PythonServerCargoDependency.PyO3.asType(),
+        "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(codegenContext.runtimeConfig).toType(),
+        "pyo3" to PythonServerCargoDependency.PyO3.toType(),
     )
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
@@ -49,6 +48,8 @@ class PythonServerModuleGenerator(
                 renderPySocketType()
                 renderPyLogging()
                 renderPyMiddlewareTypes()
+                renderPyTlsTypes()
+                renderPyLambdaTypes()
                 renderPyApplicationType()
             }
         }
@@ -65,7 +66,7 @@ class PythonServerModuleGenerator(
             """,
             *codegenScope,
         )
-        serviceShapes.forEach() { shape ->
+        serviceShapes.forEach { shape ->
             val moduleType = moduleType(shape)
             if (moduleType != null) {
                 rustTemplate(
@@ -152,13 +153,44 @@ class PythonServerModuleGenerator(
             middleware.add_class::<#{SmithyPython}::PyRequest>()?;
             middleware.add_class::<#{SmithyPython}::PyResponse>()?;
             middleware.add_class::<#{SmithyPython}::PyMiddlewareException>()?;
-            middleware.add_class::<#{SmithyPython}::PyHttpVersion>()?;
             pyo3::py_run!(
                 py,
                 middleware,
                 "import sys; sys.modules['$libName.middleware'] = middleware"
             );
             m.add_submodule(middleware)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.renderPyTlsTypes() {
+        rustTemplate(
+            """
+            let tls = #{pyo3}::types::PyModule::new(py, "tls")?;
+            tls.add_class::<#{SmithyPython}::tls::PyTlsConfig>()?;
+            pyo3::py_run!(
+                py,
+                tls,
+                "import sys; sys.modules['$libName.tls'] = tls"
+            );
+            m.add_submodule(tls)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.renderPyLambdaTypes() {
+        rustTemplate(
+            """
+            let aws_lambda = #{pyo3}::types::PyModule::new(py, "aws_lambda")?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyLambdaContext>()?;
+            pyo3::py_run!(
+                py,
+                aws_lambda,
+                "import sys; sys.modules['$libName.aws_lambda'] = aws_lambda"
+            );
+            m.add_submodule(aws_lambda)?;
             """,
             *codegenScope,
         )

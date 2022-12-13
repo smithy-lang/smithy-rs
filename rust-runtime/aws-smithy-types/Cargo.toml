@@ -13,6 +13,7 @@ num-integer = "0.1.44"
 ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
 serde = { version = "1", features = ["derive"] }
+base64-simd = "0.7"
 
 [dev-dependencies]
 base64 = "0.13.0"
@@ -20,6 +21,8 @@ lazy_static = "1.4"
 proptest = "1"
 serde_json = "1"
 ciborium = "0.2.0"
+criterion = "0.4"
+rand = "0.8.4"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -31,3 +34,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 "unstable" = []
 "serialize" = []
 "deserialize" = []
+[[bench]]
+name = "base64"
+harness = false

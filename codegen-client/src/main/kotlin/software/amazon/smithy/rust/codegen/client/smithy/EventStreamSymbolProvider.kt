@@ -38,7 +38,6 @@ class EventStreamSymbolProvider(
     private val model: Model,
     private val target: CodegenTarget,
 ) : WrappingSymbolProvider(base) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     override fun toSymbol(shape: Shape): Symbol {
         val initial = super.toSymbol(shape)
 
@@ -54,7 +53,7 @@ class EventStreamSymbolProvider(
             if (operationShape != null) {
                 val unionShape = model.expectShape(shape.target).asUnionShape().get()
                 val error = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-                    RuntimeType("MessageStreamError", smithyEventStream, "aws_smithy_http::event_stream").toSymbol()
+                    RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
                 } else {
                     unionShape.eventStreamErrorSymbol(model, this, target).toSymbol()
                 }
@@ -71,7 +70,7 @@ class EventStreamSymbolProvider(
                     .name(rustType.name)
                     .rustType(rustType)
                     .addReference(initial)
-                    .addDependency(CargoDependency.SmithyHttp(runtimeConfig).withFeature("event-stream"))
+                    .addDependency(CargoDependency.smithyHttp(runtimeConfig).withFeature("event-stream"))
                     .addReference(error)
                     .build()
             }

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
@@ -29,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -41,9 +41,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -56,6 +55,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 // The string argument is the name of the XML ScopedDecoder to continue parsing from
@@ -64,13 +64,14 @@ typealias OperationInnerWriteable = RustWriter.(String) -> Unit
 data class OperationWrapperContext(
     val shape: OperationShape,
     val outputShapeName: String,
-    val xmlErrorType: RuntimeType,
+    val xmlDecodeErrorType: RuntimeType,
     val model: Model,
 )
 
 class XmlBindingTraitParserGenerator(
     codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
+    private val builderSymbol: (shape: StructureShape) -> Symbol,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
 
@@ -96,21 +97,21 @@ class XmlBindingTraitParserGenerator(
     data class Ctx(val tag: String, val accum: String?)
 
     private val symbolProvider = codegenContext.symbolProvider
-    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).asType()
-    private val xmlError = smithyXml.member("decode::XmlError")
+    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).toType()
+    private val xmlDecodeError = smithyXml.resolve("decode::XmlDecodeError")
 
-    private val scopedDecoder = smithyXml.member("decode::ScopedDecoder")
+    private val scopedDecoder = smithyXml.resolve("decode::ScopedDecoder")
     private val runtimeConfig = codegenContext.runtimeConfig
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType.Blob(runtimeConfig),
-        "Document" to smithyXml.member("decode::Document"),
-        "XmlError" to xmlError,
-        "next_start_element" to smithyXml.member("decode::next_start_element"),
-        "try_data" to smithyXml.member("decode::try_data"),
+        "Blob" to RuntimeType.blob(runtimeConfig),
+        "Document" to smithyXml.resolve("decode::Document"),
+        "XmlDecodeError" to xmlDecodeError,
+        "next_start_element" to smithyXml.resolve("decode::next_start_element"),
+        "try_data" to smithyXml.resolve("decode::try_data"),
         "ScopedDecoder" to scopedDecoder,
-        "aws_smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType(),
+        "aws_smithy_types" to CargoDependency.smithyTypes(runtimeConfig).toType(),
     )
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
@@ -123,7 +124,7 @@ class XmlBindingTraitParserGenerator(
      * Entry point for payload-based parsing.
      * Roughly:
      * ```rust
-     * fn parse_my_struct(input: &[u8]) -> Result<MyStruct, XmlError> {
+     * fn parse_my_struct(input: &[u8]) -> Result<MyStruct, XmlDecodeError> {
      *      ...
      * }
      * ```
@@ -136,7 +137,7 @@ class XmlBindingTraitParserGenerator(
             rustBlock(
                 "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
                 symbolProvider.toSymbol(shape),
-                xmlError,
+                xmlDecodeError,
             ) {
                 // for payloads, first look at the member trait
                 // next, look to see if this structure was renamed
@@ -149,7 +150,7 @@ class XmlBindingTraitParserGenerator(
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
                     if !(${shapeName.matchExpression("start_el")}) {
-                        return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
+                        return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
                     }
                     """,
                     *codegenScope,
@@ -170,7 +171,7 @@ class XmlBindingTraitParserGenerator(
      * through:
      *
      * ```rust
-     * fn parse_some_operation(inp: &[u8], builder: my_operation::Builder) -> Result<my_operation::Builder, XmlError> {
+     * fn parse_some_operation(inp: &[u8], builder: my_operation::Builder) -> Result<my_operation::Builder, XmlDecodeError> {
      *   ...
      * }
      * ```
@@ -187,8 +188,8 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                outputShape.builderSymbol(symbolProvider),
-                xmlError,
+                builderSymbol(outputShape),
+                xmlDecodeError,
             ) {
                 rustTemplate(
                     """
@@ -201,7 +202,7 @@ class XmlBindingTraitParserGenerator(
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlDecodeError, model)
                 if (operationShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
                     unwrappedResponseParser("builder", "decoder", "start_el", outputShape.members())
                 } else {
@@ -220,8 +221,8 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                errorShape.builderSymbol(symbolProvider),
-                xmlError,
+                builderSymbol(errorShape),
+                xmlDecodeError,
             ) {
                 val members = errorShape.errorXmlMembers()
                 rust("if inp.is_empty() { return Ok(builder) }")
@@ -254,8 +255,8 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                inputShape.builderSymbol(symbolProvider),
-                xmlError,
+                builderSymbol(inputShape),
+                xmlDecodeError,
             ) {
                 rustTemplate(
                     """
@@ -267,7 +268,7 @@ class XmlBindingTraitParserGenerator(
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlDecodeError, model)
                 writeOperationWrapper(context) { tagName ->
                     parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
                 }
@@ -297,7 +298,7 @@ class XmlBindingTraitParserGenerator(
                 }
                 rust("$builder = $builder.${member.setterName()}($temp);")
             }
-            rustTemplate("_ => return Err(#{XmlError}::custom(\"expected ${member.xmlName()} tag\"))", *codegenScope)
+            rustTemplate("_ => return Err(#{XmlDecodeError}::custom(\"expected ${member.xmlName()} tag\"))", *codegenScope)
         }
     }
 
@@ -411,7 +412,7 @@ class XmlBindingTraitParserGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
                 *codegenScope, "Shape" to symbol,
             ) {
                 val members = shape.members()
@@ -420,26 +421,30 @@ class XmlBindingTraitParserGenerator(
                     members.forEach { member ->
                         val variantName = symbolProvider.toMemberName(member)
                         case(member) {
-                            val current =
-                                """
-                                (match base.take() {
-                                    None => None,
-                                    Some(${format(symbol)}::$variantName(inner)) => Some(inner),
-                                    Some(_) => return Err(#{XmlError}::custom("mixed variants"))
-                                })
-                                """
-                            withBlock("let tmp =", ";") {
-                                parseMember(member, ctx.copy(accum = current.trim()))
+                            if (member.isTargetUnit()) {
+                                rust("base = Some(#T::$variantName);", symbol)
+                            } else {
+                                val current =
+                                    """
+                                    (match base.take() {
+                                        None => None,
+                                        Some(${format(symbol)}::$variantName(inner)) => Some(inner),
+                                        Some(_) => return Err(#{XmlDecodeError}::custom("mixed variants"))
+                                    })
+                                    """
+                                withBlock("let tmp =", ";") {
+                                    parseMember(member, ctx.copy(accum = current.trim()))
+                                }
+                                rust("base = Some(#T::$variantName(tmp));", symbol)
                             }
-                            rust("base = Some(#T::$variantName(tmp));", symbol)
                         }
                     }
                     when (target.renderUnknownVariant()) {
                         true -> rust("_unknown => base = Some(#T::${UnionGenerator.UnknownVariantName}),", symbol)
-                        false -> rustTemplate("""variant => return Err(#{XmlError}::custom(format!("unexpected union variant: {:?}", variant)))""", *codegenScope)
+                        false -> rustTemplate("""variant => return Err(#{XmlDecodeError}::custom(format!("unexpected union variant: {:?}", variant)))""", *codegenScope)
                     }
                 }
-                rustTemplate("""base.ok_or_else(||#{XmlError}::custom("expected union, got nothing"))""", *codegenScope)
+                rustTemplate("""base.ok_or_else(||#{XmlDecodeError}::custom("expected union, got nothing"))""", *codegenScope)
             }
         }
         rust("#T(&mut ${ctx.tag})", nestedParser)
@@ -464,7 +469,7 @@ class XmlBindingTraitParserGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
                 *codegenScope, "Shape" to symbol,
             ) {
                 Attribute.AllowUnusedMut.render(this)
@@ -476,14 +481,14 @@ class XmlBindingTraitParserGenerator(
                     rust("let _ = decoder;")
                 }
                 withBlock("Ok(builder.build()", ")") {
-                    if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+                    if (BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
                         // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
                         // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
                         // (because they're inputs, only outputs will be parsed!)
 
                         // I'm leaving this branch here so that the binding trait parser generator would work for a server
                         // side implementation in the future.
-                        rustTemplate(""".map_err(|_|#{XmlError}::custom("missing field"))?""", *codegenScope)
+                        rustTemplate(""".map_err(|_|#{XmlDecodeError}::custom("missing field"))?""", *codegenScope)
                     }
                 }
             }
@@ -496,7 +501,7 @@ class XmlBindingTraitParserGenerator(
         val member = target.member
         val listParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{List}, #{XmlError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{List}, #{XmlDecodeError}>",
                 *codegenScope,
                 "List" to symbolProvider.toSymbol(target),
             ) {
@@ -516,7 +521,7 @@ class XmlBindingTraitParserGenerator(
 
     private fun RustWriter.parseFlatList(target: CollectionShape, ctx: Ctx) {
         val list = safeName("list")
-        withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlError) {
+        withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlDecodeError) {
             val accum = ctx.accum ?: throw CodegenException("Need accum to parse flat list")
             rustTemplate("""let mut $list = $accum.unwrap_or_default();""", *codegenScope)
             withBlock("$list.push(", ");") {
@@ -530,11 +535,11 @@ class XmlBindingTraitParserGenerator(
         val fnName = symbolProvider.deserializeFunctionName(target)
         val mapParser = RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Map}, #{XmlError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Map}, #{XmlDecodeError}>",
                 *codegenScope,
                 "Map" to symbolProvider.toSymbol(target),
             ) {
-                rust("let mut out = #T::new();", software.amazon.smithy.rust.codegen.core.rustlang.RustType.HashMap.RuntimeType)
+                rust("let mut out = #T::new();", RuntimeType.HashMap)
                 parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     rustBlock("s if ${XmlName("entry").matchExpression("s")} => ") {
                         rust("#T(&mut ${ctx.tag}, &mut out)?;", mapEntryParser(target, ctx))
@@ -549,7 +554,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.parseFlatMap(target: MapShape, ctx: Ctx) {
         val map = safeName("map")
         val entryDecoder = mapEntryParser(target, ctx)
-        withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlError) {
+        withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlDecodeError) {
             val accum = ctx.accum ?: throw CodegenException("need accum to parse flat map")
             rustTemplate(
                 """
@@ -567,7 +572,7 @@ class XmlBindingTraitParserGenerator(
         val fnName = symbolProvider.deserializeFunctionName(target) + "_entry"
         return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> Result<(), #{XmlError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> Result<(), #{XmlDecodeError}>",
                 *codegenScope,
                 "Map" to symbolProvider.toSymbol(target),
             ) {
@@ -592,8 +597,8 @@ class XmlBindingTraitParserGenerator(
 
                 rustTemplate(
                     """
-                    let k = k.ok_or_else(||#{XmlError}::custom("missing key map entry"))?;
-                    let v = v.ok_or_else(||#{XmlError}::custom("missing value map entry"))?;
+                    let k = k.ok_or_else(||#{XmlDecodeError}::custom("missing key map entry"))?;
+                    let v = v.ok_or_else(||#{XmlDecodeError}::custom("missing value map entry"))?;
                     out.insert(k, v);
                     Ok(())
                     """,
@@ -621,7 +626,7 @@ class XmlBindingTraitParserGenerator(
                         provider()
                     }
                     rustTemplate(
-                        """.map_err(|_|#{XmlError}::custom("expected ${escape(shape.toString())}"))""",
+                        """.map_err(|_|#{XmlDecodeError}::custom("expected ${escape(shape.toString())}"))""",
                         *codegenScope,
                     )
                 }
@@ -633,22 +638,22 @@ class XmlBindingTraitParserGenerator(
                         HttpBinding.Location.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                withBlock("#T::from_str(", ")", RuntimeType.DateTime(runtimeConfig)) {
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
+                withBlock("#T::from_str(", ")", RuntimeType.dateTime(runtimeConfig)) {
                     provider()
                     rust(", #T", timestampFormatType)
                 }
                 rustTemplate(
-                    """.map_err(|_|#{XmlError}::custom("expected ${escape(shape.toString())}"))""",
+                    """.map_err(|_|#{XmlDecodeError}::custom("expected ${escape(shape.toString())}"))""",
                     *codegenScope,
                 )
             }
             is BlobShape -> {
-                withBlock("#T(", ")", RuntimeType.Base64Decode(runtimeConfig)) {
+                withBlock("#T(", ")", RuntimeType.base64Decode(runtimeConfig)) {
                     provider()
                 }
                 rustTemplate(
-                    """.map_err(|err|#{XmlError}::custom(format!("invalid base64: {:?}", err))).map(#{Blob}::new)""",
+                    """.map_err(|err|#{XmlDecodeError}::custom(format!("invalid base64: {:?}", err))).map(#{Blob}::new)""",
                     *codegenScope,
                 )
             }
@@ -657,14 +662,14 @@ class XmlBindingTraitParserGenerator(
     }
 
     private fun RustWriter.parseStringInner(shape: StringShape, provider: Writable) {
-        withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlError) {
+        withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlDecodeError) {
             if (shape.hasTrait<EnumTrait>()) {
                 val enumSymbol = symbolProvider.toSymbol(shape)
                 if (convertsToEnumInServer(shape)) {
                     withBlock("#T::try_from(", ")", enumSymbol) {
                         provider()
                     }
-                    rustTemplate(""".map_err(|e| #{XmlError}::custom(format!("unknown variant {}", e)))?""", *codegenScope)
+                    rustTemplate(""".map_err(|e| #{XmlDecodeError}::custom(format!("unknown variant {}", e)))?""", *codegenScope)
                 } else {
                     withBlock("#T::from(", ")", enumSymbol) {
                         provider()

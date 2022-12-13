@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::{Credentials, Endpoint, Region};
+use aws_config::SdkConfig;
+use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
+use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_types::credentials::SharedCredentialsProvider;
 use bytes::BytesMut;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -12,32 +15,27 @@ use tracing::debug;
 
 // test will hang forever with the default (single-threaded) test executor
 #[tokio::test(flavor = "multi_thread")]
-#[should_panic(
-    expected = "error reading a body from connection: end of file before message length reached"
-)]
 async fn test_streaming_response_fails_when_eof_comes_before_content_length_reached() {
     // We spawn a faulty server that will close the connection after
     // writing half of the response body.
     let (server, server_addr) = start_faulty_server().await;
     let _ = tokio::spawn(server);
 
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
-
-    let conf = aws_sdk_s3::Config::builder()
-        .credentials_provider(creds)
+    let sdk_config = SdkConfig::builder()
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+            "ANOTREAL",
+            "notrealrnrELgWzOk3IfjzDKtFBhDby",
+            Some("notarealsessiontoken".to_string()),
+            None,
+            "test",
+        )))
         .region(Region::new("us-east-1"))
-        .endpoint_resolver(Endpoint::immutable(
-            format!("http://{server_addr}").parse().expect("valid URI"),
-        ))
+        .endpoint_resolver(
+            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
+        )
         .build();
 
-    let client = aws_sdk_s3::client::Client::from_conf(conf);
+    let client = Client::new(&sdk_config);
 
     // This will succeed b/c the head of the response is fine.
     let res = client
@@ -50,7 +48,13 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
 
     // Should panic here when the body is read with an "UnexpectedEof" error
     if let Err(e) = res.body.collect().await {
-        panic!("{e}")
+        let message = format!("{}", DisplayErrorContext(e));
+        let expected =
+            "error reading a body from connection: end of file before message length reached";
+        assert!(
+            message.contains(expected),
+            "Expected `{message}` to contain `{expected}`"
+        );
     }
 }
 
@@ -107,15 +111,13 @@ Hello"#;
                 }
             }
 
-            if socket.writable().await.is_ok() {
-                if time_to_respond {
-                    // The content length is 12 but we'll only write 5 bytes
-                    socket.try_write(&response).unwrap();
-                    // We break from the R/W loop after sending a partial response in order to
-                    // close the connection early.
-                    debug!("faulty server has written partial response, now closing connection");
-                    break;
-                }
+            if socket.writable().await.is_ok() && time_to_respond {
+                // The content length is 12 but we'll only write 5 bytes
+                socket.try_write(response).unwrap();
+                // We break from the R/W loop after sending a partial response in order to
+                // close the connection early.
+                debug!("faulty server has written partial response, now closing connection");
+                break;
             }
         }
     }

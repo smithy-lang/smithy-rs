@@ -41,23 +41,24 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustom
  */
 open class RustCrate(
     fileManifest: FileManifest,
-    symbolProvider: SymbolProvider,
-    /**
-     * For core modules like `input`, `output`, and `error`, we need to specify whether these modules should be public or
-     * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
-     */
-    baseModules: Map<String, RustModule>,
+    private val symbolProvider: SymbolProvider,
     coreCodegenConfig: CoreCodegenConfig,
 ) {
     private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
-    private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
+
+    // used to ensure we never create accidentally discard docs / incorrectly create modules with incorrect visibility
+    private var duplicateModuleWarningSystem: MutableMap<String, RustModule.LeafModule> = mutableMapOf()
 
     /**
      * Write into the module that this shape is [locatedIn]
      */
     fun useShapeWriter(shape: Shape, f: Writable) {
-        inner.useShapeWriter(shape, f)
+        val module = symbolProvider.toSymbol(shape).module()
+        check(!module.isInline()) {
+            "Cannot use useShapeWriter with inline modules—use [RustWriter.withInlineModule] instead"
+        }
+        withModule(symbolProvider.toSymbol(shape).module(), f)
     }
 
     /**
@@ -94,14 +95,11 @@ open class RustCrate(
         requireDocs: Boolean = true,
     ) {
         injectInlineDependencies()
-        val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
-            .mapNotNull { modules[it] }
         inner.finalize(
             settings,
             model,
             manifestCustomizations,
             libRsCustomizations,
-            modules,
             this.features.toList(),
             requireDocs,
         )
@@ -126,6 +124,17 @@ open class RustCrate(
         }
     }
 
+    private fun checkDups(module: RustModule.LeafModule) {
+        duplicateModuleWarningSystem[module.fullyQualifiedPath()]?.also { preexistingModule ->
+            check(module == preexistingModule) {
+                "Duplicate modules with differing properties were created! This will lead to non-deterministic behavior." +
+                    "\n Previous module: $preexistingModule." +
+                    "\n      New module: $module"
+            }
+        }
+        duplicateModuleWarningSystem[module.fullyQualifiedPath()] = module
+    }
+
     /**
      * Create a new module directly. The resulting module will be placed in `src/<modulename>.rs`
      */
@@ -133,31 +142,22 @@ open class RustCrate(
         module: RustModule,
         moduleWriter: Writable,
     ): RustCrate {
-        val moduleName = module.name
-        modules[moduleName] = module
-        inner.useFileWriter("src/$moduleName.rs", "crate::$moduleName", moduleWriter)
-        return this
-    }
-
-    /**
-     * Create a new non-root module directly. For example, if given the namespace `crate::foo::bar`,
-     * this will create `src/foo/bar.rs` with the contents from the given `moduleWriter`.
-     * Multiple calls to this with the same namespace are additive, so new code can be added
-     * by various customizations.
-     *
-     * Caution: this does not automatically add the required Rust `mod` statements to make this
-     * file an official part of the generated crate. This step needs to be done manually.
-     */
-    fun withNonRootModule(
-        namespace: String,
-        moduleWriter: Writable,
-    ): RustCrate {
-        val parts = namespace.split("::")
-        require(parts.size > 2) { "Cannot create root modules using withNonRootModule" }
-        require(parts[0] == "crate") { "Namespace must start with crate::" }
-
-        val fileName = "src/" + parts.filterIndexed { index, _ -> index > 0 }.joinToString("/") + ".rs"
-        inner.useFileWriter(fileName, namespace, moduleWriter)
+        when (module) {
+            is RustModule.LibRs -> lib { moduleWriter(this) }
+            is RustModule.LeafModule -> {
+                checkDups(module)
+                // Create a dependency which adds the mod statement for this module. This will be added to the writer
+                // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
+                val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
+                    module.renderModStatement(this)
+                }
+                val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
+                inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
+                    moduleWriter(writer)
+                    writer.addDependency(modStatement.dependency)
+                }
+            }
+        }
         return this
     }
 
@@ -171,6 +171,17 @@ open class RustCrate(
     }
 }
 
+val ErrorsModule = RustModule.public("error", documentation = "All error types that operations can return. Documentation on these types is copied from the model.")
+val OperationsModule = RustModule.public("operation", documentation = "All operations that this crate can perform.")
+val ModelsModule = RustModule.public("model", documentation = "Data structures used by operation inputs/outputs. Documentation on these types is copied from the model.")
+val InputsModule = RustModule.public("input", documentation = "Input structures for operations. Documentation on these types is copied from the model.")
+val OutputsModule = RustModule.public("output", documentation = "Output structures for operations. Documentation on these types is copied from the model.")
+
+val UnconstrainedModule =
+    RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
+val ConstrainedModule =
+    RustModule.private("constrained", "Constrained types for constrained shapes.")
+
 /**
  * Finalize all the writers by:
  * - inlining inline dependencies that have been used
@@ -181,12 +192,11 @@ fun WriterDelegator<RustWriter>.finalize(
     model: Model,
     manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,
-    modules: List<RustModule>,
     features: List<Feature>,
     requireDocs: Boolean,
 ) {
     this.useFileWriter("src/lib.rs", "crate::lib") {
-        LibRsGenerator(settings, model, modules, libRsCustomizations, requireDocs).render(it)
+        LibRsGenerator(settings, model, libRsCustomizations, requireDocs).render(it)
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }

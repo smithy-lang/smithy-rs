@@ -19,13 +19,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -87,11 +85,7 @@ class SigV4SigningConfig(
     private val sigV4Trait: SigV4Trait,
 ) : EventStreamSigningConfig(runtimeConfig) {
     private val codegenScope = arrayOf(
-        "SigV4Signer" to RuntimeType(
-            "SigV4Signer",
-            runtimeConfig.awsRuntimeDependency("aws-sig-auth", setOf("sign-eventstream")),
-            "aws_sig_auth::event_stream",
-        ),
+        "SigV4Signer" to AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).resolve("event_stream::SigV4Signer"),
     )
 
     override fun configImplSection(): Writable {
@@ -139,6 +133,11 @@ fun disableDoubleEncode(service: ServiceShape) = when (service.id) {
     else -> false
 }
 
+fun disableUriPathNormalization(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+    else -> false
+}
+
 class SigV4SigningFeature(
     private val model: Model,
     private val operation: OperationShape,
@@ -146,8 +145,10 @@ class SigV4SigningFeature(
     private val service: ServiceShape,
 ) :
     OperationCustomization() {
-    private val codegenScope =
-        arrayOf("sig_auth" to runtimeConfig.sigAuth().asType(), "aws_types" to awsTypes(runtimeConfig).asType())
+    private val codegenScope = arrayOf(
+        "sig_auth" to AwsRuntimeType.awsSigAuth(runtimeConfig),
+        "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
+    )
 
     private val serviceIndex = ServiceIndex.of(model)
 
@@ -163,6 +164,9 @@ class SigV4SigningFeature(
                 }
                 if (disableDoubleEncode(service)) {
                     rust("signing_config.signing_options.double_uri_encode = false;")
+                }
+                if (disableUriPathNormalization(service)) {
+                    rust("signing_config.signing_options.normalize_uri_path = false;")
                 }
                 if (operation.hasTrait<UnsignedPayloadTrait>()) {
                     rust("signing_config.signing_options.content_sha256_header = true;")
@@ -208,4 +212,4 @@ class SigV4SigningFeature(
     }
 }
 
-fun RuntimeConfig.sigAuth() = awsRuntimeDependency("aws-sig-auth")
+fun RuntimeConfig.sigAuth() = awsRuntimeCrate("aws-sig-auth")

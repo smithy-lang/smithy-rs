@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use super::error::SigningError;
 use super::{PayloadChecksumKind, SignatureLocation};
 use crate::http_request::canonical_request::header;
 use crate::http_request::canonical_request::param;
@@ -15,11 +16,7 @@ use http::header::HeaderValue;
 use http::{HeaderMap, Method, Uri};
 use std::borrow::Cow;
 use std::convert::TryFrom;
-use std::error::Error as StdError;
 use std::str;
-
-/// Signing error type
-pub type Error = Box<dyn StdError + Send + Sync + 'static>;
 
 /// Represents all of the information necessary to sign an HTTP request.
 #[derive(Debug)]
@@ -155,7 +152,7 @@ impl SigningInstructions {
 pub fn sign<'a>(
     request: SignableRequest<'a>,
     params: &'a SigningParams<'a>,
-) -> Result<SigningOutput<SigningInstructions>, Error> {
+) -> Result<SigningOutput<SigningInstructions>, SigningError> {
     tracing::trace!(request = ?request, params = ?params, "signing request");
     match params.settings.signature_location {
         SignatureLocation::Headers => {
@@ -181,24 +178,25 @@ type CalculatedParams = Vec<(&'static str, Cow<'static, str>)>;
 fn calculate_signing_params<'a>(
     request: &'a SignableRequest<'a>,
     params: &'a SigningParams<'a>,
-) -> Result<(CalculatedParams, String), Error> {
+) -> Result<(CalculatedParams, String), SigningError> {
     let creq = CanonicalRequest::from(request, params)?;
-    tracing::trace!(canonical_request = %creq);
 
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-    let sts = StringToSign::new(
+    let string_to_sign = StringToSign::new(
         params.time,
         params.region,
         params.service_name,
         encoded_creq,
-    );
+    )
+    .to_string();
     let signing_key = generate_signing_key(
         params.secret_key,
         params.time,
         params.region,
         params.service_name,
     );
-    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
+    let signature = calculate_signature(signing_key, string_to_sign.as_bytes());
+    tracing::trace!(canonical_request = %creq, string_to_sign = %string_to_sign, "calculated signing parameters");
 
     let values = creq.values.into_query_params().expect("signing with query");
     let mut signing_params = vec![
@@ -230,7 +228,7 @@ fn calculate_signing_params<'a>(
 fn calculate_signing_headers<'a>(
     request: &'a SignableRequest<'a>,
     params: &'a SigningParams<'a>,
-) -> Result<SigningOutput<HeaderMap<HeaderValue>>, Error> {
+) -> Result<SigningOutput<HeaderMap<HeaderValue>>, SigningError> {
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
     let creq = CanonicalRequest::from(request, params)?;
     tracing::trace!(canonical_request = %creq);

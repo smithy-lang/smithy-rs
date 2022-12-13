@@ -27,7 +27,7 @@ class RustWriterTest {
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
-        sut.withModule(RustModule.public("inner")) {
+        sut.withInlineModule(RustModule.new("inner", visibility = Visibility.PUBLIC, inline = true)) {
             rustBlock("fn build(builder: #T)", requestBuilder) {
             }
         }
@@ -155,7 +155,7 @@ class RustWriterTest {
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
-            "http" to CargoDependency.Http.asType().member("foo"),
+            "http" to RuntimeType.Http.resolve("foo"),
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
     }

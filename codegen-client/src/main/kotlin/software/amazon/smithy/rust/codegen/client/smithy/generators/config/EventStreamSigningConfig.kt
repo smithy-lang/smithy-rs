@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -16,16 +15,8 @@ open class EventStreamSigningConfig(
     runtimeConfig: RuntimeConfig,
 ) : ConfigCustomization() {
     private val codegenScope = arrayOf(
-        "SharedPropertyBag" to RuntimeType(
-            "SharedPropertyBag",
-            CargoDependency.SmithyHttp(runtimeConfig),
-            "aws_smithy_http::property_bag",
-        ),
-        "SignMessage" to RuntimeType(
-            "SignMessage",
-            CargoDependency.SmithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame",
-        ),
+        "SharedPropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"),
+        "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
     )
 
     override fun section(section: ServiceConfig): Writable {

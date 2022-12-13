@@ -28,7 +28,7 @@ jobs:
       contents: read
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Build image
       run: |
         IMAGE_TAG="$(./tools/ci-build/tools-hash)"
@@ -38,7 +38,7 @@ jobs:
           -t "${{ env.ecr_repository }}:main" \
           .
     - name: Acquire credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v1-node16
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -54,3 +54,5 @@ jobs:
   ci:
     needs: rebuild-docker-build-image
     uses: ./.github/workflows/ci.yml
+    with:
+      run_sdk_examples: true

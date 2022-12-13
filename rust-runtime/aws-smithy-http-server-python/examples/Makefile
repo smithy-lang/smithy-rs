@@ -31,12 +31,15 @@ build: codegen
 	cargo build
 	ln -sf $(DEBUG_SHARED_LIBRARY_SRC) $(SHARED_LIBRARY_DST)
 
+py_check: build
+	mypy pokemon_service.py
+
 release: codegen
 	cargo build --release
 	ln -sf $(RELEASE_SHARED_LIBRARY_SRC) $(SHARED_LIBRARY_DST)
 
 run: build
-	python $(CUR_DIR)/pokemon_service.py
+	python3 $(CUR_DIR)/pokemon_service.py
 
 test: build
 	cargo test

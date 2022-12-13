@@ -25,15 +25,19 @@ mod test;
 use serde::Serialize;
 #[cfg(all(feature= "unstable", feature = "deserialize"))]
 use serde::{de::Visitor, Deserialize};
+
+use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 use std::collections::HashMap;
 pub mod base64;
 pub mod date_time;
 pub mod endpoint;
+pub mod error;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
 
 pub use crate::date_time::DateTime;
+pub use error::Error;
 
 /// Binary Blob Type
 ///
@@ -232,6 +236,23 @@ fn serialize_json() {
     let doc: Result<Document, _> = serde_json::from_str(target_file);
     assert_eq!(obj, doc.unwrap());
 }
+impl From<u64> for Document {
+    fn from(value: u64) -> Self {
+        Document::Number(Number::PosInt(value))
+    }
+}
+
+impl From<i64> for Document {
+    fn from(value: i64) -> Self {
+        Document::Number(Number::NegInt(value))
+    }
+}
+
+impl From<i32> for Document {
+    fn from(value: i32) -> Self {
+        Document::Number(Number::NegInt(value as i64))
+    }
+}
 
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
@@ -374,8 +395,12 @@ macro_rules! to_unsigned_integer_converter {
             fn try_from(value: Number) -> Result<Self, Self::Error> {
                 match value {
                     Number::PosInt(v) => Ok(Self::try_from(v)?),
-                    Number::NegInt(v) => Err(Self::Error::NegativeToUnsignedLossyConversion(v)),
-                    Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
+                    Number::NegInt(v) => {
+                        Err(TryFromNumberErrorKind::NegativeToUnsignedLossyConversion(v).into())
+                    }
+                    Number::Float(v) => {
+                        Err(TryFromNumberErrorKind::FloatToIntegerLossyConversion(v).into())
+                    }
                 }
             }
         }
@@ -398,7 +423,9 @@ macro_rules! to_signed_integer_converter {
                 match value {
                     Number::PosInt(v) => Ok(Self::try_from(v)?),
                     Number::NegInt(v) => Ok(Self::try_from(v)?),
-                    Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
+                    Number::Float(v) => {
+                        Err(TryFromNumberErrorKind::FloatToIntegerLossyConversion(v).into())
+                    }
                 }
             }
         }
@@ -416,8 +443,12 @@ impl TryFrom<Number> for u64 {
     fn try_from(value: Number) -> Result<Self, Self::Error> {
         match value {
             Number::PosInt(v) => Ok(v),
-            Number::NegInt(v) => Err(Self::Error::NegativeToUnsignedLossyConversion(v)),
-            Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
+            Number::NegInt(v) => {
+                Err(TryFromNumberErrorKind::NegativeToUnsignedLossyConversion(v).into())
+            }
+            Number::Float(v) => {
+                Err(TryFromNumberErrorKind::FloatToIntegerLossyConversion(v).into())
+            }
         }
     }
 }
@@ -432,7 +463,9 @@ impl TryFrom<Number> for i64 {
         match value {
             Number::PosInt(v) => Ok(Self::try_from(v)?),
             Number::NegInt(v) => Ok(v),
-            Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
+            Number::Float(v) => {
+                Err(TryFromNumberErrorKind::FloatToIntegerLossyConversion(v).into())
+            }
         }
     }
 }
@@ -453,14 +486,14 @@ impl TryFrom<Number> for f64 {
                 if v <= (1 << 53) {
                     Ok(v as Self)
                 } else {
-                    Err(Self::Error::U64ToFloatLossyConversion(v))
+                    Err(TryFromNumberErrorKind::U64ToFloatLossyConversion(v).into())
                 }
             }
             Number::NegInt(v) => {
                 if (-(1 << 53)..=(1 << 53)).contains(&v) {
                     Ok(v as Self)
                 } else {
-                    Err(Self::Error::I64ToFloatLossyConversion(v))
+                    Err(TryFromNumberErrorKind::I64ToFloatLossyConversion(v).into())
                 }
             }
             Number::Float(v) => Ok(v),
@@ -478,17 +511,17 @@ impl TryFrom<Number> for f32 {
                 if v <= (1 << 24) {
                     Ok(v as Self)
                 } else {
-                    Err(Self::Error::U64ToFloatLossyConversion(v))
+                    Err(TryFromNumberErrorKind::U64ToFloatLossyConversion(v).into())
                 }
             }
             Number::NegInt(v) => {
                 if (-(1 << 24)..=(1 << 24)).contains(&v) {
                     Ok(v as Self)
                 } else {
-                    Err(Self::Error::I64ToFloatLossyConversion(v))
+                    Err(TryFromNumberErrorKind::I64ToFloatLossyConversion(v).into())
                 }
             }
-            Number::Float(v) => Err(Self::Error::F64ToF32LossyConversion(v)),
+            Number::Float(v) => Err(TryFromNumberErrorKind::F64ToF32LossyConversion(v).into()),
         }
     }
 }
@@ -496,6 +529,7 @@ impl TryFrom<Number> for f32 {
 #[cfg(test)]
 mod number {
     use super::*;
+    use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 
     macro_rules! to_unsigned_converter_tests {
         ($typ:ident) => {
@@ -503,18 +537,24 @@ mod number {
 
             assert!(matches!(
                 $typ::try_from(Number::PosInt(($typ::MAX as u64) + 1u64)).unwrap_err(),
-                TryFromNumberError::OutsideIntegerRange(..)
+                TryFromNumberError {
+                    kind: TryFromNumberErrorKind::OutsideIntegerRange(..)
+                }
             ));
 
             assert!(matches!(
                 $typ::try_from(Number::NegInt(-1i64)).unwrap_err(),
-                TryFromNumberError::NegativeToUnsignedLossyConversion(..)
+                TryFromNumberError {
+                    kind: TryFromNumberErrorKind::NegativeToUnsignedLossyConversion(..)
+                }
             ));
 
             for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
                 assert!(matches!(
                     $typ::try_from(Number::Float(val)).unwrap_err(),
-                    TryFromNumberError::FloatToIntegerLossyConversion(..)
+                    TryFromNumberError {
+                        kind: TryFromNumberErrorKind::FloatToIntegerLossyConversion(..)
+                    }
                 ));
             }
         };
@@ -526,13 +566,17 @@ mod number {
 
         assert!(matches!(
             u64::try_from(Number::NegInt(-1i64)).unwrap_err(),
-            TryFromNumberError::NegativeToUnsignedLossyConversion(..)
+            TryFromNumberError {
+                kind: TryFromNumberErrorKind::NegativeToUnsignedLossyConversion(..)
+            }
         ));
 
         for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(matches!(
                 u64::try_from(Number::Float(val)).unwrap_err(),
-                TryFromNumberError::FloatToIntegerLossyConversion(..)
+                TryFromNumberError {
+                    kind: TryFromNumberErrorKind::FloatToIntegerLossyConversion(..)
+                }
             ));
         }
     }
@@ -559,18 +603,24 @@ mod number {
 
             assert!(matches!(
                 $typ::try_from(Number::PosInt(($typ::MAX as u64) + 1u64)).unwrap_err(),
-                TryFromNumberError::OutsideIntegerRange(..)
+                TryFromNumberError {
+                    kind: TryFromNumberErrorKind::OutsideIntegerRange(..)
+                }
             ));
 
             assert!(matches!(
                 $typ::try_from(Number::NegInt(($typ::MIN as i64) - 1i64)).unwrap_err(),
-                TryFromNumberError::OutsideIntegerRange(..)
+                TryFromNumberError {
+                    kind: TryFromNumberErrorKind::OutsideIntegerRange(..)
+                }
             ));
 
             for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
                 assert!(matches!(
                     u64::try_from(Number::Float(val)).unwrap_err(),
-                    TryFromNumberError::FloatToIntegerLossyConversion(..)
+                    TryFromNumberError {
+                        kind: TryFromNumberErrorKind::FloatToIntegerLossyConversion(..)
+                    }
                 ));
             }
         };
@@ -584,7 +634,9 @@ mod number {
         for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(matches!(
                 u64::try_from(Number::Float(val)).unwrap_err(),
-                TryFromNumberError::FloatToIntegerLossyConversion(..)
+                TryFromNumberError {
+                    kind: TryFromNumberErrorKind::FloatToIntegerLossyConversion(..)
+                }
             ));
         }
     }
@@ -638,16 +690,22 @@ mod number {
 
         assert!(matches!(
             f64::try_from(Number::PosInt(significand_max_u64 + 1)).unwrap_err(),
-            TryFromNumberError::U64ToFloatLossyConversion(..)
+            TryFromNumberError {
+                kind: TryFromNumberErrorKind::U64ToFloatLossyConversion(..)
+            }
         ));
 
         assert!(matches!(
             f64::try_from(Number::NegInt(significand_max_i64 + 1)).unwrap_err(),
-            TryFromNumberError::I64ToFloatLossyConversion(..)
+            TryFromNumberError {
+                kind: TryFromNumberErrorKind::I64ToFloatLossyConversion(..)
+            }
         ));
         assert!(matches!(
             f64::try_from(Number::NegInt(-significand_max_i64 - 1)).unwrap_err(),
-            TryFromNumberError::I64ToFloatLossyConversion(..)
+            TryFromNumberError {
+                kind: TryFromNumberErrorKind::I64ToFloatLossyConversion(..)
+            }
         ));
     }
 
@@ -675,22 +733,30 @@ mod number {
 
         assert!(matches!(
             f32::try_from(Number::PosInt(significand_max_u64 + 1)).unwrap_err(),
-            TryFromNumberError::U64ToFloatLossyConversion(..)
+            TryFromNumberError {
+                kind: TryFromNumberErrorKind::U64ToFloatLossyConversion(..)
+            }
         ));
 
         assert!(matches!(
             f32::try_from(Number::NegInt(significand_max_i64 + 1)).unwrap_err(),
-            TryFromNumberError::I64ToFloatLossyConversion(..)
+            TryFromNumberError {
+                kind: TryFromNumberErrorKind::I64ToFloatLossyConversion(..)
+            }
         ));
         assert!(matches!(
             f32::try_from(Number::NegInt(-significand_max_i64 - 1)).unwrap_err(),
-            TryFromNumberError::I64ToFloatLossyConversion(..)
+            TryFromNumberError {
+                kind: TryFromNumberErrorKind::I64ToFloatLossyConversion(..)
+            }
         ));
 
         for val in [69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(matches!(
                 f32::try_from(Number::Float(val)).unwrap_err(),
-                TryFromNumberError::F64ToF32LossyConversion(..)
+                TryFromNumberError {
+                    kind: TryFromNumberErrorKind::F64ToF32LossyConversion(..)
+                }
             ));
         }
     }
@@ -718,148 +784,4 @@ mod number {
             1452089100f32
         );
     }
-}
-
-pub use error::Error;
-
-/// Generic errors for Smithy codegen
-pub mod error {
-    use crate::retry::{ErrorKind, ProvideErrorKind};
-    use std::collections::HashMap;
-    use std::fmt;
-    use std::fmt::{Display, Formatter};
-
-    /// Generic Error type
-    ///
-    /// For many services, Errors are modeled. However, many services only partially model errors or don't
-    /// model errors at all. In these cases, the SDK will return this generic error type to expose the
-    /// `code`, `message` and `request_id`.
-    #[derive(Debug, Eq, PartialEq, Default, Clone)]
-    pub struct Error {
-        code: Option<String>,
-        message: Option<String>,
-        request_id: Option<String>,
-        extras: HashMap<&'static str, String>,
-    }
-
-    /// Builder for [`Error`].
-    #[derive(Debug, Default)]
-    pub struct Builder {
-        inner: Error,
-    }
-
-    impl Builder {
-        /// Sets the error message.
-        pub fn message(&mut self, message: impl Into<String>) -> &mut Self {
-            self.inner.message = Some(message.into());
-            self
-        }
-
-        /// Sets the error code.
-        pub fn code(&mut self, code: impl Into<String>) -> &mut Self {
-            self.inner.code = Some(code.into());
-            self
-        }
-
-        /// Sets the request ID the error happened for.
-        pub fn request_id(&mut self, request_id: impl Into<String>) -> &mut Self {
-            self.inner.request_id = Some(request_id.into());
-            self
-        }
-
-        /// Set a custom field on the error metadata
-        ///
-        /// Typically, these will be accessed with an extension trait:
-        /// ```rust
-        /// use aws_smithy_types::Error;
-        /// const HOST_ID: &str = "host_id";
-        /// trait S3ErrorExt {
-        ///     fn extended_request_id(&self) -> Option<&str>;
-        /// }
-        ///
-        /// impl S3ErrorExt for Error {
-        ///     fn extended_request_id(&self) -> Option<&str> {
-        ///         self.extra(HOST_ID)
-        ///     }
-        /// }
-        ///
-        /// fn main() {
-        ///     // Extension trait must be brought into scope
-        ///     use S3ErrorExt;
-        ///     let sdk_response: Result<(), Error> = Err(Error::builder().custom(HOST_ID, "x-1234").build());
-        ///     if let Err(err) = sdk_response {
-        ///         println!("request id: {:?}, extended request id: {:?}", err.request_id(), err.extended_request_id());
-        ///     }
-        /// }
-        /// ```
-        pub fn custom(&mut self, key: &'static str, value: impl Into<String>) -> &mut Self {
-            self.inner.extras.insert(key, value.into());
-            self
-        }
-
-        /// Creates the error.
-        pub fn build(&mut self) -> Error {
-            std::mem::take(&mut self.inner)
-        }
-    }
-
-    impl Error {
-        /// Returns the error code.
-        pub fn code(&self) -> Option<&str> {
-            self.code.as_deref()
-        }
-        /// Returns the error message.
-        pub fn message(&self) -> Option<&str> {
-            self.message.as_deref()
-        }
-        /// Returns the request ID the error occurred for, if it's available.
-        pub fn request_id(&self) -> Option<&str> {
-            self.request_id.as_deref()
-        }
-        /// Returns additional information about the error if it's present.
-        pub fn extra(&self, key: &'static str) -> Option<&str> {
-            self.extras.get(key).map(|k| k.as_str())
-        }
-
-        /// Creates an `Error` builder.
-        pub fn builder() -> Builder {
-            Builder::default()
-        }
-
-        /// Converts an `Error` into a builder.
-        pub fn into_builder(self) -> Builder {
-            Builder { inner: self }
-        }
-    }
-
-    impl ProvideErrorKind for Error {
-        fn retryable_error_kind(&self) -> Option<ErrorKind> {
-            None
-        }
-
-        fn code(&self) -> Option<&str> {
-            Error::code(self)
-        }
-    }
-
-    impl Display for Error {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            let mut fmt = f.debug_struct("Error");
-            if let Some(code) = &self.code {
-                fmt.field("code", code);
-            }
-            if let Some(message) = &self.message {
-                fmt.field("message", message);
-            }
-            if let Some(req_id) = &self.request_id {
-                fmt.field("request_id", req_id);
-            }
-            for (k, v) in &self.extras {
-                fmt.field(k, &v);
-            }
-            fmt.finish()
-        }
-    }
-
-    impl std::error::Error for Error {}
 }
