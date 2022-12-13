@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
@@ -56,8 +57,13 @@ open class ServerServiceGenerator(
                 )
         val crateName = codegenContext.moduleUseName()
         val builderName = "${serviceName}Builder"
-        val service = codegenContext.serviceShape
-        val hasErrors = service.operations.any { codegenContext.model.expectShape(it).asOperationShape().get().errors.isNotEmpty() }
+        val hasErrors = operations.any { it.errors.isNotEmpty() }
+        val handlerImports = writable {
+            val errorImport = if (hasErrors) ", ${ErrorsModule.name}" else ""
+            if (operations.isNotEmpty()) {
+                rust("//! use $crateName::{${InputsModule.name}, ${OutputsModule.name}$errorImport};")
+            }
+        }
         val handlers: Writable = operations
             .map { operation ->
                 DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!")::render
@@ -208,9 +214,11 @@ open class ServerServiceGenerator(
             //!
             //!    // Run your service!
             //!    if let Err(err) = server.await {
-            //!      eprintln!("server error: {:?}", err);
+            //!        eprintln!("server error: {:?}", err);
             //!    }
             //! }
+            //!
+            #{HandlerImports:W}
             //!
             #{Handlers:W}
             //!
@@ -223,6 +231,7 @@ open class ServerServiceGenerator(
             //! [hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
             //! [Service]: https://docs.rs/tower-service/latest/tower_service/trait.Service.html
             """,
+            "HandlerImports" to handlerImports,
             "Handlers" to handlers,
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
