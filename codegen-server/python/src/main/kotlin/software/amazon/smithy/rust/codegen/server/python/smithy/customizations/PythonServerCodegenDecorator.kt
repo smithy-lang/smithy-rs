@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -60,8 +59,8 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
             is LibRsSection.Body -> writable {
                 docs("Re-exported Python types from supporting crates.")
                 rustBlock("pub mod python_types") {
-                    rust("pub use #T;", PythonServerRuntimeType.Blob(codegenContext.runtimeConfig).toSymbol())
-                    rust("pub use #T;", PythonServerRuntimeType.DateTime(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.dateTime(codegenContext.runtimeConfig).toSymbol())
                 }
             }
             else -> emptySection
@@ -104,21 +103,6 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerProtocolGenerator,
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
-/**
- * Decorator adding an `aws-lambda` feature to the generated crate.
- */
-class PythonFeatureFlagsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
-    override val name: String = "PythonFeatureFlagsDecorator"
-    override val order: Byte = 0
-
-    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
-        rustCrate.mergeFeature(Feature("aws-lambda", true, listOf("aws-smithy-http-server-python/aws-lambda")))
-    }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
-}
-
 val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
@@ -131,6 +115,4 @@ val DECORATORS = listOf(
     PubUsePythonTypesDecorator(),
     // Render the Python shared library export.
     PythonExportModuleDecorator(),
-    // Add the `aws-lambda` feature flag
-    PythonFeatureFlagsDecorator(),
 )

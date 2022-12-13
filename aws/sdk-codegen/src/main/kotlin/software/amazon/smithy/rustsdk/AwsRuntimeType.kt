@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.crateLocation
 import java.io.File
 import java.nio.file.Path
 
@@ -54,17 +53,16 @@ object AwsRuntimeType {
             CargoDependency.smithyHttpTower(this),
             CargoDependency.smithyClient(this),
             CargoDependency.Tower,
-            sigAuth(),
-            awsHttp(),
-            awsEndpoint(),
+            AwsCargoDependency.awsSigAuth(this),
+            AwsCargoDependency.awsHttp(this),
+            AwsCargoDependency.awsEndpoint(this),
         ),
-    ).member("DefaultMiddleware")
+    ).resolve("DefaultMiddleware")
+
+    fun awsEndpoint(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsEndpoint(runtimeConfig).toType()
+    fun awsHttp(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsHttp(runtimeConfig).toType()
+    fun awsSigAuth(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigAuth(runtimeConfig).toType()
+    fun awsSigAuthEventStream(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigAuthEventStream(runtimeConfig).toType()
+    fun awsSigv4(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigv4(runtimeConfig).toType()
+    fun awsTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsTypes(runtimeConfig).toType()
 }
-
-fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
-    CargoDependency(name, awsRoot().crateLocation(null), features = features)
-
-fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
-fun RuntimeConfig.awsTypes(): CargoDependency = awsRuntimeDependency("aws-types")
-fun RuntimeConfig.awsConfig(): CargoDependency = awsRuntimeDependency("aws-config")
-fun RuntimeConfig.awsEndpoint() = awsRuntimeDependency("aws-endpoint")

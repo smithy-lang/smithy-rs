@@ -113,15 +113,16 @@ class ServerAwsJsonProtocol(
     override fun markerStruct(): RuntimeType {
         return when (version) {
             is AwsJsonVersion.Json10 -> {
-                ServerRuntimeType.Protocol("AwsJson1_0", "aws_json_10", runtimeConfig)
+                ServerRuntimeType.protocol("AwsJson1_0", "aws_json_10", runtimeConfig)
             }
             is AwsJsonVersion.Json11 -> {
-                ServerRuntimeType.Protocol("AwsJson1_1", "aws_json_11", runtimeConfig)
+                ServerRuntimeType.protocol("AwsJson1_1", "aws_json_11", runtimeConfig)
             }
         }
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
+    override fun routerType() = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+        .resolve("proto::aws_json::router::AwsJsonRouter")
 
     /**
      * Returns the operation name as required by the awsJson1.x protocols.
@@ -137,8 +138,7 @@ class ServerAwsJsonProtocol(
 
     override fun serverRouterRequestSpecType(
         requestSpecModule: RuntimeType,
-    ): RuntimeType =
-        RuntimeType("String", null, "std::string")
+    ): RuntimeType = RuntimeType.String
 
     override fun serverRouterRuntimeConstructor() = when (version) {
         AwsJsonVersion.Json10 -> "new_aws_json_10_router"
@@ -146,7 +146,9 @@ class ServerAwsJsonProtocol(
     }
 }
 
-private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::rest::router")
+private fun restRouterType(runtimeConfig: RuntimeConfig) =
+    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+        .resolve("proto::rest::router::RestRouter")
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
@@ -179,7 +181,7 @@ class ServerRestJsonProtocol(
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestJson1", "rest_json_1", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.protocol("RestJson1", "rest_json_1", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -191,7 +193,7 @@ class ServerRestJsonProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        requestSpecModule.member("RequestSpec")
+        requestSpecModule.resolve("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 
@@ -203,7 +205,7 @@ class ServerRestXmlProtocol(
 ) : RestXml(codegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestXml", "rest_xml", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.protocol("RestXml", "rest_xml", runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -215,7 +217,7 @@ class ServerRestXmlProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        requestSpecModule.member("RequestSpec")
+        requestSpecModule.resolve("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 

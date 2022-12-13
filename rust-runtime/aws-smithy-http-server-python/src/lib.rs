@@ -13,11 +13,14 @@
 //!
 //! [PyO3]: https://pyo3.rs/
 
+pub mod context;
 mod error;
+pub mod lambda;
 pub mod logging;
 pub mod middleware;
 mod server;
 mod socket;
+pub mod tls;
 pub mod types;
 mod util;
 

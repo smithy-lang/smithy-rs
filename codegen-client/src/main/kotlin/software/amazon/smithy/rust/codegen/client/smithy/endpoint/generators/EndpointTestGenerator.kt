@@ -12,8 +12,6 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.ExpectedEndpoint
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -39,8 +37,8 @@ internal class EndpointTestGenerator(
         "Endpoint" to types.smithyEndpoint,
         "ResolveEndpoint" to types.resolveEndpoint,
         "Error" to types.resolveEndpointError,
-        "Document" to CargoDependency.smithyTypes(runtimeConfig).toType().member("Document"),
-        "HashMap" to RustType.HashMap.RuntimeType,
+        "Document" to RuntimeType.document(runtimeConfig),
+        "HashMap" to RuntimeType.HashMap,
     )
 
     fun generate(): Writable = writable {

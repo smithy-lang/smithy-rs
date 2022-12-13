@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Event
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -215,26 +214,10 @@ class FakeSigningConfig(
     runtimeConfig: RuntimeConfig,
 ) : EventStreamSigningConfig(runtimeConfig) {
     private val codegenScope = arrayOf(
-        "SharedPropertyBag" to RuntimeType(
-            "SharedPropertyBag",
-            CargoDependency.smithyHttp(runtimeConfig),
-            "aws_smithy_http::property_bag",
-        ),
-        "SignMessageError" to RuntimeType(
-            "SignMessageError",
-            CargoDependency.smithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame",
-        ),
-        "SignMessage" to RuntimeType(
-            "SignMessage",
-            CargoDependency.smithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame",
-        ),
-        "Message" to RuntimeType(
-            "Message",
-            CargoDependency.smithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame",
-        ),
+        "SharedPropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"),
+        "SignMessageError" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessageError"),
+        "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
+        "Message" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::Message"),
     )
 
     override fun section(section: ServiceConfig): Writable {
