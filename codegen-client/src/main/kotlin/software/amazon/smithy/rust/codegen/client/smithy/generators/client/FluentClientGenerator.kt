@@ -272,7 +272,7 @@ class FluentClientGenerator(
 
 
                     // it's supposed to provide a `path` that points to what builder type produces.
-                    val outputShapePath = input.builderSymbol(symbolProvider).toString().replace("::Builder", "::OutputShape")
+                    val builderPath = input.builderSymbol(symbolProvider).toString()
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
@@ -321,29 +321,15 @@ class FluentClientGenerator(
                         /// This method sends a request with given input.  
                         /// Method ignores any data that can be found in the builder type held on this struct.
                         ${RuntimeType.AttrUnstableSerdeAny}
-                        pub async fn send_with(self, input: $outputShapePath) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
-                            let op = input
+                        pub async fn send_with(self, builder: $builderPath) -> 
+                            std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> 
+                            #{send_bounds:W} 
+                        {
+                            let op = builder.build()
+                                .map_err(#{SdkError}::construction_failure)?
                                 .make_operation(&self.handle.conf)
                                 .await
-                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
-                            self.handle.client.call(op).await
-                        }
-
-                        /// Replaces the parameter
-                        /// Returns the existing data.
-                        ${RuntimeType.AttrUnstableSerdeAny}
-                        pub fn replace_parameter(&mut self, new_parameter: #{Inner}) -> #{Inner} {
-                            std::mem::replace(&mut self.inner, new_parameter)
-                        }
-
-                        /// This method sends a request with given input.  
-                        /// Method ignores any data that can be found in the builder type held on this struct.
-                        ${RuntimeType.AttrUnstableSerdeAny}
-                        pub async fn send_with(self, input: $outputShapePath) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> #{send_bounds:W} {
-                            let op = input
-                                .make_operation(&self.handle.conf)
-                                .await
-                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
+                                .map_err(#{SdkError}::construction_failure)?;
                             self.handle.client.call(op).await
                         }
                         """,

@@ -163,17 +163,12 @@ class BuilderGenerator(
         // Builder members are crate-public to enable using them directly in serializers/deserializers.
         // During XML deserialization, `builder.<field>.take` is used to append to lists and maps.
         val argPath = memberSymbol.rustType().render(true)
-        val dataTypesToSkip = listOf(
-            "aws_smithy_http::byte_stream::ByteStream",
-            "aws_smithy_http::event_stream::Receiver<TranscriptResultStream, TranscriptResultStreamError>",
-            "aws_smithy_http::event_stream::EventStreamSender<AudioStream, AudioStreamError>"
-        )
-        
-        for (path in dataTypesToSkip) {
-            if (argPath.contains(path)) {
-                writer.writeInline("##[cfg_attr(${RuntimeType.AttrUnstableSerialize}, serde(skip_serializing))]\n")
-                writer.writeInline("##[cfg_attr(${RuntimeType.AttrUnstableDeserialize}, serde(skip_deserializing))]\n")
-            }
+        if (argPath.contains("aws_smithy_http::byte_stream::ByteStream")) {
+            writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}, ${RuntimeType.AttrUnstableSerialize}), serde(skip))]\n")
+        } else if (argPath.contains("aws_smithy_http::event_stream::Receiver")) {
+            writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}, ${RuntimeType.AttrUnstableSerialize}), serde(skip))]\n")
+        } else if (argPath.contains("aws_smithy_http::event_stream::EventStreamSender")) {
+            writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}, ${RuntimeType.AttrUnstableSerialize}), serde(skip))]\n")
         }
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
     }
@@ -223,24 +218,21 @@ class BuilderGenerator(
         writer.writeInline("/// This is the datatype that Builder of this module build itself into.\n")
         writer.writeInline("pub type OutputShape = $structureSymbol;")
 
-        writer.docs("A builder for #D.", structureSymbol)
         // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
 
         // add serde
         writer.writeInline(RuntimeType.UnstableDerive)
-
-        baseDerives.copy(derives = derives).render(writer)
         writer.docs("A builder for #D.", structureSymbol)
         baseDerives.copy(derives = builderDerives).render(writer)
         writer.rustBlock("pub struct $builderName") {
             // writes struct fields
             for (member in members) {
-
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
+
+                val argPath = memberSymbol.rustType().render(true)
                 renderBuilderMember(this, memberName, memberSymbol)
             }
         }

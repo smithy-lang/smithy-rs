@@ -107,7 +107,7 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
             "docs" -> Cargo.DOCS
             "clippy" -> Cargo.CLIPPY
             "checkAllFeatures" -> Cargo.CHECK_ALL_FEATURES
-            "testAllFeatures" -> TEST_ALL_FEATURES.CHECK_ALL_FEATURES
+            "testAllFeatures" -> Cargo.TEST_ALL_FEATURES
             else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `docs`, `clippy`)")
         }
     }

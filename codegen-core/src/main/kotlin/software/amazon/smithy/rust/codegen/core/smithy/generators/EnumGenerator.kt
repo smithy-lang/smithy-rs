@@ -234,6 +234,7 @@ open class EnumGenerator(
                 part of the enums that are public interface.
                 """.trimIndent(),
             )
+            rust(RuntimeType.UnstableDerive)
             meta.render(this)
             rust("struct $UnknownVariantValue(pub(crate) String);")
             rustBlock("impl $UnknownVariantValue") {
