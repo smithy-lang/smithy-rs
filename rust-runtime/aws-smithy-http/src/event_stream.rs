@@ -54,9 +54,7 @@ where
         aws_smithy_eventstream::frame::UnmarshalledMessage<Self::Output, Self::Error>,
         aws_smithy_eventstream::error::Error,
     > {
-        Err(aws_smithy_eventstream::error::Error::Unmarshalling(
-            "DeserializedStream".to_string(),
-        ))
+        Err(aws_smithy_eventstream::error::Error::deserialized_stream())
     }
 }
 
