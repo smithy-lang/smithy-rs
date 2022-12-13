@@ -139,7 +139,12 @@ open class EnumGenerator(
     private fun renderUnnamedEnum() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
+
+        // add serde
+        writer.writeInline(RuntimeType.UnstableDerive)
+        
         meta.render(writer)
+
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
             docs("Returns the `&str` value of the enum member.")
@@ -179,7 +184,11 @@ open class EnumGenerator(
         )
         writer.deprecatedShape(shape)
 
+        // add serde
+        writer.writeInline(RuntimeType.UnstableDerive)
+
         meta.render(writer)
+
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
             target.ifClient {

@@ -13,9 +13,21 @@
     unreachable_pub
 )]
 
+#[cfg(test)]
+#[cfg(all(
+    feature = "unstable",
+    feature = "serialize",
+    feature = "deserialize"
+))]
+mod test;
+
+#[cfg(all(feature= "unstable", feature = "serialize"))]
+use serde::Serialize;
+#[cfg(all(feature= "unstable", feature = "deserialize"))]
+use serde::{de::Visitor, Deserialize};
+
 use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 use std::collections::HashMap;
-
 pub mod base64;
 pub mod date_time;
 pub mod endpoint;
@@ -33,6 +45,73 @@ pub use error::Error;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Blob {
     inner: Vec<u8>,
+}
+
+#[cfg(all(feature = "unstable", feature = "serialize"))]
+impl Serialize for Blob {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&crate::base64::encode(&self.inner))
+        } else {
+            serializer.serialize_bytes(&self.inner)
+        }
+    }
+}
+
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
+struct HumanReadableBlobVisitor;
+
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
+impl<'de> Visitor<'de> for HumanReadableBlobVisitor {
+    type Value = Blob;
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("expected base64 encoded string")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match base64::decode(v) {
+            Ok(inner) => Ok(Blob { inner }),
+            Err(e) => Err(serde::de::Error::custom(e)),
+        }
+    }
+}
+
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
+struct NotHumanReadableBlobVisitor;
+
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
+impl<'de> Visitor<'de> for NotHumanReadableBlobVisitor {
+    type Value = Blob;
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("expected base64 encoded string")
+    }
+
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Blob { inner: v })
+    }
+}
+
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
+impl<'de> Deserialize<'de> for Blob {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_str(HumanReadableBlobVisitor)
+        } else {
+            deserializer.deserialize_byte_buf(NotHumanReadableBlobVisitor)
+        }
+    }
 }
 
 impl Blob {
@@ -64,6 +143,15 @@ impl AsRef<[u8]> for Blob {
 /// modeled using rigid types, or data that has a schema that evolves outside of the purview of a model.
 /// The serialization format of a document is an implementation detail of a protocol.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(Serialize))]
+#[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(Deserialize))]
+#[cfg_attr(
+    any(
+        all(feature = "unstable", feature = "deserialize"),
+        all(feature = "unstable", feature = "serialize")
+    ),
+    serde(untagged)
+)]
 pub enum Document {
     /// JSON object
     Object(HashMap<String, Document>),
@@ -103,6 +191,50 @@ impl From<HashMap<String, Document>> for Document {
     }
 }
 
+/// checks if a) serialization of json suceeds and b) it is compatible with serde_json
+#[test]
+#[cfg(all(
+    all(feature = "unstable", feature = "serialize"),
+    all(feature = "unstable", feature = "deserialize")
+))]
+fn serialize_json() {
+    let mut map: HashMap<String, Document> = HashMap::new();
+    // string
+    map.insert("hello".into(), "world".to_string().into());
+    // numbers
+    map.insert("pos_int".into(), Document::Number(Number::PosInt(1).into()));
+    map.insert(
+        "neg_int".into(),
+        Document::Number(Number::NegInt(-1).into()),
+    );
+    map.insert(
+        "float".into(),
+        Document::Number(Number::Float(0.1 + 0.2).into()),
+    );
+    // booleans
+    map.insert("true".into(), true.into());
+    map.insert("false".into(), false.into());
+    // check if array with different datatypes would succeed
+    map.insert(
+        "array".into(),
+        vec![
+            map.clone().into(),
+            "hello-world".to_string().into(),
+            true.into(),
+            false.into(),
+        ]
+        .into(),
+    );
+    // map
+    map.insert("map".into(), map.clone().into());
+    let obj = Document::Object(map);
+    // comparing string isnt going to work since there is no gurantee for the ordering of the keys
+    let target_file = include_str!("../test_data/serialize_document.json");
+    let json: Result<serde_json::Value, _> = serde_json::from_str(target_file);
+    // serializer
+    assert_eq!(serde_json::to_value(&obj).unwrap(), json.unwrap());
+    let doc: Result<Document, _> = serde_json::from_str(target_file);
+    assert_eq!(obj, doc.unwrap());
 impl From<u64> for Document {
     fn from(value: u64) -> Self {
         Document::Number(Number::PosInt(value))
@@ -124,6 +256,15 @@ impl From<i32> for Document {
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(Deserialize))]
+#[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(Serialize))]
+#[cfg_attr(
+    any(
+        all(feature = "unstable", feature = "deserialize"),
+        all(feature = "unstable", feature = "serialize")
+    ),
+    serde(untagged)
+)]
 pub enum Number {
     /// Unsigned 64-bit integer value.
     PosInt(u64),
@@ -132,7 +273,6 @@ pub enum Number {
     /// 64-bit floating-point value.
     Float(f64),
 }
-
 /* ANCHOR_END: document */
 
 impl Number {
@@ -154,6 +294,92 @@ impl Number {
             Number::NegInt(v) => v as f32,
             Number::Float(v) => v as f32,
         }
+    }
+}
+
+#[test]
+#[cfg(all(
+    all(feature = "unstable", feature = "deserialize"),
+    all(feature = "unstable", feature = "serialize")
+))]
+/// ensures that numbers are deserialized as expected
+/// 0 <= PosInt  
+/// 0 > NegInt  
+/// non integer values == Float
+fn number_deserialization_works() {
+    let n: Number = serde_json::from_str("1.1").unwrap();
+    assert_eq!(n, Number::Float(1.1));
+    let n: Number = serde_json::from_str("1").unwrap();
+    assert_eq!(n, Number::PosInt(1));
+    let n: Number = serde_json::from_str("0").unwrap();
+    assert_eq!(n, Number::PosInt(0));
+    let n: Number = serde_json::from_str("-1").unwrap();
+    assert_eq!(n, Number::NegInt(-1));
+
+    assert_eq!("1.1", serde_json::to_string(&Number::Float(1.1)).unwrap());
+    assert_eq!("1", serde_json::to_string(&Number::PosInt(1)).unwrap());
+    assert_eq!("0", serde_json::to_string(&Number::PosInt(0)).unwrap());
+    assert_eq!("-1", serde_json::to_string(&Number::NegInt(-1)).unwrap());
+}
+
+/// The error type returned when conversion into an integer type or floating point type is lossy.
+#[derive(Debug)]
+pub enum TryFromNumberError {
+    /// Used when the conversion from an integer type into a smaller integer type would be lossy.
+    OutsideIntegerRange(std::num::TryFromIntError),
+    /// Used when the conversion from an `u64` into a floating point type would be lossy.
+    U64ToFloatLossyConversion(u64),
+    /// Used when the conversion from an `i64` into a floating point type would be lossy.
+    I64ToFloatLossyConversion(i64),
+    /// Used when attempting to convert an `f64` into an `f32`.
+    F64ToF32LossyConversion(f64),
+    /// Used when attempting to convert a decimal, infinite, or `NaN` floating point type into an
+    /// integer type.
+    FloatToIntegerLossyConversion(f64),
+    /// Used when attempting to convert a negative [`Number`] into an unsigned integer type.
+    NegativeToUnsignedLossyConversion(i64),
+}
+
+impl std::fmt::Display for TryFromNumberError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TryFromNumberError::OutsideIntegerRange(err) => write!(f, "integer too large: {}", err),
+            TryFromNumberError::FloatToIntegerLossyConversion(v) => write!(
+                f,
+                "cannot convert floating point number {} into an integer",
+                v
+            ),
+            TryFromNumberError::NegativeToUnsignedLossyConversion(v) => write!(
+                f,
+                "cannot convert negative integer {} into an unsigned integer type",
+                v
+            ),
+            TryFromNumberError::U64ToFloatLossyConversion(v) => {
+                write!(
+                    f,
+                    "cannot convert {}u64 into a floating point type without precision loss",
+                    v
+                )
+            }
+            TryFromNumberError::I64ToFloatLossyConversion(v) => {
+                write!(
+                    f,
+                    "cannot convert {}i64 into a floating point type without precision loss",
+                    v
+                )
+            }
+            TryFromNumberError::F64ToF32LossyConversion(v) => {
+                write!(f, "will not attempt to convert {}f64 into a f32", v)
+            }
+        }
+    }
+}
+
+impl std::error::Error for TryFromNumberError {}
+
+impl From<std::num::TryFromIntError> for TryFromNumberError {
+    fn from(value: std::num::TryFromIntError) -> Self {
+        Self::OutsideIntegerRange(value)
     }
 }
 

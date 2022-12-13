@@ -186,6 +186,89 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
      * The companion object contains commonly used RuntimeTypes
      */
     companion object {
+        fun errorKind(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ErrorKind",
+            dependency = CargoDependency.SmithyTypes(runtimeConfig),
+            namespace = "${runtimeConfig.crateSrcPrefix}_types::retry",
+        )
+
+        fun provideErrorKind(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "ProvideErrorKind",
+            dependency = CargoDependency.SmithyTypes(runtimeConfig),
+            namespace = "${runtimeConfig.crateSrcPrefix}_types::retry",
+        )
+
+        val std = RuntimeType(null, dependency = null, namespace = "std")
+        val stdfmt = std.member("fmt")
+
+        val AsRef = RuntimeType("AsRef", dependency = null, namespace = "std::convert")
+        val ByteSlab = RuntimeType("Vec<u8>", dependency = null, namespace = "std::vec")
+        val Clone = std.member("clone::Clone")
+        val Debug = stdfmt.member("Debug")
+        val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
+        val Display = stdfmt.member("Display")
+        val From = RuntimeType("From", dependency = null, namespace = "std::convert")
+        val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
+        val PartialEq = std.member("cmp::PartialEq")
+        val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
+        val String = RuntimeType("String", dependency = null, namespace = "std::string")
+
+        // serde types
+        val SerdeSerialize = RuntimeType("Serialize", dependency = null, namespace = "serde")
+        val SerdeDeserialize = RuntimeType("Deserialize", dependency = null, namespace = "serde")
+
+        // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
+        val AttrUnstableSerdeAny = """##[cfg(all(feature = "unstable", any(feature = "serialize", feature = "deserialize")))]"""
+        val AttrUnstableSerdeBoth = """
+            all(feature = "unstable", all(feature = "serialize", feature = "deserialize"))
+        """
+        val AttrUnstableSerialize = """
+            all(feature = "unstable", feature = "serialize")
+        """
+        val AttrUnstableDeserialize = """
+            all(feature = "unstable", feature = "deserialize")
+        """ 
+        // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
+        val UnstableDerive = """##[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(serde::Serialize))]
+##[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(serde::Deserialize))]"""
+
+        fun DateTime(runtimeConfig: RuntimeConfig) =
+            RuntimeType("DateTime", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+
+        fun GenericError(runtimeConfig: RuntimeConfig) =
+            RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+
+        fun Blob(runtimeConfig: RuntimeConfig) =
+            RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+
+        fun ByteStream(runtimeConfig: RuntimeConfig) =
+            RuntimeType("ByteStream", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::byte_stream")
+
+        fun Document(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType("Document", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+
+        fun LabelFormat(runtimeConfig: RuntimeConfig, func: String) =
+            RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::label")
+
+        fun QueryFormat(runtimeConfig: RuntimeConfig, func: String) =
+            RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::query")
+
+        fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType(
+                "encode",
+                CargoDependency.SmithyTypes(runtimeConfig),
+                "${runtimeConfig.crateSrcPrefix}_types::base64",
+            )
+
+        fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType(
+                "decode",
+                CargoDependency.SmithyTypes(runtimeConfig),
+                "${runtimeConfig.crateSrcPrefix}_types::base64",
+            )
+
+        fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
+
         // stdlib types
         val std = RuntimeType("std")
         val stdCmp = std.resolve("cmp")

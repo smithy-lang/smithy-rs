@@ -425,7 +425,6 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
     }
-
     data class Deprecated(val since: String?, val note: String?) : Attribute() {
         override fun render(writer: RustWriter) {
             writer.raw("#[deprecated")
