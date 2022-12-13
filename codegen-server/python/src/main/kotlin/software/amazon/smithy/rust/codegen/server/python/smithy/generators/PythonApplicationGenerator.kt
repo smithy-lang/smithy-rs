@@ -278,7 +278,6 @@ class PythonApplicationGenerator(
                     self.run_server(py, address, port, backlog, workers, tls)
                 }
                 /// Lambda entrypoint: start the server on Lambda.
-                ##[cfg(feature = "aws-lambda")]
                 ##[pyo3(text_signature = "(${'$'}self)")]
                 pub fn run_lambda(
                     &mut self,
