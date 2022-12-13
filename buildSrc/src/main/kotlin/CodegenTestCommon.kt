@@ -59,6 +59,8 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
 }
 
 enum class Cargo(val toString: String) {
+    CHECK_ALL_FEATURES("cargoCheckAllFeatures"),
+    TEST_ALL_FEATURES("cargoTestAllFeatures"),
     CHECK("cargoCheck"),
     TEST("cargoTest"),
     DOCS("cargoDocs"),
@@ -91,7 +93,7 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
     return ret
 }
 
-val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS)
+val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS, Cargo.CHECK_ALL_FEATURES)
 
 /**
  * Filter the Cargo commands to be run on the generated Rust crates using the given [properties].
@@ -104,6 +106,8 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
             "test" -> Cargo.TEST
             "docs" -> Cargo.DOCS
             "clippy" -> Cargo.CLIPPY
+            "checkAllFeatures" -> Cargo.CHECK_ALL_FEATURES
+            "testAllFeatures" -> TEST_ALL_FEATURES.CHECK_ALL_FEATURES
             else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `docs`, `clippy`)")
         }
     }
@@ -233,6 +237,19 @@ fun Project.registerCargoCommandsTasks(
             "generateCargoConfigToml",
             this.tasks.findByName("modifyMtime")?.let { "modifyMtime" },
         )
+
+    this.tasks.register<Exec>(Cargo.TEST_ALL_FEATURES.toString) {
+        dependsOn(dependentTasks)
+        workingDir(outputDir)
+        commandLine("cargo", "test", "--all-features")
+    }
+
+    this.tasks.register<Exec>(Cargo.CHECK_ALL_FEATURES.toString) {
+        dependsOn(dependentTasks)
+        workingDir(outputDir)
+        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
+    }
+
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)

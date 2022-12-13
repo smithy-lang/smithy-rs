@@ -31,7 +31,7 @@ Project Layout
   Common commands:
   * `./gradlew :aws:sdk:assemble`: Generate (but do not test / compile etc.) a fresh SDK into `sdk/build/aws-sdk`
   * `./gradlew :aws:sdk:test`: Generate & run all tests for a fresh SDK
-  * `./gradlew :aws:sdk:{cargoCheck, cargoTest, cargoDocs, cargoClippy}`: Generate & run specified cargo command.
+  * `./gradlew :aws:sdk:{cargoCheck, cargoTest, cargoDocs, cargoClippy, cargoCheckAllFeatures}`: Generate & run specified cargo command.
 * `codegen-core`: Common code generation logic useful for clients and servers
 * `codegen-client`: Whitelabel Smithy client code generation
 * `codegen-client-test`: Smithy protocol test generation & integration tests for Smithy client whitelabel code
