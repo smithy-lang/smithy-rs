@@ -18,7 +18,7 @@ use bytes::Bytes;
 pub use sender::{EventStreamSender, MessageStreamAdapter, MessageStreamError};
 
 #[doc(inline)]
-pub use receiver::{Error, RawMessage, Receiver};
+pub use receiver::{RawMessage, Receiver};
 
 use crate::result::SdkError;
 

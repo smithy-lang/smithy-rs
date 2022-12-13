@@ -27,15 +27,9 @@ impl<T, E> Debug for EventStreamSender<T, E> {
     }
 }
 
-#[cfg(all(
-    feature = "unstable",
-    feature = "deserialize"
-))]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 pub use deserialized_stream::*;
-#[cfg(all(
-    feature = "unstable",
-    feature = "deserialize"
-))]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 mod deserialized_stream {
     use super::*;
     /// Data type for deserialized stream.
@@ -59,14 +53,13 @@ mod deserialized_stream {
             (0, None)
         }
     }
-    impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {    
+    impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
         pub fn deserialized_sender() -> Self {
             EventStreamSender {
                 input_stream: Box::pin(DeserializedSenderStream::new()),
             }
         }
     }
-    
 }
 
 impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
@@ -78,12 +71,6 @@ impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> EventStreamS
         signer: impl SignMessage + Send + Sync + 'static,
     ) -> MessageStreamAdapter<T, E> {
         MessageStreamAdapter::new(marshaller, error_marshaller, signer, self.input_stream)
-    }
-
-    pub fn deserialized_sender() -> Self {
-        EventStreamSender {
-            input_stream: Box::pin(DeserializedSenderStream::new()),
-        }
     }
 }
 
@@ -175,7 +162,6 @@ impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
         }
     }
 }
-
 
 impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
     type Item = Result<Bytes, SdkError<E>>;
@@ -270,7 +256,9 @@ mod tests {
         type Input = TestServiceError;
 
         fn marshall(&self, _input: Self::Input) -> Result<Message, EventStreamError> {
-            Err(EventStreamError)
+            Err(Message::read_from(&b""[..])
+                .err()
+                .expect("this should always fail"))
         }
     }
 

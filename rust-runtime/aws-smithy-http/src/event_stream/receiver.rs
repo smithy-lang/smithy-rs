@@ -1,7 +1,7 @@
 /*
-* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-* SPDX-License-Identifier: Apache-2.0
-*/
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 use crate::body::SdkBody;
 use crate::result::{ConnectorError, SdkError};
