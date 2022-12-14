@@ -29,7 +29,7 @@ class PythonServerModuleGenerator(
         "pyo3" to PythonServerCargoDependency.PyO3.toType(),
     )
     private val symbolProvider = codegenContext.symbolProvider
-    private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
+    private val libName = codegenContext.settings.moduleName.toSnakeCase()
 
     fun render() {
         rustCrate.withModule(
