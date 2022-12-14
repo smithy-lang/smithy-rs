@@ -5,7 +5,7 @@ GRADLE := $(SRC_DIR)/gradlew
 SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-sdk
 CLIENT_SDK_DST := $(CUR_DIR)/pokemon-service-client
 SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/python/build/smithyprojections/codegen-server-test-python/pokemon-service-server-sdk/rust-server-codegen-python
-CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-codegen
+CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-client-codegen
 
 SHARED_LIBRARY_DST := $(CUR_DIR)/libpokemon_service_server_sdk.so
 ifeq ($(OS), Darwin)

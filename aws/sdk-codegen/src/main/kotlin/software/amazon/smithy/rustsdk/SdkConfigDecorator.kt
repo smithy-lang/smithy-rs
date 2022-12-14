@@ -6,15 +6,13 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
@@ -24,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
  * - `From<&aws_types::SdkConfig> for <service>::config::Builder`: Enabling customization
  * - `pub fn new(&aws_types::SdkConfig) -> <service>::Config`: Direct construction without customization
  */
-class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class SdkConfigDecorator : ClientCodegenDecorator {
     override val name: String = "SdkConfig"
     override val order: Byte = 0
 
@@ -68,9 +66,6 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
             )
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {

@@ -10,12 +10,11 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.DecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
@@ -27,17 +26,18 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
- * Rust Codegen Plugin
+ * Rust Client Codegen Plugin
  *
  * This is the entrypoint for code generation, triggered by the smithy-build plugin.
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
- * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
+ * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
  */
-class RustCodegenPlugin : DecoratableBuildPlugin<ClientProtocolGenerator, ClientCodegenContext>() {
-    override fun getName(): String = "rust-codegen"
+class RustClientCodegenPlugin : DecoratableBuildPlugin() {
+    override fun getName(): String = "rust-client-codegen"
+
     override fun executeWithDecorator(
         context: PluginContext,
-        vararg decorator: RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>,
+        vararg decorator: ClientCodegenDecorator,
     ) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
@@ -47,7 +47,7 @@ class RustCodegenPlugin : DecoratableBuildPlugin<ClientProtocolGenerator, Client
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
         val codegenDecorator =
-            CombinedCodegenDecorator.fromClasspath(
+            CombinedClientCodegenDecorator.fromClasspath(
                 context,
                 ClientCustomizations(),
                 RequiredCustomizations(),
@@ -56,8 +56,8 @@ class RustCodegenPlugin : DecoratableBuildPlugin<ClientProtocolGenerator, Client
                 *decorator,
             )
 
-        // CodegenVisitor is the main driver of code generation that traverses the model and generates code
-        CodegenVisitor(context, codegenDecorator).execute()
+        // ClientCodegenVisitor is the main driver of code generation that traverses the model and generates code
+        ClientCodegenVisitor(context, codegenDecorator).execute()
     }
 
     companion object {
