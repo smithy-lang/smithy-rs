@@ -71,7 +71,7 @@ class ConstrainedNumberGenerator(
         val rangeTrait = shape.expectTrait<RangeTrait>()
 
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
-        val constrainedTypeName = symbol.name
+        val name = symbol.name
         val unconstrainedTypeName = unconstrainedType.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constraintsInfo = listOf(Range(rangeTrait).toTraitInfo(unconstrainedTypeName))
@@ -94,16 +94,17 @@ class ConstrainedNumberGenerator(
             visibility = constrainedTypeVisibility,
         )
 
-        writer.documentShape(shape, model, note = rustDocsNote(constrainedTypeName))
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
         constrainedTypeMetadata.render(writer)
-        writer.rust("struct $constrainedTypeName(pub(crate) $unconstrainedTypeName);")
+        writer.rust("struct $name(pub(crate) $unconstrainedTypeName);")
 
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
             Attribute.AllowUnused.render(writer)
         }
         writer.rustTemplate(
             """
-            impl $constrainedTypeName {
+            impl $name {
                 /// ${rustDocsInnerMethod(unconstrainedTypeName)}
                 pub fn inner(&self) -> &$unconstrainedTypeName {
                     &self.0
@@ -115,7 +116,7 @@ class ConstrainedNumberGenerator(
                 }
             }
 
-            impl #{ConstrainedTrait} for $constrainedTypeName  {
+            impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = $unconstrainedTypeName;
             }
 
@@ -125,14 +126,14 @@ class ConstrainedNumberGenerator(
                 }
             }
 
-            impl #{Display} for $constrainedTypeName {
+            impl #{Display} for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                    ${shape.redactIfNecessary(model, "self.0")}.fmt(f)
                 }
             }
 
-            impl #{From}<$constrainedTypeName> for $unconstrainedTypeName {
-                fn from(value: $constrainedTypeName) -> Self {
+            impl #{From}<$name> for $unconstrainedTypeName {
+                fn from(value: $name) -> Self {
                     value.into_inner()
                 }
             }
@@ -146,7 +147,7 @@ class ConstrainedNumberGenerator(
             "AsRef" to RuntimeType.AsRef,
         )
 
-        writer.renderTryFrom(unconstrainedTypeName, constrainedTypeName, constraintViolation, constraintsInfo)
+        writer.renderTryFrom(unconstrainedTypeName, name, constraintViolation, constraintsInfo)
 
         writer.withInlineModule(constraintViolation.module()) {
             rust(
