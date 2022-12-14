@@ -47,3 +47,7 @@ fn main() {
     let s = serde_json::to_string_pretty(&putitem).unwrap();
     println!("{s}");
 }
+#[cfg(not(all(feature = "unstable", feature = "serialize")))]
+fn main() {
+    println!("You need to enable features, serialize and unstable ")
+}
