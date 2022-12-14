@@ -67,7 +67,7 @@ class PythonApplicationGenerator(
     private val operations: List<OperationShape>,
 ) {
     private val symbolProvider = codegenContext.symbolProvider
-    private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
+    private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
@@ -278,7 +278,6 @@ class PythonApplicationGenerator(
                     self.run_server(py, address, port, backlog, workers, tls)
                 }
                 /// Lambda entrypoint: start the server on Lambda.
-                ##[cfg(feature = "aws-lambda")]
                 ##[pyo3(text_signature = "(${'$'}self)")]
                 pub fn run_lambda(
                     &mut self,
