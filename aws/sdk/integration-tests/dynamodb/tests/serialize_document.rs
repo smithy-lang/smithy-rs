@@ -15,7 +15,7 @@ fn main() {
         .item("SongTitle", AttributeValue::S("Call Me Today".to_string()))
         .item(
             "AlbumTitle",
-            AttributeValue::S("Somewhat Famouss".to_string()),
+            AttributeValue::S("Somewhat Famous".to_string()),
         )
         .return_consumed_capacity(ReturnConsumedCapacity::Total)
         .expected(
