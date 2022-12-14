@@ -77,13 +77,21 @@ class ConstraintViolationSymbolProvider(
         false -> Visibility.PUBCRATE
     }
 
-    private fun Shape.shapeModule() = RustModule.new(
-        // need to use the context name so we get the correct name for maps
-        name = RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase(),
-        visibility = visibility,
-        parent = ModelsModule,
-        inline = true,
-    )
+    private fun Shape.shapeModule(): RustModule.LeafModule {
+        val documentation = if (publicConstrainedTypes && this.isDirectlyConstrained(base)) {
+            "See [`${this.contextName(serviceShape)}`]."
+        } else {
+            null
+        }
+        return RustModule.new(
+            // Need to use the context name so we get the correct name for maps.
+            name = RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase(),
+            visibility = visibility,
+            parent = ModelsModule,
+            inline = true,
+            documentation = documentation,
+        )
+    }
 
     private fun constraintViolationSymbolForCollectionOrMapOrUnionShape(shape: Shape): Symbol {
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)

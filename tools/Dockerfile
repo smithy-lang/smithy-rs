@@ -52,6 +52,8 @@ ARG cargo_udeps_version=0.1.35
 ARG cargo_hack_version=0.5.23
 ARG cargo_minimal_versions_version=0.1.8
 ARG cargo_check_external_types_version=0.1.6
+# Maturin is needed for Python SSDK
+ARG maturin_version=0.14.1
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
@@ -100,6 +102,7 @@ RUN set -eux; \
     cargo install cargo-hack --locked --version ${cargo_hack_version}; \
     cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}; \
     cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}; \
+    cargo install maturin --locked --version ${maturin_version}; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
         git clone https://github.com/awslabs/smithy-rs.git; \
         cd smithy-rs; \
