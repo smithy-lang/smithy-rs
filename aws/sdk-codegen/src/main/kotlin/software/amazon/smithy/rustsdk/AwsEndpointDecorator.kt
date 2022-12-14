@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -89,8 +90,15 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val epTypes = EndpointTypesGenerator.fromContext(codegenContext)
+        if (epTypes.defaultResolver() == null) {
+            throw CodegenException(
+                "${codegenContext.serviceShape} did not provide endpoint rules. " +
+                    "This is a bug and the generated client will not work. All AWS services MUST define endpoint rules.",
+            )
+        }
         // generate a region converter if params has a region
         if (!epTypes.params.toList().any { it.builtIn == Builtins.REGION.builtIn }) {
+            println("not generating a resolver for ${codegenContext.serviceShape}")
             return
         }
         rustCrate.withModule(EndpointsModule) {
