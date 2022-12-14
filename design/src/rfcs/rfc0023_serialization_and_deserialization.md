@@ -209,10 +209,15 @@ We do not see any benefit in keeping them behind a same feature-gate as this wil
 
 ## Different feature gates for different data types
 We considered implementing different feature gates for output, input and their corresponding data types.
-For example, output and input types can have `unstable-output-serde-*` and `unstable-input-serde-*`.
+For example, output and input types can have `output-serde-*` and `input-serde-*`.
 
+NOTE:
+  I believe that I got this one wrong.
+  I don't have enough time to rephrase it today so I will just leave it here.
+///
 The complexity that this implementation introduces is significant as data types in Kotlin do not hold any metadata that determines which one of the categories that data belongs to.
 Thus, we believe that benefit does not outweigh the cost of maintenance and implementation.
+///
 
 Changes checklist
 -----------------
