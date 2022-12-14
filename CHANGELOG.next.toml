@@ -10,3 +10,21 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "The Rust client codegen plugin is now called `rust-client-codegen` instead of `rust-codegen`. Be sure to update your `smithy-build.json` files to refer to the correct plugin name."
+references = ["smithy-rs#2099"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Client codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`)."
+references = ["smithy-rs#2099"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Server codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`)."
+references = ["smithy-rs#2099"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
+author = "jdisanti"

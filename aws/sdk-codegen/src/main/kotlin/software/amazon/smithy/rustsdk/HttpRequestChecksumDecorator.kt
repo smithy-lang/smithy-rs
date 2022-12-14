@@ -8,14 +8,12 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -39,7 +37,7 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
     ),
 )
 
-class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
 
@@ -50,9 +48,6 @@ class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerato
     ): List<OperationCustomization> {
         return baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private fun HttpChecksumTrait.requestAlgorithmMember(
