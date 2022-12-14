@@ -13,23 +13,22 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.client.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.client.smithy.StreamingShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
- * Rust Codegen Plugin
+ * Rust Server Codegen Plugin
  *
  * This is the entrypoint for code generation, triggered by the smithy-build plugin.
  * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
- * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
+ * enables the smithy-build plugin to invoke `execute` with all Smithy plugin context + models.
  */
 class RustCodegenServerPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
@@ -44,8 +43,8 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        val codegenDecorator: CombinedCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> =
-            CombinedCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
+        val codegenDecorator: CombinedServerCodegenDecorator =
+            CombinedServerCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
 
         // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
         logger.info("Loaded plugin to generate pure Rust bindings for the server SDK")
