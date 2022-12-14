@@ -203,8 +203,6 @@ class FluentClientGenerator(
                 )
                 // NOTE: this define methods which creates fluent_builders for each operations
                 // if you try to add a method here, it throws an protocol error.
-                // NOTE: this define methods which creates fluent_builders for each operations
-                // if you try to add a method here, it throws an protocol error.
                 writer.rust(
                     """
                     pub fn ${
