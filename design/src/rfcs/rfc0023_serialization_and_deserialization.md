@@ -1,4 +1,4 @@
-!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
+<!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
 RFC: Serialization and Deserialization
 =============
 
