@@ -97,7 +97,7 @@ class PubUsePythonTypesDecorator : ServerCodegenDecorator {
  * Generates `pyproject.toml` for the crate.
  *  - Configures Maturin as the build system
  */
-class PyProjectTomlDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+class PyProjectTomlDecorator : ServerCodegenDecorator {
     override val name: String = "PyProjectTomlDecorator"
     override val order: Byte = 0
 
@@ -112,9 +112,6 @@ class PyProjectTomlDecorator : RustCodegenDecorator<ServerProtocolGenerator, Ser
             writeWithNoFormatting(TomlWriter().write(config))
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 val DECORATORS = listOf(
