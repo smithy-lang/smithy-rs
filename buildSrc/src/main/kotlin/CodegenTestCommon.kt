@@ -93,7 +93,7 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
     return ret
 }
 
-val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS, Cargo.CHECK_ALL_FEATURES)
+val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS, Cargo.CHECK_ALL_FEATURES, Cargo.TEST_ALL_FEATURES)
 
 /**
  * Filter the Cargo commands to be run on the generated Rust crates using the given [properties].
@@ -107,7 +107,7 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
             "docs" -> Cargo.DOCS
             "clippy" -> Cargo.CLIPPY
             "checkAllFeatures" -> Cargo.CHECK_ALL_FEATURES
-            "testAllFeatures" -> TEST_ALL_FEATURES.CHECK_ALL_FEATURES
+            "testAllFeatures" -> Cargo.TEST_ALL_FEATURES
             else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `docs`, `clippy`)")
         }
     }
