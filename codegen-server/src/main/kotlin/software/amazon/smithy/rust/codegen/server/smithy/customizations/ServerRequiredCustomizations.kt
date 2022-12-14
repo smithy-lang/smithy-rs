@@ -5,11 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -29,7 +29,7 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionGenerator() + AllowLintsCustomization()
+        baseCustomizations + CrateVersionCustomization() + AllowLintsCustomization()
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
