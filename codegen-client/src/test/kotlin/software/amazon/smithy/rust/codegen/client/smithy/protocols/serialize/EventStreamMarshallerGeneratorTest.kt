@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
+package software.amazon.smithy.rust.codegen.client.smithy.protocols.serialize
 
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.util.stream.Stream
 
 class MarshallTestCasesProvider : ArgumentsProvider {
@@ -32,12 +32,12 @@ class EventStreamMarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         EventStreamTestTools.runTestCase(
             testCase,
-            CodegenTarget.SERVER,
-            { model -> serverTestSymbolProvider(model) },
+            CodegenTarget.CLIENT,
+            { model -> testSymbolProvider(model) },
             { _, test, protocol ->
                 EventStreamMarshallerGenerator(
                     test.model,
-                    CodegenTarget.SERVER,
+                    CodegenTarget.CLIENT,
                     TestRuntimeConfig,
                     test.symbolProvider,
                     test.streamShape,
