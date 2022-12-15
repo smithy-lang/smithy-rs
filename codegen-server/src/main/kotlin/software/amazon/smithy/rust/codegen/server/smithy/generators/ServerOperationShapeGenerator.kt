@@ -45,6 +45,9 @@ class ServerOperationShapeGenerator(
             //! ```no_run
             //! use $crateName::operation_shape::$firstOperationName;
             //! use #{SmithyHttpServer}::operation::OperationShapeExt;
+            //!
+            #{HandlerImports:W}
+            //!
             #{Handler:W}
             //!
             //! let operation = $firstOperationName::from_handler(handler)
@@ -62,7 +65,8 @@ class ServerOperationShapeGenerator(
             "SmithyHttpServer" to
                 ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
-            "Handler" to DocHandlerGenerator(codegenContext, operations[0], "handler", "//!")::render,
+            "Handler" to DocHandlerGenerator(codegenContext, operations[0], "handler", commentToken = "//!")::render,
+            "HandlerImports" to handlerImports(crateName, operations, commentToken = "//!"),
         )
         for (operation in operations) {
             ServerOperationGenerator(codegenContext, operation).render(writer)

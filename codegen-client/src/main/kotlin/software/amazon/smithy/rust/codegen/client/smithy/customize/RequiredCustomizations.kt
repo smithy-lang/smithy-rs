@@ -17,10 +17,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Resilien
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.pubUseSmithyTypes
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -30,7 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
  *
  * This exists as a convenient place to gather these modifications, these are not true customizations.
  */
-class RequiredCustomizations : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class RequiredCustomizations : ClientCodegenDecorator {
     override val name: String = "Required"
     override val order: Byte = -1
 
@@ -67,7 +64,4 @@ class RequiredCustomizations : RustCodegenDecorator<ClientProtocolGenerator, Cli
 
         pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

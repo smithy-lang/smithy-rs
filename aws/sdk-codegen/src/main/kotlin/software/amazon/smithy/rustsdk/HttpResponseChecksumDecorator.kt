@@ -9,11 +9,9 @@ import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.expectMember
@@ -29,7 +27,7 @@ private fun HttpChecksumTrait.requestValidationModeMember(
     return operationShape.inputShape(codegenContext.model).expectMember(requestValidationModeMember)
 }
 
-class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class HttpResponseChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpResponseChecksum"
     override val order: Byte = 0
 
@@ -40,9 +38,6 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerat
     ): List<OperationCustomization> {
         return baseCustomizations + HttpResponseChecksumCustomization(codegenContext, operation)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 // This generator was implemented based on this spec:

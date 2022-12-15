@@ -14,19 +14,17 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTests
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
@@ -73,12 +71,9 @@ interface EndpointCustomization {
  *
  * If the service DOES NOT provide custom endpoint rules, this decorator is a no-op.
  */
-class EndpointsDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class EndpointsDecorator : ClientCodegenDecorator {
     override val name: String = "Endpoints"
     override val order: Byte = 0
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,

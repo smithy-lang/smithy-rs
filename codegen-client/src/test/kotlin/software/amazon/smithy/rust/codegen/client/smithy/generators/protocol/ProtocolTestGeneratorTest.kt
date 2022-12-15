@@ -12,8 +12,8 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -222,20 +222,18 @@ class ProtocolTestGeneratorTest {
         correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())""",
     ): Path {
         val (pluginContext, testDir) = generatePluginContext(model)
-        val codegenDecorator = object : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+        val codegenDecorator = object : ClientCodegenDecorator {
             override val name: String = "mock"
             override val order: Byte = 0
+            override fun classpathDiscoverable(): Boolean = false
             override fun protocols(
                 serviceId: ShapeId,
                 currentProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>,
             ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> =
                 // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
                 mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
-
-            override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
-        val visitor = CodegenVisitor(
+        val visitor = ClientCodegenVisitor(
             pluginContext,
             codegenDecorator,
         )
