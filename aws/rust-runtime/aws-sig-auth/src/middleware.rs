@@ -6,12 +6,12 @@
 use crate::signer::{
     OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
 };
+use aws_credential_types::Credentials;
 use aws_sigv4::http_request::SignableBody;
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
 use aws_smithy_http::property_bag::PropertyBag;
 use aws_types::region::SigningRegion;
-use aws_types::Credentials;
 use aws_types::SigningService;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -190,6 +190,7 @@ mod test {
         SigV4SigningStage, Signature, SigningStageError, SigningStageErrorKind,
     };
     use crate::signer::{OperationSigningConfig, SigV4Signer};
+    use aws_credential_types::Credentials;
     use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
     use aws_endpoint::{AwsAuthStage, Params};
     use aws_smithy_http::body::SdkBody;
@@ -197,7 +198,6 @@ mod test {
     use aws_smithy_http::middleware::MapRequest;
     use aws_smithy_http::operation;
     use aws_types::region::{Region, SigningRegion};
-    use aws_types::Credentials;
     use aws_types::SigningService;
     use http::header::AUTHORIZATION;
     use std::convert::Infallible;
