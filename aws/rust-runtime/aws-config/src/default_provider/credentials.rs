@@ -6,11 +6,13 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
-use aws_types::credentials::{self, future, ProvideCredentials};
+use aws_credential_types::{
+    self, future, lazy_caching, LazyCachingCredentialsProvider, ProvideCredentials,
+};
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
-use crate::meta::credentials::{CredentialsProviderChain, LazyCachingCredentialsProvider};
+use crate::meta::credentials::CredentialsProviderChain;
 use crate::meta::region::ProvideRegion;
 use crate::provider_config::ProviderConfig;
 
@@ -67,7 +69,7 @@ impl DefaultCredentialsChain {
         Builder::default()
     }
 
-    async fn credentials(&self) -> credentials::Result {
+    async fn credentials(&self) -> aws_credential_types::Result {
         self.0
             .provide_credentials()
             .instrument(tracing::debug_span!("provide_credentials", provider = %"default_chain"))
@@ -91,7 +93,7 @@ pub struct Builder {
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
-    credential_cache: crate::meta::credentials::lazy_caching::Builder,
+    credential_cache: lazy_caching::Builder,
     region_override: Option<Box<dyn ProvideRegion>>,
     region_chain: crate::default_provider::region::Builder,
     conf: Option<ProviderConfig>,
@@ -157,7 +159,7 @@ impl Builder {
     /// Default expiration time to set on credentials if they don't have an expiration time.
     ///
     /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+    /// [`Credentials`](aws_credential_types::Credentials) that don't have their `expiry` set.
     /// This must be at least 15 minutes.
     ///
     /// Defaults to 15 minutes.
@@ -169,7 +171,7 @@ impl Builder {
     /// Default expiration time to set on credentials if they don't have an expiration time.
     ///
     /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+    /// [`Credentials`](aws_credential_types::Credentials) that don't have their `expiry` set.
     /// This must be at least 15 minutes.
     ///
     /// Defaults to 15 minutes.
@@ -251,7 +253,10 @@ impl Builder {
             .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
-        let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
+        let cached_provider = self
+            .credential_cache
+            .configure(conf.sleep(), conf.time_source())
+            .load(provider_chain);
 
         DefaultCredentialsChain(cached_provider.build())
     }
@@ -261,8 +266,8 @@ impl Builder {
 mod test {
     use tracing_test::traced_test;
 
+    use aws_credential_types::ProvideCredentials;
     use aws_smithy_types::retry::{RetryConfig, RetryMode};
-    use aws_types::credentials::ProvideCredentials;
     use aws_types::os_shim_internal::{Env, Fs};
 
     use crate::default_provider::credentials::DefaultCredentialsChain;
@@ -369,11 +374,10 @@ mod test {
     #[traced_test]
     #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
+        use aws_credential_types::{CredentialsError, TimeSource};
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::boxclone::BoxCloneService;
         use aws_smithy_client::never::NeverConnected;
-        use aws_types::credentials::CredentialsError;
-        use aws_types::os_shim_internal::TimeSource;
 
         tokio::time::pause();
         let conf = ProviderConfig::no_configuration()

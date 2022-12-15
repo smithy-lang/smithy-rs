@@ -13,9 +13,8 @@ use crate::imds;
 use crate::imds::client::LazyClient;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
-use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
+use aws_credential_types::{future, Credentials, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Env;
-use aws_types::{credentials, Credentials};
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
@@ -167,7 +166,7 @@ impl ImdsCredentialsProvider {
         }
     }
 
-    async fn credentials(&self) -> credentials::Result {
+    async fn credentials(&self) -> aws_credential_types::Result {
         if self.imds_disabled() {
             tracing::debug!("IMDS disabled because $AWS_EC2_METADATA_DISABLED was set to `true`");
             return Err(CredentialsError::not_loaded(
@@ -230,8 +229,8 @@ mod test {
         imds_request, imds_response, make_client, token_request, token_response,
     };
     use crate::imds::credentials::ImdsCredentialsProvider;
+    use aws_credential_types::ProvideCredentials;
     use aws_smithy_client::test_connection::TestConnection;
-    use aws_types::credentials::ProvideCredentials;
 
     const TOKEN_A: &str = "token_a";
 
