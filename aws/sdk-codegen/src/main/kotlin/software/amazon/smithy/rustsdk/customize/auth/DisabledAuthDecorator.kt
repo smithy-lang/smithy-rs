@@ -11,15 +11,12 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 
 private fun String.shapeId() = ShapeId.from(this)
 
 // / STS (and possibly other services) need to have auth manually set to []
-class DisabledAuthDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class DisabledAuthDecorator : ClientCodegenDecorator {
     override val name: String = "OptionalAuth"
     override val order: Byte = 0
 
@@ -48,7 +45,4 @@ class DisabledAuthDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
             }
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

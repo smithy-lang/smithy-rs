@@ -88,7 +88,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                 "imports": [${files.joinToString()}],
 
                 "plugins": {
-                    "rust-codegen": {
+                    "rust-client-codegen": {
                         "runtimeConfig": {
                             "relativePath": "../",
                             "version": "DEFAULT"
@@ -158,7 +158,7 @@ tasks.register("relocateServices") {
         awsServices.services.forEach {
             logger.info("Relocating ${it.module}...")
             copy {
-                from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
+                from("$buildDir/smithyprojections/sdk/${it.module}/rust-client-codegen")
                 into(sdkOutputDir.resolve(it.module))
             }
 

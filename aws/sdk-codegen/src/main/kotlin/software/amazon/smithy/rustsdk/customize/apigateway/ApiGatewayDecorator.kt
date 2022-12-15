@@ -8,8 +8,7 @@ package software.amazon.smithy.rustsdk.customize.apigateway
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -19,7 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-class ApiGatewayDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class ApiGatewayDecorator : ClientCodegenDecorator {
     override val name: String = "ApiGateway"
     override val order: Byte = 0
 
@@ -35,9 +34,6 @@ class ApiGatewayDecorator : RustCodegenDecorator<ClientProtocolGenerator, Client
             it + ApiGatewayAddAcceptHeader()
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class ApiGatewayAddAcceptHeader : OperationCustomization() {

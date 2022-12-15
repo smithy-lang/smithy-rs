@@ -7,17 +7,15 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 
-class RetryClassifierDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class RetryClassifierDecorator : ClientCodegenDecorator {
     override val name: String = "RetryPolicy"
     override val order: Byte = 0
 
@@ -28,9 +26,6 @@ class RetryClassifierDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
     ): List<OperationCustomization> {
         return baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
