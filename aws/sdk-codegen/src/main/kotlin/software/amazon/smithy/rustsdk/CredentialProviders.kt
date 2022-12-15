@@ -7,15 +7,13 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -23,7 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
-class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class CredentialsProviderDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsProvider"
     override val order: Byte = 0
 
@@ -48,9 +46,6 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerato
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**

@@ -10,10 +10,8 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.RustCodegenPlugin
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
@@ -29,7 +27,7 @@ import java.nio.file.Path
  */
 fun clientIntegrationTest(
     model: Model,
-    addtionalDecorators: List<RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>> = listOf(),
+    addtionalDecorators: List<ClientCodegenDecorator> = listOf(),
     addModuleToEventStreamAllowList: Boolean = false,
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
@@ -39,7 +37,7 @@ fun clientIntegrationTest(
 ): Path {
     return codegenIntegrationTest(
         model,
-        RustCodegenPlugin(),
+        RustClientCodegenPlugin(),
         addtionalDecorators,
         addModuleToEventStreamAllowList = addModuleToEventStreamAllowList,
         service = service,
@@ -56,10 +54,10 @@ fun clientIntegrationTest(
  * This exists to allow tests to easily customize the _real_ build without needing to list out customizations
  * or attempt to manually discover them from the path
  */
-abstract class DecoratableBuildPlugin<T, C : CodegenContext> : SmithyBuildPlugin {
+abstract class DecoratableBuildPlugin : SmithyBuildPlugin {
     abstract fun executeWithDecorator(
         context: PluginContext,
-        vararg decorator: RustCodegenDecorator<T, C>,
+        vararg decorator: ClientCodegenDecorator,
     )
 
     override fun execute(context: PluginContext) {
@@ -68,15 +66,15 @@ abstract class DecoratableBuildPlugin<T, C : CodegenContext> : SmithyBuildPlugin
 }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1864): move to core once CodegenDecorator is in core
-private fun <T, C : CodegenContext> codegenIntegrationTest(
+private fun codegenIntegrationTest(
     model: Model,
-    buildPlugin: DecoratableBuildPlugin<T, C>,
-    additionalDecorators: List<RustCodegenDecorator<T, C>>,
+    buildPlugin: DecoratableBuildPlugin,
+    additionalDecorators: List<ClientCodegenDecorator>,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
     addModuleToEventStreamAllowList: Boolean = false,
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
-    overrideTestDir: File? = null, test: (C, RustCrate) -> Unit,
+    overrideTestDir: File? = null, test: (ClientCodegenContext, RustCrate) -> Unit,
     command: ((Path) -> Unit)? = null,
 ): Path {
     val (ctx, testDir) = generatePluginContext(
@@ -88,15 +86,13 @@ private fun <T, C : CodegenContext> codegenIntegrationTest(
         overrideTestDir,
     )
 
-    val codegenDecorator = object : RustCodegenDecorator<T, C> {
+    val codegenDecorator = object : ClientCodegenDecorator {
         override val name: String = "Add tests"
         override val order: Byte = 0
-        override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean {
-            // never discoverable on the classpath
-            return false
-        }
 
-        override fun extras(codegenContext: C, rustCrate: RustCrate) {
+        override fun classpathDiscoverable(): Boolean = false
+
+        override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
             test(codegenContext, rustCrate)
         }
     }
