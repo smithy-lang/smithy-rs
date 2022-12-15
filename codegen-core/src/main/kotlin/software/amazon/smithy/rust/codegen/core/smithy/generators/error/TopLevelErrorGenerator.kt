@@ -59,7 +59,7 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
                 // operation errors
-                renderImplFrom(operationShape.errorSymbol(model, symbolProvider, codegenContext.target), operationShape.errors)
+                renderImplFrom(operationShape.errorSymbol(symbolProvider), operationShape.errors)
             }
             // event stream errors
             operations.map { it.eventStreamErrors(codegenContext.model) }
@@ -67,11 +67,7 @@ class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private
                 .associate { it.key to it.value }
                 .forEach { (unionShape, errors) ->
                     renderImplFrom(
-                        unionShape.eventStreamErrorSymbol(
-                            model,
-                            symbolProvider,
-                            codegenContext.target,
-                        ),
+                        unionShape.eventStreamErrorSymbol(symbolProvider),
                         errors.map { it.id },
                     )
                 }

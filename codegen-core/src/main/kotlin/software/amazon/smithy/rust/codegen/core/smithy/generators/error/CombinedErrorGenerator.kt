@@ -25,18 +25,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
- * For a given Operation ([this]), return the symbol referring to the unified error. This can be used
- * if you, e.g. want to return a unified error from a function:
+ * For a given Operation ([this]), return the symbol referring to the operation error. This can be used
+ * if you, e.g. want to return an operation error from a function:
  *
  * ```kotlin
  * rustWriter.rustBlock("fn get_error() -> #T", operation.errorSymbol(symbolProvider)) {
@@ -44,73 +41,14 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * }
  * ```
  */
-/*
-    TODO(Error): refactor when core-codegen is available
-    This is a possible future implementation:
-    ```
-    inline fun <reified T : CombinedErrorGenerator> OperationShape.errorSymbol(
-        model: Model,
-        symbolProvider: RustSymbolProvider,
-        generator: KClass<T>
-    ): RuntimeType {
-        val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
-                generator.java.newInstance().render(
-                    this,
-                    model,
-                    symbolProvider,
-                    symbol,
-                    this.operationErrors(model).map { it.asStructureShape().get() }
-                )
-        }
-    }
-    ```
-    Similarly for eventStreamErrorSymbol() below
- */
-fun OperationShape.errorSymbol(
-    model: Model,
-    symbolProvider: RustSymbolProvider,
-    target: CodegenTarget,
-): RuntimeType {
-    val symbol = symbolProvider.toSymbol(this)
-    return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
-        when (target) {
-            CodegenTarget.CLIENT -> CombinedErrorGenerator(
-                model,
-                symbolProvider,
-                symbol,
-                operationErrors(model).map { it.asStructureShape().get() },
-            ).render(this)
-            CodegenTarget.SERVER -> ServerCombinedErrorGenerator(
-                model,
-                symbolProvider,
-                symbol,
-                operationErrors(model).map { it.asStructureShape().get() },
-            ).render(this)
-        }
-    }
+fun OperationShape.errorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
+    val operationSymbol = symbolProvider.toSymbol(this)
+    return RuntimeType("${RustModule.Error.fullyQualifiedPath()}::${operationSymbol.name}Error")
 }
 
-fun UnionShape.eventStreamErrorSymbol(model: Model, symbolProvider: RustSymbolProvider, target: CodegenTarget): RuntimeType {
-    val symbol = symbolProvider.toSymbol(this)
-    val errorSymbol = RuntimeType("crate::error::${symbol.name}Error")
-    return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) {
-        val errors = this@eventStreamErrorSymbol.eventStreamErrors().map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
-        when (target) {
-            CodegenTarget.CLIENT ->
-                CombinedErrorGenerator(model, symbolProvider, symbol, errors).renderErrors(
-                    this,
-                    errorSymbol,
-                    symbol,
-                )
-            CodegenTarget.SERVER ->
-                ServerCombinedErrorGenerator(model, symbolProvider, symbol, errors).renderErrors(
-                    this,
-                    errorSymbol,
-                    symbol,
-                )
-        }
-    }
+fun UnionShape.eventStreamErrorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
+    val unionSymbol = symbolProvider.toSymbol(this)
+    return RuntimeType("${RustModule.Error.fullyQualifiedPath()}::${unionSymbol.name}Error")
 }
 
 /**

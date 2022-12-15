@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -18,7 +19,9 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSetting
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
@@ -55,5 +58,15 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
                 renderConvenienceMethod(writer)
             }
         }
+    }
+
+    override fun renderOperationError(
+        writer: RustWriter,
+        model: Model,
+        symbolProvider: RustSymbolProvider,
+        operationSymbol: Symbol,
+        errors: List<StructureShape>
+    ) {
+        CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
     }
 }
