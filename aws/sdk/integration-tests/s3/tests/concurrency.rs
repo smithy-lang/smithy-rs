@@ -8,12 +8,12 @@ use std::iter::repeat_with;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use aws_credential_types::{Credentials, SharedCredentialsProvider};
 use aws_sdk_s3::Client;
 use aws_smithy_http::endpoint::Endpoint;
 use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
-use aws_types::{Credentials, SdkConfig};
+use aws_types::SdkConfig;
 use bytes::BytesMut;
 use futures_util::future;
 use hdrhistogram::sync::SyncHistogram;
