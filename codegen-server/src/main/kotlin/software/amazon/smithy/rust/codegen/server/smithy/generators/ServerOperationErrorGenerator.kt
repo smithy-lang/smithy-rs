@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,
  * but we must still combine those variants into an enum covering all possible errors for a given operation.
  */
-open class ServerCombinedErrorGenerator(
+open class ServerOperationErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operationSymbol: Symbol,

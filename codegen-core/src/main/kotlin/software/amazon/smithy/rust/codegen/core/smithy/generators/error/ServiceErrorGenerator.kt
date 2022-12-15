@@ -42,7 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamE
  * }
  * ```
  */
-class TopLevelErrorGenerator(private val codegenContext: CodegenContext, private val operations: List<OperationShape>) {
+class ServiceErrorGenerator(private val codegenContext: CodegenContext, private val operations: List<OperationShape>) {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
 

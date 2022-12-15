@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
@@ -230,7 +230,7 @@ class ClientCodegenVisitor(
                 val errors = shape.eventStreamErrors()
                     .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
                 val errorSymbol = shape.eventStreamErrorSymbol(symbolProvider)
-                CombinedErrorGenerator(model, symbolProvider, symbol, errors)
+                OperationErrorGenerator(model, symbolProvider, symbol, errors)
                     .renderErrors(this, errorSymbol, symbol)
             }
         }
@@ -242,7 +242,7 @@ class ClientCodegenVisitor(
     override fun operationShape(shape: OperationShape) {
         rustCrate.withModule(RustModule.Error) {
             val operationSymbol = symbolProvider.toSymbol(shape)
-            CombinedErrorGenerator(
+            OperationErrorGenerator(
                 model,
                 symbolProvider,
                 operationSymbol,

@@ -23,7 +23,7 @@ import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectory
 import kotlin.io.path.writeText
 
-internal class TopLevelErrorGeneratorTest {
+internal class ServiceErrorGeneratorTest {
     @ExperimentalPathApi
     @Test
     fun `top level errors are send + sync`() {
@@ -87,7 +87,7 @@ internal class TopLevelErrorGeneratorTest {
                 }
             }
         }
-        TopLevelErrorGenerator(codegenContext, model.operationShapes.toList()).render(rustCrate)
+        ServiceErrorGenerator(codegenContext, model.operationShapes.toList()).render(rustCrate)
 
         testDir.resolve("tests").createDirectory()
         testDir.resolve("tests/validate_errors.rs").writeText(

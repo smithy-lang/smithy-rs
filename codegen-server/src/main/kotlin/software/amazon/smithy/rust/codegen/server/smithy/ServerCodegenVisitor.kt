@@ -64,7 +64,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateCons
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerCombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
@@ -489,7 +489,7 @@ open class ServerCodegenVisitor(
                 val errors = shape.eventStreamErrors()
                     .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
                 val errorSymbol = shape.eventStreamErrorSymbol(codegenContext.symbolProvider)
-                ServerCombinedErrorGenerator(model, codegenContext.symbolProvider, symbol, errors)
+                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, symbol, errors)
                     .renderErrors(this, errorSymbol, symbol)
             }
         }
@@ -522,7 +522,7 @@ open class ServerCodegenVisitor(
     override fun operationShape(shape: OperationShape) {
         rustCrate.withModule(RustModule.Error) {
             val symbol = codegenContext.symbolProvider.toSymbol(shape)
-            ServerCombinedErrorGenerator(
+            ServerOperationErrorGenerator(
                 model,
                 codegenContext.symbolProvider,
                 symbol,

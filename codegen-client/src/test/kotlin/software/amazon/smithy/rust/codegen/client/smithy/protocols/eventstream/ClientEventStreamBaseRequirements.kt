@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
@@ -67,6 +67,6 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         operationSymbol: Symbol,
         errors: List<StructureShape>
     ) {
-        CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
+        OperationErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
     }
 }

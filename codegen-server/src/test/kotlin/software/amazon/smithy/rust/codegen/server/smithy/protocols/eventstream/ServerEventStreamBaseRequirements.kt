@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerCombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 import java.util.stream.Stream
@@ -91,6 +91,6 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         operationSymbol: Symbol,
         errors: List<StructureShape>
     ) {
-        ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
+        ServerOperationErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
     }
 }
