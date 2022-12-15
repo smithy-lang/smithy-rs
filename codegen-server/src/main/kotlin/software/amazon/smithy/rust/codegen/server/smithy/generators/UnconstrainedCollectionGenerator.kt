@@ -89,8 +89,6 @@ class UnconstrainedCollectionGenerator(
     }
 
     private fun renderTryFromUnconstrainedForConstrained(writer: RustWriter) {
-        val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
-
         writer.rustBlock("impl std::convert::TryFrom<$name> for #{T}", constrainedSymbol) {
             rust("type Error = #T;", constraintViolationSymbol)
 
@@ -106,6 +104,7 @@ class UnconstrainedCollectionGenerator(
                     } else {
                         constrainedShapeSymbolProvider.toSymbol(innerShape)
                     }
+                    val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
                     rustTemplate(
                         """

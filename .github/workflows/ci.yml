@@ -251,7 +251,7 @@ jobs:
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
-    if: ${{ inputs.run_sdk_examples == 'true' }}
+    if: ${{ inputs.run_sdk_examples }}
     needs: generate
     runs-on: ubuntu-latest
     steps:

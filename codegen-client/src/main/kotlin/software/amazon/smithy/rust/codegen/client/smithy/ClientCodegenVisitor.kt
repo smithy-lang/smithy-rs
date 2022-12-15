@@ -17,7 +17,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
@@ -44,11 +44,11 @@ import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.util.logging.Logger
 
 /**
- * Base Entrypoint for Code generation
+ * Entry point for client code generation
  */
-class CodegenVisitor(
+class ClientCodegenVisitor(
     context: PluginContext,
-    private val codegenDecorator: RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>,
+    private val codegenDecorator: ClientCodegenDecorator,
 ) : ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
@@ -78,7 +78,7 @@ class CodegenVisitor(
         model = codegenDecorator.transformModel(untransformedService, baseModel)
         // the model transformer _might_ change the service shape
         val service = settings.getService(model)
-        symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
+        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
 

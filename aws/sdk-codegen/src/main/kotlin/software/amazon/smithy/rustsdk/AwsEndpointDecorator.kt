@@ -16,13 +16,12 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -36,7 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class AwsEndpointDecorator : ClientCodegenDecorator {
     override val name: String = "AwsEndpoint"
     override val order: Byte = -100
 
@@ -134,9 +133,6 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clien
         },
         )
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class EndpointConfigCustomization(

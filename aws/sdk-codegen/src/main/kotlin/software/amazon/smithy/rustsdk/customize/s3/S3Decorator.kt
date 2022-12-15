@@ -14,7 +14,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -37,7 +37,7 @@ import java.util.logging.Logger
 /**
  * Top level decorator for S3
  */
-class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class S3Decorator : ClientCodegenDecorator {
     override val name: String = "S3"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
@@ -78,9 +78,6 @@ class S3Decorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenC
     ): List<LibRsCustomization> = baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) {
         it + S3PubUse()
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)

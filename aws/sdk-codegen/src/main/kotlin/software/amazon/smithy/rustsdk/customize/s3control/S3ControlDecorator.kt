@@ -10,18 +10,11 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 
-class S3ControlDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class S3ControlDecorator : ClientCodegenDecorator {
     override val name: String = "S3Control"
     override val order: Byte = 0
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean {
-        return clazz.isAssignableFrom(ClientCodegenContext::class.java)
-    }
-
     private fun applies(service: ServiceShape) =
         service.id == ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820")
 

@@ -837,21 +837,25 @@ list RecursiveList {
 }
 
 list ConBList {
-    member: LengthList
+    member: ConBListInner
+}
+
+list ConBListInner {
+    member: ConB
 }
 
 @length(max: 69)
 list LengthList {
-    member: ConB
+    member: String
 }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
 //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
 // set ConBSet {
-//     member: NestedSet
+//     member: ConBSetInner
 // }
 //
-// set NestedSet {
+// set ConBSetInner {
 //     member: String
 // }
 
