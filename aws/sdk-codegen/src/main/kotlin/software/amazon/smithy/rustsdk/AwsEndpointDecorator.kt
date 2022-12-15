@@ -43,10 +43,12 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         val customServices = setOf(
             ShapeId.from("com.amazonaws.s3#AmazonS3"),
             ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
+            ShapeId.from("com.amazonaws.codecatalyst#CodeCatalyst"),
         )
         if (customServices.contains(service.id)) {
             return model
         }
+        // currently, most models incorrectly model region is optional when it is actually required—fix these models:
         return ModelTransformer.create().mapTraits(model) { _, trait ->
             when (trait) {
                 is EndpointRuleSetTrait -> {
