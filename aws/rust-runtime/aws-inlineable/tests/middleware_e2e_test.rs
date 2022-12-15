@@ -13,6 +13,7 @@ use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
+use aws_credential_types::{Credentials, SharedCredentialsProvider};
 use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::{EndpointShim, Params};
 use aws_http::retry::AwsResponseRetryClassifier;
@@ -29,9 +30,7 @@ use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
 
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
-use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
-use aws_types::Credentials;
 use aws_types::SigningService;
 
 type Client<C> = aws_smithy_client::Client<C, DefaultMiddleware>;
