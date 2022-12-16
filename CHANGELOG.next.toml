@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[smithy-rs]]
+message = "In 0.52, `@length`-constrained collection shapes whose members are not constrained made the server code generator crash. This has been fixed."
+references = ["smithy-rs#2103"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+author = "david-perez"
+
+[[smithy-rs]]
 message = "The Rust client codegen plugin is now called `rust-client-codegen` instead of `rust-codegen`. Be sure to update your `smithy-build.json` files to refer to the correct plugin name."
 references = ["smithy-rs#2099"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
