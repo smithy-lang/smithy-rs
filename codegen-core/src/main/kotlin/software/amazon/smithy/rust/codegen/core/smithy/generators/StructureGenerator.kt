@@ -15,6 +15,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.asRef
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -27,21 +28,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
-fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
+fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
-        block(this)
+        block()
     }
 }
 
@@ -63,22 +60,8 @@ open class StructureGenerator(
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
+            ErrorGenerator(model, symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
-    }
-
-    companion object {
-        /** Returns whether a structure shape requires a fallible builder to be generated. */
-        fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
-            // All operation inputs should have fallible builders in case a new required field is added in the future.
-            structureShape.hasTrait<SyntheticInputTrait>() ||
-                structureShape
-                    .allMembers
-                    .values.map { symbolProvider.toSymbol(it) }.any {
-                        // If any members are not optional && we can't use a default, we need to
-                        // generate a fallible builder
-                        !it.isOptional() && !it.canUseDefault()
-                    }
     }
 
     /**
@@ -99,16 +82,18 @@ open class StructureGenerator(
         } else ""
     }
 
-    /** Render a custom debug implementation
+    /**
+     * Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
     private fun renderDebugImpl() {
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
                     val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
@@ -151,7 +136,7 @@ open class StructureGenerator(
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
-        writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
+        writer.write("$memberName: #T,", memberSymbol)
     }
 
     open fun renderStructure() {
@@ -159,8 +144,7 @@ open class StructureGenerator(
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
-        val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
-        containerMeta.copy(derives = withoutDebug).render(writer)
+        containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
@@ -169,7 +153,9 @@ open class StructureGenerator(
         }
 
         renderStructureImpl()
-        renderDebugImpl()
+        if (!containerMeta.derives.derives.contains(RuntimeType.Debug)) {
+            renderDebugImpl()
+        }
     }
 
     protected fun RustWriter.forEachMember(

@@ -8,7 +8,7 @@ use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
 use aws_sdk_s3 as s3;
 use s3::error::{GetObjectError, GetObjectErrorKind};
-use s3::types::{ByteStream, SdkError};
+use s3::types::ByteStream;
 use uuid::Uuid;
 
 const METADATA_TEST_VALUE: &str = "some   value";
@@ -34,19 +34,15 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
                 CanaryError(format!("Expected object {} to not exist in S3", test_key)).into(),
             );
         }
-        Err(SdkError::ServiceError {
-            err:
-                GetObjectError {
-                    kind: GetObjectErrorKind::NoSuchKey { .. },
-                    ..
-                },
-            ..
-        }) => {
-            // good
-        }
-        Err(err) => {
-            Err(err).context("unexpected s3::GetObject failure")?;
-        }
+        Err(err) => match err.into_service_error() {
+            GetObjectError {
+                kind: GetObjectErrorKind::NoSuchKey(..),
+                ..
+            } => {
+                // good
+            }
+            err => Err(err).context("unexpected s3::GetObject failure")?,
+        },
     }
 
     // Put the test object

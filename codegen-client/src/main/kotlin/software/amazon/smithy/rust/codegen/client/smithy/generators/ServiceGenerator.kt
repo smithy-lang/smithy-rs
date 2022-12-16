@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
@@ -29,7 +29,7 @@ class ServiceGenerator(
     private val protocolGenerator: ClientProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     private val clientCodegenContext: ClientCodegenContext,
-    private val decorator: RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext>,
+    private val decorator: ClientCodegenDecorator,
 ) {
     private val index = TopDownIndex.of(clientCodegenContext.model)
 
@@ -40,34 +40,34 @@ class ServiceGenerator(
     fun render() {
         val operations = index.getContainedOperations(clientCodegenContext.serviceShape).sortedBy { it.id }
         operations.map { operation ->
-            rustCrate.useShapeWriter(operation) { operationWriter ->
-                rustCrate.useShapeWriter(operation.inputShape(clientCodegenContext.model)) { inputWriter ->
+            rustCrate.useShapeWriter(operation) operationWriter@{
+                rustCrate.useShapeWriter(operation.inputShape(clientCodegenContext.model)) inputWriter@{
                     // Render the operation shape & serializers input `input.rs`
                     protocolGenerator.renderOperation(
-                        operationWriter,
-                        inputWriter,
+                        this@operationWriter,
+                        this@inputWriter,
                         operation,
                         decorator.operationCustomizations(clientCodegenContext, operation, listOf()),
                     )
 
                     // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
-                    ProtocolTestGenerator(clientCodegenContext, protocolSupport, operation, operationWriter).render()
+                    ProtocolTestGenerator(clientCodegenContext, protocolSupport, operation, this@operationWriter).render()
                 }
             }
         }
 
         TopLevelErrorGenerator(clientCodegenContext, operations).render(rustCrate)
 
-        rustCrate.withModule(RustModule.Config) { writer ->
+        rustCrate.withModule(RustModule.Config) {
             ServiceConfigGenerator.withBaseBehavior(
                 clientCodegenContext,
                 extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf()),
-            ).render(writer)
+            ).render(this)
         }
 
         rustCrate.lib {
-            Attribute.DocInline.render(it)
-            it.write("pub use config::Config;")
+            Attribute.DocInline.render(this)
+            write("pub use config::Config;")
         }
     }
 }

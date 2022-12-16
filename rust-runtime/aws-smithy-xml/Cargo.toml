@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
-xmlparser = "=0.13.3"
+xmlparser = "0.13.5"
 
 [dev-dependencies]
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test" }

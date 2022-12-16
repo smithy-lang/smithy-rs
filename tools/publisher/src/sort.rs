@@ -120,7 +120,7 @@ mod tests {
             package("C", &["B"]),
         ];
 
-        let error = dependency_order(packages).err().expect("cycle");
+        let error = dependency_order(packages).expect_err("cycle");
         assert_eq!("dependency cycle detected", format!("{}", error));
     }
 

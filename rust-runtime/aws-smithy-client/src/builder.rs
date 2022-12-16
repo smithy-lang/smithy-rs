@@ -87,6 +87,20 @@ use crate::http_connector::ConnectorSettings;
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
 use crate::hyper_ext::Adapter as HyperAdapter;
 
+/// Max idle connections is not standardized across SDKs. Java V1 and V2 use 50, and Go V2 uses 100.
+/// The number below was chosen arbitrarily between those two reference points, and should allow
+/// for 14 separate SDK clients in a Lambda where the max file handles is 1024.
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 70;
+
+/// Returns default HTTP client settings for hyper.
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+fn default_hyper_builder() -> hyper::client::Builder {
+    let mut builder = hyper::client::Builder::default();
+    builder.pool_max_idle_per_host(DEFAULT_MAX_IDLE_CONNECTIONS);
+    builder
+}
+
 #[cfg(feature = "rustls")]
 impl<M, R> Builder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls using dynamic dispatch.
@@ -96,6 +110,7 @@ impl<M, R> Builder<(), M, R> {
     ) -> Builder<DynConnector, M, R> {
         self.connector(DynConnector::new(
             HyperAdapter::builder()
+                .hyper_builder(default_hyper_builder())
                 .connector_settings(connector_settings)
                 .build(crate::conns::https()),
         ))
@@ -112,6 +127,7 @@ impl<M, R> Builder<(), M, R> {
     ) -> Builder<DynConnector, M, R> {
         self.connector(DynConnector::new(
             HyperAdapter::builder()
+                .hyper_builder(default_hyper_builder())
                 .connector_settings(connector_settings)
                 .build(crate::conns::native_tls()),
         ))
@@ -135,7 +151,7 @@ impl<M, R> Builder<(), M, R> {
         let with_https = |b: Builder<_, M, R>| b.rustls_connector(connector_settings);
         // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
         #[cfg(not(feature = "rustls"))]
-        let with_https = |b: Builder<_, M, R>| b.native_tls_connector();
+        let with_https = |b: Builder<_, M, R>| b.native_tls_connector(connector_settings);
 
         with_https(self)
     }
@@ -269,7 +285,8 @@ impl<C, M> Builder<C, M, retry::Standard> {
 }
 
 impl<C, M> Builder<C, M> {
-    /// Set the standard retry policy's configuration.
+    /// Set the standard retry policy's configuration. When `config` is `None`,
+    /// the default retry policy will be used.
     pub fn set_retry_config(&mut self, config: Option<retry::Config>) -> &mut Self {
         let config = config.unwrap_or_default();
         self.retry_policy =
@@ -283,7 +300,8 @@ impl<C, M> Builder<C, M> {
         self
     }
 
-    /// Set operation timeout config for the client.
+    /// Set operation timeout config for the client. If `operation_timeout_config` is
+    /// `None`, timeouts will be disabled.
     pub fn set_operation_timeout_config(
         &mut self,
         operation_timeout_config: Option<OperationTimeoutConfig>,

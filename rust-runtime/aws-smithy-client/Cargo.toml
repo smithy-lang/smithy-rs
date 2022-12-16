@@ -24,8 +24,11 @@ bytes = "1"
 fastrand = "1.4.0"
 http = "0.2.3"
 http-body = "0.4.4"
-hyper = { version = "0.14.12", features = ["client", "http2", "http1"], optional = true }
-hyper-rustls = { version = "0.23.0", optional = true, features = ["rustls-native-certs", "http2"] }
+hyper = { version = "0.14.12", features = ["client", "http2", "http1", "tcp"], optional = true }
+# cargo does not support optional test dependencies, so to completely disable rustls when
+# the native-tls feature is enabled, we need to add the webpki-roots feature here.
+# https://github.com/rust-lang/cargo/issues/1596
+hyper-rustls = { version = "0.23.0", optional = true, features = ["rustls-native-certs", "http2", "webpki-roots"] }
 hyper-tls = { version = "0.5.0", optional = true }
 lazy_static = { version = "1", optional = true }
 pin-project-lite = "0.2.7"
@@ -36,7 +39,6 @@ tracing = "0.1"
 
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
-hyper-rustls = { version = "0.23.0", features = ["webpki-roots"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.8.4", features = ["full", "test-util"] }

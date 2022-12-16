@@ -5,13 +5,18 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -19,10 +24,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 
 sealed class ErrorKind {
     abstract fun writable(runtimeConfig: RuntimeConfig): Writable
@@ -60,6 +70,7 @@ fun StructureShape.modeledRetryKind(errorTrait: ErrorTrait): ErrorKind? {
 }
 
 class ErrorGenerator(
+    private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
@@ -78,10 +89,23 @@ class ErrorGenerator(
                 }
             }
             if (messageShape != null) {
-                val (returnType, message) = if (symbolProvider.toSymbol(messageShape).isOptional()) {
-                    "Option<&str>" to "self.${symbolProvider.toMemberName(messageShape)}.as_deref()"
+                val messageSymbol = symbolProvider.toSymbol(messageShape).mapRustType { t -> t.asDeref() }
+                val messageType = messageSymbol.rustType()
+                val memberName = symbolProvider.toMemberName(messageShape)
+                val (returnType, message) = if (messageType.stripOuter<RustType.Option>() is RustType.Opaque) {
+                    // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
+                    if (messageSymbol.isOptional()) {
+                        "Option<&${messageType.stripOuter<RustType.Option>().render()}>" to
+                            "self.$memberName.as_ref()"
+                    } else {
+                        "&${messageType.render()}" to "&self.$memberName"
+                    }
                 } else {
-                    "&str" to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                    if (messageSymbol.isOptional()) {
+                        messageType.render() to "self.$memberName.as_deref()"
+                    } else {
+                        messageType.render() to "self.$memberName.as_ref()"
+                    }
                 }
 
                 rust(
@@ -118,8 +142,12 @@ class ErrorGenerator(
                 }
                 write("write!(f, ${errorDesc.dq()})?;")
                 messageShape?.let {
-                    ifSet(it, symbolProvider.toSymbol(it), "&self.message") { field ->
-                        write("""write!(f, ": {}", $field)?;""")
+                    if (it.shouldRedact(model)) {
+                        write("""write!(f, ": {}", $REDACTION)?;""")
+                    } else {
+                        ifSet(it, symbolProvider.toSymbol(it), ValueExpression.Reference("&self.message")) { field ->
+                            write("""write!(f, ": {}", ${field.asRef()})?;""")
+                        }
                     }
                 }
                 write("Ok(())")

@@ -9,11 +9,11 @@ use crate::proto::rest::router::Error;
 use crate::response::IntoResponse;
 use crate::routers::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
-use super::AwsRestJson1;
+use super::RestJson1;
 
 pub use crate::proto::rest::router::*;
 
-impl IntoResponse<AwsRestJson1> for Error {
+impl IntoResponse<RestJson1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::NotFound => http::Response::builder()

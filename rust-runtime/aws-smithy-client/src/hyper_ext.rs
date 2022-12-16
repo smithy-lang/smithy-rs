@@ -17,7 +17,20 @@
 //! with `rustls` will be constructed during client creation. However, if you are creating a Smithy
 //! [`Client`](crate::Client), directly, use the `dyn_https_https()` method to match that default behavior:
 //!
-//! ```no_run
+#![cfg_attr(
+    not(all(
+        any(feature = "rustls", feature = "native-tls"),
+        feature = "client-hyper"
+    )),
+    doc = "```no_run,ignore"
+)]
+#![cfg_attr(
+    all(
+        any(feature = "rustls", feature = "native-tls"),
+        feature = "client-hyper"
+    ),
+    doc = "```no_run"
+)]
 //! use aws_smithy_client::Client;
 //!
 //! let client = Client::builder()
@@ -34,7 +47,11 @@
 //! A use case for where you may want to use the [`Adapter`] is when settings Hyper client settings
 //! that aren't otherwise exposed by the `Client` builder interface.
 //!
-//! ```no_run
+#![cfg_attr(
+    not(all(feature = "rustls", feature = "client-hyper")),
+    doc = "```no_run,ignore"
+)]
+#![cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
@@ -69,6 +86,7 @@ use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
 use http::Uri;
 use hyper::client::connect::{Connected, Connection};
@@ -160,7 +178,7 @@ fn to_connector_error(err: hyper::Error) -> ConnectorError {
     else if err.is_incomplete_message() {
         ConnectorError::other(err.into(), Some(ErrorKind::TransientError))
     } else {
-        tracing::warn!(err = ?err, "unrecognized error from Hyper. If this error should be retried, please file an issue.");
+        tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
         ConnectorError::other(err.into(), None)
     }
 }
@@ -186,7 +204,11 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// Construct a HyperAdapter with the default HTTP implementation (rustls). This can be useful when you want to share a Hyper connector
 /// between multiple Smithy clients.
 ///
-/// ```no_run
+#[cfg_attr(
+    not(all(feature = "rustls", feature = "client-hyper")),
+    doc = "```no_run,ignore"
+)]
+#[cfg_attr(all(feature = "rustls", feature = "client-hyper"), doc = "```no_run")]
 /// use tower::layer::util::Identity;
 /// use aws_smithy_client::{conns, hyper_ext};
 /// use aws_smithy_client::erase::DynConnector;
@@ -428,7 +450,7 @@ mod timeout_middleware {
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
             let (timeout_future, kind, &mut duration) = match self.project() {
                 MaybeTimeoutFutureProj::NoTimeout { future } => {
-                    return future.poll(cx).map_err(|err| err.into())
+                    return future.poll(cx).map_err(|err| err.into());
                 }
                 MaybeTimeoutFutureProj::Timeout {
                     timeout,
@@ -513,6 +535,7 @@ mod timeout_middleware {
         use aws_smithy_async::assert_elapsed;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_http::body::SdkBody;
+        use aws_smithy_types::error::display::DisplayErrorContext;
         use aws_smithy_types::timeout::TimeoutConfig;
         use std::sync::Arc;
         use std::time::Duration;
@@ -554,9 +577,12 @@ mod timeout_middleware {
                 "expected resp.is_timeout() to be true but it was false, resp == {:?}",
                 resp
             );
-            assert_eq!(
-                format!("{}", resp),
-                "timeout: error trying to connect: HTTP connect timeout occurred after 1s"
+            let message = DisplayErrorContext(&resp).to_string();
+            let expected =
+                "timeout: error trying to connect: HTTP connect timeout occurred after 1s";
+            assert!(
+                message.contains(expected),
+                "expected '{message}' to contain '{expected}'"
             );
             assert_elapsed!(now, Duration::from_secs(1));
         }
@@ -590,9 +616,11 @@ mod timeout_middleware {
                 "expected resp.is_timeout() to be true but it was false, resp == {:?}",
                 resp
             );
-            assert_eq!(
-                format!("{}", resp),
-                "timeout: HTTP read timeout occurred after 2s"
+            let message = format!("{}", DisplayErrorContext(&resp));
+            let expected = "timeout: HTTP read timeout occurred after 2s";
+            assert!(
+                message.contains(expected),
+                "expected '{message}' to contain '{expected}'"
             );
             assert_elapsed!(now, Duration::from_secs(2));
         }

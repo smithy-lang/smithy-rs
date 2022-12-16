@@ -16,8 +16,8 @@ use self::request_spec::RequestSpec;
 use crate::{
     body::{boxed, Body, BoxBody, HttpBody},
     proto::{
-        aws_json::router::AwsJsonRouter, aws_json_10::AwsJson10, aws_json_11::AwsJson11, rest::router::RestRouter,
-        rest_json_1::AwsRestJson1, rest_xml::AwsRestXml,
+        aws_json::router::AwsJsonRouter, aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest::router::RestRouter,
+        rest_json_1::RestJson1, rest_xml::RestXml,
     },
 };
 use crate::{error::BoxError, routers::RoutingService};
@@ -29,6 +29,9 @@ use tower_http::map_response_body::MapResponseBodyLayer;
 
 mod future;
 mod into_make_service;
+mod into_make_service_with_connect_info;
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 mod lambda_handler;
 
 #[doc(hidden)]
@@ -38,8 +41,17 @@ mod route;
 
 pub(crate) mod tiny_map;
 
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub use self::lambda_handler::LambdaHandler;
-pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
+
+#[allow(deprecated)]
+pub use self::{
+    future::RouterFuture,
+    into_make_service::IntoMakeService,
+    into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
+    route::Route,
+};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.
@@ -62,6 +74,10 @@ pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::
 /// [awsJson1.1]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html
 /// [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 #[derive(Debug)]
+#[deprecated(
+    since = "0.52.0",
+    note = "`OperationRegistry` is part of the deprecated service builder API. This type no longer appears in the public API."
+)]
 pub struct Router<B = Body> {
     routes: Routes<B>,
 }
@@ -75,12 +91,13 @@ pub struct Router<B = Body> {
 /// directly found in the `X-Amz-Target` HTTP header.
 #[derive(Debug)]
 enum Routes<B = Body> {
-    RestXml(RoutingService<RestRouter<Route<B>>, AwsRestXml>),
-    RestJson1(RoutingService<RestRouter<Route<B>>, AwsRestJson1>),
-    AwsJson10(RoutingService<AwsJsonRouter<Route<B>>, AwsJson10>),
-    AwsJson11(RoutingService<AwsJsonRouter<Route<B>>, AwsJson11>),
+    RestXml(RoutingService<RestRouter<Route<B>>, RestXml>),
+    RestJson1(RoutingService<RestRouter<Route<B>>, RestJson1>),
+    AwsJson1_0(RoutingService<AwsJsonRouter<Route<B>>, AwsJson1_0>),
+    AwsJson1_1(RoutingService<AwsJsonRouter<Route<B>>, AwsJson1_1>),
 }
 
+#[allow(deprecated)]
 impl<B> Clone for Router<B> {
     fn clone(&self) -> Self {
         match &self.routes {
@@ -90,16 +107,17 @@ impl<B> Clone for Router<B> {
             Routes::RestXml(routes) => Router {
                 routes: Routes::RestXml(routes.clone()),
             },
-            Routes::AwsJson10(routes) => Router {
-                routes: Routes::AwsJson10(routes.clone()),
+            Routes::AwsJson1_0(routes) => Router {
+                routes: Routes::AwsJson1_0(routes.clone()),
             },
-            Routes::AwsJson11(routes) => Router {
-                routes: Routes::AwsJson11(routes.clone()),
+            Routes::AwsJson1_1(routes) => Router {
+                routes: Routes::AwsJson1_1(routes.clone()),
             },
         }
     }
 }
 
+#[allow(deprecated)]
 impl<B> Router<B>
 where
     B: Send + 'static,
@@ -141,11 +159,11 @@ where
             Routes::RestXml(routes) => Router {
                 routes: Routes::RestXml(routes.map(|router| router.layer(layer).boxed())),
             },
-            Routes::AwsJson10(routes) => Router {
-                routes: Routes::AwsJson10(routes.map(|router| router.layer(layer).boxed())),
+            Routes::AwsJson1_0(routes) => Router {
+                routes: Routes::AwsJson1_0(routes.map(|router| router.layer(layer).boxed())),
             },
-            Routes::AwsJson11(routes) => Router {
-                routes: Routes::AwsJson11(routes.map(|router| router.layer(layer).boxed())),
+            Routes::AwsJson1_1(routes) => Router {
+                routes: Routes::AwsJson1_1(routes.map(|router| router.layer(layer).boxed())),
             },
         }
     }
@@ -219,7 +237,7 @@ where
         );
 
         Self {
-            routes: Routes::AwsJson10(svc),
+            routes: Routes::AwsJson1_0(svc),
         }
     }
 
@@ -244,11 +262,12 @@ where
         );
 
         Self {
-            routes: Routes::AwsJson11(svc),
+            routes: Routes::AwsJson1_1(svc),
         }
     }
 }
 
+#[allow(deprecated)]
 impl<B> Service<Request<B>> for Router<B>
 where
     B: Send + 'static,
@@ -269,14 +288,15 @@ where
             Routes::RestJson1(routes) => routes.call(req),
             Routes::RestXml(routes) => routes.call(req),
             // AwsJson routes.
-            Routes::AwsJson10(routes) => routes.call(req),
-            Routes::AwsJson11(routes) => routes.call(req),
+            Routes::AwsJson1_0(routes) => routes.call(req),
+            Routes::AwsJson1_1(routes) => routes.call(req),
         };
         RouterFuture::new(fut)
     }
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod rest_tests {
     use super::*;
     use crate::{
@@ -323,7 +343,7 @@ mod rest_tests {
 
         #[inline]
         fn call(&mut self, req: Request<B>) -> Self::Future {
-            let body = boxed(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
+            let body = boxed(Body::from(format!("{} :: {}", self.0, req.uri())));
             let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
             Box::pin(fut)
         }
@@ -503,6 +523,7 @@ mod rest_tests {
     }
 }
 
+#[allow(deprecated)]
 #[cfg(test)]
 mod awsjson_tests {
     use super::rest_tests::{get_body_as_string, req};

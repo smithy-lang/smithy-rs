@@ -6,9 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -19,9 +17,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErr
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 
 /**
@@ -29,23 +27,22 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBou
  */
 open class ServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
+    val protocol: ServerProtocol,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"
-    private val service = codegenContext.serviceShape
     private val model = codegenContext.model
-    private val protocol = codegenContext.protocol
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "Tower" to ServerCargoDependency.Tower.asType(),
-        "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "Phantom" to ServerRuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "http" to RuntimeType.http,
+        "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
+        "Tower" to ServerCargoDependency.Tower.toType(),
+        "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
+        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "Phantom" to RuntimeType.Phantom,
+        "ServerOperationHandler" to ServerRuntimeType.operationHandler(runtimeConfig),
+        "http" to RuntimeType.Http,
     )
 
     open fun render(writer: RustWriter) {
@@ -83,11 +80,8 @@ open class ServerOperationHandlerGenerator(
                         Ok(v) => v,
                         Err(extension_not_found_rejection) => {
                             let extension = $serverCrate::extension::RuntimeErrorExtension::new(extension_not_found_rejection.to_string());
-                            let runtime_error = $serverCrate::runtime_error::RuntimeError {
-                                protocol: #{SmithyHttpServer}::protocols::Protocol::${protocol.name.toPascalCase()},
-                                kind: extension_not_found_rejection.into(),
-                            };
-                            let mut response = runtime_error.into_response();
+                            let runtime_error = $serverCrate::runtime_error::RuntimeError::from(extension_not_found_rejection);
+                            let mut response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(runtime_error);
                             response.extensions_mut().insert(extension);
                             return response.map($serverCrate::body::boxed);
                         }
@@ -109,7 +103,8 @@ open class ServerOperationHandlerGenerator(
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
-                                return runtime_error.into_response().map($serverCrate::body::boxed);
+                                let response = #{SmithyHttpServer}::response::IntoResponse::<#{Protocol}>::into_response(runtime_error);
+                                return response.map($serverCrate::body::boxed);
                             }
                         };
                         $callImpl
@@ -120,6 +115,7 @@ open class ServerOperationHandlerGenerator(
                         response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
+                    "Protocol" to protocol.markerStruct(),
                     *codegenScope,
                 )
             }

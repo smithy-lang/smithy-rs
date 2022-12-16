@@ -14,11 +14,11 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -92,7 +92,7 @@ class AwsJsonSerializerGenerator(
             val inputShape = operationShape.inputShape(codegenContext.model)
             val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)
             serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
-                it.rustBlockTemplate(
+                rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                     *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
                 ) {
@@ -111,10 +111,11 @@ open class AwsJson(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.GenericError(runtimeConfig),
-        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
-        "Response" to RuntimeType.http.member("Response"),
+        "Error" to RuntimeType.genericError(runtimeConfig),
+        "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
+        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
+            .resolve("deserialize::error::DeserializeError"),
+        "Response" to RuntimeType.Http.resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
     private val jsonDeserModule = RustModule.private("json_deser")
@@ -129,15 +130,21 @@ open class AwsJson(
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
+    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
+        return JsonParserGenerator(
+            codegenContext,
+            httpBindingResolver,
+            ::awsJsonFieldName,
+            builderSymbolFn(codegenContext.symbolProvider),
+        )
+    }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
+        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) {
+            rustTemplate(
                 """
                 pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
@@ -148,8 +155,8 @@ open class AwsJson(
         }
 
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
+        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) {
+            rustTemplate(
                 """
                 pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate

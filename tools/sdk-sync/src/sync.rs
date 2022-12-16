@@ -10,6 +10,7 @@ use anyhow::{bail, Context, Result};
 use smithy_rs_tool_common::git::{Commit, CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, TryRecvError};
@@ -405,7 +406,7 @@ impl Sync {
             .map(|c| format!("{} <{}>", c.author_name, c.author_email))
             .collect();
         for author in authors {
-            commit_message.push_str(&format!("Co-authored-by: {}\n", author));
+            writeln!(&mut commit_message, "Co-authored-by: {}", author).unwrap();
         }
         commit_message
     }

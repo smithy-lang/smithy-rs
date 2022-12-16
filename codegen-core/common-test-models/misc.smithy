@@ -5,6 +5,7 @@ namespace aws.protocoltests.misc
 use aws.protocols#restJson1
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
+use smithy.framework#ValidationException
 
 /// A service to test miscellaneous aspects of code generation where protocol
 /// selection is not relevant. If you want to test something protocol-specific,
@@ -14,7 +15,8 @@ use smithy.test#httpResponseTests
 service MiscService {
     operations: [
         TypeComplexityOperation,
-        InnerRequiredShapeOperation,
+        RequiredInnerShapeOperation,
+        RequiredHeaderCollectionOperation,
         ResponseCodeRequiredOperation,
         ResponseCodeHttpFallbackOperation,
         ResponseCodeDefaultOperation,
@@ -53,13 +55,14 @@ map MapA {
 
 /// This operation tests that (de)serializing required values from a nested
 /// shape works correctly.
-@http(uri: "/innerRequiredShapeOperation", method: "POST")
-operation InnerRequiredShapeOperation {
-    input: InnerRequiredShapeOperationInputOutput,
-    output: InnerRequiredShapeOperationInputOutput,
+@http(uri: "/requiredInnerShapeOperation", method: "POST")
+operation RequiredInnerShapeOperation {
+    input: RequiredInnerShapeOperationInputOutput,
+    output: RequiredInnerShapeOperationInputOutput,
+    errors: [ValidationException],
 }
 
-structure InnerRequiredShapeOperationInputOutput {
+structure RequiredInnerShapeOperationInputOutput {
     inner: InnerShape
 }
 
@@ -230,3 +233,29 @@ structure ResponseCodeRequiredOutput {
     }
 ])
 operation AcceptHeaderStarService {}
+
+@http(uri: "/required-header-collection-operation", method: "GET")
+operation RequiredHeaderCollectionOperation {
+    input: RequiredHeaderCollectionOperationInputOutput,
+    output: RequiredHeaderCollectionOperationInputOutput,
+    errors: [ValidationException]
+}
+
+structure RequiredHeaderCollectionOperationInputOutput {
+    @required
+    @httpHeader("X-Required-List")
+    requiredHeaderList: HeaderList,
+
+    @required
+    @httpHeader("X-Required-Set")
+    requiredHeaderSet: HeaderSet,
+}
+
+list HeaderList {
+    member: String
+}
+
+@uniqueItems
+list HeaderSet {
+    member: String
+}

@@ -93,9 +93,9 @@ mod tests {
         let sensitive = Sensitive(inner);
         let actual = format!("{}", sensitive);
         let expected = if cfg!(feature = "unredacted-logging") {
-            format!("{}", inner)
+            inner.to_string()
         } else {
-            format!("{}", REDACTED)
+            REDACTED.to_string()
         };
         assert_eq!(actual, expected)
     }

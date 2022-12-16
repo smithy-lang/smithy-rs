@@ -83,7 +83,7 @@ fun Array<Writable>.join(separator: Writable) = asIterable().join(separator)
  *     "type_params" to rustTypeParameters(
  *         symbolProvider.toSymbol(operation),
  *         RustType.Unit,
- *         runtimeConfig.smithyHttp().member("body::SdkBody"),
+ *         runtimeConfig.smithyHttp().resolve("body::SdkBody"),
  *         GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
  *     )
  * )
@@ -108,12 +108,9 @@ fun rustTypeParameters(
                     )
                     else -> {
                         // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
-                        val func = typeParameter as? RustWriter.() -> Unit
-                        if (func != null) {
-                            func.invoke(this)
-                        } else {
-                            throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
-                        }
+                        @Suppress("UNCHECKED_CAST")
+                        val func = typeParameter as? Writable ?: throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+                        func.invoke(this)
                     }
                 }
             }

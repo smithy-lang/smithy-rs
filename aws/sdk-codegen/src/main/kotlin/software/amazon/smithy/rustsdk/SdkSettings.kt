@@ -20,16 +20,24 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
     }
 
     /** Path to the `sdk-default-configuration.json` config file */
-    val defaultsConfigPath: Path? get() =
-        awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value.let { Paths.get(it) }
+    val defaultsConfigPath: Path?
+        get() =
+            awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value.let { Paths.get(it) }
 
     /** Path to the `sdk-endpoints.json` configuration */
-    val endpointsConfigPath: Path? get() =
-        awsSdk?.getStringMember("endpointsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
+    val endpointsConfigPath: Path?
+        get() =
+            awsSdk?.getStringMember("endpointsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
+
+    /** Path to the `default-partitions.json` configuration */
+    val partitionsConfigPath: Path?
+        get() =
+            awsSdk?.getStringMember("partitionsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
 
     /** Path to AWS SDK integration tests */
-    val integrationTestPath: String get() =
-        awsSdk?.getStringMember("integrationTestPath")?.orNull()?.value ?: "aws/sdk/integration-tests"
+    val integrationTestPath: String
+        get() =
+            awsSdk?.getStringMember("integrationTestPath")?.orNull()?.value ?: "aws/sdk/integration-tests"
 
     /** Version number of the `aws-config` crate */
     val awsConfigVersion: String? get() =

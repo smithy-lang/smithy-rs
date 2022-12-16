@@ -122,9 +122,9 @@ mod tests {
 
     const CUTOFF: usize = 5;
 
-    const SMALL_VALUES: [(&'static str, usize); 3] = [("a", 0), ("b", 1), ("c", 2)];
-    const MEDIUM_VALUES: [(&'static str, usize); 5] = [("a", 0), ("b", 1), ("c", 2), ("d", 3), ("e", 4)];
-    const LARGE_VALUES: [(&'static str, usize); 10] = [
+    const SMALL_VALUES: [(&str, usize); 3] = [("a", 0), ("b", 1), ("c", 2)];
+    const MEDIUM_VALUES: [(&str, usize); 5] = [("a", 0), ("b", 1), ("c", 2), ("d", 3), ("e", 4)];
+    const LARGE_VALUES: [(&str, usize); 10] = [
         ("a", 0),
         ("b", 1),
         ("c", 2),

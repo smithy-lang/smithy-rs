@@ -5,6 +5,7 @@ use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 use aws.protocols#awsJson1_1
 use aws.api#service
+use smithy.framework#ValidationException
 
 /// Confounds model generation machinery with lots of problematic names
 @awsJson1_1
@@ -41,17 +42,20 @@ service Config {
     }
 ])
 operation ReservedWordsAsMembers {
-    input: ReservedWords
+    input: ReservedWords,
+    errors: [ValidationException],
 }
 
 // tests that module names are properly escaped
 operation Match {
     input: ReservedWords
+    errors: [ValidationException],
 }
 
 // Should generate a PascalCased `RpcEchoInput` struct.
 operation RPCEcho {
     input: ReservedWords
+    errors: [ValidationException],
 }
 
 structure ReservedWords {

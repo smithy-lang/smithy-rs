@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use anyhow::{Context, Result};
 use std::collections::BTreeSet;
+use std::fmt::Write;
 use std::fs::Metadata;
 use std::path::Path;
+
+use anyhow::{Context, Result};
 
 #[derive(Debug, Default)]
 pub struct FileList(BTreeSet<FileMetadata>);
@@ -63,7 +65,7 @@ impl FileList {
                         .to_str()
                         .expect("not using unusual file names in crate source")
                         .into(),
-                    sha256: sha256::digest_file(&path).context("hash file")?,
+                    sha256: sha256::try_digest(path).context("hash file")?,
                 });
             }
         }
@@ -84,7 +86,7 @@ impl FileMetadata {
     /// Returns a string to hash for this file
     fn hash_entry(&self) -> String {
         let mut entry = String::with_capacity(7 + self.path.len() + 1 + self.sha256.len() + 1);
-        entry.push_str(&format!("{:06o} ", self.mode));
+        write!(&mut entry, "{:06o} ", self.mode).unwrap();
         entry.push_str(&self.path);
         entry.push(' ');
         entry.push_str(&self.sha256);

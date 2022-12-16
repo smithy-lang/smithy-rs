@@ -7,7 +7,7 @@ use crate::shell::{handle_failure, output_text};
 use anyhow::{bail, Context, Result};
 use std::borrow::Cow;
 use std::ffi::OsStr;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::debug;
@@ -415,7 +415,7 @@ fn split_file_names(value: &str) -> Vec<PathBuf> {
 fn log_command(command: Command) -> Command {
     let mut message = String::new();
     if let Some(cwd) = command.get_current_dir() {
-        message.push_str(&format!("[in {:?}]: ", cwd));
+        write!(&mut message, "[in {:?}]: ", cwd).unwrap();
     }
     message.push_str(command.get_program().to_str().expect("valid str"));
     for arg in command.get_args() {

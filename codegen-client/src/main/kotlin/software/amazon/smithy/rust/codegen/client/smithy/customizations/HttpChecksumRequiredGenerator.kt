@@ -8,9 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpChecksumRequiredTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -50,9 +48,9 @@ class HttpChecksumRequiredGenerator(
                         Result::<_, #{BuildError}>::Ok(req)
                     })?;
                     """,
-                    "md5" to CargoDependency.Md5.asType(),
-                    "http" to CargoDependency.Http.asType(),
-                    "base64_encode" to RuntimeType.Base64Encode(codegenContext.runtimeConfig),
+                    "md5" to RuntimeType.Md5,
+                    "http" to RuntimeType.Http,
+                    "base64_encode" to RuntimeType.base64Encode(codegenContext.runtimeConfig),
                     "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
                 )
             }

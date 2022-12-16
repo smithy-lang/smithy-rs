@@ -9,27 +9,24 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, UNIX_EPOCH};
 
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation;
+use aws_smithy_http::operation::Operation;
+use aws_smithy_http::response::ParseHttpResponse;
+use aws_smithy_types::endpoint::Endpoint;
+use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
-use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
-use aws_endpoint::{EndpointShim, Params};
 use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
-
-use aws_smithy_client::test_connection::TestConnection;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::ResolveEndpoint;
-use aws_smithy_http::operation;
-use aws_smithy_http::operation::Operation;
-use aws_smithy_http::response::ParseHttpResponse;
-
-use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use aws_types::credentials::SharedCredentialsProvider;
-use aws_types::region::Region;
+use aws_types::region::SigningRegion;
 use aws_types::Credentials;
 use aws_types::SigningService;
 
@@ -78,22 +75,18 @@ impl ParseHttpResponse for TestOperationParser {
 fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier> {
     let req = operation::Request::new(
         http::Request::builder()
-            .uri("https://test-service.test-region.amazonaws.com/")
+            .uri("/")
             .body(SdkBody::from("request body"))
             .unwrap(),
     )
-    .augment(|req, mut conf| {
-        conf.insert(
-            EndpointShim::from_resolver(aws_endpoint::partition::endpoint::Metadata {
-                uri_template: "test-service.{region}.amazonaws.com",
-                protocol: Protocol::Https,
-                credential_scope: Default::default(),
-                signature_versions: SignatureVersion::V4,
-            })
-            .resolve_endpoint(&Params::new(Some(Region::new("test-region")))),
-        );
+    .augment(|req, conf| {
+        conf.insert(aws_smithy_http::endpoint::Result::Ok(
+            Endpoint::builder()
+                .url("https://test-service.test-region.amazonaws.com")
+                .build(),
+        ));
         aws_http::auth::set_provider(
-            &mut conf,
+            conf,
             SharedCredentialsProvider::new(Credentials::new(
                 "access_key",
                 "secret_key",
@@ -102,7 +95,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
                 "test",
             )),
         );
-        conf.insert(Region::new("test-region"));
+        conf.insert(SigningRegion::from_static("test-region"));
         conf.insert(OperationSigningConfig::default_config());
         conf.insert(SigningService::from_static("test-service-signing"));
         conf.insert(UNIX_EPOCH + Duration::from_secs(1613414417));
@@ -112,6 +105,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
     .unwrap();
     Operation::new(req, TestOperationParser)
         .with_retry_classifier(AwsResponseRetryClassifier::new())
+        .with_metadata(operation::Metadata::new("test-op", "test-service"))
 }
 
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -147,4 +141,40 @@ async fn e2e_test() {
     assert_eq!(resp, "Hello!");
 
     conn.assert_requests_match(&[]);
+}
+
+#[tokio::test]
+async fn test_operation_metadata_is_available_to_middlewares() {
+    let conn = TestConnection::new(vec![(
+        http::Request::builder()
+            .header(USER_AGENT, "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
+            .header("x-amz-user-agent", "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0")
+            .header(AUTHORIZATION, "AWS4-HMAC-SHA256 Credential=access_key/20210215/test-region/test-service-signing/aws4_request, SignedHeaders=host;x-amz-date;x-amz-user-agent, Signature=da249491d7fe3da22c2e09cbf910f37aa5b079a3cedceff8403d0b18a7bfab75")
+            .header("x-amz-date", "20210215T184017Z")
+            .uri(Uri::from_static("https://test-service.test-region.amazonaws.com/"))
+            .body(SdkBody::from("request body")).unwrap(),
+        http::Response::builder()
+            .status(200)
+            .body("response body")
+            .unwrap(),
+    )]);
+    let client = aws_smithy_client::Client::builder()
+        .middleware_fn(|req| {
+            let metadata = req
+                .properties()
+                .get::<operation::Metadata>()
+                .cloned()
+                .unwrap();
+
+            assert_eq!("test-op", metadata.name());
+            assert_eq!("test-service", metadata.service());
+
+            req
+        })
+        .connector(DynConnector::new(conn))
+        .build();
+
+    let resp = client.call(test_operation()).await;
+    let resp = resp.expect("successful operation");
+    assert_eq!(resp, "Hello!");
 }

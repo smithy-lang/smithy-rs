@@ -19,9 +19,9 @@ class CargoTomlGeneratorTest {
     @Test
     fun `adds codegen version to package metadata`() {
         val project = TestWorkspace.testProject()
-        project.lib { writer ->
-            writer.addDependency(CargoMetadata)
-            writer.unitTest(
+        project.lib {
+            addDependency(CargoMetadata)
+            unitTest(
                 "smithy_codegen_version_in_package_metadata",
                 """
                 let metadata = cargo_metadata::MetadataCommand::new()

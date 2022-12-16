@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.rustlang
 
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
@@ -23,13 +24,11 @@ fun autoDeref(input: String) = if (input.startsWith("&")) {
  * A hierarchy of types handled by Smithy codegen
  */
 sealed class RustType {
-
-    // TODO(kotlin): when Kotlin supports, sealed interfaces, seal Container
     /**
      * A Rust type that contains [member], another RustType. Used to generically operate over
      * shapes that contain other shapes, e.g. [stripOuter] and [contains].
      */
-    interface Container {
+    sealed interface Container {
         val member: RustType
         val namespace: kotlin.String?
         val name: kotlin.String
@@ -51,7 +50,7 @@ sealed class RustType {
      * // Then, invoke the writable directly
      * t.invoke(writer)
      * // OR template it out
-     * writer.rustInlineTemplate("#{t:W}", "t" to t)
+     *rustInlineTemplate("#{t:W}", "t" to t)
      * ```
      *
      * When formatted, the converted type will appear as such:
@@ -91,8 +90,9 @@ sealed class RustType {
     }
 
     object String : RustType() {
-        override val name: kotlin.String = "String"
-        override val namespace = "std::string"
+        private val runtimeType = RuntimeType.String
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
     }
 
     data class Float(val precision: Int) : RustType() {
@@ -109,18 +109,18 @@ sealed class RustType {
 
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
         // validating that `key` is a string occurs in the constructor in SymbolVisitor
-
-        override val name: kotlin.String = "HashMap"
-        override val namespace = "std::collections"
+        override val name = RuntimeType.HashMap.name
+        override val namespace = RuntimeType.HashMap.namespace
 
         companion object {
-            val RuntimeType = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
+            val Type = RuntimeType.HashMap.name
+            val Namespace = RuntimeType.HashMap.namespace
         }
     }
 
     data class HashSet(override val member: RustType) : RustType(), Container {
-        override val name = Type
-        override val namespace = Namespace
+        override val name = RuntimeType.Vec.name
+        override val namespace = RuntimeType.Vec.namespace
 
         companion object {
             // This is Vec intentionally. Note the following passage from the Smithy spec:
@@ -128,9 +128,8 @@ sealed class RustType {
             //    support ordered sets, requiring them may be overly burdensome for users, or conflict with language
             //    idioms. Such languages SHOULD store the values of sets in a list and rely on validation to ensure uniqueness.
             // It's possible that we could provide our own wrapper type in the future.
-            const val Type = "Vec"
-            const val Namespace = "std::vec"
-            val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
+            val Type = RuntimeType.Vec.name
+            val Namespace = RuntimeType.Vec.namespace
         }
     }
 
@@ -139,8 +138,9 @@ sealed class RustType {
     }
 
     data class Option(override val member: RustType) : RustType(), Container {
-        override val name = "Option"
-        override val namespace = "std::option"
+        private val runtimeType = RuntimeType.Option
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
 
         /** Convert `Option<T>` to `Option<&T>` **/
         fun referenced(lifetime: kotlin.String?): Option {
@@ -148,9 +148,16 @@ sealed class RustType {
         }
     }
 
+    data class MaybeConstrained(override val member: RustType) : RustType(), Container {
+        private val runtimeType = RuntimeType.MaybeConstrained
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
+    }
+
     data class Box(override val member: RustType) : RustType(), Container {
-        override val name = "Box"
-        override val namespace = "std::boxed"
+        private val runtimeType = RuntimeType.Box
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
     }
 
     data class Dyn(override val member: RustType) : RustType(), Container {
@@ -159,8 +166,9 @@ sealed class RustType {
     }
 
     data class Vec(override val member: RustType) : RustType(), Container {
-        override val name = "Vec"
-        override val namespace = "std::vec"
+        private val runtimeType: RuntimeType = RuntimeType.Vec
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
@@ -237,6 +245,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
         is RustType.Opaque -> this.name
+        is RustType.MaybeConstrained -> "${this.name}<${this.member.render(fullyQualified)}>"
     }
     return "$namespace$base"
 }
@@ -318,7 +327,23 @@ fun RustType.isCopy(): Boolean = when (this) {
 enum class Visibility {
     PRIVATE,
     PUBCRATE,
-    PUBLIC
+    PUBLIC;
+
+    companion object {
+        fun publicIf(condition: Boolean, ifNot: Visibility): Visibility =
+            if (condition) {
+                PUBLIC
+            } else {
+                ifNot
+            }
+    }
+
+    fun toRustQualifier(): String =
+        when (this) {
+            PRIVATE -> ""
+            PUBCRATE -> "pub(crate)"
+            PUBLIC -> "pub"
+        }
 }
 
 /**
@@ -359,6 +384,15 @@ data class RustMetadata(
         renderAttributes(writer)
         renderVisibility(writer)
     }
+
+    companion object {
+        val TestModule = RustMetadata(
+            visibility = Visibility.PRIVATE,
+            additionalAttributes = listOf(
+                Attribute.Cfg("test"),
+            ),
+        )
+    }
 }
 
 /**
@@ -378,15 +412,40 @@ sealed class Attribute {
     abstract fun render(writer: RustWriter)
 
     companion object {
+        val AllowDeadCode = Custom("allow(dead_code)")
+        val AllowDeprecated = Custom("allow(deprecated)")
+        val AllowUnused = Custom("allow(unused)")
+        val AllowUnusedMut = Custom("allow(unused_mut)")
+        val DocHidden = Custom("doc(hidden)")
+        val DocInline = Custom("doc(inline)")
+
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
          * indicates that more fields may be added in the future
          */
         val NonExhaustive = Custom("non_exhaustive")
-        val AllowUnusedMut = Custom("allow(unused_mut)")
-        val AllowDeadCode = Custom("allow(dead_code)")
-        val DocHidden = Custom("doc(hidden)")
-        val DocInline = Custom("doc(inline)")
+    }
+
+    data class Deprecated(val since: String?, val note: String?) : Attribute() {
+        override fun render(writer: RustWriter) {
+            writer.raw("#[deprecated")
+            if (since != null || note != null) {
+                writer.raw("(")
+                if (since != null) {
+                    writer.raw("""since = "$since"""")
+
+                    if (note != null) {
+                        writer.raw(", ")
+                    }
+                }
+
+                if (note != null) {
+                    writer.raw("""note = "$note"""")
+                }
+                writer.raw(")")
+            }
+            writer.raw("]")
+        }
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {
@@ -395,7 +454,7 @@ sealed class Attribute {
                 return
             }
             writer.raw("#[derive(")
-            derives.sortedBy { it.name }.forEach { derive ->
+            derives.sortedBy { it.path }.forEach { derive ->
                 writer.writeInline("#T, ", derive)
             }
             writer.write(")]")
@@ -424,7 +483,11 @@ sealed class Attribute {
             val bang = if (container) "!" else ""
             writer.raw("#$bang[$annotation]")
             symbols.forEach {
-                writer.addDependency(it.dependency)
+                try {
+                    writer.addDependency(it.dependency)
+                } catch (ex: Exception) {
+                    PANIC("failed to add dependency for RuntimeType $it")
+                }
             }
         }
 

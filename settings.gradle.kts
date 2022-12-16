@@ -17,3 +17,18 @@ include(":aws:sdk-codegen")
 include(":aws:sdk-adhoc-test")
 include(":aws:sdk")
 include(":aws:rust-runtime")
+
+pluginManagement {
+    val smithyGradlePluginVersion: String by settings
+    plugins {
+        id("software.amazon.smithy") version smithyGradlePluginVersion
+    }
+}
+
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        google()
+    }
+}

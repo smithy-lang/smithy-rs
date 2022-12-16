@@ -10,10 +10,8 @@ import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -27,12 +25,9 @@ private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
 /**
  * Generates a README.md for each service crate for display on crates.io.
  */
-class AwsReadmeDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class AwsReadmeDecorator : ClientCodegenDecorator {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
         if (generateReadme(codegenContext)) {
@@ -57,7 +52,7 @@ internal class AwsSdkReadmeGenerator {
     internal fun generateReadme(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
             ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
-        rustCrate.withFile("README.md") { writer ->
+        rustCrate.withFile("README.md") {
             val description = normalizeDescription(
                 codegenContext.moduleName,
                 codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
@@ -66,7 +61,7 @@ internal class AwsSdkReadmeGenerator {
             val snakeCaseModuleName = moduleName.replace('-', '_')
             val shortModuleName = moduleName.removePrefix("aws-sdk-")
 
-            writer.raw(
+            raw(
                 """
                 # $moduleName
 
@@ -218,7 +213,7 @@ internal class AwsSdkReadmeGenerator {
     private fun Element.normalizeLists() {
         (getElementsByTag("ul") + getElementsByTag("ol"))
             // Only operate on lists that are top-level (are not nested within other lists)
-            .filter { list -> list.parents().none() { it.isList() } }
+            .filter { list -> list.parents().none { it.isList() } }
             .forEach { list -> list.normalizeList() }
     }
 

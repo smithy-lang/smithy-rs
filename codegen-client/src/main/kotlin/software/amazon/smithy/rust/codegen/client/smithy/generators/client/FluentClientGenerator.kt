@@ -15,15 +15,13 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
-import software.amazon.smithy.rust.codegen.client.smithy.generators.smithyHttp
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -58,13 +56,11 @@ class FluentClientGenerator(
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
-        retryDefault = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType()
-            .member("retry::Standard"),
-        client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType(),
+        retryDefault = RuntimeType.smithyClient(codegenContext.runtimeConfig).resolve("retry::Standard"),
+        client = RuntimeType.smithyClient(codegenContext.runtimeConfig),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryClassifier: RuntimeType = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
-        .member("retry::DefaultResponseRetryClassifier"),
+    private val retryClassifier: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -81,13 +77,12 @@ class FluentClientGenerator(
         TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
-        crate.withModule(clientModule) { writer ->
-            renderFluentClient(writer)
+        crate.withModule(clientModule) {
+            renderFluentClient(this)
         }
 
         CustomizableOperationGenerator(
@@ -146,7 +141,7 @@ class FluentClientGenerator(
             """,
             "generics_decl" to generics.decl,
             "smithy_inst" to generics.smithyInst,
-            "client" to clientDep.asType(),
+            "client" to RuntimeType.smithyClient(runtimeConfig),
             "client_docs" to writable
             {
                 customizations.forEach {
@@ -160,7 +155,7 @@ class FluentClientGenerator(
         )
         writer.rustBlockTemplate(
             "impl${generics.inst} Client${generics.inst} #{bounds:W}",
-            "client" to clientDep.asType(),
+            "client" to RuntimeType.smithyClient(runtimeConfig),
             "bounds" to generics.bounds,
         ) {
             operations.forEach { operation ->
@@ -195,7 +190,7 @@ class FluentClientGenerator(
                     outputFieldsHead += " with field(s):"
                 }
 
-                rustTemplate(
+                writer.rustTemplate(
                     """
                     /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
                     ///
@@ -207,7 +202,7 @@ class FluentClientGenerator(
                     """,
                 )
 
-                rust(
+                writer.rust(
                     """
                     pub fn ${
                     clientOperationFnName(
@@ -221,7 +216,7 @@ class FluentClientGenerator(
                 )
             }
         }
-        writer.withModule("fluent_builders") {
+        writer.withInlineModule(RustModule.new("fluent_builders", visibility = Visibility.PUBLIC, inline = true)) {
             docs(
                 """
                 Utilities to ergonomically construct a request to the service.
@@ -255,14 +250,14 @@ class FluentClientGenerator(
                     }
                     """,
                     "Inner" to input.builderSymbol(symbolProvider),
-                    "client" to clientDep.asType(),
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
                     "generics" to generics.decl,
                     "operation" to operationSymbol,
                 )
 
                 rustBlockTemplate(
                     "impl${generics.inst} ${operationSymbol.name}${generics.inst} #{bounds:W}",
-                    "client" to clientDep.asType(),
+                    "client" to RuntimeType.smithyClient(runtimeConfig),
                     "bounds" to generics.bounds,
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
@@ -283,10 +278,10 @@ class FluentClientGenerator(
                             #{SdkError}<#{OperationError}>
                         > #{send_bounds:W} {
                             let handle = self.handle.clone();
-                            let operation = self.inner.build().map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?
+                            let operation = self.inner.build().map_err(#{SdkError}::construction_failure)?
                                 .make_operation(&handle.conf)
                                 .await
-                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
+                                .map_err(#{SdkError}::construction_failure)?;
                             Ok(crate::operation::customize::CustomizableOperation { handle, operation })
                         }
 
@@ -300,18 +295,18 @@ class FluentClientGenerator(
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
                         #{send_bounds:W} {
-                            let op = self.inner.build().map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?
+                            let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
                                 .make_operation(&self.handle.conf)
                                 .await
-                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
+                                .map_err(#{SdkError}::construction_failure)?;
                             self.handle.client.call(op).await
                         }
                         """,
-                        "ClassifyRetry" to runtimeConfig.smithyHttp().member("retry::ClassifyRetry"),
+                        "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
                         "OperationError" to errorType,
                         "OperationOutput" to outputType,
-                        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
-                        "SdkSuccess" to runtimeConfig.smithyHttp().member("result::SdkSuccess"),
+                        "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
                         "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
                         "customizable_op_type_params" to rustTypeParameters(
                             symbolProvider.toSymbol(operation),

@@ -103,8 +103,8 @@ internal class ServiceConfigGeneratorTest {
         val symbolProvider = testSymbolProvider("namespace empty".asSmithyModel())
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(RustModule.Config) {
-            sut.render(it)
-            it.unitTest(
+            sut.render(this)
+            unitTest(
                 "set_config_fields",
                 """
                 let mut builder = Config::builder();

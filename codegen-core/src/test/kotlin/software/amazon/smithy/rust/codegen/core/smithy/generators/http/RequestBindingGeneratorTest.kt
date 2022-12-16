@@ -48,6 +48,18 @@ class RequestBindingGeneratorTest {
             member: Timestamp
         }
 
+        @enum([
+            {
+                value: "variantA",
+                name: "VARIANT_A",
+            },
+            {
+                value: "variantB",
+                name: "VARIANT_B",
+            },
+        ])
+        string RequiredEnum
+
         @mediaType("video/quicktime")
         string Video
 
@@ -89,6 +101,10 @@ class RequestBindingGeneratorTest {
 
             @httpQuery("hello")
             extras: Extras,
+
+            @required
+            @httpQuery("uploadId")
+            uploadId: String,
 
             // Sent in the body
             data: Blob,
@@ -163,17 +179,17 @@ class RequestBindingGeneratorTest {
     @Test
     fun `generates valid request bindings`() {
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(RustModule.public("input")) { writer ->
-            // Currently rendering the operation renders the protocols—I want to separate that at some point.
-            renderOperation(writer)
+        project.withModule(RustModule.public("input")) { // Currently rendering the operation renders the protocols—I want to separate that at some point.
+            renderOperation(this)
 
-            writer.unitTest(
+            unitTest(
                 name = "generate_uris",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("somebucket/ok")
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .set_extras(Some(vec![0,1,2,44]))
                         .some_value("svq!!%&")
                         .build().expect("build should succeed");
@@ -182,27 +198,28 @@ class RequestBindingGeneratorTest {
                     assert_eq!(o.as_str(), "/somebucket%2Fok/1970-04-28T03%3A58%3A45Z");
                     o.clear();
                     inp.test_uri_query(&mut o);
-                    assert_eq!(o.as_str(), "?paramName=svq%21%21%25%26&hello=0&hello=1&hello=2&hello=44")
+                    assert_eq!(o.as_str(), "?paramName=svq%21%21%25%26&hello=0&hello=1&hello=2&hello=44&uploadId=some-valid-id")
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "serialize_non_zero_values",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("somebucket/ok")
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .primitive(1)
                         .enabled(true)
                         .build().expect("build should succeed");
                     let mut o = String::new();
                     inp.test_uri_query(&mut o);
-                    assert_eq!(o.as_str(), "?primitive=1&enabled=true")
+                    assert_eq!(o.as_str(), "?primitive=1&enabled=true&uploadId=some-valid-id")
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "build_http_requests",
                 test = """
                     use std::collections::HashMap;
@@ -212,13 +229,14 @@ class RequestBindingGeneratorTest {
                         .set_date_header_list(Some(vec![ts.clone()]))
                         .set_int_list(Some(vec![0,1,44]))
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .set_extras(Some(vec![0,1]))
                         .some_value("qp")
                         .media_type("base64encodethis")
                         .prefix("k".to_string(), "😹".to_string())
                         .build().unwrap();
                     let http_request = inp.test_request_builder_base().expect("valid input").body(()).unwrap();
-                    assert_eq!(http_request.uri(), "/buk/1970-04-28T03%3A58%3A45Z?paramName=qp&hello=0&hello=1");
+                    assert_eq!(http_request.uri(), "/buk/1970-04-28T03%3A58%3A45Z?paramName=qp&hello=0&hello=1&uploadId=some-valid-id");
                     assert_eq!(http_request.method(), "PUT");
                     let mut date_header = http_request.headers().get_all("X-Dates").iter();
                     assert_eq!(date_header.next().unwrap(), "Tue, 28 Apr 1970 03:58:45 GMT");
@@ -235,7 +253,7 @@ class RequestBindingGeneratorTest {
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "invalid_header_name_produces_error",
                 test = """
                     use std::collections::HashMap;
@@ -243,14 +261,15 @@ class RequestBindingGeneratorTest {
                     let inp = PutObjectInput::builder()
                         .bucket_name("buk")
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .prefix("😹".to_string(), "😹".to_string())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
-                    assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
+                    assert_eq!(format!("{}", err), "invalid field in input: prefix (details: `😹` cannot be used as a header name: invalid HTTP header name)");
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "invalid_prefix_header_value_produces_an_error",
                 test = """
                     use std::collections::HashMap;
@@ -258,29 +277,31 @@ class RequestBindingGeneratorTest {
                     let inp = PutObjectInput::builder()
                         .bucket_name("buk")
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .prefix("valid-key".to_string(), "\n can't put a newline in a header value".to_string())
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
-                    assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
+                    assert_eq!(format!("{}", err), "invalid field in input: prefix (details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "invalid_header_value_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("buk")
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .string_header("\n is not valid")
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     // make sure we obey the sensitive trait
-                    assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
+                    assert_eq!(format!("{}", err), "invalid field in input: string_header (details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "missing_uri_label_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -288,13 +309,16 @@ class RequestBindingGeneratorTest {
                         // don't set bucket
                         // .bucket_name("buk")
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    let message = err.to_string();
+                    let expected = "bucket_name was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "missing_timestamp_uri_label_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
@@ -302,22 +326,61 @@ class RequestBindingGeneratorTest {
                         .bucket_name("buk")
                         // don't set key
                         // .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    let message = err.to_string();
+                    let expected = "key was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
                 """,
             )
 
-            writer.unitTest(
+            unitTest(
                 name = "empty_uri_label_produces_an_error",
                 test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("")
                         .key(ts.clone())
+                        .upload_id("some-valid-id")
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                    assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                    let message = err.to_string();
+                    let expected = "bucket_name was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
+                """,
+            )
+
+            unitTest(
+                name = "error_when_required_query_param_is_missing",
+                test = """
+                    let ts = aws_smithy_types::DateTime::from_secs(10123125);
+                    let inp = PutObjectInput::builder()
+                        .bucket_name("buk")
+                        // don't set uploadId
+                        // .upload_id("some-id")
+                        .key(ts.clone())
+                        .build().unwrap();
+                    let err = inp.test_request_builder_base().expect_err("can't build request with uploadId unset");
+                    let message = err.to_string();
+                    let expected = "upload_id was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
+                """,
+            )
+
+            unitTest(
+                name = "error_when_required_query_param_is_empty",
+                test = """
+                    let ts = aws_smithy_types::DateTime::from_secs(10123125);
+                    let inp = PutObjectInput::builder()
+                        .bucket_name("buk")
+                        .key(ts.clone())
+                        .upload_id("")
+                        .build().unwrap();
+                    let err = inp.test_request_builder_base().expect_err("can't build request with uploadId unset");
+                    let message = err.to_string();
+                    let expected = "upload_id was missing: cannot be empty or unset";
+                    assert!(message.contains(expected), "expected '{message}' to contain '{expected}'");
                 """,
             )
         }

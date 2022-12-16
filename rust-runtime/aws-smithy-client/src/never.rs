@@ -5,20 +5,19 @@
 
 //! Test connectors that never return data
 
-use http::Uri;
-
-use aws_smithy_async::future::never::Never;
-
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-
 use std::task::{Context, Poll};
 
-use crate::erase::boxclone::BoxFuture;
+use http::Uri;
+use tower::BoxError;
+
+use aws_smithy_async::future::never::Never;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use tower::BoxError;
+
+use crate::erase::boxclone::BoxFuture;
 
 /// A service that will never return whatever it is you want
 ///
@@ -27,7 +26,7 @@ use tower::BoxError;
 #[derive(Debug)]
 pub struct NeverService<Req, Resp, Err> {
     _resp: PhantomData<(Req, Resp, Err)>,
-    invocations: Arc<AtomicU64>,
+    invocations: Arc<AtomicUsize>,
 }
 
 impl<Req, Resp, Err> Clone for NeverService<Req, Resp, Err> {
@@ -55,7 +54,7 @@ impl<Req, Resp, Err> NeverService<Req, Resp, Err> {
     }
 
     /// Returns the number of invocations made to this service
-    pub fn num_calls(&self) -> u64 {
+    pub fn num_calls(&self) -> usize {
         self.invocations.load(Ordering::SeqCst)
     }
 }
@@ -71,8 +70,8 @@ pub type NeverConnected = NeverService<Uri, stream::EmptyStream, BoxError>;
 pub(crate) mod stream {
     use std::io::Error;
     use std::pin::Pin;
-
     use std::task::{Context, Poll};
+
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
     /// A stream that will never return or accept any data

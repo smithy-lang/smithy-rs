@@ -109,21 +109,21 @@ class RustGenericsTest {
         val ggB = RustGenerics(
             GenericTypeArg("B", testRT("Banana")),
         )
-        RustWriter.forModule("model").let { writer ->
-            writer.rustTemplate("#{bounds:W}", "bounds" to (ggA + ggB).bounds())
+        RustWriter.forModule("model").let {
+            it.rustTemplate("#{bounds:W}", "bounds" to (ggA + ggB).bounds())
 
-            writer.toString() shouldContain """
+            it.toString() shouldContain """
                 A: test::Apple,
                 B: test::Banana,
             """.trimIndent()
         }
 
-        RustWriter.forModule("model").let { writer ->
-            writer.rustTemplate("#{decl:W}", "decl" to (ggA + ggB).declaration())
+        RustWriter.forModule("model").let {
+            it.rustTemplate("#{decl:W}", "decl" to (ggA + ggB).declaration())
 
-            writer.toString() shouldContain "<A, B>"
+            it.toString() shouldContain "<A, B>"
         }
     }
 
-    private fun testRT(name: String): RuntimeType = RuntimeType(name, null, "test")
+    private fun testRT(name: String): RuntimeType = RuntimeType("test::$name")
 }

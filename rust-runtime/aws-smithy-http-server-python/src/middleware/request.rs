@@ -4,120 +4,114 @@
  */
 
 //! Python-compatible middleware [http::Request] implementation.
-use std::collections::HashMap;
+
+use std::mem;
+use std::sync::Arc;
 
 use aws_smithy_http_server::body::Body;
-use http::{Request, Version};
-use pyo3::prelude::*;
+use http::{request::Parts, Request};
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use tokio::sync::Mutex;
 
-/// Python compabible HTTP [Version].
-#[pyclass(name = "HttpVersion")]
-#[derive(PartialEq, PartialOrd, Copy, Clone, Eq, Ord, Hash)]
-pub struct PyHttpVersion(Version);
-
-#[pymethods]
-impl PyHttpVersion {
-    /// Extract the value of the HTTP [Version] into a string that
-    /// can be used by Python.
-    #[pyo3(text_signature = "($self)")]
-    fn value(&self) -> &str {
-        match self.0 {
-            Version::HTTP_09 => "HTTP/0.9",
-            Version::HTTP_10 => "HTTP/1.0",
-            Version::HTTP_11 => "HTTP/1.1",
-            Version::HTTP_2 => "HTTP/2.0",
-            Version::HTTP_3 => "HTTP/3.0",
-            _ => unreachable!(),
-        }
-    }
-}
+use super::{PyHeaderMap, PyMiddlewareError};
 
 /// Python-compatible [Request] object.
-///
-/// For performance reasons, there is not support yet to pass the body to the Python middleware,
-/// as it requires to consume and clone the body, which is a very expensive operation.
-///
-/// TODO(if customers request for it, we can implemented an opt-in functionality to also pass
-/// the body around).
 #[pyclass(name = "Request")]
 #[pyo3(text_signature = "(request)")]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PyRequest {
-    #[pyo3(get, set)]
-    method: String,
-    #[pyo3(get, set)]
-    uri: String,
-    // TODO(investigate if using a PyDict can make the experience more idiomatic)
-    // I'd like to be able to do request.headers.get("my-header") and
-    // request.headers["my-header"] = 42 instead of implementing set_header() and get_header()
-    // under pymethods. The same applies to response.
-    pub(crate) headers: HashMap<String, String>,
-    version: Version,
+    parts: Option<Parts>,
+    headers: PyHeaderMap,
+    body: Arc<Mutex<Option<Body>>>,
 }
 
 impl PyRequest {
     /// Create a new Python-compatible [Request] structure from the Rust side.
-    ///
-    /// This is done by cloning the headers, method, URI and HTTP version to let them be owned by Python.
-    pub fn new(request: &Request<Body>) -> Self {
+    pub fn new(request: Request<Body>) -> Self {
+        let (mut parts, body) = request.into_parts();
+        let headers = mem::take(&mut parts.headers);
         Self {
-            method: request.method().to_string(),
-            uri: request.uri().to_string(),
-            headers: request
-                .headers()
-                .into_iter()
-                .map(|(k, v)| -> (String, String) {
-                    let name: String = k.as_str().to_string();
-                    let value: String = String::from_utf8_lossy(v.as_bytes()).to_string();
-                    (name, value)
-                })
-                .collect(),
-            version: request.version(),
+            parts: Some(parts),
+            headers: PyHeaderMap::new(headers),
+            body: Arc::new(Mutex::new(Some(body))),
         }
+    }
+
+    // Consumes self by taking the inner Request.
+    // This method would have been `into_inner(self) -> Request<Body>`
+    // but we can't do that because we are crossing Python boundary.
+    pub fn take_inner(&mut self) -> Option<Request<Body>> {
+        let headers = self.headers.take_inner()?;
+        let mut parts = self.parts.take()?;
+        parts.headers = headers;
+        let body = {
+            let body = mem::take(&mut self.body);
+            let body = Arc::try_unwrap(body).ok()?;
+            body.into_inner().take()?
+        };
+        Some(Request::from_parts(parts, body))
     }
 }
 
 #[pymethods]
 impl PyRequest {
-    #[new]
-    /// Create a new Python-compatible `Request` object from the Python side.
-    fn newpy(
-        method: String,
-        uri: String,
-        headers: Option<HashMap<String, String>>,
-        version: Option<PyHttpVersion>,
-    ) -> Self {
-        let version = version.map(|v| v.0).unwrap_or(Version::HTTP_11);
-        Self {
-            method,
-            uri,
-            headers: headers.unwrap_or_default(),
-            version,
-        }
+    /// Return the HTTP method of this request.
+    #[getter]
+    fn method(&self) -> PyResult<String> {
+        self.parts
+            .as_ref()
+            .map(|parts| parts.method.to_string())
+            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
+    }
+
+    /// Return the URI of this request.
+    #[getter]
+    fn uri(&self) -> PyResult<String> {
+        self.parts
+            .as_ref()
+            .map(|parts| parts.uri.to_string())
+            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
     }
 
     /// Return the HTTP version of this request.
-    #[pyo3(text_signature = "($self)")]
-    fn version(&self) -> String {
-        PyHttpVersion(self.version).value().to_string()
+    #[getter]
+    fn version(&self) -> PyResult<String> {
+        self.parts
+            .as_ref()
+            .map(|parts| format!("{:?}", parts.version))
+            .ok_or_else(|| PyMiddlewareError::RequestGone.into())
     }
 
     /// Return the HTTP headers of this request.
-    /// TODO(can we use `Py::clone_ref()` to prevent cloning the hashmap?)
-    #[pyo3(text_signature = "($self)")]
-    fn headers(&self) -> HashMap<String, String> {
+    #[getter]
+    fn headers(&self) -> PyHeaderMap {
         self.headers.clone()
     }
 
-    /// Insert a new key/value into this request's headers.
-    #[pyo3(text_signature = "($self, key, value)")]
-    fn set_header(&mut self, key: &str, value: &str) {
-        self.headers.insert(key.to_string(), value.to_string());
+    /// Return the HTTP body of this request.
+    /// Note that this is a costly operation because the whole request body is cloned.
+    #[getter]
+    fn body<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let body = self.body.clone();
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let body = {
+                let mut body_guard = body.lock().await;
+                let body = body_guard.take().ok_or(PyMiddlewareError::RequestGone)?;
+                let body = hyper::body::to_bytes(body)
+                    .await
+                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+                let buf = body.clone();
+                body_guard.replace(Body::from(body));
+                buf
+            };
+            // TODO(Perf): can we use `PyBytes` here?
+            Ok(body.to_vec())
+        })
     }
 
-    /// Return a header value of this request.
-    #[pyo3(text_signature = "($self, key)")]
-    fn get_header(&self, key: &str) -> Option<&String> {
-        self.headers.get(key)
+    /// Set the HTTP body of this request.
+    #[setter]
+    fn set_body(&mut self, buf: &[u8]) {
+        self.body = Arc::new(Mutex::new(Some(Body::from(buf.to_owned()))));
     }
 }

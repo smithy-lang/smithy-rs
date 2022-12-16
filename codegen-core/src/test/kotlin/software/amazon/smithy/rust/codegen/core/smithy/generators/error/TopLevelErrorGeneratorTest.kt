@@ -8,12 +8,11 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.core.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -75,17 +74,16 @@ internal class TopLevelErrorGeneratorTest {
         val rustCrate = RustCrate(
             pluginContext.fileManifest,
             symbolProvider,
-            DefaultPublicModules,
             codegenContext.settings.codegenConfig,
         )
 
-        rustCrate.lib { writer ->
-            writer.rust("##![allow(deprecated)]")
+        rustCrate.lib {
+            Attribute.AllowDeprecated.copy(container = true).render(this)
         }
-        rustCrate.withModule(RustModule.Error) { writer ->
+        rustCrate.withModule(RustModule.Error) {
             for (shape in model.structureShapes) {
                 if (shape.id.namespace == "com.example") {
-                    StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.CLIENT)
+                    StructureGenerator(model, symbolProvider, this, shape).render(CodegenTarget.CLIENT)
                 }
             }
         }

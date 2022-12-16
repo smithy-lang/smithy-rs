@@ -66,15 +66,15 @@ pub async fn subcommand_publish(
             if !is_published(&package.handle).await? {
                 publish(&package.handle, &package.crate_path).await?;
 
+                // Keep things slow to avoid getting throttled by crates.io
+                tokio::time::sleep(Duration::from_secs(2)).await;
+
                 // Sometimes it takes a little bit of time for the new package version
                 // to become available after publish. If we proceed too quickly, then
                 // the next package publish can fail if it depends on this package.
                 wait_for_eventual_consistency(&package).await?;
                 info!("Successfully published `{}`", package.handle);
                 any_published = true;
-
-                // Keep things slow to avoid getting throttled by crates.io
-                tokio::time::sleep(Duration::from_secs(1)).await;
             } else {
                 info!("`{}` was already published", package.handle);
             }
@@ -126,7 +126,7 @@ async fn is_published(handle: &PackageHandle) -> Result<bool> {
         3,
         Duration::from_secs(5),
         || async {
-            let expected_version = (&handle.version).to_string();
+            let expected_version = handle.version.to_string();
             let crate_info = match CRATES_IO_CLIENT.get_crate(&handle.name).await {
                 Ok(info) => info,
                 Err(Error::NotFound(_)) => return Ok(false),
@@ -260,9 +260,9 @@ mod test {
     #[tokio::test]
     async fn crate_published_works() {
         let handle = PackageHandle::new("aws-smithy-http", "0.27.0-alpha.1".parse().unwrap());
-        assert_eq!(is_published(&handle).await.expect("failed"), true);
+        assert!(is_published(&handle).await.expect("failed"));
         // we will never publish this version
         let handle = PackageHandle::new("aws-smithy-http", "0.21.0-alpha.1".parse().unwrap());
-        assert_eq!(is_published(&handle).await.expect("failed"), false);
+        assert!(!is_published(&handle).await.expect("failed"));
     }
 }

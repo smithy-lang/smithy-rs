@@ -1,4 +1,5 @@
 # Summary
+
 - [Design Overview](./overview.md)
 - [Tenets](./tenets.md)
 - [Design FAQ](./faq.md)
@@ -7,11 +8,19 @@
   - [HTTP Middleware](transport/middleware.md)
 
 - [Smithy](./smithy/overview.md)
-    - [Simple Shapes](./smithy/simple_shapes.md)
-    - [Recursive Shapes](./smithy/recursive_shapes.md)
-    - [Aggregate Shapes](./smithy/aggregate_shapes.md)
-    - [Endpoint Resolution](smithy/endpoint.md)
-    - [Backwards Compatibility](smithy/backwards-compat.md)
+  - [Simple Shapes](./smithy/simple_shapes.md)
+  - [Recursive Shapes](./smithy/recursive_shapes.md)
+  - [Aggregate Shapes](./smithy/aggregate_shapes.md)
+  - [Endpoint Resolution](smithy/endpoint.md)
+  - [Backwards Compatibility](smithy/backwards-compat.md)
+
+- [Server](./server/overview.md)
+  - [Middleware](./server/middleware.md)
+  - [Instrumentation](./server/instrumentation.md)
+  - [Accessing Un-modelled Data](./server/from_parts.md)
+  - [The Anatomy of a Service](./server/anatomy.md)
+  - [Generating Common Service Code](./server/code_generation.md)
+  - [Generating the Pokémon Service](./server/pokemon_service.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)
@@ -35,6 +44,11 @@
   - [RFC-0019: Event Streams Errors](./rfcs/rfc0019_event_streams_errors.md)
   - [RFC-0020: Service Builder Improvements](./rfcs/rfc0020_service_builder.md)
   - [RFC-0021: Dependency Versions](./rfcs/rfc0021_dependency_versions.md)
+  - [RFC-0022: Error Context and Compatibility](./rfcs/rfc0022_error_context_and_compatibility.md)
+  - [RFC-0023: Evolving the new service builder API](./rfcs/rfc0023_refine_builder.md)
+  - [RFC-0024: RequestID](./rfcs/rfc0024_request_id.md)
+  - [RFC-0025: Constraint traits](./rfcs/rfc0025_constraint_traits.md)
+  - [RFC-0026: Client Crate Organization](./rfcs/rfc0026_client_crate_organization.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)

@@ -3,24 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http_server::plugin::Plugin;
+//! Provides an example [`Plugin`] implementation - [`PrintPlugin`].
 
-/// A [`Service`](tower::Service) that adds a print log.
+use aws_smithy_http_server::{
+    operation::{Operation, OperationShape},
+    plugin::{Plugin, PluginPipeline, PluginStack},
+};
+use tower::{layer::util::Stack, Layer, Service};
+
+use std::task::{Context, Poll};
+
+/// A [`Service`] that prints a given string.
 #[derive(Clone, Debug)]
 pub struct PrintService<S> {
     inner: S,
     name: &'static str,
 }
 
-impl<R, S> tower::Service<R> for PrintService<S>
+impl<R, S> Service<R> for PrintService<S>
 where
-    S: tower::Service<R>,
+    S: Service<R>,
 {
     type Response = S::Response;
     type Error = S::Error;
     type Future = S::Future;
 
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -30,12 +38,12 @@ where
     }
 }
 
-/// A [`Layer`](tower::Layer) which constructs the [`PrintService`].
+/// A [`Layer`] which constructs the [`PrintService`].
 #[derive(Debug)]
 pub struct PrintLayer {
     name: &'static str,
 }
-impl<S> tower::Layer<S> for PrintLayer {
+impl<S> Layer<S> for PrintLayer {
     type Service = PrintService<S>;
 
     fn layer(&self, service: S) -> Self::Service {
@@ -46,35 +54,32 @@ impl<S> tower::Layer<S> for PrintLayer {
     }
 }
 
-/// A [`Plugin`]() for a service builder to add a [`PrintLayer`] over operations.
+/// A [`Plugin`] for a service builder to add a [`PrintLayer`] over operations.
 #[derive(Debug)]
 pub struct PrintPlugin;
+
 impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
 where
-    Op: aws_smithy_http_server::operation::OperationShape,
+    Op: OperationShape,
 {
     type Service = S;
-    type Layer = tower::layer::util::Stack<L, PrintLayer>;
+    type Layer = Stack<L, PrintLayer>;
 
-    fn map(
-        &self,
-        input: aws_smithy_http_server::operation::Operation<S, L>,
-    ) -> aws_smithy_http_server::operation::Operation<Self::Service, Self::Layer> {
+    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
         input.layer(PrintLayer { name: Op::NAME })
     }
 }
 
-/// An extension to service builders to add the `print()` function.
-pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable<PrintPlugin> {
+/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
+pub trait PrintExt<ExistingPlugins> {
     /// Causes all operations to print the operation name when called.
     ///
     /// This works by applying the [`PrintPlugin`].
-    fn print(self) -> Self::Output
-    where
-        Self: Sized,
-    {
-        self.apply(PrintPlugin)
-    }
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>>;
 }
 
-impl<Builder> PrintExt for Builder where Builder: aws_smithy_http_server::plugin::Pluggable<PrintPlugin> {}
+impl<ExistingPlugins> PrintExt<ExistingPlugins> for PluginPipeline<ExistingPlugins> {
+    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, ExistingPlugins>> {
+        self.push(PrintPlugin)
+    }
+}

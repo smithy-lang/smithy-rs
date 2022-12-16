@@ -20,6 +20,7 @@ service RestXmlExtras {
         ChecksumRequired,
         StringHeader,
         CreateFoo,
+        RequiredMember,
     ]
 }
 
@@ -242,5 +243,17 @@ structure StringHeaderOutput {
     field: String,
 
     @httpHeader("x-enum")
-    enumHeader: StringEnum
+    enumHeader: StringEnum,
+}
+
+/// This operation tests that we can serialize `required` members.
+@http(uri: "/required-member", method: "GET")
+operation RequiredMember {
+    input: RequiredMemberInputOutput
+    output: RequiredMemberInputOutput
+}
+
+structure RequiredMemberInputOutput {
+    @required
+    requiredString: String
 }

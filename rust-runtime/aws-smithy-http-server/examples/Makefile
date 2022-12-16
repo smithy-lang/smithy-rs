@@ -4,7 +4,7 @@ GRADLE := $(SRC_DIR)/gradlew
 SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-sdk
 CLIENT_SDK_DST := $(CUR_DIR)/pokemon-service-client
 SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-server-sdk/rust-server-codegen
-CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-codegen
+CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-client-codegen
 
 all: codegen
 

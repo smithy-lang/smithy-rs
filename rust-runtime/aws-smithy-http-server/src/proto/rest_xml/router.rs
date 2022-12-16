@@ -11,12 +11,12 @@ use crate::response::IntoResponse;
 use crate::routers::method_disallowed;
 use crate::routers::UNKNOWN_OPERATION_EXCEPTION;
 
-use super::AwsRestXml;
+use super::RestXml;
 
 pub use crate::proto::rest::router::*;
 
 /// An AWS REST routing error.
-impl IntoResponse<AwsRestXml> for Error {
+impl IntoResponse<RestXml> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::NotFound => http::Response::builder()
@@ -26,7 +26,7 @@ impl IntoResponse<AwsRestXml> for Error {
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(empty())
-                .expect("invalid HTTP response for REST JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
+                .expect("invalid HTTP response for REST XML routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
             Error::MethodNotAllowed => method_disallowed(),
         }
     }

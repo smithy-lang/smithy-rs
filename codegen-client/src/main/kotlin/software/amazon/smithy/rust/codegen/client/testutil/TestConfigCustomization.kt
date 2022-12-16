@@ -75,8 +75,8 @@ fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDel
     val customizations = listOf(stubConfigCustomization("a")) + customization + stubConfigCustomization("b")
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
     project.withModule(RustModule.Config) {
-        generator.render(it)
-        it.unitTest(
+        generator.render(this)
+        unitTest(
             "config_send_sync",
             """
             fn assert_send_sync<T: Send + Sync>() {}
@@ -84,6 +84,6 @@ fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDel
             """,
         )
     }
-    project.lib { it.rust("pub use config::Config;") }
+    project.lib { rust("pub use config::Config;") }
     return project
 }

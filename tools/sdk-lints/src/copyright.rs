@@ -55,7 +55,7 @@ fn check_copyright_header(path: impl AsRef<Path>) -> Vec<LintError> {
             path.as_ref().display()
         ))];
     }
-    return vec![];
+    vec![]
 }
 
 fn needs_copyright_header(path: &Path) -> bool {

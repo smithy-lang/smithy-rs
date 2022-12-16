@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -45,6 +44,7 @@ class AwsQuerySerializerGeneratorTest {
             number: Double,
             s: String,
             top: Top,
+            unit: Unit,
         }
 
         @enum([{name: "FOO", value: "FOO"}])
@@ -89,18 +89,19 @@ class AwsQuerySerializerGeneratorTest {
     @ParameterizedTest
     @CsvSource("true", "false")
     fun `generates valid serializers`(generateUnknownVariant: Boolean) {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val symbolProvider = testSymbolProvider(model)
-        val target = when (generateUnknownVariant) {
+        val codegenTarget = when (generateUnknownVariant) {
             true -> CodegenTarget.CLIENT
             false -> CodegenTarget.SERVER
         }
-        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = target))
+        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
+        val codegenContext = testCodegenContext(model, codegenTarget = codegenTarget)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = codegenTarget))
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
-        val project = TestWorkspace.testProject(testSymbolProvider(model))
-        project.lib { writer ->
-            writer.unitTest(
+        val project = TestWorkspace.testProject(symbolProvider)
+        project.lib {
+            unitTest(
                 "query_serializer",
                 """
                 use model::Top;
@@ -116,7 +117,7 @@ class AwsQuerySerializerGeneratorTest {
                     .boolean(true)
                     .build()
                     .unwrap();
-                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
                 assert_eq!(
                     output,
@@ -133,14 +134,14 @@ class AwsQuerySerializerGeneratorTest {
             )
         }
         project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
-            UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice"), renderUnknownVariant = generateUnknownVariant).render()
+            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice"), renderUnknownVariant = generateUnknownVariant).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.public("input")) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
         project.compileAndTest()
     }

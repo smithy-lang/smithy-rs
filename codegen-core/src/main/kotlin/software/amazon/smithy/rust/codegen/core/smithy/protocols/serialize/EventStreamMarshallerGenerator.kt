@@ -21,9 +21,9 @@ import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -52,22 +52,22 @@ open class EventStreamMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
 ) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+    private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
-        "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
+        "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
+        "Message" to smithyEventStream.resolve("frame::Message"),
+        "Header" to smithyEventStream.resolve("frame::Header"),
+        "HeaderValue" to smithyEventStream.resolve("frame::HeaderValue"),
+        "Error" to smithyEventStream.resolve("error::Error"),
     )
 
     open fun render(): RuntimeType {
         val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
-        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
-            inlineWriter.renderMarshaller(marshallerType, unionSymbol)
+        return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) {
+            renderMarshaller(marshallerType, unionSymbol)
         }
     }
 
@@ -111,7 +111,7 @@ open class EventStreamMarshallerGenerator(
                         rustTemplate(
                             """
                             Self::Input::${UnionGenerator.UnknownVariantName} => return Err(
-                                #{Error}::Marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
+                                #{Error}::marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                             )
                             """,
                             *codegenScope,
@@ -211,7 +211,7 @@ open class EventStreamMarshallerGenerator(
                     rustTemplate(
                         """
                         #{serializerFn}(&$input)
-                            .map_err(|err| #{Error}::Marshalling(format!("{}", err)))?
+                            .map_err(|err| #{Error}::marshalling(format!("{}", err)))?
                         """,
                         "serializerFn" to serializerFn,
                         *codegenScope,
@@ -227,7 +227,7 @@ open class EventStreamMarshallerGenerator(
         inputExpr: String,
         someName: String,
         writeSomeCase: RustWriter.(String) -> Unit,
-        writeNoneCase: (RustWriter.() -> Unit)? = null,
+        writeNoneCase: (Writable)? = null,
     ) {
         if (optional) {
             rustBlock("if let Some($someName) = $inputExpr") {
@@ -249,6 +249,6 @@ open class EventStreamMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("${symbol.name.toPascalCase()}Marshaller", null, "crate::event_stream_serde")
+        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}Marshaller")
     }
 }

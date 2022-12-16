@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -43,16 +44,18 @@ class AwsQueryParserGeneratorTest {
     @Test
     fun `it modifies operation parsing to include Response and Result tags`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val symbolProvider = testSymbolProvider(model)
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = AwsQueryParserGenerator(
-            testCodegenContext(model),
+            codegenContext,
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
+            builderSymbolFn(symbolProvider),
         )
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
 
-        project.lib { writer ->
-            writer.unitTest(
+        project.lib {
+            unitTest(
                 name = "valid_input",
                 test = """
                     let xml = br#"
@@ -62,7 +65,7 @@ class AwsQueryParserGeneratorTest {
                         </SomeOperationResult>
                     </someOperationResponse>
                     "#;
-                    let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
+                    let output = ${format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
                     assert_eq!(output.some_attribute, Some(5));
                     assert_eq!(output.some_val, Some("Some value".to_string()));
                 """,
@@ -70,12 +73,12 @@ class AwsQueryParserGeneratorTest {
         }
 
         project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#SomeOutput").renderWithModelBuilder(model, symbolProvider, it)
+            model.lookup<StructureShape>("test#SomeOutput").renderWithModelBuilder(model, symbolProvider, this)
         }
 
         project.withModule(RustModule.public("output")) {
             model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
-                .renderWithModelBuilder(model, symbolProvider, it)
+                .renderWithModelBuilder(model, symbolProvider, this)
         }
         project.compileAndTest()
     }
