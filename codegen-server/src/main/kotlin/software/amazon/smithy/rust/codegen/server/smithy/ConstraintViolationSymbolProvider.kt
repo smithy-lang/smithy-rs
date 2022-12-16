@@ -106,7 +106,9 @@ class ConstraintViolationSymbolProvider(
     }
 
     override fun toSymbol(shape: Shape): Symbol {
-        check(shape.canReachConstrainedShape(model, base))
+        check(shape.canReachConstrainedShape(model, base)) {
+            "`ConstraintViolationSymbolProvider` was called on shape that does not reach a constrained shape: $shape"
+        }
 
         return when (shape) {
             is MapShape, is CollectionShape, is UnionShape -> {

@@ -63,7 +63,7 @@ enum class Cargo(val toString: String) {
     TEST_ALL_FEATURES("cargoTestAllFeatures"),
     CHECK("cargoCheck"),
     TEST("cargoTest"),
-    DOCS("cargoDocs"),
+    DOCS("cargoDoc"),
     CLIPPY("cargoClippy");
 }
 
@@ -104,7 +104,7 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         when (it) {
             "check" -> Cargo.CHECK
             "test" -> Cargo.TEST
-            "docs" -> Cargo.DOCS
+            "doc" -> Cargo.DOCS
             "clippy" -> Cargo.CLIPPY
             "checkAllFeatures" -> Cargo.CHECK_ALL_FEATURES
             "testAllFeatures" -> Cargo.TEST_ALL_FEATURES
