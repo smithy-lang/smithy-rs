@@ -41,6 +41,7 @@ val allCodegenTests = listOf(
     CodegenTest(
         "com.amazonaws.apigateway#BackplaneControlService",
         "apigateway",
+        imports = listOf("models/apigateway-rules.smithy"),
         extraConfig = """
             ,
             "codegen": {
