@@ -395,6 +395,16 @@ private const val RENAMED_FROM_KEY = "renamedfrom"
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
 fun Symbol.Builder.module(module: RustModule.LeafModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
 fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)
+
+/**
+ * Creates a test module for this symbol.
+ * For example if the symbol represents the name for the struct `struct MyStruct { ... }`,
+ * This function will create an inline module
+ * ```rust
+ *  #[cfg(test)]
+ *  mod test_my_struct { ... }
+ * ```
+ */
 fun Symbol.testModule(): RustModule.LeafModule {
     val module = module()
 
