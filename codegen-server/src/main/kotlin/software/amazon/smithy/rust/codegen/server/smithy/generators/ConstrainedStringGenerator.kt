@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
@@ -147,7 +146,7 @@ class ConstrainedStringGenerator(
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }
 
-        renderPatternTests(symbol)
+        renderTests(symbol)
     }
 
     private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
@@ -178,23 +177,11 @@ class ConstrainedStringGenerator(
         }
     }
 
-    private fun renderPatternTests(symbol: Symbol) {
+    private fun renderTests(symbol: Symbol) {
         val name = symbol.name
-        val testCases = constraintsInfo.flatMap { it.testCases }
+        val testCases = TraitInfo.testCases(constraintsInfo)
 
         if (testCases.isNotEmpty()) {
-            val annotatedTestCases: Writable = testCases.map { testCase ->
-                writable {
-                    rustTemplate(
-                        """
-                        ##[test]
-                        #{TestCase:W}
-                        """,
-                        "TestCase" to testCase,
-                    )
-                }
-            }.join("\n")
-
             writer.withInlineModule(symbol.testModule()) {
                 rustTemplate(
                     """
@@ -202,7 +189,7 @@ class ConstrainedStringGenerator(
 
                     #{AnnotatedTestCases:W}
                     """,
-                    "AnnotatedTestCases" to annotatedTestCases,
+                    "AnnotatedTestCases" to testCases.join("\n"),
                 )
             }
         }
