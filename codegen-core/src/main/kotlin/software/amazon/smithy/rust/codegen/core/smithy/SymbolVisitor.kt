@@ -399,7 +399,7 @@ fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY
 /**
  * Creates a test module for this symbol.
  * For example if the symbol represents the name for the struct `struct MyStruct { ... }`,
- * This function will create an inline module
+ * this function will create the following inline module:
  * ```rust
  *  #[cfg(test)]
  *  mod test_my_struct { ... }
