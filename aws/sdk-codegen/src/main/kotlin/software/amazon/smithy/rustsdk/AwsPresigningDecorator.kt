@@ -17,10 +17,9 @@ import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -85,7 +84,7 @@ internal val PRESIGNABLE_OPERATIONS by lazy {
 
 class AwsPresigningDecorator internal constructor(
     private val presignableOperations: Map<ShapeId, PresignableOperation> = PRESIGNABLE_OPERATIONS,
-) : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+) : ClientCodegenDecorator {
     companion object {
         const val ORDER: Byte = 0
     }
@@ -116,9 +115,6 @@ class AwsPresigningDecorator internal constructor(
         // Apply operation-specific model transformations
         return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     private fun addSyntheticOperations(model: Model): Model {
         val presignableOps = model.shapes()

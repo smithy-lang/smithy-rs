@@ -23,9 +23,13 @@ internal class EndpointRulesetIndex : KnowledgeIndex {
 
     fun endpointRulesForService(serviceShape: ServiceShape) = ruleSets.computeIfAbsent(
         serviceShape,
-    ) { serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typecheck() } }
+    ) {
+        serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }
+            ?.also { it.typecheck() }
+    }
 
-    fun endpointTests(serviceShape: ServiceShape) = serviceShape.getTrait<EndpointTestsTrait>()?.testCases ?: emptyList()
+    fun endpointTests(serviceShape: ServiceShape) =
+        serviceShape.getTrait<EndpointTestsTrait>()?.testCases ?: emptyList()
 
     companion object {
         fun of(model: Model): EndpointRulesetIndex {

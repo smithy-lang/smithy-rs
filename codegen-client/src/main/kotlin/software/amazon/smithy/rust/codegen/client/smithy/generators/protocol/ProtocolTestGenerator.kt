@@ -180,7 +180,7 @@ class ProtocolTestGenerator(
         } ?: writable { }
         rustTemplate(
             """
-            let builder = #{Config}::Config::builder()$customToken;
+            let builder = #{Config}::Config::builder().endpoint_resolver("https://example.com")$customToken;
             #{customParams}
             let config = builder.build();
 

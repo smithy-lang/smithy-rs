@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -74,7 +75,8 @@ class ConstrainedMapGenerator(
             "ConstraintViolation" to constraintViolation,
         )
 
-        writer.documentShape(shape, model, note = rustDocsNote(name))
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
         constrainedTypeMetadata.render(writer)
         writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {

@@ -47,7 +47,11 @@ class TemplateGenerator(
     }
 
     override fun visitStaticElement(str: String) = writable {
-        rust("out.push_str(${str.dq()});")
+        when (str.length) {
+            0 -> {}
+            1 -> rust("out.push('$str');")
+            else -> rust("out.push_str(${str.dq()});")
+        }
     }
 
     override fun visitDynamicElement(expr: Expression) = writable {
