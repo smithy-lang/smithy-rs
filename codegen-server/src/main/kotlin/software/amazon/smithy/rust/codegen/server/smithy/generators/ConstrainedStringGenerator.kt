@@ -22,9 +22,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.smithy.testModule
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
@@ -56,14 +58,14 @@ class ConstrainedStringGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
     private val constraintsInfo: List<TraitInfo> =
         supportedStringConstraintTraits
             .mapNotNull { shape.getTrait(it).orNull() }
-            .map(StringTraitInfo::fromTrait)
+            .map { StringTraitInfo.fromTrait(symbol, it) }
             .map(StringTraitInfo::toTraitInfo)
 
     fun render() {
-        val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
@@ -144,6 +146,8 @@ class ConstrainedStringGenerator(
         writer.withInlineModule(constraintViolation.module()) {
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }
+
+        renderPatternTests(symbol)
     }
 
     private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
@@ -171,6 +175,36 @@ class ConstrainedStringGenerator(
                 "String" to RuntimeType.String,
                 "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
             )
+        }
+    }
+
+    private fun renderPatternTests(symbol: Symbol) {
+        val name = symbol.name
+        val testCases = constraintsInfo.flatMap { it.testCases }
+
+        if (testCases.isNotEmpty()) {
+            val annotatedTestCases: Writable = testCases.map { testCase ->
+                writable {
+                    rustTemplate(
+                        """
+                        ##[test]
+                        #{TestCase:W}
+                        """,
+                        "TestCase" to testCase,
+                    )
+                }
+            }.join("\n")
+
+            writer.withInlineModule(symbol.testModule()) {
+                rustTemplate(
+                    """
+                    use super::$name;
+
+                    #{AnnotatedTestCases:W}
+                    """,
+                    "AnnotatedTestCases" to annotatedTestCases,
+                )
+            }
         }
     }
 }
@@ -216,7 +250,7 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     }
 }
 
-private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
+private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo {
         val pattern = patternTrait.pattern
 
@@ -238,6 +272,15 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                 )
             },
             this::renderValidationFunction,
+            testCases = listOf {
+                rust(
+                    """
+                    fn regex_compiles() {
+                        ${symbol.name}::compile_regex();
+                    }
+                    """,
+                )
+            },
         )
     }
 
@@ -278,12 +321,12 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
     }
 }
 
-private sealed class StringTraitInfo {
+private sealed class StringTraitInfo() {
     companion object {
-        fun fromTrait(trait: Trait): StringTraitInfo =
+        fun fromTrait(symbol: Symbol, trait: Trait) =
             when (trait) {
                 is PatternTrait -> {
-                    Pattern(trait)
+                    Pattern(symbol, trait)
                 }
                 is LengthTrait -> {
                     Length(trait)

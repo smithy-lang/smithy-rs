@@ -38,8 +38,11 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -392,6 +395,17 @@ private const val RENAMED_FROM_KEY = "renamedfrom"
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
 fun Symbol.Builder.module(module: RustModule.LeafModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
 fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)
+fun Symbol.testModule(): RustModule.LeafModule {
+    val module = module()
+
+    return RustModule.new(
+        name = "test_${name.toRustName()}",
+        visibility = Visibility.PRIVATE,
+        inline = true,
+        parent = module.parent,
+        additionalAttributes = listOf(Attribute.Cfg("test")),
+    )
+}
 
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
     return this.putProperty(RENAMED_FROM_KEY, name)
@@ -435,3 +449,5 @@ fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is 
 // Symbols should _always_ be created with a Rust type & shape attached
 fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
+
+fun String.toRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())

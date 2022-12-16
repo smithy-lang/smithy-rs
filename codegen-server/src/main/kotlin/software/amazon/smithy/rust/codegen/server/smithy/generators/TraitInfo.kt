@@ -20,6 +20,7 @@ data class TraitInfo(
     val constraintViolationVariant: Writable,
     val asValidationExceptionField: Writable,
     val validationFunctionDefinition: (constraintViolation: Symbol, unconstrainedTypeName: String) -> Writable,
+    val testCases: List<Writable> = listOf(),
 )
 
 /**
