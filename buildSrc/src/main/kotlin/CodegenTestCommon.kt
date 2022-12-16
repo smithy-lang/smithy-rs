@@ -237,13 +237,13 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "check", "--lib", "--tests", "--benches", "-all--features")
+        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "test", "-all--features")
+        commandLine("cargo", "test", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
