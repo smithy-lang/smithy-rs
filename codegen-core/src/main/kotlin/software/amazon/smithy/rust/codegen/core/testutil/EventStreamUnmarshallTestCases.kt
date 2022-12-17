@@ -211,8 +211,8 @@ internal object EventStreamUnmarshallTestCases {
         )
 
         val (someError, kindSuffix) = when (codegenTarget) {
-            CodegenTarget.CLIENT -> listOf("TestStreamErrorKind::SomeError", ".kind")
-            CodegenTarget.SERVER -> listOf("TestStreamError::SomeError", "")
+            CodegenTarget.CLIENT -> "TestStreamErrorKind::SomeError" to ".kind"
+            CodegenTarget.SERVER -> "TestStreamError::SomeError" to ""
         }
         unitTest(
             "some_error",
