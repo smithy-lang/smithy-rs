@@ -31,6 +31,7 @@ private fun hasStreamingOperations(model: Model): Boolean {
     }
 }
 
+// TODO(https://github.com/awslabs/smithy-rs/issues/2111): Fix this logic to consider collection/map shapes
 private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) -> Boolean): Boolean =
     model.structureShapes.any { structure ->
         structure.members().any { member -> predicate(model.expectShape(member.target)) }
@@ -38,10 +39,10 @@ private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) ->
         union.members().any { member -> predicate(model.expectShape(member.target)) }
     }
 
-/** Returns true if the model has any blob shapes or members */
+/** Returns true if the model uses any blob shapes */
 private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isBlobShape)
 
-/** Returns true if the model has any timestamp shapes or members */
+/** Returns true if the model uses any timestamp shapes */
 private fun hasDateTimes(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isTimestampShape)
 
 /** Returns a list of types that should be re-exported for the given model */
