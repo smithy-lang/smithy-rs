@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.eval.Type
-import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expr.Reference
 import software.amazon.smithy.rulesengine.language.syntax.fn.Function
@@ -128,6 +127,19 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         "EndpointError" to types.resolveEndpointError,
         "DiagnosticCollector" to endpointsLib("diagnostic").toType().resolve("DiagnosticCollector"),
     )
+
+    private val allowLintsForResolver = listOf(
+        // we generate if x { if y { if z { ... } } }
+        "clippy::collapsible_if",
+        // we generate `if (true) == expr { ... }`
+        "clippy::bool_comparison",
+        // we generate `if !(a == b)`
+        "clippy::nonminimal_bool",
+        // we generate `if x == "" { ... }`
+        "clippy::comparison_to_empty",
+        // we generate `if let Some(_) = ... { ... }`
+        "clippy::redundant_pattern_matching",
+    )
     private val context = Context(registry, runtimeConfig)
 
     companion object {
@@ -190,6 +202,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
         return RuntimeType.forInlineFun("resolve_endpoint", EndpointsImpl) {
+            allowLintsForResolver.map { Attribute.Custom("allow($it)") }.map { it.render(this) }
             rustTemplate(
                 """
                 pub(super) fn resolve_endpoint($ParamsName: &#{Params}, $DiagnosticCollector: &mut #{DiagnosticCollector}, #{additional_args}) -> #{endpoint}::Result {
@@ -270,7 +283,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                 // 2. the RHS returns a boolean which we need to gate on
                 // 3. the RHS is infallible (e.g. uriEncode)
                 val resultName =
-                    (condition.result.orNull() ?: (fn as? Reference)?.name ?: Identifier.of("_")).rustName()
+                    (condition.result.orNull() ?: (fn as? Reference)?.name)?.rustName() ?: "_"
                 val target = generator.generate(fn)
                 val next = generateRuleInternal(rule, rest)
                 when {

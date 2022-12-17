@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.endpoint
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
@@ -36,7 +35,11 @@ class EndpointsDecoratorTest {
         @endpointRuleSet({
             "version": "1.0",
             "rules": [{
-                "conditions": [{"fn": "isSet", "argv": [{"ref":"Region"}]}],
+                "conditions": [
+                    {"fn": "isSet", "argv": [{"ref":"Region"}]},
+                    {"fn": "isSet", "argv": [{"ref":"ABoolParam"}]},
+                    {"fn": "booleanEquals", "argv": [{"ref": "ABoolParam"}, false]}
+                ],
                 "type": "endpoint",
                 "endpoint": {
                     "url": "https://www.{Region}.example.com"
@@ -94,7 +97,6 @@ class EndpointsDecoratorTest {
     fun `set an endpoint in the property bag`() {
         val testDir = clientIntegrationTest(
             model,
-            addtionalDecorators = listOf(EndpointsDecorator()),
             // just run integration tests
             command = { "cargo test --test *".runWithWarnings(it) },
         ) { clientCodegenContext, rustCrate ->
