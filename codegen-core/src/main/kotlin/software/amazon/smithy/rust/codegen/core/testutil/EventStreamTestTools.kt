@@ -47,32 +47,55 @@ data class TestEventStreamProject(
     val project: TestWriterDelegator,
 )
 
-object EventStreamTestTools {
-    fun runTestCase(
-        testCase: EventStreamTestModels.TestCase,
-        codegenTarget: CodegenTarget,
-        createSymbolProvider: (Model) -> RustSymbolProvider,
-        renderGenerator: (CodegenContext, TestEventStreamProject, Protocol) -> RuntimeType,
-        marshall: Boolean,
-    ) {
-        val test = generateTestProject(testCase, codegenTarget, createSymbolProvider)
+enum class EventStreamTestVariety {
+    Marshall,
+    Unmarshall
+}
 
-        val codegenContext = CodegenContext(
+interface EventStreamTestRequirements<C : CodegenContext> {
+    /** Create a codegen context for the tests */
+    fun createCodegenContext(
+        model: Model,
+        symbolProvider: RustSymbolProvider,
+        serviceShape: ServiceShape,
+        protocolShapeId: ShapeId,
+        codegenTarget: CodegenTarget,
+    ): C
+
+    /** Create a symbol provider for the tests */
+    fun createSymbolProvider(model: Model): RustSymbolProvider
+
+    /** Render the event stream marshall/unmarshall code generator */
+    fun renderGenerator(
+        codegenContext: C,
+        project: TestEventStreamProject,
+        protocol: Protocol,
+    ): RuntimeType
+}
+
+object EventStreamTestTools {
+    fun <C : CodegenContext> runTestCase(
+        testCase: EventStreamTestModels.TestCase,
+        requirements: EventStreamTestRequirements<C>,
+        codegenTarget: CodegenTarget,
+        variety: EventStreamTestVariety,
+    ) {
+        val test = generateTestProject(testCase, codegenTarget, requirements::createSymbolProvider)
+
+        val codegenContext = requirements.createCodegenContext(
             test.model,
             test.symbolProvider,
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
-            testRustSettings(),
-            target = codegenTarget,
+            codegenTarget,
         )
         val protocol = testCase.protocolBuilder(codegenContext)
-        val generator = renderGenerator(codegenContext, test, protocol)
+        val generator = requirements.renderGenerator(codegenContext, test, protocol)
 
         test.project.lib {
-            if (marshall) {
-                writeMarshallTestCases(testCase, generator)
-            } else {
-                writeUnmarshallTestCases(testCase, codegenTarget, generator)
+            when (variety) {
+                EventStreamTestVariety.Marshall -> writeMarshallTestCases(testCase, generator)
+                EventStreamTestVariety.Unmarshall -> writeUnmarshallTestCases(testCase, codegenTarget, generator)
             }
         }
         test.project.compileAndTest()
