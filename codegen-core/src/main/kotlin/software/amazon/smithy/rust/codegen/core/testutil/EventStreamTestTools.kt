@@ -21,12 +21,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
@@ -71,6 +69,13 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         project: TestEventStreamProject,
         protocol: Protocol,
     ): RuntimeType
+
+    /** Render a builder for the given shape */
+    fun renderBuilderForShape(
+        writer: RustWriter,
+        codegenContext: C,
+        shape: StructureShape,
+    )
 }
 
 object EventStreamTestTools {
@@ -80,15 +85,17 @@ object EventStreamTestTools {
         codegenTarget: CodegenTarget,
         variety: EventStreamTestVariety,
     ) {
-        val test = generateTestProject(testCase, codegenTarget, requirements::createSymbolProvider)
-
+        val model = EventStreamNormalizer.transform(OperationNormalizer.transform(testCase.model))
+        val symbolProvider = requirements.createSymbolProvider(model)
+        val serviceShape = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val codegenContext = requirements.createCodegenContext(
-            test.model,
-            test.symbolProvider,
-            test.serviceShape,
+            model,
+            symbolProvider,
+            serviceShape,
             ShapeId.from(testCase.protocolShapeId),
             codegenTarget,
         )
+        val test = generateTestProject(requirements, codegenContext, codegenTarget)
         val protocol = testCase.protocolBuilder(codegenContext)
         val generator = requirements.renderGenerator(codegenContext, test, protocol)
 
@@ -101,17 +108,16 @@ object EventStreamTestTools {
         test.project.compileAndTest()
     }
 
-    private fun generateTestProject(
-        testCase: EventStreamTestModels.TestCase,
+    private fun <C : CodegenContext> generateTestProject(
+        requirements: EventStreamTestRequirements<C>,
+        codegenContext: C,
         codegenTarget: CodegenTarget,
-        createSymbolProvider: (Model) -> RustSymbolProvider,
     ): TestEventStreamProject {
-        val model = EventStreamNormalizer.transform(OperationNormalizer.transform(testCase.model))
-        val serviceShape = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
+        val model = codegenContext.model
+        val symbolProvider = codegenContext.symbolProvider
         val operationShape = model.expectShape(ShapeId.from("test#TestStreamOp")) as OperationShape
         val unionShape = model.expectShape(ShapeId.from("test#TestStream")) as UnionShape
 
-        val symbolProvider = createSymbolProvider(model)
         val project = TestWorkspace.testProject(symbolProvider)
         val operationSymbol = symbolProvider.toSymbol(operationShape)
         project.withModule(ErrorsModule) {
@@ -125,11 +131,7 @@ object EventStreamTestTools {
             }
             for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
                 StructureGenerator(model, symbolProvider, this, shape as StructureShape).render(codegenTarget)
-                val builderGen = BuilderGenerator(model, symbolProvider, shape)
-                builderGen.render(this)
-                implBlock(shape, symbolProvider) {
-                    builderGen.renderConvenienceMethod(this)
-                }
+                requirements.renderBuilderForShape(this, codegenContext, shape)
             }
         }
         project.withModule(ModelsModule) {
@@ -139,7 +141,14 @@ object EventStreamTestTools {
         project.withModule(RustModule.Output) {
             operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         }
-        return TestEventStreamProject(model, serviceShape, operationShape, unionShape, symbolProvider, project)
+        return TestEventStreamProject(
+            model,
+            codegenContext.serviceShape,
+            operationShape,
+            unionShape,
+            symbolProvider,
+            project,
+        )
     }
 
     private fun recursivelyGenerateModels(
