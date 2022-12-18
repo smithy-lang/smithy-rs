@@ -26,6 +26,8 @@ Data types are, a) builder data types and b) data types that builder types may h
 
 Additionally, we add `fn set_fields` to fluent builders to allow users to set the data they deserialized to fluent builders.
 
+Lastly, we emphasize that this RFC does NOT aim to serialize the entire response or request.
+
 # Use Case
 Users have requested `serde` traits to be implemented on data types implemented in rust SDK.  
 We have created this RFC with the following use cases in mind.
@@ -126,7 +128,7 @@ The resulting size of the serialized data is smaller when tagged externally, as 
 
 For the reasons mentioned above, we implement an enum that is externally tagged.
 
-## Data Types to Ignore
+## Data Types to Skip
 We are going to skip serialization and deserialization of fields that have the following datatypes.
 
 - `aws_smithy_http::byte_stream::ByteStream`
@@ -159,6 +161,55 @@ This method accepts inputs and replace all parameters that `Client` has with the
 pub fn set_fields(mut self, builder: path::to::builder_type) -> path::to::builder_type {
     self.inner = new_parameter;
     self
+}
+```
+
+# Other Concerns
+## Model evolution 
+SDK will introduce new fields and it is possible that we may see new data types in future.  
+
+We believe that this will not be a problem.
+
+### Introduction of New Fields
+Most fields are `Option<T>` type. 
+When user de-serializes data written for a format before the new fields were introduced, new field will be assigned with `None` type.
+
+If a field isn't `Option`, `serde` uses `Default` trait to generate data to fill the field.  
+We believe that we could 
+
+If the new field is not an `Option<T>` type and has no `Default` implementation, we must implement a custom de-serialization logic.
+
+In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside of our responsibility.
+
+## Introduction of New Data Type
+If new field introduces a new data type, it will not require any additional work if the data type can derive `serde` traits.  
+
+If the data cannot derive `serde` traits on it's own, then we have two options.
+To clarify, this is the same approach we took on `Data Type to skip` section.
+1. skip
+   We will simply skip serializing/de-serializing. However, we may need to implement custom serialization/de-serialization logic if a value is not wrapped with `Option`.
+2. custom serialization/de-serialization logic 
+   We can implement tailored serialization/de-serialization logic, just like in 
+
+e.g.
+```rust
+#[derive(serde::Serialize, serde::Deserialize)]
+struct OutputV1 {
+  string_field: Option<String>
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct OutputV2 {
+  string_field: Option<String>,
+  // this will always be treated as None value by serde
+  #[serde(skip)] 
+  skip_not_serializable: Option<SomeComplexDataType>,
+  // We can implement a custom serialization logic
+  #[serde(serialize_with = "custom_serilization_logic", deserialize_with = "custom_deserilization_logic")]
+  not_derive_able: SomeComplexDataType,
+  // Serialization will be skipped, and de-serialization will be handled with the function provided on default tag
+  #[serde(skip, default = "default_value")]
+  skip_with_custom: DataTypeWithoutDefaultTrait,
 }
 ```
 
