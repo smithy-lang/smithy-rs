@@ -213,6 +213,15 @@ struct OutputV2 {
 }
 ```
 # Discussions
+
+## Serialization and de-serialization support for an entire response/request
+The problem with serialization/de-serialization of an entire response/request the lack of data type that can be mapped to `serde`'s data model field by field.
+
+Currently, SDK has no data type that represents an entire response or request that can be mapped to `serde`'s data model; Thus, you must introduce a schema and implement logics that allows users to serialize/de-serialize their data.
+
+Although this RFC does not solve this issue, we believe that this RFC will help future contirbutor who wishes to implement serialization and de-serialization support for an entire response/request.
+
+
 ## Sensitive Information
 If serialized data contains sensitive information, it will not be masked.  
 Users must be cautious to avoid compromisation
@@ -273,13 +282,6 @@ We do not see any benefit in keeping them behind a same feature-gate as this wil
 We considered implementing different feature gates for output, input and their corresponding data types.
 For example, output and input types can have `output-serde-*` and `input-serde-*`.
 We are unable to do this as relevant meta data is not available during the code-gen.
-
-## Serialization and de-serialization support for an entire response/request
-The problem with serialization/de-serialization of an entire response/request the lack of data type that can be mapped to `serde`'s data model field by field.
-
-Currently, SDK has no data type that represents an entire response or request that can be mapped to `serde`'s data model; Thus, you must introduce a schema and implement logics that allows users to serialize/de-serialize their data.
-
-Although this RFC does not solve this issue, we believe that this RFC will help future contirbutor who wishes to implement serialization and de-serialization support for an entire response/request.
 
 
 Changes checklist
