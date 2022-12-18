@@ -110,16 +110,16 @@ We considered implementing manually or implementing them as part of code-gen; We
 
 ## Enum Representation 
 `serde` allows programmers to use one of four different tagging ([internal, external, adjacent and untagged](https://serde.rs/enum-representations.html)) when serializing an enum.  
-## untagged  
+### untagged  
   You cannot deserialize serialized data in some cases. 
   For example, [aws_sdk_dynamodb::model::AttributeValue](https://docs.rs/aws-sdk-dynamodb/latest/aws_sdk_dynamodb/model/enum.AttributeValue.html) has `Null(bool)` and `Bool(bool)`, which you cannot distinguish serialized values without a tag.
 
   
-## internal  
+### internal  
   This results in compile time error.
   [*Using a #[serde(tag = "...")] attribute on an enum containing a tuple variant is an error at compile time*](https://serde.rs/enum-representations.html).
 
-## external and adjacent
+### external and adjacent
 We are left with `external` and `adjacent` tagging.  
 External tagging is the default way.  
 This RFC can be achieved either way.  
