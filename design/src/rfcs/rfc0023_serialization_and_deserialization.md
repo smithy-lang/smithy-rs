@@ -24,7 +24,7 @@ Data types are, a) builder data types and b) data types that builder types may h
 
 `DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format.
 
-Additionally, we add two functions, `send_with`  and `replace_parameter` to the fluent builder to allow users to use the data they deserialized in the operation.
+Additionally, we add `fn set_fields` to fluent builders to allow users to set the data they deserialized to fluent builders.
 
 # Use Case
 Users have requested `serde` traits to be implemented on data types implemented in rust SDK.  
@@ -149,6 +149,19 @@ These builder types are available to users, however, no API requires users to bu
 We considered removing traits from these data types, however, the code-gen framework does not carry the necessary metadata to determine whether the data is the builder type of an output type or not.
 We conclude that we must avoid such a technical challenge to bring this RFC to life.
 
+## `fn set_fields` to allow users supply externally created `Input`s
+
+SDK does not have a method that allows users supply deserialized inputs.
+Thus, we add a new method `fn set_fields` to `Client` types.
+This method accepts inputs and replace all parameters that `Client` has with the new one.
+
+```rust
+pub fn set_fields(mut self, builder: path::to::builder_type) -> path::to::builder_type {
+    self.inner = new_parameter;
+    self
+}
+```
+
 # What users must know
 ## Sensitive Information
 If serialized data contains sensitive information, it will not be masked.  
@@ -189,9 +202,8 @@ Users are advised to consider the use of software such as [sccache](https://gith
 
 
 ## Misleading Results
-SDK team previously expressed concern over misleading results.  
+SDK team previously expressed concern over serialized data to be misleading.  
 We believe that features implemented as part of this RFC does not produce misleading result as we focus on builder types and it's corresponding data types which are mapped to serde's data type model with the derive macro.  
-
 
 # Feature Gate
 `Serde` traits are implemented behind feature gates. 

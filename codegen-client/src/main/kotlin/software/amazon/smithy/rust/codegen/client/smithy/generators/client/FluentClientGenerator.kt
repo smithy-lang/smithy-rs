@@ -309,26 +309,11 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
 
-                        /// Replaces the parameter
-                        /// Returns the existing data.
+                        /// Replaces any parameters set to this data.
                         ${RuntimeType.AttrUnstableSerdeAny}
-                        pub fn replace_parameter(&mut self, new_parameter: #{Inner}) -> #{Inner} {
-                            std::mem::replace(&mut self.inner, new_parameter)
-                        }
-
-                        /// This method sends a request with given input.  
-                        /// Method ignores any data that can be found in the builder type held on this struct.
-                        ${RuntimeType.AttrUnstableSerdeAny}
-                        pub async fn send_with(self, builder: $builderPath) -> 
-                            std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>> 
-                            #{send_bounds:W} 
-                        {
-                            let op = builder.build()
-                                .map_err(#{SdkError}::construction_failure)?
-                                .make_operation(&self.handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure)?;
-                            self.handle.client.call(op).await
+                        pub fn set_fields(mut self, builder: $builderPath) -> $builderPath {
+                            self.inner = new_parameter;
+                            self
                         }
                         """,
                         "Inner" to input.builderSymbol(symbolProvider),
