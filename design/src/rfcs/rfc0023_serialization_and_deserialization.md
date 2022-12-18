@@ -212,8 +212,7 @@ struct OutputV2 {
   skip_with_custom: DataTypeWithoutDefaultTrait,
 }
 ```
-
-# What users must know
+# Discussions
 ## Sensitive Information
 If serialized data contains sensitive information, it will not be masked.  
 Users must be cautious to avoid compromisation
@@ -253,7 +252,7 @@ Users are advised to consider the use of software such as [sccache](https://gith
 
 
 ## Misleading Results
-SDK team previously expressed concern over serialized data to be misleading.  
+SDK team previously expressed concern that serialized data may be misleading.  
 We believe that features implemented as part of this RFC does not produce misleading result as we focus on builder types and it's corresponding data types which are mapped to serde's data type model with the derive macro.  
 
 # Feature Gate
@@ -273,14 +272,15 @@ We do not see any benefit in keeping them behind a same feature-gate as this wil
 ## Different feature gates for different data types
 We considered implementing different feature gates for output, input and their corresponding data types.
 For example, output and input types can have `output-serde-*` and `input-serde-*`.
+We are unable to do this as relevant meta data is not available during the code-gen.
 
-NOTE:
-  I believe that I got this one wrong.
-  I don't have enough time to rephrase it today so I will just leave it here.
-///
-The complexity that this implementation introduces is significant as data types in Kotlin do not hold any metadata that determines which one of the categories that data belongs to.
-Thus, we believe that benefit does not outweigh the cost of maintenance and implementation.
-///
+## Serialization and de-serialization support for an entire response/request
+The problem with serialization/de-serialization of an entire response/request the lack of data type that can be mapped to `serde`'s data model field by field.
+
+Currently, SDK has no data type that represents an entire response or request that can be mapped to `serde`'s data model; Thus, you must introduce a schema and implement logics that allows users to serialize/de-serialize their data.
+
+Although this RFC does not solve this issue, we believe that this RFC will help future contirbutor who wishes to implement serialization and de-serialization support for an entire response/request.
+
 
 Changes checklist
 -----------------
