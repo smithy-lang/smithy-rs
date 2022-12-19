@@ -11,12 +11,12 @@
     unreachable_pub
 )]
 
-//! `aws-credential-types` provides the items concerned with AWS SDK credentials including:
-//! * A trait for credential providers
-//! * An opaque struct representing credentials
-//! * Concrete implementations of credential caching
-
 //! AWS SDK Credentials
+//!
+//! `aws-credential-types` provides the items concerned with AWS SDK credentials including:
+//! * A trait for credentials providers
+//! * An opaque struct representing credentials
+//! * Concrete implementations of credentials caching
 //!
 //! ## Implementing your own credentials provider
 //!
