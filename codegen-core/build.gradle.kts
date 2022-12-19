@@ -4,11 +4,12 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.jetbrains.dokka.gradle.DokkaTask
 import java.io.ByteArrayOutputStream
 
 plugins {
     kotlin("jvm")
-    id("org.jetbrains.dokka")
+    id("org.jetbrains.dokka") apply false
     jacoco
     `maven-publish`
 }
@@ -20,8 +21,6 @@ extra["moduleName"] = "software.amazon.smithy.rust.codegen.core"
 group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
-val isTestingEnabled: String by project
-val shouldRunTests: Boolean = isTestingEnabled.toBoolean()
 val smithyVersion: String by project
 
 dependencies {
@@ -32,19 +31,6 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
-}
-
-if (shouldRunTests) {
-    val kotestVersion: String by project
-
-    apply(plugin = "org.jetbrains.dokka")
-    apply(plugin = "jacoco")
-
-    dependencies {
-        runtimeOnly(project(":rust-runtime"))
-        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
-    }
 }
 
 fun gitCommitHash(): String {
@@ -111,7 +97,18 @@ val sourcesJar by tasks.creating(Jar::class) {
     from(sourceSets.getByName("main").allSource)
 }
 
-if (shouldRunTests) {
+val isTestingEnabled: String by project
+if (isTestingEnabled.toBoolean()) {
+    val kotestVersion: String by project
+
+    apply(plugin = "org.jetbrains.dokka")
+
+    dependencies {
+        runtimeOnly(project(":rust-runtime"))
+        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+    }
+
     tasks.compileTestKotlin {
         kotlinOptions.jvmTarget = "1.8"
     }
@@ -128,7 +125,7 @@ if (shouldRunTests) {
         }
     }
 
-    tasks.dokkaHtml.configure {
+    tasks.named<DokkaTask>("dokkaHtml") {
         outputDirectory.set(buildDir.resolve("javadoc"))
     }
 
