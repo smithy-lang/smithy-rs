@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 import java.util.ServiceLoader
 import java.util.logging.Logger
@@ -61,6 +62,14 @@ interface CoreCodegenDecorator<CodegenContext> {
         codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> = baseCustomizations
+
+    /**
+     * Hook to customize generated errors.
+     */
+    fun errorCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<ErrorCustomization>,
+    ): List<ErrorCustomization> = baseCustomizations
 }
 
 /**
@@ -70,14 +79,6 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
     decorators: List<Decorator>,
 ) : CoreCodegenDecorator<CodegenContext> {
     private val orderedDecorators = decorators.sortedBy { it.order }
-
-    final override fun libRsCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> =
-        combineCustomizations(baseCustomizations) { decorator, customizations ->
-            decorator.libRsCustomizations(codegenContext, customizations)
-        }
 
     final override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations =
         combineCustomizations(emptyMap()) { decorator, customizations ->
@@ -92,6 +93,21 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
         combineCustomizations(model) { decorator, otherModel ->
             decorator.transformModel(service, otherModel)
         }
+
+    final override fun libRsCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<LibRsCustomization>,
+    ): List<LibRsCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.libRsCustomizations(codegenContext, customizations)
+        }
+
+    override fun errorCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<ErrorCustomization>,
+    ): List<ErrorCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
+        decorator.errorCustomizations(codegenContext, customizations)
+    }
 
     /**
      * Combines customizations from multiple ordered codegen decorators.

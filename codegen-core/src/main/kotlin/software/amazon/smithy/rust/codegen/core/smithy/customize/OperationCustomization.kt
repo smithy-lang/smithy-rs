@@ -53,6 +53,18 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("MutateOutput")
+
+    /**
+     * Allows for adding additional properties to the `extras` field on the
+     * `aws_smithy_types::error::Error` generic error type.
+     */
+    data class PopulateGenericErrorExtras(
+        override val customizations: List<OperationCustomization>,
+        /** Name of the generic error builder (for referring to it in Rust code) */
+        val builderName: String,
+        /** Name of the response (for referring to it in Rust code) */
+        val responseName: String,
+    ) : OperationSection("PopulateGenericErrorExtras")
 }
 
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {

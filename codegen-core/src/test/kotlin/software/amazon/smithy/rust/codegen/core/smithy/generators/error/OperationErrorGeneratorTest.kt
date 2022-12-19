@@ -55,7 +55,13 @@ class OperationErrorGeneratorTest {
                 model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, this)
             }
             val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
-            val generator = OperationErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(model.lookup("error#Greeting")), errors)
+            val generator = OperationErrorGenerator(
+                model,
+                symbolProvider,
+                symbolProvider.toSymbol(model.lookup("error#Greeting")),
+                errors,
+                emptyList(),
+            )
             generator.render(this)
 
             unitTest(

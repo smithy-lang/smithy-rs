@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -60,6 +61,7 @@ class OperationErrorGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operationSymbol: Symbol,
     private val errors: List<StructureShape>,
+    private val customizations: List<ErrorCustomization>,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val genericError = RuntimeType.genericError(symbolProvider.config().runtimeConfig)
@@ -73,7 +75,7 @@ class OperationErrorGenerator(
 
     fun renderErrors(
         writer: RustWriter,
-        errorSymbol: RuntimeType,
+        errorType: RuntimeType,
         operationSymbol: Symbol,
     ) {
         val meta = RustMetadata(
@@ -84,21 +86,21 @@ class OperationErrorGenerator(
 
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
         meta.render(writer)
-        writer.rustBlock("struct ${errorSymbol.name}") {
+        writer.rustBlock("struct ${errorType.name}") {
             rust(
                 """
                 /// Kind of error that occurred.
-                pub kind: ${errorSymbol.name}Kind,
+                pub kind: ${errorType.name}Kind,
                 /// Additional metadata about the error, including error code, message, and request ID.
                 pub (crate) meta: #T
                 """,
                 RuntimeType.genericError(runtimeConfig),
             )
         }
-        writer.rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {
+        writer.rustBlock("impl #T for ${errorType.name}", createUnhandledError) {
             rustBlock("fn create_unhandled_error(source: Box<dyn std::error::Error + Send + Sync + 'static>) -> Self") {
                 rustBlock("Self") {
-                    rust("kind: ${errorSymbol.name}Kind::Unhandled(#T::new(source)),", unhandledError())
+                    rust("kind: ${errorType.name}Kind::Unhandled(#T::new(source)),", unhandledError())
                     rust("meta: Default::default()")
                 }
             }
@@ -106,7 +108,7 @@ class OperationErrorGenerator(
 
         writer.rust("/// Types of errors that can occur for the `${operationSymbol.name}` operation.")
         meta.render(writer)
-        writer.rustBlock("enum ${errorSymbol.name}Kind") {
+        writer.rustBlock("enum ${errorType.name}Kind") {
             errors.forEach { errorVariant ->
                 documentShape(errorVariant, model)
                 deprecatedShape(errorVariant)
@@ -121,21 +123,23 @@ class OperationErrorGenerator(
                 unhandledError(),
             )
         }
-        writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
+        writer.rustBlock("impl #T for ${errorType.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                delegateToVariants(errors, errorSymbol) {
+                delegateToVariants(errors, errorType) {
                     writable { rust("_inner.fmt(f)") }
                 }
             }
         }
 
+        writer.writeCustomizations(customizations, ErrorSection.OperationErrorAdditionalTraitImpls(errorType))
+
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
         writer.rustBlock(
-            "impl #T for ${errorSymbol.name}",
+            "impl #T for ${errorType.name}",
             RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig),
         ) {
             rustBlock("fn code(&self) -> Option<&str>") {
-                rust("${errorSymbol.name}::code(self)")
+                rust("${errorType.name}::code(self)")
             }
 
             rustBlock("fn retryable_error_kind(&self) -> Option<#T>", errorKindT) {
@@ -146,7 +150,7 @@ class OperationErrorGenerator(
                     rustBlock("match &self.kind") {
                         retryableVariants.forEach {
                             val errorVariantSymbol = symbolProvider.toSymbol(it)
-                            rust("${errorSymbol.name}Kind::${errorVariantSymbol.name}(inner) => Some(inner.retryable_error_kind()),")
+                            rust("${errorType.name}Kind::${errorVariantSymbol.name}(inner) => Some(inner.retryable_error_kind()),")
                         }
                         rust("_ => None")
                     }
@@ -154,27 +158,27 @@ class OperationErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl ${errorSymbol.name}") {
+        writer.rustBlock("impl ${errorType.name}") {
             writer.rustTemplate(
                 """
-                /// Creates a new `${errorSymbol.name}`.
-                pub fn new(kind: ${errorSymbol.name}Kind, meta: #{generic_error}) -> Self {
+                /// Creates a new `${errorType.name}`.
+                pub fn new(kind: ${errorType.name}Kind, meta: #{generic_error}) -> Self {
                     Self { kind, meta }
                 }
 
-                /// Creates the `${errorSymbol.name}::Unhandled` variant from any error type.
+                /// Creates the `${errorType.name}::Unhandled` variant from any error type.
                 pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
                     Self {
-                        kind: ${errorSymbol.name}Kind::Unhandled(#{Unhandled}::new(err.into())),
+                        kind: ${errorType.name}Kind::Unhandled(#{Unhandled}::new(err.into())),
                         meta: Default::default()
                     }
                 }
 
-                /// Creates the `${errorSymbol.name}::Unhandled` variant from a `#{generic_error}`.
+                /// Creates the `${errorType.name}::Unhandled` variant from a `#{generic_error}`.
                 pub fn generic(err: #{generic_error}) -> Self {
                     Self {
                         meta: err.clone(),
-                        kind: ${errorSymbol.name}Kind::Unhandled(#{Unhandled}::new(err.into())),
+                        kind: ${errorType.name}Kind::Unhandled(#{Unhandled}::new(err.into())),
                     }
                 }
 
@@ -189,11 +193,6 @@ class OperationErrorGenerator(
                     &self.meta
                 }
 
-                /// Returns the request ID if it's available.
-                pub fn request_id(&self) -> Option<&str> {
-                    self.meta.request_id()
-                }
-
                 /// Returns the error code if it's available.
                 pub fn code(&self) -> Option<&str> {
                     self.meta.code()
@@ -206,16 +205,16 @@ class OperationErrorGenerator(
             errors.forEach { error ->
                 val errorVariantSymbol = symbolProvider.toSymbol(error)
                 val fnName = errorVariantSymbol.name.toSnakeCase()
-                writer.rust("/// Returns `true` if the error kind is `${errorSymbol.name}Kind::${errorVariantSymbol.name}`.")
+                writer.rust("/// Returns `true` if the error kind is `${errorType.name}Kind::${errorVariantSymbol.name}`.")
                 writer.rustBlock("pub fn is_$fnName(&self) -> bool") {
-                    rust("matches!(&self.kind, ${errorSymbol.name}Kind::${errorVariantSymbol.name}(_))")
+                    rust("matches!(&self.kind, ${errorType.name}Kind::${errorVariantSymbol.name}(_))")
                 }
             }
         }
 
-        writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
+        writer.rustBlock("impl #T for ${errorType.name}", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
-                delegateToVariants(errors, errorSymbol) {
+                delegateToVariants(errors, errorType) {
                     writable {
                         rust("Some(_inner)")
                     }
@@ -224,7 +223,7 @@ class OperationErrorGenerator(
         }
     }
 
-    sealed class VariantMatch(name: String) : Section(name) {
+    private sealed class VariantMatch(name: String) : Section(name) {
         object Unhandled : VariantMatch("Unhandled")
         data class Modeled(val symbol: Symbol, val shape: Shape) : VariantMatch("Modeled")
     }

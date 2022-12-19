@@ -230,8 +230,13 @@ class ClientCodegenVisitor(
                 val errors = shape.eventStreamErrors()
                     .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
                 val errorSymbol = shape.eventStreamErrorSymbol(symbolProvider)
-                OperationErrorGenerator(model, symbolProvider, symbol, errors)
-                    .renderErrors(this, errorSymbol, symbol)
+                OperationErrorGenerator(
+                    model,
+                    symbolProvider,
+                    symbol,
+                    errors,
+                    codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+                ).renderErrors(this, errorSymbol, symbol)
             }
         }
     }
@@ -247,6 +252,7 @@ class ClientCodegenVisitor(
                 symbolProvider,
                 operationSymbol,
                 shape.operationErrors(model).map { it.asStructureShape().get() },
+                codegenDecorator.errorCustomizations(codegenContext, emptyList()),
             ).render(this)
         }
     }

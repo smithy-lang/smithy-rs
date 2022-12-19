@@ -25,6 +25,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
@@ -56,7 +58,7 @@ class S3Decorator : ClientCodegenDecorator {
         currentProtocols.letIf(applies(serviceId)) {
             it + mapOf(
                 RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
-                    S3(protocolConfig)
+                    S3ProtocolOverride(protocolConfig)
                 },
             )
         }
@@ -72,6 +74,13 @@ class S3Decorator : ClientCodegenDecorator {
         }
     }
 
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
+        baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) { it + listOf(S3ParseExtendedRequestId()) }
+
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
@@ -84,40 +93,58 @@ class S3Decorator : ClientCodegenDecorator {
     }
 }
 
-class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
+class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContext) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.genericError(runtimeConfig),
+        "ErrorBuilder" to RuntimeType.genericErrorBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.HttpHeaderMap,
         "Response" to RuntimeType.HttpResponse,
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
-        "s3_errors" to AwsRuntimeType.S3Errors,
     )
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType {
         return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.private("xml_deser")) {
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlDecodeError}>",
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(
                     """
+                    // S3 HEAD responses have no response body to for an error code. Therefore,
+                    // check the HTTP response status and populate an error code for 404s.
                     if response.body().is_empty() {
-                        let mut err = #{Error}::builder();
+                        let mut builder = #{Error}::builder();
                         if response.status().as_u16() == 404 {
-                            err.code("NotFound");
+                            builder = builder.code("NotFound");
                         }
-                        Ok(err.build())
+                        Ok(builder)
                     } else {
-                        let base_err = #{base_errors}::parse_generic_error(response.body().as_ref())?;
-                        Ok(#{s3_errors}::parse_extended_error(base_err, response.headers()))
+                        #{base_errors}::parse_generic_error(response.body().as_ref())
                     }
                     """,
                     *errorScope,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Customizes error parsing logic to add S3's extended request ID to the `aws_smithy_types::error::Error`'s extras.
+ */
+class S3ParseExtendedRequestId() : OperationCustomization() {
+    override fun section(section: OperationSection): Writable = writable {
+        when (section) {
+            is OperationSection.PopulateGenericErrorExtras -> {
+                rust(
+                    "${section.builderName} = #T::apply_extended_error(${section.builderName}, ${section.responseName}.headers());",
+                    AwsRuntimeType.S3Errors,
+                )
+            }
+            else -> {}
         }
     }
 }

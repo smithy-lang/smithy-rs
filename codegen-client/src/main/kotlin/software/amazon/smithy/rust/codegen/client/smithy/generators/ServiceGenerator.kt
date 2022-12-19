@@ -56,7 +56,11 @@ class ServiceGenerator(
             }
         }
 
-        ServiceErrorGenerator(clientCodegenContext, operations).render(rustCrate)
+        ServiceErrorGenerator(
+            clientCodegenContext,
+            operations,
+            decorator.errorCustomizations(clientCodegenContext, emptyList()),
+        ).render(rustCrate)
 
         rustCrate.withModule(RustModule.Config) {
             ServiceConfigGenerator.withBaseBehavior(

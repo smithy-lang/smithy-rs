@@ -46,7 +46,7 @@ interface Protocol {
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_http_generic_error(response: &Response<Bytes>) -> aws_smithy_types::error::Error
+     * fn parse_http_generic_error(response: &Response<Bytes>) -> aws_smithy_types::error::Builder
      * ```
      */
     fun parseHttpGenericError(operationShape: OperationShape): RuntimeType

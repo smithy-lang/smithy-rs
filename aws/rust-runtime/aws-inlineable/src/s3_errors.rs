@@ -21,23 +21,23 @@ impl ErrorExt for aws_smithy_types::Error {
 }
 
 /// Parses the S3 Extended Request ID out of S3 error response headers.
-pub fn parse_extended_error(
-    error: aws_smithy_types::Error,
+pub fn apply_extended_error(
+    builder: aws_smithy_types::error::Builder,
     headers: &HeaderMap<HeaderValue>,
-) -> aws_smithy_types::Error {
-    let mut builder = error.into_builder();
+) -> aws_smithy_types::error::Builder {
     let host_id = headers
         .get("x-amz-id-2")
         .and_then(|header_value| header_value.to_str().ok());
     if let Some(host_id) = host_id {
-        builder.custom(EXTENDED_REQUEST_ID, host_id);
+        builder.custom(EXTENDED_REQUEST_ID, host_id)
+    } else {
+        builder
     }
-    builder.build()
 }
 
 #[cfg(test)]
 mod test {
-    use crate::s3_errors::{parse_extended_error, ErrorExt};
+    use crate::s3_errors::{apply_extended_error, ErrorExt};
 
     #[test]
     fn add_error_fields() {
@@ -49,14 +49,11 @@ mod test {
             .status(400)
             .body("")
             .unwrap();
-        let error = aws_smithy_types::Error::builder()
-            .message("123")
-            .request_id("456")
-            .build();
-
-        let error = parse_extended_error(error, resp.headers());
+        let mut builder = aws_smithy_types::Error::builder().message("123");
+        builder = apply_extended_error(builder, resp.headers());
         assert_eq!(
-            error
+            builder
+                .build()
                 .extended_request_id()
                 .expect("extended request id should be set"),
             "eftixk72aD6Ap51TnqcoF8eFidJG9Z/2mkiDFu8yU9AS1ed4OpIszj7UDNEHGran"
@@ -66,12 +63,8 @@ mod test {
     #[test]
     fn handle_missing_header() {
         let resp = http::Response::builder().status(400).body("").unwrap();
-        let error = aws_smithy_types::Error::builder()
-            .message("123")
-            .request_id("456")
-            .build();
-
-        let error = parse_extended_error(error, resp.headers());
-        assert_eq!(error.extended_request_id(), None);
+        let mut builder = aws_smithy_types::Error::builder().message("123");
+        builder = apply_extended_error(builder, resp.headers());
+        assert_eq!(builder.build().extended_request_id(), None);
     }
 }

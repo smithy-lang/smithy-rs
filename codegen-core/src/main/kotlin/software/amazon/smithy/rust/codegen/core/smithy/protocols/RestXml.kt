@@ -27,7 +27,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.genericError(runtimeConfig),
+        "ErrorBuilder" to RuntimeType.genericErrorBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.HttpHeaderMap,
         "Response" to RuntimeType.HttpResponse,
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
@@ -58,7 +58,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlDecodeError}>",
+                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_generic_error(response.body().as_ref())", restXmlErrors)
@@ -68,7 +68,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) {
             rustBlockTemplate(
-                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlDecodeError}>",
+                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_generic_error(payload.as_ref())", restXmlErrors)

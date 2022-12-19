@@ -111,7 +111,7 @@ open class AwsJson(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.genericError(runtimeConfig),
+        "ErrorBuilder" to RuntimeType.genericErrorBuilder(runtimeConfig),
         "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
@@ -146,7 +146,7 @@ open class AwsJson(
         RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) {
             rustTemplate(
                 """
-                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
+                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorBuilder}, #{JsonError}> {
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
                 }
                 """,
@@ -158,7 +158,7 @@ open class AwsJson(
         RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) {
             rustTemplate(
                 """
-                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
+                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{ErrorBuilder}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate
                     #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
                 }

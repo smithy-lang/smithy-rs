@@ -67,6 +67,6 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         operationSymbol: Symbol,
         errors: List<StructureShape>,
     ) {
-        OperationErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
+        OperationErrorGenerator(model, symbolProvider, operationSymbol, errors, emptyList()).render(writer)
     }
 }

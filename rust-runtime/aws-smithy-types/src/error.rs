@@ -20,7 +20,6 @@ pub mod display;
 pub struct Error {
     code: Option<String>,
     message: Option<String>,
-    request_id: Option<String>,
     extras: HashMap<&'static str, String>,
 }
 
@@ -32,20 +31,14 @@ pub struct Builder {
 
 impl Builder {
     /// Sets the error message.
-    pub fn message(&mut self, message: impl Into<String>) -> &mut Self {
+    pub fn message(mut self, message: impl Into<String>) -> Self {
         self.inner.message = Some(message.into());
         self
     }
 
     /// Sets the error code.
-    pub fn code(&mut self, code: impl Into<String>) -> &mut Self {
+    pub fn code(mut self, code: impl Into<String>) -> Self {
         self.inner.code = Some(code.into());
-        self
-    }
-
-    /// Sets the request ID the error happened for.
-    pub fn request_id(&mut self, request_id: impl Into<String>) -> &mut Self {
-        self.inner.request_id = Some(request_id.into());
         self
     }
 
@@ -70,18 +63,18 @@ impl Builder {
     ///     use S3ErrorExt;
     ///     let sdk_response: Result<(), Error> = Err(Error::builder().custom(HOST_ID, "x-1234").build());
     ///     if let Err(err) = sdk_response {
-    ///         println!("request id: {:?}, extended request id: {:?}", err.request_id(), err.extended_request_id());
+    ///         println!("extended request id: {:?}", err.extended_request_id());
     ///     }
     /// }
     /// ```
-    pub fn custom(&mut self, key: &'static str, value: impl Into<String>) -> &mut Self {
+    pub fn custom(mut self, key: &'static str, value: impl Into<String>) -> Self {
         self.inner.extras.insert(key, value.into());
         self
     }
 
     /// Creates the error.
-    pub fn build(&mut self) -> Error {
-        std::mem::take(&mut self.inner)
+    pub fn build(self) -> Error {
+        self.inner
     }
 }
 
@@ -93,10 +86,6 @@ impl Error {
     /// Returns the error message.
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
-    }
-    /// Returns the request ID the error occurred for, if it's available.
-    pub fn request_id(&self) -> Option<&str> {
-        self.request_id.as_deref()
     }
     /// Returns additional information about the error if it's present.
     pub fn extra(&self, key: &'static str) -> Option<&str> {
@@ -132,9 +121,6 @@ impl fmt::Display for Error {
         }
         if let Some(message) = &self.message {
             fmt.field("message", message);
-        }
-        if let Some(req_id) = &self.request_id {
-            fmt.field("request_id", req_id);
         }
         for (k, v) in &self.extras {
             fmt.field(k, &v);

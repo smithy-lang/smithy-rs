@@ -90,6 +90,7 @@ internal class ServiceErrorGeneratorTest {
                         symbolProvider,
                         symbolProvider.toSymbol(operation),
                         operation.operationErrors(model).map { it as StructureShape },
+                        emptyList(),
                     ).render(this)
                 }
             }
@@ -99,7 +100,7 @@ internal class ServiceErrorGeneratorTest {
                 }
             }
         }
-        ServiceErrorGenerator(codegenContext, model.operationShapes.toList()).render(rustCrate)
+        ServiceErrorGenerator(codegenContext, model.operationShapes.toList(), emptyList()).render(rustCrate)
 
         testDir.resolve("tests").createDirectory()
         testDir.resolve("tests/validate_errors.rs").writeText(

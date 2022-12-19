@@ -307,7 +307,7 @@ class EventStreamUnmarshallerGenerator(
                 rustTemplate(
                     """
                     let generic = match #{parse_generic_error}(message.payload()) {
-                        Ok(generic) => generic,
+                        Ok(builder) => builder.build(),
                         Err(err) => return Ok(#{UnmarshalledMessage}::Error(#{OpError}::unhandled(err))),
                     };
                     """,

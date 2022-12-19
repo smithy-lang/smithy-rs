@@ -126,7 +126,7 @@ class HttpBoundProtocolTraitImplGenerator(
             *codegenScope,
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
-            "parse_error" to parseError(operationShape),
+            "parse_error" to parseError(operationShape, customizations),
             "parse_response" to parseResponse(operationShape, customizations),
         )
     }
@@ -158,12 +158,12 @@ class HttpBoundProtocolTraitImplGenerator(
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(symbolProvider),
             "parse_streaming_response" to parseStreamingResponse(operationShape, customizations),
-            "parse_error" to parseError(operationShape),
+            "parse_error" to parseError(operationShape, customizations),
             *codegenScope,
         )
     }
 
-    private fun parseError(operationShape: OperationShape): RuntimeType {
+    private fun parseError(operationShape: OperationShape, customizations: List<OperationCustomization>): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -176,11 +176,17 @@ class HttpBoundProtocolTraitImplGenerator(
                 "O" to outputSymbol,
                 "E" to errorSymbol,
             ) {
+                Attribute.AllowUnusedMut.render(this)
                 rust(
-                    "let generic = #T(response).map_err(#T::unhandled)?;",
+                    "let mut generic_builder = #T(response).map_err(#T::unhandled)?;",
                     protocol.parseHttpGenericError(operationShape),
                     errorSymbol,
                 )
+                writeCustomizations(
+                    customizations,
+                    OperationSection.PopulateGenericErrorExtras(customizations, "generic_builder", "response"),
+                )
+                rust("let generic = generic_builder.build();")
                 if (operationShape.operationErrors(model).isNotEmpty()) {
                     rustTemplate(
                         """
