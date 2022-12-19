@@ -27,18 +27,18 @@ import java.nio.file.Path
  */
 fun clientIntegrationTest(
     model: Model,
-    addtionalDecorators: List<ClientCodegenDecorator> = listOf(),
+    additionalDecorators: List<ClientCodegenDecorator> = listOf(),
     addModuleToEventStreamAllowList: Boolean = false,
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
     command: ((Path) -> Unit)? = null,
-    test: (ClientCodegenContext, RustCrate) -> Unit,
+    test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ): Path {
     return codegenIntegrationTest(
         model,
         RustClientCodegenPlugin(),
-        addtionalDecorators,
+        additionalDecorators,
         addModuleToEventStreamAllowList = addModuleToEventStreamAllowList,
         service = service,
         runtimeConfig = runtimeConfig,
