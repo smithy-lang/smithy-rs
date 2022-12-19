@@ -64,8 +64,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateCons
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
