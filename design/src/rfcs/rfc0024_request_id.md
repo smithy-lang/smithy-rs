@@ -132,6 +132,11 @@ Changes checklist
 -----------------
 
 - [x] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
-- [x] Implement `ClientRequestId`: `new()` that wraps a string (the header value) and the header in which the value could be found, with `Display`, `Debug` and `ToStr` implementations
+- [ ] Implement `ClientRequestId`: `new()` that wraps a string (the header value) and the header in which the value could be found, with `Display`, `Debug` and `ToStr` implementations
 - [x] Implement `FromParts` for `Extension<ServerRequestId>`
-- [x] Implement `FromParts` for `Extension<ClientRequestId>`
+- [ ] Implement `FromParts` for `Extension<ClientRequestId>`
+
+Changes since the RFC has been approved
+---------------------------------------
+
+This RFC has been changed to only implement `ServerRequestId`.

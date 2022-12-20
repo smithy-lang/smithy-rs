@@ -5,11 +5,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use aws_smithy_http_server::{
-    request::connect_info::ConnectInfo, request::request_id::ClientRequestId,
-    request::request_id::ClientRequestIdProviderLayer, request::request_id::ServerRequestId,
-    request::request_id::ServerRequestIdProviderLayer,
-};
+use aws_smithy_http_server::{request::request_id::ServerRequestId, request::request_id::ServerRequestIdProviderLayer};
 use clap::Parser;
 use pokemon_service::{capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing};
 use pokemon_service_server_sdk::{
@@ -60,13 +56,8 @@ pub async fn get_storage_with_local_approved(
 pub async fn do_nothing_but_log_request_ids(
     _input: DoNothingInput,
     server_request_id: ServerRequestId,
-    client_request_id: Option<ClientRequestId>,
 ) -> DoNothingOutput {
-    tracing::debug!(
-        "This request has this client ID: {:?} and server ID: {}",
-        client_request_id,
-        server_request_id
-    );
+    tracing::debug!("This request has this server ID: {}", server_request_id);
     DoNothingOutput {}
 }
 
@@ -85,9 +76,6 @@ async fn main() {
         .expect("failed to build an instance of PokemonService");
 
     let app = app.layer(&ServerRequestIdProviderLayer::new());
-    let app = app.layer(&ClientRequestIdProviderLayer::new(&[std::borrow::Cow::Borrowed(
-        "x-request-id",
-    )]));
 
     // Start the [`hyper::Server`].
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

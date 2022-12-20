@@ -5,7 +5,7 @@
 
 //! # Request IDs
 //!
-//! `aws-smithy-http-server` provides two types of request ids: [`ServerRequestId`] and [`ClientRequestId`].
+//! `aws-smithy-http-server` provides the [`ServerRequestId`].
 //!
 //! ## `ServerRequestId`
 //!
@@ -17,25 +17,16 @@
 //!
 //! The [`ServerRequestId`] is not meant to be propagated to downstream dependencies of the service. You should rely on a distributed tracing implementation for correlation purposes (e.g. OpenTelemetry).
 //!
-//! ## `ClientRequestId`
-//!
-//! Clients can choose to provide their own identifier for the requests they are submitting.
-//! [`ClientRequestId`] can be used by the service to extract the client-provided request id - usually for logging purposes.
-//!
-//! We expect client request ids to be encoded as headers in the incoming request. The server will try to extract a value from the if a matching header is found.
-//! Handlers and middlewares can use `Option<ClientRequestId>` to leverage the client request id - it will be set to `Some` if one was found, `None` otherwise.
-//!
 //! ## Examples
 //!
-//! Your handler can now optionally take as input a [`ServerRequestId`] and an [`Option<ClientRequestId>`].
+//! Your handler can now optionally take as input a [`ServerRequestId`].
 //!
 //! ```rust
 //! pub async fn handler(
 //!     _input: Input,
 //!     server_request_id: ServerRequestId,
-//!     client_request_id: Option<ClientRequestId>,
 //! ) -> Output {
-//!     /* Use server_request_id and client_request_id */
+//!     /* Use server_request_id */
 //!     todo!()
 //! }
 //!
@@ -44,7 +35,6 @@
 //!     .build().unwrap();
 //!
 //! let app = app.layer(&ServerRequestIdProviderLayer::new()); /* Generate a server request ID */
-//! let app = app.layer(&ClientRequestIdProviderLayer::new(&["x-request-id".into()])); /* Provide your handler with the client request ID */
 //!
 //! let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
 //!     .parse()
@@ -157,102 +147,6 @@ where
 }
 
 impl<Protocol> IntoResponse<Protocol> for MissingServerRequestId {
-    fn into_response(self) -> http::Response<BoxBody> {
-        internal_server_error()
-    }
-}
-
-/// The Client Request ID.
-///
-/// If it is missing, the request will be rejected with a `500 Internal Server Error` response.
-#[derive(Clone, Debug)]
-pub struct ClientRequestId {
-    id: Box<str>,
-}
-
-/// The client request ID has not been added to the [`Request`](http::Request) or has been previously removed.
-#[non_exhaustive]
-#[derive(Debug, Error)]
-#[error("the `ClientRequestId` is not present in the `http::Request`")]
-pub struct MissingClientRequestId;
-
-impl ClientRequestId {
-    /// Wrap an incoming request ID from a client
-    pub fn new(id: Box<str>) -> Self {
-        Self { id }
-    }
-}
-
-impl Display for ClientRequestId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.id.fmt(f)
-    }
-}
-
-impl<P> FromParts<P> for ClientRequestId {
-    type Rejection = MissingClientRequestId;
-
-    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
-        parts.extensions.remove::<Self>().ok_or(MissingClientRequestId)
-    }
-}
-
-#[derive(Clone)]
-pub struct ClientRequestIdProvider<'a, S> {
-    inner: S,
-    possible_headers: &'a [Cow<'a, str>],
-}
-
-pub struct ClientRequestIdProviderLayer<'a> {
-    possible_headers: &'a [Cow<'a, str>],
-}
-
-impl<'a> ClientRequestIdProviderLayer<'a> {
-    pub fn new(possible_headers: &'a [Cow<'a, str>]) -> Self {
-        Self { possible_headers }
-    }
-}
-
-impl<'a, S> Layer<S> for ClientRequestIdProviderLayer<'a> {
-    type Service = ClientRequestIdProvider<'a, S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        ClientRequestIdProvider {
-            inner,
-            possible_headers: self.possible_headers,
-        }
-    }
-}
-
-impl<'a, R, S> Service<http::Request<R>> for ClientRequestIdProvider<'a, S>
-where
-    S: Service<http::Request<R>>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
-        let mut id: Option<ClientRequestId> = None;
-        for possible_header in self.possible_headers {
-            let possible_header: &'a str = possible_header.borrow();
-            if let Some(value) = req.headers().get(possible_header) {
-                if let Ok(value) = value.to_str() {
-                    id = Some(ClientRequestId::new(value.into()));
-                    break;
-                }
-            }
-        }
-        req.extensions_mut().insert(id);
-        self.inner.call(req)
-    }
-}
-
-impl<Protocol> IntoResponse<Protocol> for MissingClientRequestId {
     fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
