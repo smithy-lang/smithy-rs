@@ -44,15 +44,15 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
 
 /**
  * A dependency on a snippet of code
-*
-* InlineDependency should not be instantiated directly, rather, it should be constructed with
-* [software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.forInlineFun]
-*
-* InlineDependencies are created as private modules within the main crate. This is useful for any code that
-* doesn't need to exist in a shared crate, but must still be generated exactly once during codegen.
-*
-* CodegenVisitor de-duplicates inline dependencies by (module, name) during code generation.
-*/
+ *
+ * InlineDependency should not be instantiated directly, rather, it should be constructed with
+ * [software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.forInlineFun]
+ *
+ * InlineDependencies are created as private modules within the main crate. This is useful for any code that
+ * doesn't need to exist in a shared crate, but must still be generated exactly once during codegen.
+ *
+ * CodegenVisitor de-duplicates inline dependencies by (module, name) during code generation.
+ */
 class InlineDependency(
     name: String,
     val module: RustModule,
@@ -118,7 +118,7 @@ data class Feature(val name: String, val default: Boolean, val deps: List<String
 
 /**
  * A dependency on an internal or external Cargo Crate
-*/
+ */
 data class CargoDependency(
     override val name: String,
     private val location: DependencyLocation,
