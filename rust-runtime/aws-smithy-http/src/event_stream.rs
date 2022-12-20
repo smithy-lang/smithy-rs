@@ -32,7 +32,7 @@ where
     E: std::fmt::Debug,
 {
     /// default value
-    pub fn new() -> impl UnmarshallMessage<Output = T, Error = E> {
+    pub fn create() -> impl UnmarshallMessage<Output = T, Error = E> {
         Self(PhantomData::<(T, E)>)
     }
 }

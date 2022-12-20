@@ -163,7 +163,7 @@ where
     #[cfg(all(feature = "unstable", feature = "deserialize"))]
     pub fn deserialized_receiver() -> Self {
         Receiver {
-            unmarshaller: Box::new(crate::event_stream::DeserializedReceiverStream::<T, E>::new()),
+            unmarshaller: Box::new(crate::event_stream::DeserializedReceiverStream::<T, E>::create()),
             decoder: MessageFrameDecoder::new(),
             buffer: RecvBuf::Empty,
             body: SdkBody::empty(),
