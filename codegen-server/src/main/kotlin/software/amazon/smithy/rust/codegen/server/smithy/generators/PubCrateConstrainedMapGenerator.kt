@@ -63,7 +63,7 @@ class PubCrateConstrainedMapGenerator(
         val codegenScope = arrayOf(
             "KeySymbol" to keySymbol,
             "ValueSymbol" to valueSymbol,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "UnconstrainedSymbol" to unconstrainedSymbol,
             "Symbol" to symbol,
             "From" to RuntimeType.From,

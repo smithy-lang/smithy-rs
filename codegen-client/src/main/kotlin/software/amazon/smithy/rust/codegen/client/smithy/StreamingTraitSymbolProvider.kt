@@ -48,7 +48,7 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
 
         // We are only targeting streaming blobs
         return if (target is BlobShape && shape.isStreaming(model)) {
-            RuntimeType.ByteStream(config().runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
+            RuntimeType.byteStream(config().runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
         } else {
             base.toSymbol(shape)
         }

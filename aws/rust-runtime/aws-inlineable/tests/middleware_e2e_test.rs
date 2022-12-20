@@ -9,28 +9,24 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, UNIX_EPOCH};
 
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation;
+use aws_smithy_http::operation::Operation;
+use aws_smithy_http::response::ParseHttpResponse;
+use aws_smithy_types::endpoint::Endpoint;
+use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
-use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
-use aws_endpoint::{EndpointShim, Params};
 use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
-use aws_smithy_client::erase::DynConnector;
-
-use aws_smithy_client::test_connection::TestConnection;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::ResolveEndpoint;
-use aws_smithy_http::operation;
-use aws_smithy_http::operation::Operation;
-use aws_smithy_http::response::ParseHttpResponse;
-
-use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use aws_types::credentials::SharedCredentialsProvider;
-use aws_types::region::Region;
+use aws_types::region::SigningRegion;
 use aws_types::Credentials;
 use aws_types::SigningService;
 
@@ -79,20 +75,16 @@ impl ParseHttpResponse for TestOperationParser {
 fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier> {
     let req = operation::Request::new(
         http::Request::builder()
-            .uri("https://test-service.test-region.amazonaws.com/")
+            .uri("/")
             .body(SdkBody::from("request body"))
             .unwrap(),
     )
     .augment(|req, conf| {
-        conf.insert(
-            EndpointShim::from_resolver(aws_endpoint::partition::endpoint::Metadata {
-                uri_template: "test-service.{region}.amazonaws.com",
-                protocol: Protocol::Https,
-                credential_scope: Default::default(),
-                signature_versions: SignatureVersion::V4,
-            })
-            .resolve_endpoint(&Params::new(Some(Region::new("test-region")))),
-        );
+        conf.insert(aws_smithy_http::endpoint::Result::Ok(
+            Endpoint::builder()
+                .url("https://test-service.test-region.amazonaws.com")
+                .build(),
+        ));
         aws_http::auth::set_provider(
             conf,
             SharedCredentialsProvider::new(Credentials::new(
@@ -103,7 +95,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
                 "test",
             )),
         );
-        conf.insert(Region::new("test-region"));
+        conf.insert(SigningRegion::from_static("test-region"));
         conf.insert(OperationSigningConfig::default_config());
         conf.insert(SigningService::from_static("test-service-signing"));
         conf.insert(UNIX_EPOCH + Duration::from_secs(1613414417));

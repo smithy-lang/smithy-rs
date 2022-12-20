@@ -32,7 +32,7 @@ const val CODEGEN_SETTINGS = "codegen"
 /**
  * [CoreCodegenConfig] contains code-generation configuration that is _common to all_  smithy-rs plugins.
  *
- * If your configuration is specific to the `rust-codegen` client plugin, put it in [ClientCodegenContext] instead.
+ * If your configuration is specific to the `rust-client-codegen` client plugin, put it in [ClientCodegenContext] instead.
  * If your configuration is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  *
  * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
@@ -64,7 +64,7 @@ open class CoreCodegenConfig(
 /**
  * [CoreRustSettings] contains crate settings that are _common to all_  smithy-rs plugins.
  *
- * If your setting is specific to the crate that the `rust-codegen` client plugin generates, put it in
+ * If your setting is specific to the crate that the `rust-client-codegen` client plugin generates, put it in
  * [ClientCodegenContext] instead.
  * If your setting is specific to the crate that the `rust-server-codegen` server plugin generates, put it in
  * [ServerCodegenContext] instead.

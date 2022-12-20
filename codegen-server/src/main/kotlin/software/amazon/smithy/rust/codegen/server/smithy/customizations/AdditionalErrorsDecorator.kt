@@ -13,11 +13,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
 /**
  * Add at least one error to all operations in the model.
@@ -33,15 +30,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+class AddInternalServerErrorToInfallibleOperationsDecorator : ServerCodegenDecorator {
     override val name: String = "AddInternalServerErrorToInfallibleOperations"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { shape -> shape.allErrors(model).isEmpty() }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -62,15 +56,12 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+class AddInternalServerErrorToAllOperationsDecorator : ServerCodegenDecorator {
     override val name: String = "AddInternalServerErrorToAllOperations"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { true }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 fun addErrorShapeToModelOperations(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {

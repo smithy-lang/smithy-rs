@@ -5,27 +5,27 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 /* Example Generated Code */
 /*
@@ -75,7 +75,7 @@ fn test_1() {
 }
  */
 
-class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
@@ -105,9 +105,21 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
         return listOf(
             object : EndpointCustomization {
                 override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
-                    return when (parameter) {
-                        Builtins.REGION -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
+                    return when (parameter.builtIn) {
+                        Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
                         else -> null
+                    }
+                }
+
+                override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                    if (name != Builtins.REGION.builtIn.get()) {
+                        return null
+                    }
+                    return writable {
+                        rustTemplate(
+                            "let $configBuilderRef = $configBuilderRef.region(#{Region}::new(${value.expectStringNode().value.dq()}));",
+                            "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+                        )
                     }
                 }
 
@@ -116,19 +128,16 @@ class RegionDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCode
             },
         )
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val region = region(codegenContext.runtimeConfig)
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf("Region" to region.member("Region"))
+    private val codegenScope = arrayOf("Region" to region.resolve("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
-            is ServiceConfig.ConfigImpl -> rustTemplate(
+            ServiceConfig.ConfigStruct -> rustTemplate("pub(crate) region: Option<#{Region}>,", *codegenScope)
+            ServiceConfig.ConfigImpl -> rustTemplate(
                 """
                 /// Returns the AWS region, if it was provided.
                 pub fn region(&self) -> Option<&#{Region}> {
@@ -138,7 +147,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                 *codegenScope,
             )
 
-            is ServiceConfig.BuilderStruct ->
+            ServiceConfig.BuilderStruct ->
                 rustTemplate("region: Option<#{Region}>,", *codegenScope)
 
             ServiceConfig.BuilderImpl ->
@@ -167,6 +176,8 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                 """region: self.region,""",
                 *codegenScope,
             )
+
+            else -> emptySection
         }
     }
 }
@@ -205,7 +216,4 @@ class PubUseRegion(private val runtimeConfig: RuntimeConfig) : LibRsCustomizatio
     }
 }
 
-fun region(runtimeConfig: RuntimeConfig) =
-    RuntimeType("region", awsTypes(runtimeConfig), "aws_types")
-
-fun awsTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-types")
+fun region(runtimeConfig: RuntimeConfig) = AwsRuntimeType.awsTypes(runtimeConfig).resolve("region")

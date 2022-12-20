@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -51,6 +50,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -61,12 +61,11 @@ class XmlBindingTraitSerializerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
-    private val smithyXml = CargoDependency.smithyXml(runtimeConfig).toType()
     private val codegenTarget = codegenContext.target
     private val codegenScope =
         arrayOf(
-            "XmlWriter" to smithyXml.member("encode::XmlWriter"),
-            "ElementWriter" to smithyXml.member("encode::ElWriter"),
+            "XmlWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::XmlWriter"),
+            "ElementWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Error" to runtimeConfig.serializationError(),
         )
@@ -302,10 +301,10 @@ class XmlBindingTraitSerializerGenerator(
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
-                    CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder"),
+                    RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder"),
                 )
             }
-            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
+            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(
@@ -313,7 +312,7 @@ class XmlBindingTraitSerializerGenerator(
                         HttpLocation.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rust("$input.fmt(#T)?.as_ref()", timestampFormatType)
             }
             else -> TODO(member.toString())
@@ -346,12 +345,30 @@ class XmlBindingTraitSerializerGenerator(
                     serializeMap(target, "entry", Ctx.Scope("inner_writer", ctx.input))
                 }
                 is StructureShape -> {
-                    rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
-                    serializeStructure(
-                        target,
-                        XmlMemberIndex.fromMembers(target.members().toList()),
-                        Ctx.Element("inner_writer", ctx.input),
-                    )
+                    // We call serializeStructure only when target.members() is nonempty.
+                    // If it were empty, serializeStructure would generate the following code:
+                    //   pub fn serialize_structure_crate_model_unit(
+                    //       input: &crate::model::Unit,
+                    //       writer: aws_smithy_xml::encode::ElWriter,
+                    //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+                    //       let _ = input;
+                    //       #[allow(unused_mut)]
+                    //       let mut scope = writer.finish();
+                    //       scope.finish();
+                    //       Ok(())
+                    //   }
+                    // However, this would cause a compilation error at a call site because it cannot
+                    // extract data out of the Unit type that corresponds to the variable "input" above.
+                    if (target.members().isEmpty()) {
+                        rust("${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
+                    } else {
+                        rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
+                        serializeStructure(
+                            target,
+                            XmlMemberIndex.fromMembers(target.members().toList()),
+                            Ctx.Element("inner_writer", ctx.input),
+                        )
+                    }
                 }
                 is UnionShape -> {
                     rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
@@ -399,8 +416,12 @@ class XmlBindingTraitSerializerGenerator(
                 rustBlock("match input") {
                     val members = unionShape.members()
                     members.forEach { member ->
-                        val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) =>", ",", unionSymbol) {
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
+                        } else {
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName =>", ",", unionSymbol) {
                             serializeMember(member, Ctx.Scope("scope_writer", "inner"))
                         }
                     }
@@ -465,7 +486,20 @@ class XmlBindingTraitSerializerGenerator(
         val memberSymbol = symbolProvider.toSymbol(member)
         if (memberSymbol.isOptional()) {
             val tmp = safeName()
-            rustBlock("if let Some($tmp) = ${ctx.input}") {
+            val target = model.expectShape(member.target)
+            val pattern = if (target.isStructureShape && target.members().isEmpty()) {
+                // In this case, we mark a variable captured in the if-let
+                // expression as unused to prevent the warning coming
+                // from the following code generated by handleOptional:
+                //   if let Some(var_2) = &input.input {
+                //       scope.start_el("input").finish();
+                //   }
+                // where var_2 above is unused.
+                "Some(_$tmp)"
+            } else {
+                "Some($tmp)"
+            }
+            rustBlock("if let $pattern = ${ctx.input}") {
                 inner(Ctx.updateInput(ctx, tmp))
             }
         } else {

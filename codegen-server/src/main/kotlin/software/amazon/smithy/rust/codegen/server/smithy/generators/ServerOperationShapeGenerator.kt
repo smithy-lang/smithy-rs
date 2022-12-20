@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -46,6 +45,9 @@ class ServerOperationShapeGenerator(
             //! ```no_run
             //! use $crateName::operation_shape::$firstOperationName;
             //! use #{SmithyHttpServer}::operation::OperationShapeExt;
+            //!
+            #{HandlerImports:W}
+            //!
             #{Handler:W}
             //!
             //! let operation = $firstOperationName::from_handler(handler)
@@ -61,9 +63,10 @@ class ServerOperationShapeGenerator(
             //! operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
             """.trimIndent(),
             "SmithyHttpServer" to
-                ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).toType(),
+                ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
-            "Handler" to DocHandlerGenerator(codegenContext, operations[0], "handler", "//!")::render,
+            "Handler" to DocHandlerGenerator(codegenContext, operations[0], "handler", commentToken = "//!")::render,
+            "HandlerImports" to handlerImports(crateName, operations, commentToken = "//!"),
         )
         for (operation in operations) {
             ServerOperationGenerator(codegenContext, operation).render(writer)
