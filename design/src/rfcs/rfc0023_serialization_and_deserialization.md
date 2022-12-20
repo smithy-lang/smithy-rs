@@ -110,9 +110,8 @@ Serde can distinguish each variant without a tag as each variant's content is di
 
 ## Builder Types and Non-Builder Types
 Builder types and non Builder types implement `Serialize` and `Deserialize` with derive macro.
-Derive macro will be implemented behind a feature-gate; Users must enable `serialize` to use `serde::Serialize`, and `deserialize` to use `serde::Deserialize` respectively. Additionally, 
+Derive macro will be implemented behind a feature-gate; Users must enable `serialize` to use `serde::Serialize`, and `deserialize` to use `serde::Deserialize` respectively. Additionally, user must enable `unstable` until the stablization of this RFC.
 
-While 
 ```rust
 #[allow(missing_docs)] // documentation missing in model
 #[cfg_attr(
@@ -196,7 +195,7 @@ We believe that this will not be a problem.
 Most fields are `Option<T>` type. 
 When user de-serializes data written for a format before the new fields were introduced, new field will be assigned with `None` type.
 
-If a field isn't `Option`, `serde` uses `Default` trait to generate data to fill the field.  
+If a field isn't `Option`, `serde` uses `Default` trait unless a custom de-serialization/serialization is specified to generate data to fill the field.  
 If the new field is not an `Option<T>` type and has no `Default` implementation, we must implement a custom de-serialization logic.
 
 In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.
