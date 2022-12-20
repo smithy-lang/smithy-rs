@@ -130,7 +130,7 @@ mod builder {
     /// Callers outside of this crate cannot call `build` directly. They can instead call
     /// `into_credentials_cache` to obtain a [`CredentialsCache`]. Its `create_cache` then calls
     /// `build` to create a `LazyCredentialsCache`.
-    #[derive(Debug, Default)]
+    #[derive(Clone, Debug, Default)]
     pub struct Builder {
         sleep: Option<Arc<dyn AsyncSleep>>,
         time_source: Option<TimeSource>,

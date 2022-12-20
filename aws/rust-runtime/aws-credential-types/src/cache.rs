@@ -60,7 +60,7 @@ impl ProvideCachedCredentials for SharedCredentialsCache {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Inner {
     Lazy(lazy_caching::Builder),
 }
@@ -88,7 +88,7 @@ pub(crate) enum Inner {
 ///         ))
 ///     })));
 /// ```
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CredentialsCache {
     pub(crate) inner: Inner,
 }
