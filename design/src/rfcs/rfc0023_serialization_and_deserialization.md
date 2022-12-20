@@ -153,10 +153,10 @@ For the reasons mentioned above, we implement an enum that is externally tagged.
 We are going to skip serialization and deserialization of fields that have the following datatypes.
 
 - `aws_smithy_http::byte_stream::ByteStream`
-- `aws_smithy_http::event_stream::Receiver<TranscriptResultStream, TranscriptResultStreamError>:`
-- `aws_smithy_http::event_stream::EventStreamSender<AudioStream, AudioStreamError>`
+- `aws_smithy_http::event_stream::Receiver`
+- `aws_smithy_http::event_stream::EventStreamSender`
 
-Any fields with these data types are tagged with `#[serde(skip_serialization)]` and `#[serde(skip_deserialization)]`.
+Any fields with these data types are tagged with `#[serde(skip, default = "..name of the function for tailored serilaization/de-serialization")]`.
 
 Here are some examples of data types affected by this decision:
 - `aws_sdk_transcribestreaming::client::fluent_builders::StartMedicalStreamTranscription`
@@ -164,6 +164,37 @@ Here are some examples of data types affected by this decision:
 
 We considered serializing them as bytes, however, it could take some time for a stream to reach the end, and the resulting serialized data may be too big for itself to fit into the ram.   
 Additionally, those data types are sometimes used to represent bi-directional data transfer, which is not serializable.
+
+Here is an example of struct with a field which comes with custom serialization/de-serialization logic.
+```rust
+#[allow(missing_docs)]
+#[cfg_attr(
+    all(feature = "unstable", feature = "serialize"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(feature = "unstable", feature = "deserialize"),
+    derive(serde::Deserialize)
+)]
+#[non_exhaustive]
+#[derive(std::fmt::Debug)]
+pub struct ExampleStreamTranscriptionOutput {
+    #[cfg_attr(
+        any(
+            all(feature = "unstable", feature = "deserialize"),
+            all(feature = "unstable", feature = "serialize")
+        ),
+        serde(
+            skip,
+            default = "aws_smithy_http::event_stream::Receiver::deserialized_receiver"
+        )
+    )]
+    pub transcript_result_stream: aws_smithy_http::event_stream::Receiver<
+        crate::model::ExampleTranscriptResultStream,
+        crate::error::ExampleTranscriptResultStreamError,
+    >
+}
+```
 
 ## `Serde` traits implemented on Builder of Output Types
 Output data, such as `aws_sdk_dynamodb::output::UpdateTableOutput` has builder types. 
