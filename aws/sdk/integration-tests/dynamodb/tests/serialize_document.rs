@@ -12,7 +12,7 @@ fn main() {
         },
         operation::PutItem,
     };
-    
+
     // based on the json thing found here https://docs.aws.amazon.com/cli/latest/userguide/cli-services-dynamodb.html
     let putitem = PutItem::builder()
         .table_name("MusicCollection")
@@ -50,5 +50,8 @@ fn main() {
         )
         .build()
         .unwrap();
-    assert_eq!(serde_json::to_string_pretty(&putitem), Ok(include_str!("./serialize_document_example.json").to_string()));
+    assert_eq!(
+        serde_json::to_string_pretty(&putitem),
+        Ok(include_str!("./serialize_document_example.json").to_string())
+    );
 }
