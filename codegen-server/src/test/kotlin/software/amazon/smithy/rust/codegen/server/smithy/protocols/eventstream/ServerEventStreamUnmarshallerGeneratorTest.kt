@@ -27,20 +27,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import java.util.stream.Stream
 
-data class TestCase(
-    val eventStreamTestCase: EventStreamTestModels.TestCase,
-    val publicConstrainedTypes: Boolean,
-) {
-    override fun toString(): String = "$eventStreamTestCase, publicConstrainedTypes = $publicConstrainedTypes"
-}
-
 class UnmarshallTestCasesProvider : ArgumentsProvider {
     override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
         EventStreamTestModels.TEST_CASES.flatMap { testCase ->
             listOf(
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Enable tests for `publicConstrainedTypes = false`
-                // TestCase(testCase, false),
-                TestCase(testCase, true),
+                // TestCase(testCase, publicConstrainedTypes = false),
+                TestCase(testCase, publicConstrainedTypes = true),
             )
         }.map { Arguments.of(it) }.stream()
 }
@@ -69,38 +62,16 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     ).render()
                 }
 
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Delete this function override to use the correct builder from the parent class
                 override fun renderBuilderForShape(
                     writer: RustWriter,
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
                 ) {
-                    if (testCase.publicConstrainedTypes) {
-                        // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Use the ServerBuilderGenerator:
-                        // ServerBuilderGenerator(codegenContext, shape).apply {
-                        //     render(writer)
-                        //     writer.implBlock(shape, codegenContext.symbolProvider) {
-                        //         renderConvenienceMethod(writer)
-                        //     }
-                        // }
-                        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
-                            render(writer)
-                            writer.implBlock(shape, codegenContext.symbolProvider) {
-                                renderConvenienceMethod(writer)
-                            }
-                        }
-                    } else {
-                        // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Use the ServerBuilderGeneratorWithoutPublicConstraintedTypes:
-                        // ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape).apply {
-                        //     render(writer)
-                        //     writer.implBlock(shape, codegenContext.symbolProvider) {
-                        //         renderConvenienceMethod(writer)
-                        //     }
-                        // }
-                        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
-                            render(writer)
-                            writer.implBlock(shape, codegenContext.symbolProvider) {
-                                renderConvenienceMethod(writer)
-                            }
+                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
+                        render(writer)
+                        writer.implBlock(shape, codegenContext.symbolProvider) {
+                            renderConvenienceMethod(writer)
                         }
                     }
                 }

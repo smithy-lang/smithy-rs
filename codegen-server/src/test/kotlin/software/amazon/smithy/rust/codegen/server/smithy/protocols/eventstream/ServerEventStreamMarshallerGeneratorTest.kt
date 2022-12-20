@@ -10,11 +10,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
@@ -23,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import java.util.stream.Stream
 
 class MarshallTestCasesProvider : ArgumentsProvider {
@@ -31,17 +27,22 @@ class MarshallTestCasesProvider : ArgumentsProvider {
         // Don't include awsQuery or ec2Query for now since marshall support for them is unimplemented
         EventStreamTestModels.TEST_CASES
             .filter { testCase -> !testCase.protocolShapeId.contains("Query") }
-            .map { Arguments.of(it) }.stream()
+            .flatMap { testCase ->
+                listOf(
+                    TestCase(testCase, publicConstrainedTypes = false),
+                    TestCase(testCase, publicConstrainedTypes = true),
+                )
+            }.map { Arguments.of(it) }.stream()
 }
 
 class ServerEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(MarshallTestCasesProvider::class)
-    fun test(testCase: EventStreamTestModels.TestCase) {
+    fun test(testCase: TestCase) {
         EventStreamTestTools.runTestCase(
-            testCase,
+            testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
-                override val publicConstrainedTypes: Boolean get() = true
+                override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes
 
                 override fun renderGenerator(
                     codegenContext: ServerCodegenContext,
@@ -55,21 +56,8 @@ class ServerEventStreamMarshallerGeneratorTest {
                         project.symbolProvider,
                         project.streamShape,
                         protocol.structuredDataSerializer(project.operationShape),
-                        testCase.requestContentType,
+                        testCase.eventStreamTestCase.requestContentType,
                     ).render()
-                }
-
-                override fun renderBuilderForShape(
-                    writer: RustWriter,
-                    codegenContext: ServerCodegenContext,
-                    shape: StructureShape,
-                ) {
-                    ServerBuilderGenerator(codegenContext, shape).apply {
-                        render(writer)
-                        writer.implBlock(shape, codegenContext.symbolProvider) {
-                            renderConvenienceMethod(writer)
-                        }
-                    }
                 }
             },
             CodegenTarget.SERVER,
