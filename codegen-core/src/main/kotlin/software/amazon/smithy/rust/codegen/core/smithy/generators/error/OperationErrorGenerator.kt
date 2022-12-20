@@ -43,12 +43,12 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  */
 fun OperationShape.errorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
     val operationSymbol = symbolProvider.toSymbol(this)
-    return RuntimeType("${RustModule.Error.fullyQualifiedPath()}::${operationSymbol.name}Error")
+    return RustModule.Error.toType().resolve("${operationSymbol.name}Error")
 }
 
 fun UnionShape.eventStreamErrorSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
     val unionSymbol = symbolProvider.toSymbol(this)
-    return RuntimeType("${RustModule.Error.fullyQualifiedPath()}::${unionSymbol.name}Error")
+    return RustModule.Error.toType().resolve("${unionSymbol.name}Error")
 }
 
 /**
