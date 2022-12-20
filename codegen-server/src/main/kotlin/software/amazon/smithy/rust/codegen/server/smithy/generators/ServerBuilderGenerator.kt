@@ -5,16 +5,41 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.ArrayNode
+import software.amazon.smithy.model.node.BooleanNode
+import software.amazon.smithy.model.node.NullNode
+import software.amazon.smithy.model.node.NumberNode
+import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.node.StringNode
+import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.FloatShape
+import software.amazon.smithy.model.shapes.IntEnumShape
+import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.LongShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.ShortShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.DefaultTrait
+import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -28,7 +53,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
@@ -39,11 +66,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -99,15 +130,18 @@ class ServerBuilderGenerator(
             model: Model,
             symbolProvider: SymbolProvider,
             takeInUnconstrainedTypes: Boolean,
-        ): Boolean =
-            if (takeInUnconstrainedTypes) {
-                structureShape.canReachConstrainedShape(model, symbolProvider)
+        ): Boolean {
+            val members = structureShape.members()
+            val allOptional = members.all { symbolProvider.toSymbol(it).isOptional() }
+            val allUnconstrainedDefault = members.all { it.hasNonNullDefault() && !it.canReachConstrainedShape(model, symbolProvider) }
+            val notFallible = allOptional || allUnconstrainedDefault
+
+            return if (takeInUnconstrainedTypes) {
+                !notFallible && structureShape.canReachConstrainedShape(model, symbolProvider)
             } else {
-                structureShape
-                    .members()
-                    .map { symbolProvider.toSymbol(it) }
-                    .any { !it.isOptional() }
+                !notFallible
             }
+        }
     }
 
     private val takeInUnconstrainedTypes = shape.isReachableFromOperationInput()
@@ -142,24 +176,26 @@ class ServerBuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            serverBuilderConstraintViolations.render(
-                writer,
-                visibility,
-                nonExhaustive = true,
-                shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput(),
-            )
+            if (!members.all { it.hasNonNullDefault() && !it.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider) }) {
+                serverBuilderConstraintViolations.render(
+                    writer,
+                    visibility,
+                    nonExhaustive = true,
+                    shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput(),
+                )
 
-            // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
-            // an operation input shape.
-            if (shape.hasTrait<SyntheticInputTrait>()) {
-                renderImplFromConstraintViolationForRequestRejection(writer)
+                // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
+                // an operation input shape.
+                if (shape.hasTrait<SyntheticInputTrait>()) {
+                    renderImplFromConstraintViolationForRequestRejection(writer)
+                }
+
+                if (takeInUnconstrainedTypes) {
+                    renderImplFromBuilderForMaybeConstrained(writer)
+                }
+
+                renderTryFromBuilderImpl(writer)
             }
-
-            if (takeInUnconstrainedTypes) {
-                renderImplFromBuilderForMaybeConstrained(writer)
-            }
-
-            renderTryFromBuilderImpl(writer)
         } else {
             renderFromBuilderImpl(writer)
         }
@@ -396,10 +432,11 @@ class ServerBuilderGenerator(
     }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
+        val errorType = if (!isBuilderFallible) "std::convert::Infallible" else "ConstraintViolation"
         writer.rustTemplate(
             """
             impl #{TryFrom}<Builder> for #{Structure} {
-                type Error = ConstraintViolation;
+                type Error = $errorType;
 
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
                     builder.build()
@@ -496,6 +533,16 @@ class ServerBuilderGenerator(
                 val memberName = symbolProvider.toMemberName(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
+                    val wrapDefault: (String) -> String = {
+                        if (member.isStreaming(model)) {
+                            // We set ByteStream to Default::default() until it is easier to use the full namespace for python.
+                            // Use `unwrap_or_default` to make clippy happy.
+                            ".unwrap_or_default()"
+                        } else {
+                            """.unwrap_or_else(|| $it.try_into().expect("This check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues"))"""
+                        }
+                    }
+
                     // Write the modifier(s).
                     serverBuilderConstraintViolations.builderConstraintViolationForMember(member)?.also { constraintViolation ->
                         val hasBox = builderMemberSymbol(member)
@@ -523,14 +570,21 @@ class ServerBuilderGenerator(
                                     #{MaybeConstrained}::Constrained(x) => Ok(x),
                                     #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                                 })
-                                .map(|res|
-                                    res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
-                                       .map_err(ConstraintViolation::${constraintViolation.name()})
-                                )
-                                .transpose()?
                                 """,
                                 *codegenScope,
                             )
+                            if (isBuilderFallible) {
+                                rustTemplate(
+                                    """
+                                    .map(|res|
+                                        res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
+                                           .map_err(ConstraintViolation::${constraintViolation.name()})
+                                    )
+                                    .transpose()?
+                                    """,
+                                    *codegenScope,
+                                )
+                            }
 
                             // Constrained types are not public and this is a member shape that would have generated a
                             // public constrained type, were the setting to be enabled.
@@ -543,8 +597,32 @@ class ServerBuilderGenerator(
                                     constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
                                 )
                             }
+                            if (member.hasNonNullDefault()) {
+                                rustTemplate(
+                                    """#{Default:W}""",
+                                    "Default" to renderDefaultBuilder(
+                                        model,
+                                        runtimeConfig,
+                                        symbolProvider,
+                                        member,
+                                        wrapDefault,
+                                    ),
+                                )
+                                if (!isBuilderFallible) {
+                                    // unwrap the Option
+                                    rust(".unwrap()")
+                                }
+                            }
+                        }
+                    } ?: run {
+                        if (member.hasNonNullDefault()) {
+                            rustTemplate(
+                                "#{Default:W}",
+                                "Default" to renderDefaultBuilder(model, runtimeConfig, symbolProvider, member, wrapDefault),
+                            )
                         }
                     }
+                    // This won't run if there is a default value
                     serverBuilderConstraintViolations.forMember(member)?.also {
                         rust(".ok_or(ConstraintViolation::${it.name()})?")
                     }
@@ -559,5 +637,123 @@ fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol) = wri
         rust("Result<#T, ConstraintViolation>", structureSymbol)
     } else {
         rust("#T", structureSymbol)
+    }
+}
+
+fun renderDefaultBuilder(model: Model, runtimeConfig: RuntimeConfig, symbolProvider: RustSymbolProvider, member: MemberShape, wrap: (s: String) -> String = { it }): Writable {
+    return writable {
+        val node = member.expectTrait<DefaultTrait>().toNode()!!
+        val name = member.memberName
+        val types = ServerCargoDependency.smithyTypes(runtimeConfig).toType()
+        when (val target = model.expectShape(member.target)) {
+            is EnumShape, is IntEnumShape -> {
+                val value = when (target) {
+                    is IntEnumShape -> node.expectNumberNode().value
+                    is EnumShape -> node.expectStringNode().value
+                    else -> throw CodegenException("Default value for $name must be of EnumShape or IntEnumShape")
+                }
+                val enumValues = when (target) {
+                    is IntEnumShape -> target.enumValues
+                    is EnumShape -> target.enumValues
+                    else -> UNREACHABLE("It must be an [Int]EnumShape, otherwise it'd have failed above")
+                }
+                val variant = enumValues
+                    .entries
+                    .filter { entry -> entry.value == value }
+                    .map { entry ->
+                        symbolProvider.toEnumVariantName(
+                            EnumDefinition.builder().name(entry.key).value(entry.value.toString()).build(),
+                        )!!
+                    }
+                    .first()
+                val symbol = symbolProvider.toSymbol(target)
+                val result = "$symbol::${variant.name}"
+                rust(wrap(result))
+            }
+
+            is ByteShape -> rust(wrap(node.expectNumberNode().value.toString() + "i8"))
+            is ShortShape -> rust(wrap(node.expectNumberNode().value.toString() + "i16"))
+            is IntegerShape -> rust(wrap(node.expectNumberNode().value.toString() + "i32"))
+            is LongShape -> rust(wrap(node.expectNumberNode().value.toString() + "i64"))
+            is FloatShape -> rust(wrap(node.expectNumberNode().value.toFloat().toString() + "f32"))
+            is DoubleShape -> rust(wrap(node.expectNumberNode().value.toDouble().toString() + "f64"))
+            is BooleanShape -> rust(wrap(node.expectBooleanNode().value.toString()))
+            is StringShape -> rust(wrap("String::from(${node.expectStringNode().value.dq()})"))
+            is TimestampShape -> when (node) {
+                is NumberNode -> rust(wrap(node.expectNumberNode().value.toString()))
+                is StringNode -> {
+                    val value = node.expectStringNode().value
+                    rustTemplate(
+                        wrap(
+                            """
+                            #{SmithyTypes}::DateTime::from_str("$value", #{SmithyTypes}::date_time::Format::DateTime)
+	                                .expect("default value `$value` cannot be parsed into a valid date time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")""",
+                        ),
+                        "SmithyTypes" to types,
+                    )
+                }
+
+                else -> throw CodegenException("Default value for $name is unsupported")
+            }
+
+            is ListShape -> {
+                check(node is ArrayNode && node.isEmpty)
+                rust(wrap("Vec::new()"))
+            }
+
+            is MapShape -> {
+                check(node is ObjectNode && node.isEmpty)
+                rust(wrap("std::collections::HashMap::new()"))
+            }
+
+            is DocumentShape -> {
+                when (node) {
+                    is NullNode -> rustTemplate(
+                        "#{SmithyTypes}::Document::Null",
+                        "SmithyTypes" to types,
+                    )
+
+                    is BooleanNode -> rust(wrap(node.value.toString()))
+                    is StringNode -> rust(wrap("String::from(${node.value.dq()})"))
+                    is NumberNode -> {
+                        val value = node.value.toString()
+                        val variant = when (node.value) {
+                            is Float, is Double -> "Float"
+                            else -> if (node.value.toLong() >= 0) "PosInt" else "NegInt"
+                        }
+                        rustTemplate(
+                            wrap(
+                                "#{SmithyTypes}::Document::Number(#{SmithyTypes}::Number::$variant($value))",
+                            ),
+                            "SmithyTypes" to types,
+                        )
+                    }
+
+                    is ArrayNode -> {
+                        check(node.isEmpty)
+                        rust(wrap("Vec::new()"))
+                    }
+
+                    is ObjectNode -> {
+                        check(node.isEmpty)
+                        rust(wrap("std::collections::HashMap::new()"))
+                    }
+
+                    else -> throw CodegenException("Default value $node for member shape ${member.id} is unsupported or cannot exist; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+                }
+            }
+
+            is BlobShape -> {
+                val value = if (member.isStreaming(model)) {
+                    /* ByteStream to work in Python and Rust without explicit dependency */
+                    "Default::default()"
+                } else {
+                    "Vec::new()"
+                }
+                rust(wrap(value))
+            }
+
+            else -> throw CodegenException("Default value for $name is unsupported or cannot exist")
+        }
     }
 }
