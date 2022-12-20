@@ -311,8 +311,8 @@ class FluentClientGenerator(
 
                         /// Replaces any parameters set to this data.
                         ${RuntimeType.AttrUnstableSerdeAny}
-                        pub fn set_fields(mut self, builder: $builderPath) -> $builderPath {
-                            self.inner = new_parameter;
+                        pub fn set_fields(mut self, builder: $builderPath) -> Self {
+                            self.inner = builder;
                             self
                         }
                         """,
