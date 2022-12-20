@@ -3,7 +3,7 @@ RFC: Serialization and Deserialization
 
 > Status: RFC
 >
-> Applies to: Builder data types, data types that builder types may hold as a member as well as three data types `DateTime`, `Document`, `Blob` and `Number` implemented in `aws_smithy_types` crate.
+> Applies to: Output, Input and Builder types as well as `DateTime`, `Document`, `Blob` and `Number` implemented in `aws_smithy_types` crate.
 
 # Terminology
 - Builder
@@ -17,9 +17,11 @@ RFC: Serialization and Deserialization
 
 
 # Overview
-We are going to implement Serialize and Deserialize traits from serde crate on some data types.
-Data types are,
+We are going to implement Serialize and Deserialize traits from `serde` crate to some data types.
+Data types that are going to be affected are;
 - builder data types
+- operation `Input` types
+- operation `Output` types
 - data types that builder types may have on its field(s)
 - `aws_smithy_types::DateTime`
 - `aws_smithy_types::Document`
@@ -28,10 +30,9 @@ Data types are,
 
 `DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format; We must emphasize that these 2 formats are not compatible to each other. Reason for this is explained at the [Blob](#blob) section and [Date Time](#datetime).
 
-
 Additionally, we add `fn set_fields` to fluent builders to allow users to set the data they deserialized to fluent builders.
 
-Lastly, we emphasize that this RFC does NOT aim to serialize the entire response or request.
+Lastly, we emphasize that this RFC does NOT aim to serialize the entire response or request or implement `serde` traits on data types for server-side code.
 
 # Use Case
 Users have requested `serde` traits to be implemented on data types implemented in rust SDK.
