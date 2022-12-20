@@ -5,10 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
-import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StructureShape
@@ -22,16 +19,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
-import java.util.stream.Stream
-
-class UnmarshallTestCasesProvider : ArgumentsProvider {
-    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-        EventStreamTestModels.TEST_CASES.map { Arguments.of(it) }.stream()
-}
 
 class ClientEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
-    @ArgumentsSource(UnmarshallTestCasesProvider::class)
+    @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
         EventStreamTestTools.runTestCase(
             testCase,

@@ -5,6 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
+import org.junit.jupiter.api.extension.ExtensionContext
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.ArgumentsProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -20,12 +23,24 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilde
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
+import java.util.stream.Stream
 
 data class TestCase(
     val eventStreamTestCase: EventStreamTestModels.TestCase,
     val publicConstrainedTypes: Boolean,
 ) {
     override fun toString(): String = "$eventStreamTestCase, publicConstrainedTypes = $publicConstrainedTypes"
+}
+
+class TestCasesProvider : ArgumentsProvider {
+    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
+        EventStreamTestModels.TEST_CASES
+            .flatMap { testCase ->
+                listOf(
+                    TestCase(testCase, publicConstrainedTypes = false),
+                    TestCase(testCase, publicConstrainedTypes = true),
+                )
+            }.map { Arguments.of(it) }.stream()
 }
 
 abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<ServerCodegenContext> {

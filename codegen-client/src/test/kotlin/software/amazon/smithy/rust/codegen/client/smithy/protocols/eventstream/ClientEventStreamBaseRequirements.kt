@@ -5,6 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
+import org.junit.jupiter.api.extension.ExtensionContext
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.ArgumentsProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -17,7 +20,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
+import java.util.stream.Stream
+
+class TestCasesProvider : ArgumentsProvider {
+    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
+        EventStreamTestModels.TEST_CASES.map { Arguments.of(it) }.stream()
+}
 
 abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext> {
     override fun createCodegenContext(

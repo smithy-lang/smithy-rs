@@ -9,8 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsQueryProtocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Ec2QueryProtocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
@@ -177,91 +175,5 @@ object EventStreamTestModels {
                 </ErrorResponse>
             """.trimIndent(),
         ) { RestXml(it) },
-
-        //
-        // awsQuery
-        //
-        TestCase(
-            protocolShapeId = "aws.protocols#awsQuery",
-            model = awsQuery(),
-            requestContentType = "application/x-www-form-urlencoded",
-            responseContentType = "text/xml",
-            validTestStruct = """
-                <TestStruct>
-                    <someString>hello</someString>
-                    <someInt>5</someInt>
-                </TestStruct>
-            """.trimIndent(),
-            validMessageWithNoHeaderPayloadTraits = """
-                <MessageWithNoHeaderPayloadTraits>
-                    <someString>hello</someString>
-                    <someInt>5</someInt>
-                </MessageWithNoHeaderPayloadTraits>
-            """.trimIndent(),
-            validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
-            validSomeError = """
-                <ErrorResponse>
-                    <Error>
-                        <Type>SomeError</Type>
-                        <Code>SomeError</Code>
-                        <Message>some error</Message>
-                    </Error>
-                </ErrorResponse>
-            """.trimIndent(),
-            validUnmodeledError = """
-                <ErrorResponse>
-                    <Error>
-                        <Type>UnmodeledError</Type>
-                        <Code>UnmodeledError</Code>
-                        <Message>unmodeled error</Message>
-                    </Error>
-                </ErrorResponse>
-            """.trimIndent(),
-        ) { AwsQueryProtocol(it) },
-
-        //
-        // ec2Query
-        //
-        TestCase(
-            protocolShapeId = "aws.protocols#ec2Query",
-            model = ec2Query(),
-            requestContentType = "application/x-www-form-urlencoded",
-            responseContentType = "text/xml",
-            validTestStruct = """
-                <TestStruct>
-                    <someString>hello</someString>
-                    <someInt>5</someInt>
-                </TestStruct>
-            """.trimIndent(),
-            validMessageWithNoHeaderPayloadTraits = """
-                <MessageWithNoHeaderPayloadTraits>
-                    <someString>hello</someString>
-                    <someInt>5</someInt>
-                </MessageWithNoHeaderPayloadTraits>
-            """.trimIndent(),
-            validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
-            validSomeError = """
-                <Response>
-                    <Errors>
-                        <Error>
-                            <Type>SomeError</Type>
-                            <Code>SomeError</Code>
-                            <Message>some error</Message>
-                        </Error>
-                    </Errors>
-                </Response>
-            """.trimIndent(),
-            validUnmodeledError = """
-                <Response>
-                    <Errors>
-                        <Error>
-                            <Type>UnmodeledError</Type>
-                            <Code>UnmodeledError</Code>
-                            <Message>unmodeled error</Message>
-                        </Error>
-                    </Errors>
-                </Response>
-            """.trimIndent(),
-        ) { Ec2QueryProtocol(it) },
     )
 }
