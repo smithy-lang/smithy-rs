@@ -18,7 +18,11 @@ pub use sender::{EventStreamSender, MessageStreamAdapter, MessageStreamError};
 pub use receiver::{RawMessage, Receiver};
 
 pub use deserialized_stream::*;
-#[cfg(all(feature = "unstable", feature = "deserialize", feature = "event-stream"))]
+#[cfg(all(
+    feature = "unstable",
+    feature = "deserialize",
+    feature = "event-stream"
+))]
 pub mod deserialized_stream {
     use super::*;
     use aws_smithy_eventstream::frame::UnmarshallMessage;

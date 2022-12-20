@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::ffi::CString;
 use crate::*;
 use serde::{Deserialize, Serialize};
+use std::ffi::CString;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 struct ForTest {

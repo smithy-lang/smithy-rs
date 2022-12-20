@@ -24,7 +24,7 @@ pub(crate) enum ErrorKind {
     TimestampValueTooLarge(DateTime),
     Marshalling(String),
     Unmarshalling(String),
-    DeserializedStream
+    DeserializedStream,
 }
 
 #[derive(Debug)]
@@ -55,7 +55,7 @@ impl Error {
 
     pub fn deserialized_stream() -> Self {
         Self {
-            kind: ErrorKind::DeserializedStream
+            kind: ErrorKind::DeserializedStream,
         }
     }
 }
@@ -99,7 +99,10 @@ impl fmt::Display for Error {
             ),
             Marshalling(error) => write!(f, "failed to marshall message: {}", error),
             Unmarshalling(error) => write!(f, "failed to unmarshall message: {}", error),
-            DeserializedStream => write!(f, "this is a deserialized stream. No meesage can be sent or be received."),
+            DeserializedStream => write!(
+                f,
+                "this is a deserialized stream. No meesage can be sent or be received."
+            ),
         }
     }
 }

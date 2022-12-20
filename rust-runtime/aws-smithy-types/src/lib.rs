@@ -14,16 +14,12 @@
 )]
 
 #[cfg(test)]
-#[cfg(all(
-    feature = "unstable",
-    feature = "serialize",
-    feature = "deserialize"
-))]
+#[cfg(all(feature = "unstable", feature = "serialize", feature = "deserialize"))]
 mod test;
 
-#[cfg(all(feature= "unstable", feature = "serialize"))]
+#[cfg(all(feature = "unstable", feature = "serialize"))]
 use serde::Serialize;
-#[cfg(all(feature= "unstable", feature = "deserialize"))]
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 use serde::{de::Visitor, Deserialize};
 
 use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
@@ -144,7 +140,10 @@ impl AsRef<[u8]> for Blob {
 /// The serialization format of a document is an implementation detail of a protocol.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(Serialize))]
-#[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(Deserialize))]
+#[cfg_attr(
+    all(feature = "unstable", feature = "deserialize"),
+    derive(Deserialize)
+)]
 #[cfg_attr(
     any(
         all(feature = "unstable", feature = "deserialize"),
@@ -257,7 +256,10 @@ impl From<i32> for Document {
 /// A number type that implements Javascript / JSON semantics, modeled on serde_json:
 /// <https://docs.serde.rs/src/serde_json/number.rs.html#20-22>
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(Deserialize))]
+#[cfg_attr(
+    all(feature = "unstable", feature = "deserialize"),
+    derive(Deserialize)
+)]
 #[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(Serialize))]
 #[cfg_attr(
     any(
@@ -322,7 +324,6 @@ fn number_deserialization_works() {
     assert_eq!("0", serde_json::to_string(&Number::PosInt(0)).unwrap());
     assert_eq!("-1", serde_json::to_string(&Number::NegInt(-1)).unwrap());
 }
-
 
 macro_rules! to_unsigned_integer_converter {
     ($typ:ident, $styp:expr) => {
