@@ -51,7 +51,7 @@ fn main() {
         .build()
         .unwrap();
     assert_eq!(
-        serde_json::to_string_pretty(&putitem),
-        Ok(include_str!("./serialize_document_example.json").to_string())
+        serde_json::to_string_pretty(&putitem).ok(),
+        Some(include_str!("./serialize_document_example.json").to_string())
     );
 }
