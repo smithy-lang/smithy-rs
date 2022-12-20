@@ -64,7 +64,7 @@ There are many different crates, so we decided to survey how some of the most po
 | library    | version | implementation  | all time downloads on crate.io as of writing (Dec, 2022) |
 | ---------- | ------- | --------------- | -------------------------------------------------------- |
 | serde_json | 1.0     | Array of number | 109,491,713                                              |
-| tom        | 0.5.9   | Array of number | 63,601,994                                               |
+| toml        | 0.5.9   | Array of number | 63,601,994                                               |
 | serde_yaml | 0.9.14  | Unsupported     | 23,767,300                                               |
 
 First of all, bytes could have hundreds of elements; reading an array of hundred of numbers will never be a pleasing experience, and it is especially troubling when you are writing data for test cases.
@@ -183,7 +183,7 @@ We believe that we could
 
 If the new field is not an `Option<T>` type and has no `Default` implementation, we must implement a custom de-serialization logic.
 
-In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside of our responsibility.
+In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.
 
 ## Introduction of New Data Type
 If new field introduces a new data type, it will not require any additional work if the data type can derive `serde` traits.  
