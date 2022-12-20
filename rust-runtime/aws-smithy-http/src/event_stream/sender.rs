@@ -46,7 +46,7 @@ mod deserialized_stream {
         type Item = std::result::Result<T, E>;
         fn poll_next(
             self: std::pin::Pin<&mut Self>,
-            cx: &mut std::task::Context<'_>,
+            _: &mut std::task::Context<'_>,
         ) -> std::task::Poll<Option<Self::Item>> {
             std::task::Poll::Ready(None)
         }
