@@ -10,49 +10,49 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
+import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import java.util.stream.Stream
 
-class UnmarshallTestCasesProvider : ArgumentsProvider {
+class MarshallTestCasesProvider : ArgumentsProvider {
     override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-        EventStreamTestModels.TEST_CASES.map { Arguments.of(it) }.stream()
+        // Don't include awsQuery or ec2Query for now since marshall support for them is unimplemented
+        EventStreamTestModels.TEST_CASES
+            .filter { testCase -> !testCase.protocolShapeId.contains("Query") }
+            .map { Arguments.of(it) }.stream()
 }
 
-class EventStreamUnmarshallerGeneratorTest {
+class ClientEventStreamMarshallerGeneratorTest {
     @ParameterizedTest
-    @ArgumentsSource(UnmarshallTestCasesProvider::class)
+    @ArgumentsSource(MarshallTestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
         EventStreamTestTools.runTestCase(
             testCase,
-            object : EventStreamBaseRequirements() {
+            object : ClientEventStreamBaseRequirements() {
                 override fun renderGenerator(
                     codegenContext: ClientCodegenContext,
                     project: TestEventStreamProject,
                     protocol: Protocol,
-                ): RuntimeType {
-                    fun builderSymbol(shape: StructureShape): Symbol = shape.builderSymbol(codegenContext.symbolProvider)
-                    return EventStreamUnmarshallerGenerator(
-                        protocol,
-                        codegenContext,
-                        project.operationShape,
-                        project.streamShape,
-                        ::builderSymbol,
-                    ).render()
-                }
+                ): RuntimeType = EventStreamMarshallerGenerator(
+                    project.model,
+                    CodegenTarget.CLIENT,
+                    TestRuntimeConfig,
+                    project.symbolProvider,
+                    project.streamShape,
+                    protocol.structuredDataSerializer(project.operationShape),
+                    testCase.requestContentType,
+                ).render()
             },
             CodegenTarget.CLIENT,
-            EventStreamTestVariety.Unmarshall,
+            EventStreamTestVariety.Marshall,
         )
     }
 }

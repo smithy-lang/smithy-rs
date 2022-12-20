@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 
-abstract class EventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext> {
+abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext> {
     override fun createCodegenContext(
         model: Model,
         serviceShape: ServiceShape,

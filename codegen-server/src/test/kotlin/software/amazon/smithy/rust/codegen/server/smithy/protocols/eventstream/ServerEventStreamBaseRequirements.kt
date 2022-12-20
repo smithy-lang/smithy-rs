@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 
-abstract class EventStreamBaseRequirements : EventStreamTestRequirements<ServerCodegenContext> {
+abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<ServerCodegenContext> {
     abstract val publicConstrainedTypes: Boolean
 
     override fun createCodegenContext(

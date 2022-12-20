@@ -10,52 +10,62 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
-import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import java.util.stream.Stream
 
-class MarshallTestCasesProvider : ArgumentsProvider {
-    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-        // Don't include awsQuery or ec2Query for now since marshall support for them is unimplemented
-        EventStreamTestModels.TEST_CASES
-            .filter { testCase -> !testCase.protocolShapeId.contains("Query") }
-            .map { Arguments.of(it) }.stream()
+data class TestCase(
+    val eventStreamTestCase: EventStreamTestModels.TestCase,
+    val publicConstrainedTypes: Boolean,
+) {
+    override fun toString(): String = "$eventStreamTestCase, publicConstrainedTypes = $publicConstrainedTypes"
 }
 
-class EventStreamMarshallerGeneratorTest {
+class UnmarshallTestCasesProvider : ArgumentsProvider {
+    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
+        EventStreamTestModels.TEST_CASES.flatMap { testCase ->
+            listOf(
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Enable tests for `publicConstrainedTypes = false`
+                // TestCase(testCase, false),
+                TestCase(testCase, true),
+            )
+        }.map { Arguments.of(it) }.stream()
+}
+
+class ServerEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
-    @ArgumentsSource(MarshallTestCasesProvider::class)
-    fun test(testCase: EventStreamTestModels.TestCase) {
+    @ArgumentsSource(UnmarshallTestCasesProvider::class)
+    fun test(testCase: TestCase) {
         EventStreamTestTools.runTestCase(
-            testCase,
-            object : EventStreamBaseRequirements() {
-                override val publicConstrainedTypes: Boolean get() = true
+            testCase.eventStreamTestCase,
+            object : ServerEventStreamBaseRequirements() {
+                override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes
 
                 override fun renderGenerator(
                     codegenContext: ServerCodegenContext,
                     project: TestEventStreamProject,
                     protocol: Protocol,
                 ): RuntimeType {
-                    return EventStreamMarshallerGenerator(
-                        project.model,
-                        CodegenTarget.SERVER,
-                        TestRuntimeConfig,
-                        project.symbolProvider,
+                    fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
+                    return EventStreamUnmarshallerGenerator(
+                        protocol,
+                        codegenContext,
+                        project.operationShape,
                         project.streamShape,
-                        protocol.structuredDataSerializer(project.operationShape),
-                        testCase.requestContentType,
+                        ::builderSymbol,
                     ).render()
                 }
 
@@ -64,7 +74,14 @@ class EventStreamMarshallerGeneratorTest {
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
                 ) {
-                    ServerBuilderGenerator(codegenContext, shape).apply {
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Use the correct builder:
+                    // ServerBuilderGenerator(codegenContext, shape).apply {
+                    //     render(writer)
+                    //     writer.implBlock(shape, codegenContext.symbolProvider) {
+                    //         renderConvenienceMethod(writer)
+                    //     }
+                    // }
+                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
                         render(writer)
                         writer.implBlock(shape, codegenContext.symbolProvider) {
                             renderConvenienceMethod(writer)
@@ -73,7 +90,7 @@ class EventStreamMarshallerGeneratorTest {
                 }
             },
             CodegenTarget.SERVER,
-            EventStreamTestVariety.Marshall,
+            EventStreamTestVariety.Unmarshall,
         )
     }
 }
