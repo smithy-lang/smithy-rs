@@ -208,7 +208,9 @@ To clarify, this is the same approach we took on `Data Type to skip` section.
 1. skip
    We will simply skip serializing/de-serializing. However, we may need to implement custom serialization/de-serialization logic if a value is not wrapped with `Option`.
 2. custom serialization/de-serialization logic 
-   We can implement tailored serialization/de-serialization logic, just like in 
+   We can implement tailored serialization/de-serialization logic.
+
+Either way, we will mention this on the generated docs to avoid suprising users.
 
 e.g.
 ```rust
