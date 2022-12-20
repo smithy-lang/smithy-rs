@@ -31,9 +31,9 @@ private const val DEFAULT_KEY = "DEFAULT"
 
 /**
  * Location of the runtime crates (aws-smithy-http, aws-smithy-types etc.)
-*
-* This can be configured via the `runtimeConfig.versions` field in smithy-build.json
-*/
+ *
+ * This can be configured via the `runtimeConfig.versions` field in smithy-build.json
+ */
 data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap) {
     companion object {
         fun Path(path: String) = RuntimeCrateLocation(path, CrateVersionMap(emptyMap()))
@@ -60,7 +60,7 @@ fun defaultRuntimeCrateVersion(): String {
 
 /**
  * A mapping from crate name to a user-specified version.
-*/
+ */
 @JvmInline
 value class CrateVersionMap(
     val map: Map<String, String>,
@@ -68,7 +68,7 @@ value class CrateVersionMap(
 
 /**
  * Prefix & crate location for the runtime crates.
-*/
+ */
 data class RuntimeConfig(
     val cratePrefix: String = "aws",
     val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.Path("../"),
@@ -108,22 +108,22 @@ data class RuntimeConfig(
 
 /**
  * `RuntimeType` captures all necessary information to render a type into a Rust file:
-* - [name]: What type is this?
-* - [namespace]: Where can we find this type.
-* - [dependency]: What other crates, if any, are required to use this type?
-*
-* For example:
-*
-*  * `RuntimeType("header::HeaderName", CargoDependency.Http)`, when passed to a [RustWriter] would appear as such:
-*
-* `http::header::HeaderName`
-*  ------------  ----------
-*       |            |
-* `[namespace]`  `[name]`
-*
-*  This type would have a [CargoDependency] pointing to the `http` crate. Writing it multiple times would still only
-*  add the dependency once.
-*/
+ * - [name]: What type is this?
+ * - [namespace]: Where can we find this type.
+ * - [dependency]: What other crates, if any, are required to use this type?
+ *
+ * For example:
+ *
+ *  * `RuntimeType("header::HeaderName", CargoDependency.Http)`, when passed to a [RustWriter] would appear as such:
+ *
+ * `http::header::HeaderName`
+ *  ------------  ----------
+ *       |            |
+ * `[namespace]`  `[name]`
+ *
+ *  This type would have a [CargoDependency] pointing to the `http` crate. Writing it multiple times would still only
+ *  add the dependency once.
+ */
 data class RuntimeType(val path: String, val dependency: RustDependency? = null) {
     val name: String
     val namespace: String
