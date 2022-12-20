@@ -5,7 +5,7 @@
 
 //! Provides Sender/Receiver implementations for Event Stream codegen.
 
-use std::{error::Error as StdError, fmt::Debug};
+use std::error::Error as StdError;
 
 mod receiver;
 mod sender;
@@ -17,6 +17,11 @@ pub use sender::{EventStreamSender, MessageStreamAdapter, MessageStreamError};
 #[doc(inline)]
 pub use receiver::{RawMessage, Receiver};
 
+#[cfg(all(
+    feature = "unstable",
+    feature = "deserialize",
+    feature = "event-stream"
+))]
 pub use deserialized_stream::*;
 #[cfg(all(
     feature = "unstable",
@@ -26,7 +31,7 @@ pub use deserialized_stream::*;
 pub mod deserialized_stream {
     use super::*;
     use aws_smithy_eventstream::frame::UnmarshallMessage;
-    use std::marker::PhantomData;
+    use std::{fmt::Debug, marker::PhantomData};
     /// This data is used to fill a field when the users try to deserialize data that has a Receiver in one of the field.
     pub struct DeserializedReceiverStream<T, E>(PhantomData<(T, E)>);
     impl<T, E> Debug for DeserializedReceiverStream<T, E> {
