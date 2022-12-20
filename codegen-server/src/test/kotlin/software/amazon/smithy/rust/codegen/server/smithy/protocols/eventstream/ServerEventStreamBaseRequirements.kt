@@ -89,7 +89,7 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         model: Model,
         symbolProvider: RustSymbolProvider,
         operationSymbol: Symbol,
-        errors: List<StructureShape>
+        errors: List<StructureShape>,
     ) {
         ServerOperationErrorGenerator(model, symbolProvider, operationSymbol, errors).render(writer)
     }
