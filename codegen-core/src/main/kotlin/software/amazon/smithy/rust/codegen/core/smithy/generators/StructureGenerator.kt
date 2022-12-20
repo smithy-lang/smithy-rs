@@ -137,9 +137,9 @@ open class StructureGenerator(
         if (argPath.contains("aws_smithy_http::byte_stream::ByteStream")) {
             writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}, ${RuntimeType.AttrUnstableSerialize}), serde(skip))]\n")
         } else if (argPath.contains("aws_smithy_http::event_stream::Receiver")) {
-            writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}, ${RuntimeType.AttrUnstableSerialize}), serde(skip, default = \"aws_smithy_http::event_stream::Receiver::deserialized_receiver\"))]\n")
+            writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}), serde(skip, default = \"aws_smithy_http::event_stream::Receiver::deserialized_receiver\"))]\n")
         } else if (argPath.contains("aws_smithy_http::event_stream::EventStreamSender")) {
-            writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}, ${RuntimeType.AttrUnstableSerialize}), serde(skip, default = \"aws_smithy_http::event_stream::EventStreamSender::deserialized_sender\"))]\n")
+            writer.writeInline("##[cfg_attr(any(${RuntimeType.AttrUnstableDeserialize}), serde(skip, default = \"aws_smithy_http::event_stream::EventStreamSender::deserialized_sender\"))]\n")
         }
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
