@@ -99,7 +99,7 @@ impl Credentials {
     /// ```rust
     /// use aws_credential_types::Credentials;
     /// # mod service {
-    /// #     use aws_credential_types::ProvideCredentials;
+    /// #     use aws_credential_types::provider::ProvideCredentials;
     /// #     pub struct Config;
     /// #     impl Config {
     /// #        pub fn builder() -> Self {

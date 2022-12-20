@@ -6,8 +6,8 @@
 //! Credentials Provider for external process
 
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials, RefreshableCredentials};
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
-use aws_credential_types::{future, CredentialsError, ProvideCredentials};
 use aws_smithy_json::deserialize::Token;
 use std::fmt;
 use std::process::Command;
@@ -109,7 +109,7 @@ impl CredentialProcessProvider {
         }
     }
 
-    async fn credentials(&self) -> aws_credential_types::Result {
+    async fn credentials(&self) -> provider::Result {
         // Security: command arguments must be redacted at debug level
         tracing::debug!(command = %self.command, "loading credentials from external process");
 
@@ -260,7 +260,7 @@ pub(crate) fn parse_credential_process_json_credentials(
 #[cfg(test)]
 mod test {
     use crate::credential_process::CredentialProcessProvider;
-    use aws_credential_types::ProvideCredentials;
+    use aws_credential_types::provider::ProvideCredentials;
     use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;

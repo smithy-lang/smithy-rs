@@ -5,9 +5,9 @@
 
 //! Assume credentials for a role through the AWS Security Token Service (STS).
 
-use aws_credential_types::{
-    self, future, CredentialsError, LazyCachingCredentialsProvider, ProvideCredentials,
-    SharedCredentialsProvider,
+use aws_credential_types::lazy_caching::LazyCachingCredentialsProvider;
+use aws_credential_types::provider::{
+    self, error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
 };
 use aws_sdk_sts::error::AssumeRoleErrorKind;
 use aws_sdk_sts::middleware::DefaultMiddleware;
@@ -235,7 +235,7 @@ impl AssumeRoleProviderBuilder {
 }
 
 impl Inner {
-    async fn credentials(&self) -> aws_credential_types::Result {
+    async fn credentials(&self) -> provider::Result {
         tracing::debug!("retrieving assumed credentials");
         let op = self
             .op
@@ -298,9 +298,9 @@ impl ProvideCredentials for AssumeRoleProvider {
 mod test {
     use crate::provider_config::ProviderConfig;
     use crate::sts::AssumeRoleProvider;
-    use aws_credential_types::{
-        Credentials, ManualTimeSource, ProvideCredentials, SharedCredentialsProvider, TimeSource,
-    };
+    use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
+    use aws_credential_types::time_source::{ManualTimeSource, TimeSource};
+    use aws_credential_types::Credentials;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::capture_request;

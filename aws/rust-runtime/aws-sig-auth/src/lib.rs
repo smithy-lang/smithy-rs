@@ -77,9 +77,9 @@
 //! ## Sign a request for APIGateway execute-api
 //!
 //! ```no_run
+//! use aws_credential_types::provider::ProvideCredentials;
 //! use aws_sig_auth::signer::{OperationSigningConfig, RequestConfig, SigV4Signer};
 //! use aws_smithy_http::body::SdkBody;
-//! use aws_credential_types::ProvideCredentials;
 //! use aws_types::region::{Region, SigningRegion};
 //! use aws_types::SigningService;
 //! use std::error::Error;

@@ -13,7 +13,7 @@ use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
-use aws_credential_types::{Credentials, SharedCredentialsProvider};
+use aws_credential_types::{provider::SharedCredentialsProvider, Credentials};
 use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::{EndpointShim, Params};
 use aws_http::retry::AwsResponseRetryClassifier;

@@ -566,7 +566,7 @@ impl<T, E> ClassifyRetry<SdkSuccess<T>, SdkError<E>> for ImdsResponseRetryClassi
 pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
-    use aws_credential_types::{ManualTimeSource, TimeSource};
+    use aws_credential_types::time_source::{ManualTimeSource, TimeSource};
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::{capture_request, TestConnection};

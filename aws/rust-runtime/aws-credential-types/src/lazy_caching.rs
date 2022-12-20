@@ -13,8 +13,8 @@ use aws_smithy_async::rt::sleep::AsyncSleep;
 use tracing::{debug, info, info_span, Instrument};
 
 use crate::cache::ExpiringCache;
-use crate::TimeSource;
-use crate::{future, CredentialsError, ProvideCredentials};
+use crate::provider::{error::CredentialsError, future, ProvideCredentials};
+use crate::time_source::TimeSource;
 
 const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
@@ -120,7 +120,7 @@ mod builder {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use crate::ProvideCredentials;
+    use crate::provider::ProvideCredentials;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 
     use super::TimeSource;
@@ -135,8 +135,8 @@ mod builder {
     ///
     /// ```no_run
     /// use aws_credential_types::Credentials;
-    /// use aws_credential_types::provide_credentials_fn;
-    /// use aws_credential_types::LazyCachingCredentialsProvider;
+    /// use aws_credential_types::credential_fn::provide_credentials_fn;
+    /// use aws_credential_types::lazy_caching::LazyCachingCredentialsProvider;
     ///
     /// let provider = LazyCachingCredentialsProvider::builder()
     ///     .load(provide_credentials_fn(|| async {
@@ -311,7 +311,10 @@ mod tests {
     use tracing_test::traced_test;
 
     use crate::{
-        provide_credentials_fn, Credentials, CredentialsError, ManualTimeSource, ProvideCredentials,
+        credential_fn::provide_credentials_fn,
+        provider::{error::CredentialsError, ProvideCredentials},
+        time_source::ManualTimeSource,
+        Credentials,
     };
 
     use super::{
@@ -321,7 +324,7 @@ mod tests {
 
     fn test_provider(
         time: TimeSource,
-        load_list: Vec<crate::Result>,
+        load_list: Vec<crate::provider::Result>,
     ) -> LazyCachingCredentialsProvider {
         let load_list = Arc::new(Mutex::new(load_list));
         LazyCachingCredentialsProvider::new(

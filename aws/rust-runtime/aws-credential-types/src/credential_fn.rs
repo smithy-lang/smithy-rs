@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Types that allow a credentials provider to be created from a closure
+
 use std::fmt::{self, Debug, Formatter};
 use std::future::Future;
 use std::marker::PhantomData;
 
-use crate::{future, ProvideCredentials};
+use crate::provider::{future, ProvideCredentials};
 
 /// A [`ProvideCredentials`] implemented by a closure.
 ///
@@ -27,7 +29,7 @@ impl<T> Debug for ProvideCredentialsFn<'_, T> {
 impl<'c, T, F> ProvideCredentials for ProvideCredentialsFn<'c, T>
 where
     T: Fn() -> F + Send + Sync + 'c,
-    F: Future<Output = crate::Result> + Send + 'static,
+    F: Future<Output = crate::provider::Result> + Send + 'static,
 {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
@@ -39,13 +41,13 @@ where
 
 /// Returns a new credentials provider built with the given closure. This allows you
 /// to create an [`ProvideCredentials`] implementation from an async block that returns
-/// a [`crate::Result`].
+/// a [`crate::provider::Result`].
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use aws_credential_types::Credentials;
-/// use aws_credential_types::provide_credentials_fn;
+/// use aws_credential_types::credential_fn::provide_credentials_fn;
 ///
 /// async fn load_credentials() -> Credentials {
 ///     todo!()
@@ -60,7 +62,7 @@ where
 pub fn provide_credentials_fn<'c, T, F>(f: T) -> ProvideCredentialsFn<'c, T>
 where
     T: Fn() -> F + Send + Sync + 'c,
-    F: Future<Output = crate::Result> + Send + 'static,
+    F: Future<Output = crate::provider::Result> + Send + 'static,
 {
     ProvideCredentialsFn {
         f,
@@ -70,8 +72,11 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::provide_credentials_fn;
-    use crate::{future, Credentials, ProvideCredentials};
+    use crate::credential_fn::provide_credentials_fn;
+    use crate::{
+        provider::{future, ProvideCredentials},
+        Credentials,
+    };
     use async_trait::async_trait;
     use std::fmt::{Debug, Formatter};
 
@@ -110,7 +115,7 @@ mod test {
     #[tokio::test]
     async fn provide_credentials_fn_closure_can_borrow() {
         fn check_is_str_ref(_input: &str) {}
-        async fn test_async_provider(input: String) -> crate::Result {
+        async fn test_async_provider(input: String) -> crate::provider::Result {
             Ok(Credentials::new(&input, &input, None, None, "test"))
         }
 

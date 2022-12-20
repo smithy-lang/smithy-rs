@@ -23,7 +23,7 @@ use std::time::{Duration, SystemTime};
 /// #         Client { }
 /// #     }
 /// # }
-/// use aws_credential_types::TimeSource;
+/// use aws_credential_types::time_source::TimeSource;
 /// let time = TimeSource::real();
 /// let client = Client::with_timesource(time);
 /// ```
@@ -70,7 +70,7 @@ impl Default for TimeSource {
 /// #         Client { }
 /// #     }
 /// # }
-/// use aws_credential_types::{ManualTimeSource, TimeSource};
+/// use aws_credential_types::time_source::{ManualTimeSource, TimeSource};
 /// use std::time::{UNIX_EPOCH, Duration};
 /// let mut time = ManualTimeSource::new(UNIX_EPOCH);
 /// let client = Client::with_timesource(TimeSource::manual(&time));
@@ -126,9 +126,9 @@ enum Inner {
 
 #[cfg(test)]
 mod test {
-    use std::time::{Duration, UNIX_EPOCH};
+    use super::{ManualTimeSource, TimeSource};
 
-    use crate::{ManualTimeSource, TimeSource};
+    use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
     fn ts_works() {

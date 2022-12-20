@@ -8,7 +8,8 @@ use std::iter::repeat_with;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use aws_credential_types::{Credentials, SharedCredentialsProvider};
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_smithy_http::endpoint::Endpoint;
 use aws_smithy_types::timeout::TimeoutConfig;

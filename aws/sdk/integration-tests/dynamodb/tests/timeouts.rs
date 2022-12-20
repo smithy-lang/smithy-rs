@@ -6,7 +6,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aws_credential_types::{Credentials, SharedCredentialsProvider};
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::types::SdkError;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::never::NeverConnector;

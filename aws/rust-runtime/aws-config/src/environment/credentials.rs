@@ -5,7 +5,8 @@
 
 use std::env::VarError;
 
-use aws_credential_types::{self, future, Credentials, CredentialsError, ProvideCredentials};
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::Env;
 
 /// Load Credentials from Environment Variables
@@ -20,7 +21,7 @@ pub struct EnvironmentVariableCredentialsProvider {
 }
 
 impl EnvironmentVariableCredentialsProvider {
-    fn credentials(&self) -> aws_credential_types::Result {
+    fn credentials(&self) -> provider::Result {
         let access_key = self
             .env
             .get("AWS_ACCESS_KEY_ID")
@@ -100,7 +101,7 @@ fn err_if_blank(value: String) -> Result<String, VarError> {
 
 #[cfg(test)]
 mod test {
-    use aws_credential_types::{CredentialsError, ProvideCredentials};
+    use aws_credential_types::provider::{error::CredentialsError, ProvideCredentials};
     use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
 

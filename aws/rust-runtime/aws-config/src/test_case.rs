@@ -5,7 +5,7 @@
 
 use crate::provider_config::ProviderConfig;
 
-use aws_credential_types::{self, ProvideCredentials};
+use aws_credential_types::provider::{self, ProvideCredentials};
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use aws_smithy_client::erase::DynConnector;
@@ -247,7 +247,7 @@ impl TestEnvironment {
         }
     }
 
-    fn check_results(&self, result: aws_credential_types::Result) {
+    fn check_results(&self, result: provider::Result) {
         self.metadata.result.assert_matches(result);
     }
 }

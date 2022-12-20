@@ -6,9 +6,8 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
-use aws_credential_types::{
-    self, future, lazy_caching, LazyCachingCredentialsProvider, ProvideCredentials,
-};
+use aws_credential_types::lazy_caching::{self, LazyCachingCredentialsProvider};
+use aws_credential_types::provider::{self, future, ProvideCredentials};
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
@@ -69,7 +68,7 @@ impl DefaultCredentialsChain {
         Builder::default()
     }
 
-    async fn credentials(&self) -> aws_credential_types::Result {
+    async fn credentials(&self) -> provider::Result {
         self.0
             .provide_credentials()
             .instrument(tracing::debug_span!("provide_credentials", provider = %"default_chain"))
@@ -266,7 +265,7 @@ impl Builder {
 mod test {
     use tracing_test::traced_test;
 
-    use aws_credential_types::ProvideCredentials;
+    use aws_credential_types::provider::ProvideCredentials;
     use aws_smithy_types::retry::{RetryConfig, RetryMode};
     use aws_types::os_shim_internal::{Env, Fs};
 
@@ -374,7 +373,8 @@ mod test {
     #[traced_test]
     #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
-        use aws_credential_types::{CredentialsError, TimeSource};
+        use aws_credential_types::provider::error::CredentialsError;
+        use aws_credential_types::time_source::TimeSource;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::boxclone::BoxCloneService;
         use aws_smithy_client::never::NeverConnected;

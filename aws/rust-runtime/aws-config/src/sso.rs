@@ -14,7 +14,8 @@ use crate::fs_util::{home_dir, Os};
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::provider_config::ProviderConfig;
 
-use aws_credential_types::{future, Credentials, CredentialsError, ProvideCredentials};
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::Credentials;
 use aws_sdk_sso::middleware::DefaultMiddleware as SsoMiddleware;
 use aws_sdk_sso::model::RoleCredentials;
 use aws_smithy_client::erase::DynConnector;
@@ -79,7 +80,7 @@ impl SsoCredentialsProvider {
         }
     }
 
-    async fn credentials(&self) -> aws_credential_types::Result {
+    async fn credentials(&self) -> provider::Result {
         load_sso_credentials(&self.sso_config, &self.client, &self.env, &self.fs).await
     }
 }
@@ -203,7 +204,7 @@ async fn load_sso_credentials(
     sso: &aws_smithy_client::Client<DynConnector, SsoMiddleware>,
     env: &Env,
     fs: &Fs,
-) -> aws_credential_types::Result {
+) -> provider::Result {
     let token = load_token(&sso_config.start_url, env, fs)
         .await
         .map_err(CredentialsError::provider_error)?;

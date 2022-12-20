@@ -4,7 +4,7 @@
  */
 
 use aws_config::SdkConfig;
-use aws_credential_types::SharedCredentialsProvider;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::types::ByteStream;
 use aws_sdk_s3::{Client, Credentials, Region};

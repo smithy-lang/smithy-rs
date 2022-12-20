@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_credential_types::SharedCredentialsProvider;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::{types::ByteStream, Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;

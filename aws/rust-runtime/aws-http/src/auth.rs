@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_credential_types::{CredentialsError, ProvideCredentials, SharedCredentialsProvider};
+use aws_credential_types::provider::{
+    error::CredentialsError, ProvideCredentials, SharedCredentialsProvider,
+};
 use aws_smithy_http::middleware::AsyncMapRequest;
 use aws_smithy_http::operation::Request;
 use aws_smithy_http::property_bag::PropertyBag;
@@ -15,7 +17,7 @@ pub fn set_provider(bag: &mut PropertyBag, provider: SharedCredentialsProvider) 
     bag.insert(provider);
 }
 
-/// Middleware stage that loads credentials from a [CredentialsProvider](aws_credential_types::ProvideCredentials)
+/// Middleware stage that loads credentials from a [CredentialsProvider](aws_credential_types::provider::ProvideCredentials)
 /// and places them in the property bag of the request.
 ///
 /// [CredentialsStage] implements [`AsyncMapRequest`](aws_smithy_http::middleware::AsyncMapRequest), and:
@@ -61,7 +63,7 @@ impl CredentialsStage {
 }
 
 mod error {
-    use aws_credential_types::CredentialsError;
+    use aws_credential_types::provider::error::CredentialsError;
     use std::error::Error as StdError;
     use std::fmt;
 
@@ -115,7 +117,10 @@ mod tests {
     use super::set_provider;
     use super::CredentialsStage;
     use aws_credential_types::{
-        future, Credentials, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
+        provider::{
+            error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
+        },
+        Credentials,
     };
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::middleware::AsyncMapRequest;

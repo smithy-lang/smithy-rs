@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Expiry-aware cache
+
 use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{OnceCell, RwLock};
 
-/// Expiry-aware cache
-///
 /// [`ExpiringCache`] implements two important features:
 /// 1. Respect expiry of contents
 /// 2. Deduplicate load requests to prevent thundering herds when no value is present.
@@ -105,7 +105,7 @@ fn expired(expiration: SystemTime, buffer_time: Duration, now: SystemTime) -> bo
 #[cfg(test)]
 mod tests {
     use super::{expired, ExpiringCache};
-    use crate::{Credentials, CredentialsError};
+    use crate::{provider::error::CredentialsError, Credentials};
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
 

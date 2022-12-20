@@ -8,7 +8,8 @@
 //!
 //! Future work will stabilize this interface and enable it to be used directly.
 
-use aws_credential_types::{Credentials, CredentialsError};
+use aws_credential_types::provider::{self, error::CredentialsError};
+use aws_credential_types::Credentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_http::body::SdkBody;
@@ -43,10 +44,7 @@ impl HttpCredentialProvider {
         Builder::default()
     }
 
-    pub(crate) async fn credentials(
-        &self,
-        auth: Option<HeaderValue>,
-    ) -> aws_credential_types::Result {
+    pub(crate) async fn credentials(&self, auth: Option<HeaderValue>) -> provider::Result {
         let credentials = self.client.call(self.operation(auth)).await;
         match credentials {
             Ok(creds) => Ok(creds),
@@ -121,7 +119,7 @@ struct CredentialsResponseParser {
     provider_name: &'static str,
 }
 impl ParseStrictResponse for CredentialsResponseParser {
-    type Output = aws_credential_types::Result;
+    type Output = provider::Result;
 
     fn parse(&self, response: &Response<Bytes>) -> Self::Output {
         if !response.status().is_success() {
@@ -205,7 +203,8 @@ mod test {
     use crate::http_credential_provider::{
         CredentialsResponseParser, HttpCredentialRetryClassifier,
     };
-    use aws_credential_types::{Credentials, CredentialsError};
+    use aws_credential_types::provider::error::CredentialsError;
+    use aws_credential_types::Credentials;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation;
     use aws_smithy_http::response::ParseStrictResponse;
