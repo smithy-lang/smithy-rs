@@ -277,7 +277,7 @@ Although this RFC does not solve this issue, we believe that this RFC will help 
 
 ## Sensitive Information
 If serialized data contains sensitive information, it will not be masked.  
-Users must be cautious to avoid compromisation
+We mention that fields can compromised such information on every struct field to ensure that users know this.
 
 ## Compile Time
 We ran the following benchmark on C6a.2xlarge instance with 50gb of GP2 SSD.  
