@@ -319,8 +319,8 @@ We believe that features implemented as part of this RFC does not produce mislea
 
 # Feature Gate
 `Serde` traits are implemented behind feature gates. 
-`Serialize`  is implemented behind `serialize`., while `Deserialize` is implemented behind  `deserialize`.
-Users must enable `unstable` feature to expose those features.
+`Serialize` is implemented behind `serialize`, while `Deserialize` is implemented behind `deserialize`.
+Users must enable the `unstable` feature to expose those features.
 
 We considered giving each feature a dedicated feature gate such as `unstable-serde-serialize`. 
 In this case, we will need to change the name of feature gates entirely once it leaves the unstable status which will cause users to make changes to their code base.
