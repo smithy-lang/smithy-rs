@@ -55,17 +55,19 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /** BuilderGenerator customization sections */
 sealed class BuilderSection(name: String) : Section(name) {
+    abstract val shape: StructureShape
+
     /** Hook to add additional fields to the builder */
-    data class AdditionalFields(val shape: StructureShape) : BuilderSection("AdditionalFields")
+    data class AdditionalFields(override val shape: StructureShape) : BuilderSection("AdditionalFields")
 
     /** Hook to add additional methods to the builder */
-    data class AdditionalMethods(val shape: StructureShape) : BuilderSection("AdditionalMethods")
+    data class AdditionalMethods(override val shape: StructureShape) : BuilderSection("AdditionalMethods")
 
     /** Hook to add additional fields to the `build()` method */
-    data class AdditionalFieldsInBuild(val shape: StructureShape) : BuilderSection("AdditionalFieldsInBuild")
+    data class AdditionalFieldsInBuild(override val shape: StructureShape) : BuilderSection("AdditionalFieldsInBuild")
 
     /** Hook to add additional fields to the `Debug` impl */
-    data class AdditionalDebugFields(val shape: StructureShape, val formatterName: String) :
+    data class AdditionalDebugFields(override val shape: StructureShape, val formatterName: String) :
         BuilderSection("AdditionalDebugFields")
 }
 

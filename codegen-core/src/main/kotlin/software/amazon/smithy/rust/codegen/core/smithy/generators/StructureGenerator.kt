@@ -38,8 +38,17 @@ import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 /** StructureGenerator customization sections */
 sealed class StructureSection(name: String) : Section(name) {
-    data class AdditionalMembers(val shape: StructureShape) : StructureSection("AdditionalMembers")
-    data class AdditionalTraitImpls(val shape: StructureShape, val structName: String) :
+    abstract val shape: StructureShape
+
+    /** Hook to add additional fields to the structure */
+    data class AdditionalFields(override val shape: StructureShape) : StructureSection("AdditionalFields")
+
+    /** Hook to add additional fields to the `Debug` impl */
+    data class AdditionalDebugFields(override val shape: StructureShape, val formatterName: String) :
+        StructureSection("AdditionalDebugFields")
+
+    /** Hook to add additional trait impls to the structure */
+    data class AdditionalTraitImpls(override val shape: StructureShape, val structName: String) :
         StructureSection("AdditionalTraitImpls")
 }
 
@@ -103,6 +112,7 @@ open class StructureGenerator(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
+                writeCustomizations(customizations, StructureSection.AdditionalDebugFields(shape, "formatter"))
                 rust("formatter.finish()")
             }
         }
@@ -155,7 +165,7 @@ open class StructureGenerator(
             writer.forEachMember(members) { member, memberName, memberSymbol ->
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
-            writeCustomizations(customizations, StructureSection.AdditionalMembers(shape))
+            writeCustomizations(customizations, StructureSection.AdditionalFields(shape))
         }
 
         renderStructureImpl()
