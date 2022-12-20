@@ -110,7 +110,25 @@ Serde can distinguish each variant without a tag as each variant's content is di
 
 ## Builder Types and Non-Builder Types
 Builder types and non Builder types implement `Serialize` and `Deserialize` with derive macro.
-We considered implementing manually or implementing them as part of code-gen; We are not able to find any advantage that justifies the complexity.
+Derive macro will be implemented behind a feature-gate; Users must enable `serialize` to use `serde::Serialize`, and `deserialize` to use `serde::Deserialize` respectively. Additionally, 
+
+While 
+```rust
+#[allow(missing_docs)] // documentation missing in model
+#[cfg_attr(
+    all(feature = "unstable", feature = "serialize"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(feature = "unstable", feature = "deserialize"),
+    derive(serde::Deserialize)
+)]
+#[non_exhaustive]
+#[derive(std::clone::Clone, std::cmp::PartialEq)]
+pub struct UploadPartCopyOutput {
+  ...
+}
+```
 
 ## Enum Representation 
 `serde` allows programmers to use one of four different tagging ([internal, external, adjacent and untagged](https://serde.rs/enum-representations.html)) when serializing an enum.  
@@ -179,8 +197,6 @@ Most fields are `Option<T>` type.
 When user de-serializes data written for a format before the new fields were introduced, new field will be assigned with `None` type.
 
 If a field isn't `Option`, `serde` uses `Default` trait to generate data to fill the field.  
-We believe that we could 
-
 If the new field is not an `Option<T>` type and has no `Default` implementation, we must implement a custom de-serialization logic.
 
 In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.
