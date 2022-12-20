@@ -94,7 +94,7 @@ impl Credentials {
     /// This function requires the `hardcoded-credentials` feature to be enabled.
     ///
     /// [`Credentials`](crate::Credentials) implement
-    /// [`ProvideCredentials`](crate::ProvideCredentials) directly, so no custom provider
+    /// [`ProvideCredentials`](crate::provider::ProvideCredentials) directly, so no custom provider
     /// implementation is required when wiring these up to a client:
     /// ```rust
     /// use aws_credential_types::Credentials;
