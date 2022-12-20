@@ -30,6 +30,7 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
@@ -40,7 +41,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -261,7 +261,7 @@ open class ServerCodegenVisitor(
             serverBuilderGenerator.render(writer)
 
             if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-                writer.implBlock(shape, codegenContext.symbolProvider) {
+                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     serverBuilderGenerator.renderConvenienceMethod(this)
                 }
             }
@@ -281,7 +281,7 @@ open class ServerCodegenVisitor(
                 ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape)
             serverBuilderGeneratorWithoutPublicConstrainedTypes.render(writer)
 
-            writer.implBlock(shape, codegenContext.symbolProvider) {
+            writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                 serverBuilderGeneratorWithoutPublicConstrainedTypes.renderConvenienceMethod(this)
             }
         }

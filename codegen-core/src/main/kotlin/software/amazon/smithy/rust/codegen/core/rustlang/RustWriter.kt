@@ -356,6 +356,13 @@ private fun Element.changeInto(tagName: String) {
     replaceWith(Element(tagName).also { elem -> elem.appendChildren(childNodesCopy()) })
 }
 
+/** Write an `impl` block for the given symbol */
+fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
+    rustBlock("impl ${symbol.name}") {
+        block()
+    }
+}
+
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */

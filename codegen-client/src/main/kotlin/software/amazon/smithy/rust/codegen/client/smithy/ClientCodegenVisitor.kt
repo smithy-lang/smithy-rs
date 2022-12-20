@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtoco
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -34,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGener
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
@@ -193,7 +193,7 @@ class ClientCodegenVisitor(
             if (!shape.hasTrait<SyntheticInputTrait>()) {
                 val builderGenerator = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
                 builderGenerator.render(this)
-                this.implBlock(shape, symbolProvider) {
+                implBlock(symbolProvider.toSymbol(shape)) {
                     builderGenerator.renderConvenienceMethod(this)
                 }
             }

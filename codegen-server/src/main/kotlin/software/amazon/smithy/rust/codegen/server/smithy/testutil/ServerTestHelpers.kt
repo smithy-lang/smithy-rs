@@ -12,12 +12,12 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
@@ -124,7 +124,7 @@ fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: Ru
     // regardless of the `publicConstrainedTypes` setting.
     val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this)
     modelBuilder.render(writer)
-    writer.implBlock(this, symbolProvider) {
+    writer.implBlock(symbolProvider.toSymbol(this)) {
         modelBuilder.renderConvenienceMethod(this)
     }
 }

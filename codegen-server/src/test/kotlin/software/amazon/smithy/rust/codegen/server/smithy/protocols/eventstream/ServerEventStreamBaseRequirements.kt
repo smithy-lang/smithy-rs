@@ -14,9 +14,9 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
@@ -70,14 +70,14 @@ abstract class ServerEventStreamBaseRequirements : EventStreamTestRequirements<S
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             ServerBuilderGenerator(codegenContext, shape).apply {
                 render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
+                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }
         } else {
             ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape).apply {
                 render(writer)
-                writer.implBlock(shape, codegenContext.symbolProvider) {
+                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                     renderConvenienceMethod(writer)
                 }
             }

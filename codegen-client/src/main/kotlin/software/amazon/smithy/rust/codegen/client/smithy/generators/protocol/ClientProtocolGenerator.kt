@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -18,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
@@ -51,7 +51,7 @@ open class ClientProtocolGenerator(
 
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
-        inputWriter.implBlock(inputShape, symbolProvider) {
+        inputWriter.implBlock(symbolProvider.toSymbol(inputShape)) {
             writeCustomizations(
                 customizations,
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
@@ -78,7 +78,7 @@ open class ClientProtocolGenerator(
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")
         }
-        operationWriter.implBlock(operationShape, symbolProvider) {
+        operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
             builderGenerator.renderConvenienceMethod(this)
 
             rust("/// Creates a new `$operationName` operation.")

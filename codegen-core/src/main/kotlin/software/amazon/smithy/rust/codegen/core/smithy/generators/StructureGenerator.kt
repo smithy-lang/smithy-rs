@@ -6,16 +6,13 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.asRef
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -35,12 +32,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
-
-fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
-    rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
-        block()
-    }
-}
 
 open class StructureGenerator(
     val model: Model,

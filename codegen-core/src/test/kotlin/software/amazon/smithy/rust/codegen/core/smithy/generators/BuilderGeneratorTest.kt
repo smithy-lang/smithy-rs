@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
@@ -37,7 +38,7 @@ internal class BuilderGeneratorTest {
         generator.render()
         innerGenerator.render()
         builderGenerator.render(writer)
-        writer.implBlock(struct, provider) {
+        writer.implBlock(provider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(
@@ -84,7 +85,7 @@ internal class BuilderGeneratorTest {
         innerGenerator.render()
         val builderGenerator = BuilderGenerator(model, provider, struct)
         builderGenerator.render(writer)
-        writer.implBlock(struct, provider) {
+        writer.implBlock(provider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(
@@ -104,7 +105,7 @@ internal class BuilderGeneratorTest {
         val builderGenerator = BuilderGenerator(model, provider, credentials)
         credsGenerator.render()
         builderGenerator.render(writer)
-        writer.implBlock(credentials, provider) {
+        writer.implBlock(provider.toSymbol(credentials)) {
             builderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(

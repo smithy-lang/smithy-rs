@@ -10,10 +10,10 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
@@ -60,7 +60,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                 ) {
                     BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
                         render(writer)
-                        writer.implBlock(shape, codegenContext.symbolProvider) {
+                        writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                             renderConvenienceMethod(writer)
                         }
                     }

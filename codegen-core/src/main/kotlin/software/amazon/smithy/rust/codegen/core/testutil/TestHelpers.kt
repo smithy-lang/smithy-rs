@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
@@ -26,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.io.File
@@ -107,7 +107,7 @@ fun StructureShape.renderWithModelBuilder(
     StructureGenerator(model, symbolProvider, writer, this).render(forWhom)
     val modelBuilder = BuilderGenerator(model, symbolProvider, this)
     modelBuilder.render(writer)
-    writer.implBlock(this, symbolProvider) {
+    writer.implBlock(symbolProvider.toSymbol(this)) {
         modelBuilder.renderConvenienceMethod(this)
     }
 }
