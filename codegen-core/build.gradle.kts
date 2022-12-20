@@ -4,12 +4,10 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import org.jetbrains.dokka.gradle.DokkaTask
 import java.io.ByteArrayOutputStream
 
 plugins {
     kotlin("jvm")
-    id("org.jetbrains.dokka") apply false
     jacoco
     `maven-publish`
 }
@@ -101,8 +99,6 @@ val isTestingEnabled: String by project
 if (isTestingEnabled.toBoolean()) {
     val kotestVersion: String by project
 
-    apply(plugin = "org.jetbrains.dokka")
-
     dependencies {
         runtimeOnly(project(":rust-runtime"))
         testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
@@ -124,13 +120,6 @@ if (isTestingEnabled.toBoolean()) {
             showStandardStreams = true
         }
     }
-
-    tasks.named<DokkaTask>("dokkaHtml") {
-        outputDirectory.set(buildDir.resolve("javadoc"))
-    }
-
-    // Always build documentation
-    tasks["build"].finalizedBy(tasks["dokkaHtml"])
 
     // Configure jacoco (code coverage) to generate an HTML report
     tasks.jacocoTestReport {

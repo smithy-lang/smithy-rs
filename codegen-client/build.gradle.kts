@@ -7,7 +7,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     kotlin("jvm")
-    id("org.jetbrains.dokka")
     jacoco
     `maven-publish`
 }
@@ -82,13 +81,6 @@ if (isTestingEnabled.toBoolean()) {
             showStandardStreams = true
         }
     }
-
-    tasks.dokkaHtml.configure {
-        outputDirectory.set(buildDir.resolve("javadoc"))
-    }
-
-    // Always build documentation
-    tasks["build"].finalizedBy(tasks["dokkaHtml"])
 
     // Configure jacoco (code coverage) to generate an HTML report
     tasks.jacocoTestReport {
