@@ -179,7 +179,7 @@ We believe that we could
 
 If the new field is not an `Option<T>` type and has no `Default` implementation, we must implement a custom de-serialization logic.
 
-In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside of our responsibility.
+In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.
 
 ## Introduction of New Data Type
 If new field introduces a new data type, it will not require any additional work if the data type can derive `serde` traits.  
