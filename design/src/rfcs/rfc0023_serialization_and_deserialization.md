@@ -186,7 +186,7 @@ If the new field is not an `Option<T>` type and has no `Default` implementation,
 In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.
 
 ## Introduction of New Data Type
-If new field introduces a new data type, it will not require any additional work if the data type can derive `serde` traits.  
+If a new field introduces a new data type, it will not require any additional work if the data type can derive `serde` traits.  
 
 If the data cannot derive `serde` traits on it's own, then we have two options.
 To clarify, this is the same approach we took on `Data Type to skip` section.
