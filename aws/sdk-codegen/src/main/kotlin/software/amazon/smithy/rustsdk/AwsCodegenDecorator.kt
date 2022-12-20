@@ -20,6 +20,7 @@ import software.amazon.smithy.rustsdk.customize.sts.STSDecorator
 
 val DECORATORS: List<ClientCodegenDecorator> = listOf(
     // General AWS Decorators
+    CredentialsCacheDecorator(),
     CredentialsProviderDecorator(),
     RegionDecorator(),
     AwsEndpointDecorator(),
