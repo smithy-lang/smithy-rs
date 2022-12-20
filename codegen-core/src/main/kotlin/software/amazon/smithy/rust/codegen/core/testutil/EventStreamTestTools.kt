@@ -153,21 +153,22 @@ object EventStreamTestTools {
         mode: CodegenTarget,
     ) {
         for (member in shape.members()) {
-            val target = model.expectShape(member.target)
-            if (target is StructureShape || target is UnionShape) {
-                when (target) {
-                    is StructureShape -> target.renderWithModelBuilder(model, symbolProvider, writer)
-                    is UnionShape -> UnionGenerator(
-                        model,
-                        symbolProvider,
-                        writer,
-                        target,
-                        renderUnknownVariant = mode.renderUnknownVariant(),
-                    ).render()
-                    else -> TODO("EventStreamTestTools doesn't support rendering $target")
-                }
-                recursivelyGenerateModels(model, symbolProvider, target, writer, mode)
+            if (member.target.namespace == "smithy.api") {
+                continue
             }
+            val target = model.expectShape(member.target)
+            when (target) {
+                is StructureShape -> target.renderWithModelBuilder(model, symbolProvider, writer)
+                is UnionShape -> UnionGenerator(
+                    model,
+                    symbolProvider,
+                    writer,
+                    target,
+                    renderUnknownVariant = mode.renderUnknownVariant(),
+                ).render()
+                else -> TODO("EventStreamTestTools doesn't support rendering $target")
+            }
+            recursivelyGenerateModels(model, symbolProvider, target, writer, mode)
         }
     }
 }
