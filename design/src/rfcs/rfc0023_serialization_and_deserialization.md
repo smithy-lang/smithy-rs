@@ -26,7 +26,8 @@ Data types are,
 - `aws_smithy_types::Blob`
 - `aws_smithy_types::Number`
 
-`DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format.
+`DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format; We must emphasize that these 2 formats are not compatible to each other. Reason for this is explained at the [Blob](#blob) section and [Date Time](#datetime).
+
 
 Additionally, we add `fn set_fields` to fluent builders to allow users to set the data they deserialized to fluent builders.
 
@@ -80,7 +81,7 @@ Additionally, non-human readable format tends to emphasize resource efficiency o
 Thus, we believe that implementing a tailored serialization logic would be beneficial to the users.
 
 
-### Date Time
+### DateTime
 `Serialize` and `Deserialize` is not implemented with derive macro.  
 For human-readable format, `DateTime` is serialized in RFC-3339 format; 
 It expects the value to be in RFC-3339 format when it is Deserialized.  
