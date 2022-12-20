@@ -34,7 +34,7 @@ mod deserialized_stream {
     /// Data type for deserialized stream.
     pub struct DeserializedSenderStream<T, E>(PhantomData<(T, E)>);
     impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> DeserializedSenderStream<T, E> {
-        pub fn new() -> impl Stream<Item = Result<T, E>> + Send {
+        pub fn create() -> impl Stream<Item = Result<T, E>> + Send {
             Self(PhantomData::<(T, E)>)
         }
     }
@@ -55,7 +55,7 @@ mod deserialized_stream {
     impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
         pub fn deserialized_sender() -> Self {
             EventStreamSender {
-                input_stream: Box::pin(DeserializedSenderStream::new()),
+                input_stream: Box::pin(DeserializedSenderStream::create()),
             }
         }
     }
