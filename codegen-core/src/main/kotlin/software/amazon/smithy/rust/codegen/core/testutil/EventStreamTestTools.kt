@@ -123,7 +123,7 @@ object EventStreamTestTools {
                 CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
                 CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
             }
-            for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
+            for (shape in model.shapes().filter { shape -> shape is StructureShape && shape.hasTrait<ErrorTrait>() }) {
                 StructureGenerator(model, symbolProvider, this, shape as StructureShape).render(codegenTarget)
                 requirements.renderBuilderForShape(this, codegenContext, shape)
             }
@@ -155,10 +155,16 @@ object EventStreamTestTools {
         for (member in shape.members()) {
             val target = model.expectShape(member.target)
             if (target is StructureShape || target is UnionShape) {
-                if (target is StructureShape) {
-                    target.renderWithModelBuilder(model, symbolProvider, writer)
-                } else if (target is UnionShape) {
-                    UnionGenerator(model, symbolProvider, writer, target, renderUnknownVariant = mode.renderUnknownVariant()).render()
+                when (target) {
+                    is StructureShape -> target.renderWithModelBuilder(model, symbolProvider, writer)
+                    is UnionShape -> UnionGenerator(
+                        model,
+                        symbolProvider,
+                        writer,
+                        target,
+                        renderUnknownVariant = mode.renderUnknownVariant(),
+                    ).render()
+                    else -> TODO("EventStreamTestTools doesn't support rendering $target")
                 }
                 recursivelyGenerateModels(model, symbolProvider, target, writer, mode)
             }
