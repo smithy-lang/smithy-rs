@@ -1,8 +1,6 @@
-<!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
 RFC: Serialization and Deserialization
 =============
 
-<!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
 > Status: RFC
 >
 > Applies to: Builder data types, data types that builder types may hold as a member as well as three data types `DateTime`, `Document`, `Blob` and `Number` implemented in `aws_smithy_types` crate.
@@ -20,7 +18,13 @@ RFC: Serialization and Deserialization
 
 # Overview
 We are going to implement Serialize and Deserialize traits from serde crate on some data types.   
-Data types are, a) builder data types and b) data types that builder types may have on its field(s) and c) `DateTime`, `Document`, `Blob` and `Number` implemented in `aws_smithy_types` crate.
+Data types are, 
+- builder data types
+- data types that builder types may have on its field(s)
+- `aws_smithy_types::DateTime`
+- `aws_smithy_types::Document`
+- `aws_smithy_types::Blob`
+- `aws_smithy_types::Number`
 
 `DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format.
 
