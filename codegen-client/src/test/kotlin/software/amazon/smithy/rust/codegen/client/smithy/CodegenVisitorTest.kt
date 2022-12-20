@@ -9,7 +9,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
-import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
@@ -45,16 +45,16 @@ class CodegenVisitorTest {
                 greeting: String
             }
         """.asSmithyModel(smithyVersion = "2.0")
-        val (ctx, testDir) = generatePluginContext(model)
+        val (ctx, _) = generatePluginContext(model)
         val codegenDecorator =
-            CombinedCodegenDecorator.fromClasspath(
+            CombinedClientCodegenDecorator.fromClasspath(
                 ctx,
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
                 NoOpEventStreamSigningDecorator(),
             )
-        val visitor = CodegenVisitor(ctx, codegenDecorator)
+        val visitor = ClientCodegenVisitor(ctx, codegenDecorator)
         val baselineModel = visitor.baselineTransform(model)
         baselineModel.getShapesWithTrait(ShapeId.from("smithy.api#mixin")).isEmpty() shouldBe true
     }

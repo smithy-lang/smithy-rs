@@ -5,7 +5,7 @@
 
 use aws_config::SdkConfig;
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
+use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_types::error::display::DisplayErrorContext;
 use bytes::BytesMut;
 use std::future::Future;
@@ -30,9 +30,7 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
             "test",
         )))
         .region(Region::new("us-east-1"))
-        .endpoint_resolver(
-            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
-        )
+        .endpoint_url(format!("http://{server_addr}"))
         .build();
 
     let client = Client::new(&sdk_config);
