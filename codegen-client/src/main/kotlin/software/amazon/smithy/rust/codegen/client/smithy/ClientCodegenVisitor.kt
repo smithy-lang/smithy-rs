@@ -189,9 +189,21 @@ class ClientCodegenVisitor(
     override fun structureShape(shape: StructureShape) {
         logger.fine("generating a structure...")
         rustCrate.useShapeWriter(shape) {
-            StructureGenerator(model, symbolProvider, this, shape).render()
+            StructureGenerator(
+                model,
+                symbolProvider,
+                this,
+                shape,
+                codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+            ).render()
             if (!shape.hasTrait<SyntheticInputTrait>()) {
-                val builderGenerator = BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
+                val builderGenerator =
+                    BuilderGenerator(
+                        codegenContext.model,
+                        codegenContext.symbolProvider,
+                        shape,
+                        codegenDecorator.builderCustomizations(codegenContext, emptyList()),
+                    )
                 builderGenerator.render(this)
                 implBlock(symbolProvider.toSymbol(shape)) {
                     builderGenerator.renderConvenienceMethod(this)

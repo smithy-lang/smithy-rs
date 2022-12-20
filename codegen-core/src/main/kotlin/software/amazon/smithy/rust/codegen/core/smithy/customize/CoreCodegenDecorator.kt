@@ -9,8 +9,10 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 import java.util.ServiceLoader
@@ -70,6 +72,23 @@ interface CoreCodegenDecorator<CodegenContext> {
         codegenContext: CodegenContext,
         baseCustomizations: List<ErrorCustomization>,
     ): List<ErrorCustomization> = baseCustomizations
+
+    /**
+     * Hook to customize generated structures.
+     */
+    fun structureCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<StructureCustomization>,
+    ): List<StructureCustomization> = baseCustomizations
+
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): Move these customizations into `ClientCodegenDecorator`
+    /**
+     * Hook to customize generated builders.
+     */
+    fun builderCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<BuilderCustomization>,
+    ): List<BuilderCustomization> = baseCustomizations
 }
 
 /**
@@ -107,6 +126,20 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
         baseCustomizations: List<ErrorCustomization>,
     ): List<ErrorCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
         decorator.errorCustomizations(codegenContext, customizations)
+    }
+
+    override fun structureCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<StructureCustomization>,
+    ): List<StructureCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
+        decorator.structureCustomizations(codegenContext, customizations)
+    }
+
+    override fun builderCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<BuilderCustomization>,
+    ): List<BuilderCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
+        decorator.builderCustomizations(codegenContext, customizations)
     }
 
     /**

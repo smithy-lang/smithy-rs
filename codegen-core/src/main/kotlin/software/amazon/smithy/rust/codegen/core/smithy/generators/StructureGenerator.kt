@@ -25,6 +25,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
@@ -33,11 +36,22 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
+/** StructureGenerator customization sections */
+sealed class StructureSection(name: String) : Section(name) {
+    data class AdditionalMembers(val shape: StructureShape) : StructureSection("AdditionalMembers")
+    data class AdditionalTraitImpls(val shape: StructureShape, val structName: String) :
+        StructureSection("AdditionalTraitImpls")
+}
+
+/** Customizations for StructureGenerator */
+abstract class StructureCustomization : NamedSectionGenerator<StructureSection>()
+
 open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
+    private val customizations: List<StructureCustomization>,
 ) {
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
@@ -141,12 +155,15 @@ open class StructureGenerator(
             writer.forEachMember(members) { member, memberName, memberSymbol ->
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
+            writeCustomizations(customizations, StructureSection.AdditionalMembers(shape))
         }
 
         renderStructureImpl()
         if (!containerMeta.derives.derives.contains(RuntimeType.Debug)) {
             renderDebugImpl()
         }
+
+        writer.writeCustomizations(customizations, StructureSection.AdditionalTraitImpls(shape, name))
     }
 
     protected fun RustWriter.forEachMember(

@@ -118,7 +118,7 @@ fun serverTestCodegenContext(
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
 fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
-    StructureGenerator(model, symbolProvider, writer, this).render(CodegenTarget.SERVER)
+    StructureGenerator(model, symbolProvider, writer, this, emptyList()).render(CodegenTarget.SERVER)
     val serverCodegenContext = serverTestCodegenContext(model)
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.

@@ -246,7 +246,13 @@ open class ServerCodegenVisitor(
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) {
-            StructureGenerator(model, codegenContext.symbolProvider, this, shape).render(CodegenTarget.SERVER)
+            StructureGenerator(
+                model,
+                codegenContext.symbolProvider,
+                this,
+                shape,
+                codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+            ).render(CodegenTarget.SERVER)
 
             renderStructureShapeBuilder(shape, this)
         }

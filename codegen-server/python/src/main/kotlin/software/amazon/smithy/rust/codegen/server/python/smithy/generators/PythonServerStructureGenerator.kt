@@ -33,7 +33,7 @@ class PythonServerStructureGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
-) : StructureGenerator(model, symbolProvider, writer, shape) {
+) : StructureGenerator(model, symbolProvider, writer, shape, emptyList()) {
 
     private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.toType())
 

@@ -32,9 +32,9 @@ internal class BuilderGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         writer.rust("##![allow(deprecated)]")
-        val innerGenerator = StructureGenerator(model, provider, writer, inner)
-        val generator = StructureGenerator(model, provider, writer, struct)
-        val builderGenerator = BuilderGenerator(model, provider, struct)
+        val innerGenerator = StructureGenerator(model, provider, writer, inner, emptyList())
+        val generator = StructureGenerator(model, provider, writer, struct, emptyList())
+        val builderGenerator = BuilderGenerator(model, provider, struct, emptyList())
         generator.render()
         innerGenerator.render()
         builderGenerator.render(writer)
@@ -74,16 +74,22 @@ internal class BuilderGeneratorTest {
         val writer = RustWriter.forModule("model")
         writer.rust("##![allow(deprecated)]")
         val innerGenerator = StructureGenerator(
-            StructureGeneratorTest.model, provider, writer,
+            StructureGeneratorTest.model,
+            provider,
+            writer,
             StructureGeneratorTest.inner,
+            emptyList(),
         )
         val generator = StructureGenerator(
-            StructureGeneratorTest.model, provider, writer,
+            StructureGeneratorTest.model,
+            provider,
+            writer,
             StructureGeneratorTest.struct,
+            emptyList(),
         )
         generator.render()
         innerGenerator.render()
-        val builderGenerator = BuilderGenerator(model, provider, struct)
+        val builderGenerator = BuilderGenerator(model, provider, struct, emptyList())
         builderGenerator.render(writer)
         writer.implBlock(provider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(this)
@@ -101,8 +107,8 @@ internal class BuilderGeneratorTest {
     fun `builder for a struct with sensitive fields should implement the debug trait as such`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
-        val credsGenerator = StructureGenerator(model, provider, writer, credentials)
-        val builderGenerator = BuilderGenerator(model, provider, credentials)
+        val credsGenerator = StructureGenerator(model, provider, writer, credentials, emptyList())
+        val builderGenerator = BuilderGenerator(model, provider, credentials, emptyList())
         credsGenerator.render()
         builderGenerator.render(writer)
         writer.implBlock(provider.toSymbol(credentials)) {

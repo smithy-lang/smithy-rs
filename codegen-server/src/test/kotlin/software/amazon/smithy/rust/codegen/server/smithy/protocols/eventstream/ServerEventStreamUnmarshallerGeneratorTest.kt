@@ -58,7 +58,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
                 ) {
-                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
+                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape, emptyList()).apply {
                         render(writer)
                         writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
                             renderConvenienceMethod(writer)

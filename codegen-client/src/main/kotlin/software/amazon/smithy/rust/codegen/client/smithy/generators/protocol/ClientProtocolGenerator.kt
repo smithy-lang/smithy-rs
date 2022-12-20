@@ -46,7 +46,7 @@ open class ClientProtocolGenerator(
         customizations: List<OperationCustomization>,
     ) {
         val inputShape = operationShape.inputShape(model)
-        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
+        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model), emptyList())
         builderGenerator.render(inputWriter)
 
         // impl OperationInputShape { ... }

@@ -37,7 +37,13 @@ class ServerBuilderGeneratorTest {
         val codegenContext = serverTestCodegenContext(model)
         val writer = RustWriter.forModule("model")
         val shape = model.lookup<StructureShape>("test#Credentials")
-        StructureGenerator(model, codegenContext.symbolProvider, writer, shape).render(CodegenTarget.SERVER)
+        StructureGenerator(
+            model,
+            codegenContext.symbolProvider,
+            writer,
+            shape,
+            emptyList(),
+        ).render(CodegenTarget.SERVER)
         val builderGenerator = ServerBuilderGenerator(codegenContext, shape)
         builderGenerator.render(writer)
         writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {

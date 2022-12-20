@@ -126,7 +126,7 @@ object EventStreamTestTools {
             requirements.renderOperationError(this, model, symbolProvider, operationSymbol, errors)
             requirements.renderOperationError(this, model, symbolProvider, symbolProvider.toSymbol(unionShape), errors)
             for (shape in errors) {
-                StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
+                StructureGenerator(model, symbolProvider, this, shape, emptyList()).render(codegenTarget)
                 requirements.renderBuilderForShape(this, codegenContext, shape)
             }
         }

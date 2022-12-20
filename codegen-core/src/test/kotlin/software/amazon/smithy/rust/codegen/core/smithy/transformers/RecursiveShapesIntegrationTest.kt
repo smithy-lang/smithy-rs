@@ -47,7 +47,7 @@ class RecursiveShapesIntegrationTest {
             val writer = RustWriter.forModule("model")
             val symbolProvider = testSymbolProvider(input)
             structures.forEach {
-                StructureGenerator(input, symbolProvider, writer, it).render()
+                StructureGenerator(input, symbolProvider, writer, it, emptyList()).render()
             }
             UnionGenerator(input, symbolProvider, writer, input.lookup("com.example#Atom")).render()
             writer
