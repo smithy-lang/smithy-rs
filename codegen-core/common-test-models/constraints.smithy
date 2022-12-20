@@ -651,7 +651,7 @@ string LengthPatternString
 @length(min: 1, max: 69)
 string MediaTypeLengthString
 
-@range(min: -7, max: 69)
+@range(min: -0, max: 69)
 integer RangeInteger
 
 @range(min: -10)
