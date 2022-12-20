@@ -74,17 +74,33 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
                 ) {
-                    // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Use the correct builder:
-                    // ServerBuilderGenerator(codegenContext, shape).apply {
-                    //     render(writer)
-                    //     writer.implBlock(shape, codegenContext.symbolProvider) {
-                    //         renderConvenienceMethod(writer)
-                    //     }
-                    // }
-                    BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
-                        render(writer)
-                        writer.implBlock(shape, codegenContext.symbolProvider) {
-                            renderConvenienceMethod(writer)
+                    if (testCase.publicConstrainedTypes) {
+                        // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Use the ServerBuilderGenerator:
+                        // ServerBuilderGenerator(codegenContext, shape).apply {
+                        //     render(writer)
+                        //     writer.implBlock(shape, codegenContext.symbolProvider) {
+                        //         renderConvenienceMethod(writer)
+                        //     }
+                        // }
+                        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
+                            render(writer)
+                            writer.implBlock(shape, codegenContext.symbolProvider) {
+                                renderConvenienceMethod(writer)
+                            }
+                        }
+                    } else {
+                        // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Use the ServerBuilderGeneratorWithoutPublicConstraintedTypes:
+                        // ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape).apply {
+                        //     render(writer)
+                        //     writer.implBlock(shape, codegenContext.symbolProvider) {
+                        //         renderConvenienceMethod(writer)
+                        //     }
+                        // }
+                        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
+                            render(writer)
+                            writer.implBlock(shape, codegenContext.symbolProvider) {
+                                renderConvenienceMethod(writer)
+                            }
                         }
                     }
                 }
