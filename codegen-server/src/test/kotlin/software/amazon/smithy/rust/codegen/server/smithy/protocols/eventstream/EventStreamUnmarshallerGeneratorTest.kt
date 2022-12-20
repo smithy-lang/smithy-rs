@@ -52,6 +52,8 @@ class EventStreamUnmarshallerGeneratorTest {
         EventStreamTestTools.runTestCase(
             testCase.eventStreamTestCase,
             object : EventStreamBaseRequirements() {
+                override val publicConstrainedTypes: Boolean get() = testCase.publicConstrainedTypes
+
                 override fun renderGenerator(
                     codegenContext: ServerCodegenContext,
                     project: TestEventStreamProject,

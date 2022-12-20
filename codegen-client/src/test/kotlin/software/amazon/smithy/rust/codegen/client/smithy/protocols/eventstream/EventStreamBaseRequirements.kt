@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientTestRustSetting
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirements
@@ -23,20 +22,17 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestRequirem
 abstract class EventStreamBaseRequirements : EventStreamTestRequirements<ClientCodegenContext> {
     override fun createCodegenContext(
         model: Model,
-        symbolProvider: RustSymbolProvider,
         serviceShape: ServiceShape,
         protocolShapeId: ShapeId,
         codegenTarget: CodegenTarget,
     ): ClientCodegenContext = ClientCodegenContext(
         model,
-        symbolProvider,
+        testSymbolProvider(model),
         serviceShape,
         protocolShapeId,
         clientTestRustSettings(),
         CombinedClientCodegenDecorator(emptyList()),
     )
-
-    override fun createSymbolProvider(model: Model): RustSymbolProvider = testSymbolProvider(model)
 
     override fun renderBuilderForShape(
         writer: RustWriter,

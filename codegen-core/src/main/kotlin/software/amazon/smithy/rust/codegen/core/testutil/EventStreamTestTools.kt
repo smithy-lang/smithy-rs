@@ -54,14 +54,10 @@ interface EventStreamTestRequirements<C : CodegenContext> {
     /** Create a codegen context for the tests */
     fun createCodegenContext(
         model: Model,
-        symbolProvider: RustSymbolProvider,
         serviceShape: ServiceShape,
         protocolShapeId: ShapeId,
         codegenTarget: CodegenTarget,
     ): C
-
-    /** Create a symbol provider for the tests */
-    fun createSymbolProvider(model: Model): RustSymbolProvider
 
     /** Render the event stream marshall/unmarshall code generator */
     fun renderGenerator(
@@ -86,11 +82,9 @@ object EventStreamTestTools {
         variety: EventStreamTestVariety,
     ) {
         val model = EventStreamNormalizer.transform(OperationNormalizer.transform(testCase.model))
-        val symbolProvider = requirements.createSymbolProvider(model)
         val serviceShape = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
         val codegenContext = requirements.createCodegenContext(
             model,
-            symbolProvider,
             serviceShape,
             ShapeId.from(testCase.protocolShapeId),
             codegenTarget,

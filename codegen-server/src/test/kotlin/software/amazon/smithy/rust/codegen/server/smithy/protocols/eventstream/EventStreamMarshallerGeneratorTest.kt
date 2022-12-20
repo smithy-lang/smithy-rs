@@ -41,6 +41,8 @@ class EventStreamMarshallerGeneratorTest {
         EventStreamTestTools.runTestCase(
             testCase,
             object : EventStreamBaseRequirements() {
+                override val publicConstrainedTypes: Boolean get() = true
+
                 override fun renderGenerator(
                     codegenContext: ServerCodegenContext,
                     project: TestEventStreamProject,
