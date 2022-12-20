@@ -306,8 +306,8 @@ impl Number {
     all(feature = "unstable", feature = "serialize")
 ))]
 /// ensures that numbers are deserialized as expected
-/// 0 <= PosInt  
-/// 0 > NegInt  
+/// 0 <= PosInt
+/// 0 > NegInt
 /// non integer values == Float
 fn number_deserialization_works() {
     let n: Number = serde_json::from_str("1.1").unwrap();

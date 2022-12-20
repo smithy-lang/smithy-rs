@@ -77,7 +77,7 @@ data class RuntimeConfig(
 
         /**
          * Load a `RuntimeConfig` from an [ObjectNode] (JSON)
-        */
+         */
         fun fromNode(maybeNode: Optional<ObjectNode>): RuntimeConfig {
             val node = maybeNode.orElse(Node.objectNode())
             val crateVersionMap = node.getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
@@ -138,7 +138,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
     /**
      * Get a writable for this `RuntimeType`
-    */
+     */
     val writable = writable {
         rustInlineTemplate(
             "#{this:T}",
@@ -148,10 +148,10 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
     /**
      * Convert this [RuntimeType] into a [Symbol].
-    *
-    * This is not commonly required, but is occasionally useful when you want to force an import without referencing a type
-    * (e.g. when bringing a trait into scope). See [CodegenWriter.addUseImports].
-    */
+     *
+     * This is not commonly required, but is occasionally useful when you want to force an import without referencing a type
+     * (e.g. when bringing a trait into scope). See [CodegenWriter.addUseImports].
+     */
     fun toSymbol(): Symbol {
         val builder = Symbol
             .builder()
@@ -165,26 +165,26 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
     /**
      * Create a new [RuntimeType] with a nested path.
-    *
-    * # Example
-    * ```kotlin
-    * val http = CargoDependency.http.resolve("Request")
-    * ```
-    */
+     *
+     * # Example
+     * ```kotlin
+     * val http = CargoDependency.http.resolve("Request")
+     * ```
+     */
     fun resolve(subPath: String): RuntimeType {
         return copy(path = "$path::$subPath")
     }
 
     /**
      * Returns the fully qualified name for this type
-    */
+     */
     fun fullyQualifiedName(): String {
         return path
     }
 
     /**
      * The companion object contains commonly used RuntimeTypes
-    */
+     */
     companion object {
         // stdlib types
         val std = RuntimeType("std")
@@ -300,24 +300,24 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
         val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
 
-                // serde types
-    val SerdeSerialize = RuntimeType("serde::Serialize", dependency = null)
-    val SerdeDeserialize = RuntimeType("serde::Deserialize", dependency = null)
+        // serde types
+        val SerdeSerialize = RuntimeType("serde::Serialize", dependency = null)
+        val SerdeDeserialize = RuntimeType("serde::Deserialize", dependency = null)
 
-    // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
-    val AttrUnstableSerdeAny = """##[cfg(all(feature = "unstable", any(feature = "serialize", feature = "deserialize")))]"""
-    val AttrUnstableSerdeBoth = """
-        all(feature = "unstable", all(feature = "serialize", feature = "deserialize"))
-    """
-    val AttrUnstableSerialize = """
-        all(feature = "unstable", feature = "serialize")
-    """
-    val AttrUnstableDeserialize = """
-        all(feature = "unstable", feature = "deserialize")
-    """ 
-    // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
-    val UnstableDerive = """##[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(serde::Serialize))]
+        // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
+        val AttrUnstableSerdeAny = """##[cfg(all(feature = "unstable", any(feature = "serialize", feature = "deserialize")))]"""
+        val AttrUnstableSerdeBoth = """
+            all(feature = "unstable", all(feature = "serialize", feature = "deserialize"))
+        """
+        val AttrUnstableSerialize = """
+            all(feature = "unstable", feature = "serialize")
+        """
+        val AttrUnstableDeserialize = """
+            all(feature = "unstable", feature = "deserialize")
+        """
+
+        // double `#` is because this data is passed onto writeInLine, which will interpret it as a variable with single `#`
+        val UnstableDerive = """##[cfg_attr(all(feature = "unstable", feature = "serialize"), derive(serde::Serialize))]
     ##[cfg_attr(all(feature = "unstable", feature = "deserialize"), derive(serde::Deserialize))]"""
-    
     }
 }

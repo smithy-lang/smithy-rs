@@ -264,10 +264,9 @@ class FluentClientGenerator(
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
 
-                    // NOTE: if you want to add a method to the fluent_builder which is created via method implemented on a client, 
+                    // NOTE: if you want to add a method to the fluent_builder which is created via method implemented on a client,
                     // make some changes to this string
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
-
 
                     // it's supposed to provide a `path` that points to what builder type produces.
                     val builderPath = input.builderSymbol(symbolProvider).toString()

@@ -142,7 +142,7 @@ open class EnumGenerator(
 
         // add serde
         writer.writeInline(RuntimeType.UnstableDerive)
-        
+
         meta.render(writer)
 
         writer.write("struct $enumName(String);")
