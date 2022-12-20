@@ -91,7 +91,7 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
     return ret
 }
 
-val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS, Cargo.CHECK_ALL_FEATURES)
+val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS)
 
 /**
  * Filter the Cargo commands to be run on the generated Rust crates using the given [properties].
