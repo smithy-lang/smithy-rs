@@ -11,16 +11,13 @@ mod receiver;
 mod sender;
 
 pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;
-
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 use aws_smithy_eventstream::frame::UnmarshallMessage;
-use bytes::Bytes;
 #[doc(inline)]
 pub use sender::{EventStreamSender, MessageStreamAdapter, MessageStreamError};
 
 #[doc(inline)]
 pub use receiver::{RawMessage, Receiver};
-
-use crate::result::SdkError;
 
 /// This data is used to fill a field when the users try to deserialize data that has a Receiver in one of the field.
 pub struct DeserializedReceiverStream<T, E>(PhantomData<(T, E)>);

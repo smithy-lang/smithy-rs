@@ -4,6 +4,7 @@
  */
 
 use crate::result::SdkError;
+#[cfg(all(feature = "unstable", feature = "deserialize"))]
 use aws_smithy_eventstream::frame::UnmarshallMessage;
 use aws_smithy_eventstream::frame::{MarshallMessage, SignMessage};
 use bytes::Bytes;
