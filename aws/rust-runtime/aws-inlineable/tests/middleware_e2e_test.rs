@@ -7,8 +7,11 @@ use std::convert::Infallible;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
+use aws_credential_types::cache::CredentialsCache;
+use aws_credential_types::Credentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
@@ -21,8 +24,6 @@ use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
-use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_credential_types::Credentials;
 use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
@@ -85,15 +86,15 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
                 .url("https://test-service.test-region.amazonaws.com")
                 .build(),
         ));
-        aws_http::auth::set_provider(
+        aws_http::auth::set_credentials_cache(
             conf,
-            SharedCredentialsProvider::new(Credentials::new(
+            CredentialsCache::lazy().create_cache(Arc::new(Credentials::new(
                 "access_key",
                 "secret_key",
                 None,
                 None,
                 "test",
-            )),
+            ))),
         );
         conf.insert(SigningRegion::from_static("test-region"));
         conf.insert(OperationSigningConfig::default_config());
