@@ -43,7 +43,6 @@
 //! ```
 
 use std::{
-    borrow::{Borrow, Cow},
     fmt::Display,
     task::{Context, Poll},
 };
