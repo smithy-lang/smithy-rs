@@ -132,9 +132,24 @@ class ServerBuilderGenerator(
             takeInUnconstrainedTypes: Boolean,
         ): Boolean {
             val members = structureShape.members()
-            val allOptional = members.all { symbolProvider.toSymbol(it).isOptional() }
-            val allUnconstrainedDefault = members.all { it.hasNonNullDefault() && !it.canReachConstrainedShape(model, symbolProvider) }
-            val notFallible = allOptional || allUnconstrainedDefault
+            fun isOptional(member: MemberShape) = symbolProvider.toSymbol(member).isOptional()
+            fun hasDefault(member: MemberShape) = member.hasNonNullDefault()
+            fun isNotConstrained(member: MemberShape) = !member.canReachConstrainedShape(model, symbolProvider)
+
+            val notFallible = members.all {
+                if (structureShape.isReachableFromOperationInput()) {
+                    // When deserializing an input structure, constraints might not be satisfied.
+                    // For this member not to be fallible, it must not be constrained (constraints in input must always be checked)
+                    // and either optional (no need to set this; not required)
+                    // or has a default value (some value will always be present)
+                    isNotConstrained(it) && (isOptional(it) || hasDefault(it))
+                } else {
+                    // This structure will be constructed manually.
+                    // Constraints will have to be dealt with
+                    // before members are set in the builder
+                    isOptional(it) || hasDefault(it)
+                }
+            }
 
             return if (takeInUnconstrainedTypes) {
                 !notFallible && structureShape.canReachConstrainedShape(model, symbolProvider)
@@ -176,26 +191,24 @@ class ServerBuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            if (!members.all { it.hasNonNullDefault() && !it.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider) }) {
-                serverBuilderConstraintViolations.render(
-                    writer,
-                    visibility,
-                    nonExhaustive = true,
-                    shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput(),
-                )
+            serverBuilderConstraintViolations.render(
+                writer,
+                visibility,
+                nonExhaustive = true,
+                shouldRenderAsValidationExceptionFieldList = shape.isReachableFromOperationInput(),
+            )
 
-                // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
-                // an operation input shape.
-                if (shape.hasTrait<SyntheticInputTrait>()) {
-                    renderImplFromConstraintViolationForRequestRejection(writer)
-                }
-
-                if (takeInUnconstrainedTypes) {
-                    renderImplFromBuilderForMaybeConstrained(writer)
-                }
-
-                renderTryFromBuilderImpl(writer)
+            // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
+            // an operation input shape.
+            if (shape.hasTrait<SyntheticInputTrait>()) {
+                renderImplFromConstraintViolationForRequestRejection(writer)
             }
+
+            if (takeInUnconstrainedTypes) {
+                renderImplFromBuilderForMaybeConstrained(writer)
+            }
+
+            renderTryFromBuilderImpl(writer)
         } else {
             renderFromBuilderImpl(writer)
         }
@@ -539,7 +552,12 @@ class ServerBuilderGenerator(
                             // Use `unwrap_or_default` to make clippy happy.
                             ".unwrap_or_default()"
                         } else {
-                            """.unwrap_or_else(|| $it.try_into().expect("This check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues"))"""
+                            val into = if (!member.canReachConstrainedShape(model, symbolProvider)) {
+                                ""
+                            } else {
+                                """.try_into().expect("This check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")"""
+                            }
+                            """.unwrap_or_else(|| $it$into)"""
                         }
                     }
 
@@ -596,21 +614,49 @@ class ServerBuilderGenerator(
                                     ".map(|v: #T| v.into())",
                                     constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
                                 )
-                            }
-                            if (member.hasNonNullDefault()) {
-                                rustTemplate(
-                                    """#{Default:W}""",
-                                    "Default" to renderDefaultBuilder(
-                                        model,
-                                        runtimeConfig,
-                                        symbolProvider,
-                                        member,
-                                        wrapDefault,
-                                    ),
-                                )
-                                if (!isBuilderFallible) {
-                                    // unwrap the Option
-                                    rust(".unwrap()")
+                                // This is to avoid a `allow(clippy::useless_conversion)` on `try_into()`
+                                // Removing this `if` and leaving the `else if` below a plain `if` will make no difference
+                                //  to the compilation, but to clippy.
+                                if (member.hasNonNullDefault()) {
+                                    rustTemplate(
+                                        """#{Default:W}""",
+                                        "Default" to renderDefaultBuilder(
+                                            model,
+                                            runtimeConfig,
+                                            symbolProvider,
+                                            member,
+                                        ) {
+                                            if (member.isStreaming(model)) {
+                                                // We set ByteStream to Default::default() until it is easier to use the full namespace for python.
+                                                // Use `unwrap_or_default` to make clippy happy.
+                                                ".unwrap_or_default()"
+                                            } else {
+                                                // The conversion is done above
+                                                """.unwrap_or($it)"""
+                                            }
+                                        },
+                                    )
+                                    if (!isBuilderFallible) {
+                                        // Unwrap the Option
+                                        rust(".unwrap()")
+                                    }
+                                }
+                            } else {
+                                if (member.hasNonNullDefault()) {
+                                    rustTemplate(
+                                        """#{Default:W}""",
+                                        "Default" to renderDefaultBuilder(
+                                            model,
+                                            runtimeConfig,
+                                            symbolProvider,
+                                            member,
+                                            wrapDefault,
+                                        ),
+                                    )
+                                    if (!isBuilderFallible) {
+                                        // unwrap the Option
+                                        rust(".unwrap()")
+                                    }
                                 }
                             }
                         }
@@ -713,8 +759,8 @@ fun renderDefaultBuilder(model: Model, runtimeConfig: RuntimeConfig, symbolProvi
                         "SmithyTypes" to types,
                     )
 
-                    is BooleanNode -> rust(wrap(node.value.toString()))
-                    is StringNode -> rust(wrap("String::from(${node.value.dq()})"))
+                    is BooleanNode -> rustTemplate(wrap("""#{SmithyTypes}::Document::Bool(${node.value})"""), "SmithyTypes" to types)
+                    is StringNode -> rustTemplate(wrap("#{SmithyTypes}::Document::String(String::from(${node.value.dq()}))"), "SmithyTypes" to types)
                     is NumberNode -> {
                         val value = node.value.toString()
                         val variant = when (node.value) {
@@ -731,12 +777,12 @@ fun renderDefaultBuilder(model: Model, runtimeConfig: RuntimeConfig, symbolProvi
 
                     is ArrayNode -> {
                         check(node.isEmpty)
-                        rust(wrap("Vec::new()"))
+                        rustTemplate(wrap("""#{SmithyTypes}::Document::Array(Vec::new())"""), "SmithyTypes" to types)
                     }
 
                     is ObjectNode -> {
                         check(node.isEmpty)
-                        rust(wrap("std::collections::HashMap::new()"))
+                        rustTemplate(wrap("#{SmithyTypes}::Document::Object(std::collections::HashMap::new())"), "SmithyTypes" to types)
                     }
 
                     else -> throw CodegenException("Default value $node for member shape ${member.id} is unsupported or cannot exist; please file a bug report under https://github.com/awslabs/smithy-rs/issues")

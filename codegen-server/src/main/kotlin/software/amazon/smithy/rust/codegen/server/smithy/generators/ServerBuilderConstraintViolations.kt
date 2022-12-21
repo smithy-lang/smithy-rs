@@ -62,7 +62,7 @@ class ServerBuilderConstraintViolations(
         nonExhaustive: Boolean,
         shouldRenderAsValidationExceptionFieldList: Boolean,
     ) {
-        check(all.isNotEmpty())
+        check(all.isNotEmpty()) { shape }
 
         Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
         writer.docs("Holds one variant for each of the ways the builder can fail.")

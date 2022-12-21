@@ -97,9 +97,7 @@ class ServerBuilderDefaultValuesTest {
             val rustValues = setupRustValuesForTest(testConfig.assertValues)
             val applySetters = testConfig.applyDefaultValues
             val setters = if (applySetters) structSetters(rustValues, testConfig.nullDefault && !testConfig.requiredTrait) else writable { }
-            // unwrap when the builder is fallible
-            // enums are constrained
-            val unwrapBuilder = if ((testConfig.nullDefault && testConfig.requiredTrait) || (testConfig.applyDefaultValues && !testConfig.nullDefault)) ".unwrap()" else ""
+            val unwrapBuilder = if (testConfig.nullDefault && testConfig.requiredTrait && testConfig.applyDefaultValues) ".unwrap()" else ""
             unitTest(
                 name = "generates_default_required_values",
                 block = writable {
@@ -135,7 +133,7 @@ class ServerBuilderDefaultValuesTest {
             "IntegerMap" to "std::collections::HashMap::<String, i32>::new()",
             "DocumentList" to "Vec::<aws_smithy_types::Document>::new()",
             "DocumentMap" to "std::collections::HashMap::<String, aws_smithy_types::Document>::new()",
-        )
+        ) + valuesMap.filter { it.value?.startsWith("Document") == true }.map { it.key to "${it.value}.into()" }
     }
 
     private fun writeServerBuilderGeneratorWithoutPublicConstrainedTypes(writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {

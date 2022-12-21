@@ -8,7 +8,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -29,8 +32,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 
 /**
  * Generates a builder for the Rust type associated with the [StructureShape].
@@ -62,9 +63,12 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
             symbolProvider: SymbolProvider,
         ): Boolean {
             val members = structureShape.members()
-            val allOptional = members.all { symbolProvider.toSymbol(it).isOptional() }
-            val allUnconstrainedDefault = members.all { it.hasNonNullDefault() && !it.canReachConstrainedShape(model, symbolProvider) }
-            val notFallible = allOptional || allUnconstrainedDefault
+            fun isOptional(member: MemberShape) = symbolProvider.toSymbol(member).isOptional()
+            fun hasDefault(member: MemberShape) = member.hasNonNullDefault()
+
+            val notFallible = members.all {
+                isOptional(it) || hasDefault(it)
+            }
 
             return !notFallible
         }
@@ -99,16 +103,14 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
-            if (!members.all { it.hasNonNullDefault() && !it.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider) }) {
-                serverBuilderConstraintViolations.render(
-                    writer,
-                    Visibility.PUBLIC,
-                    nonExhaustive = false,
-                    shouldRenderAsValidationExceptionFieldList = false,
-                )
+            serverBuilderConstraintViolations.render(
+                writer,
+                Visibility.PUBLIC,
+                nonExhaustive = false,
+                shouldRenderAsValidationExceptionFieldList = false,
+            )
 
-                renderTryFromBuilderImpl(writer)
-            }
+            renderTryFromBuilderImpl(writer)
         } else {
             renderFromBuilderImpl(writer)
         }
@@ -170,10 +172,23 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
                 withBlock("$memberName: self.$memberName", ",") {
                     if (member.hasNonNullDefault()) {
-                        val into = if (member.isStreaming(model)) {
-                            ""
-                        } else { ".into()" }
-                        rustTemplate("""#{default:W}""", "default" to renderDefaultBuilder(model, runtimeConfig, symbolProvider, member) { ".unwrap_or_else(|| $it$into)" })
+                        if (member.isStreaming(model)) {
+                            rustTemplate(".unwrap_or_default()")
+                        } else {
+                            val unwrapOr = when (model.expectShape(member.target)) {
+                                is NumberShape, is EnumShape, is BooleanShape -> ".unwrap_or("
+                                else -> ".unwrap_or_else(||"
+                            }
+                            rustTemplate(
+                                """#{default:W}""",
+                                "default" to renderDefaultBuilder(
+                                    model,
+                                    runtimeConfig,
+                                    symbolProvider,
+                                    member,
+                                ) { "$unwrapOr $it)" },
+                            )
+                        }
                     }
                     serverBuilderConstraintViolations.forMember(member)?.also {
                         rust(".ok_or(ConstraintViolation::${it.name()})?")
