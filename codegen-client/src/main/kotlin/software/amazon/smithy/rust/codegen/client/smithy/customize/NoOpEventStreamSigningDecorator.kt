@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customize
 
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
  * The NoOpEventStreamSigningDecorator:
  * - adds a `new_event_stream_signer()` method to `config` to create an Event Stream NoOp signer
  */
-open class NoOpEventStreamSigningDecorator<T, C : CodegenContext> : RustCodegenDecorator<T, C> {
+open class NoOpEventStreamSigningDecorator : ClientCodegenDecorator {
     override val name: String = "NoOpEventStreamSigning"
     override val order: Byte = Byte.MIN_VALUE
 
@@ -29,7 +29,7 @@ open class NoOpEventStreamSigningDecorator<T, C : CodegenContext> : RustCodegenD
             !baseCustomizations.any { it is EventStreamSigningConfig }
 
     override fun configCustomizations(
-        codegenContext: C,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         if (!applies(codegenContext, baseCustomizations)) {
@@ -40,17 +40,15 @@ open class NoOpEventStreamSigningDecorator<T, C : CodegenContext> : RustCodegenD
             codegenContext.runtimeConfig,
         )
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>) = true
 }
 
 class NoOpEventStreamSigningConfig(
     private val serviceHasEventStream: Boolean,
     runtimeConfig: RuntimeConfig,
 ) : EventStreamSigningConfig(runtimeConfig) {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
+
     private val codegenScope = arrayOf(
-        "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "NoOpSigner" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::NoOpSigner"),
     )
 
     override fun configImplSection() = renderEventStreamSignerFn {

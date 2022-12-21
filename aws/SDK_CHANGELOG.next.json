@@ -17,7 +17,7 @@
         "smithy-rs#1641"
       ],
       "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Service configs are now generated with new accessors for:\n- `Config::retry_config()` - Returns a reference to the inner retry configuration.\n- `Config::timeout_config()` - Returns a reference to the inner timeout configuration.\n- `Config::sleep_impl()` - Returns a clone of the inner async sleep implementation.\n\nPreviously, these were only accessible through `SdkConfig`.\n",
@@ -31,7 +31,7 @@
         "smithy-rs#1598"
       ],
       "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Lossy converters into integer types for `aws_smithy_types::Number` have been\nremoved. Lossy converters into floating point types for\n`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were\ndirectly using the integer lossy converters, we recommend you use the safe\nconverters.\n_Before:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    let foo: f32 = n.to_f32(); // Lossy conversion!\n    let bar: u32 = n.to_u32(); // Lossy conversion!\n}\n```\n_After:_\n```rust\nfn f1(n: aws_smithy_types::Number) {\n    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.\n    let foo: f32 = n.try_into().expect(\"lossy conversion detected\"); // Or handle the error instead of panicking.\n    // You can still do lossy conversions, but only into floating point types.\n    let foo: f32 = n.to_f32_lossy();\n    // To lossily convert into integer types, use an `as` cast directly.\n    let bar: u32 = n as u32; // Lossy conversion!\n}\n```\n",
@@ -45,7 +45,7 @@
         "smithy-rs#1274"
       ],
       "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy.",
@@ -59,7 +59,7 @@
         "smithy-rs#1699"
       ],
       "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The AWS S3 `GetObjectAttributes` operation will no longer fail with an XML error.",
@@ -73,7 +73,7 @@
         "aws-sdk-rust#609"
       ],
       "since-commit": "6e96137ca79b592960881b140ab17717b1ebb780",
-      "age": 2
+      "age": 3
     },
     {
       "message": "`aws_config::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`.",
@@ -88,7 +88,7 @@
         "aws-sdk-rust#586"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Direct configuration of `aws_config::SdkConfig` now defaults to retries being disabled.\nIf you're using `aws_config::load_from_env()` or `aws_config::from_env()` to configure\nthe SDK, then you are NOT affected by this change. If you use `SdkConfig::builder()` to\nconfigure the SDK, then you ARE affected by this change and should set the retry config\non that builder.\n",
@@ -103,7 +103,7 @@
         "aws-sdk-rust#586"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Client creation now panics if retries or timeouts are enabled without an async sleep\nimplementation set on the SDK config.\nIf you're using the Tokio runtime and have the `rt-tokio` feature enabled (which is enabled by default),\nthen you shouldn't notice this change at all.\nOtherwise, if using something other than Tokio as the async runtime, the `AsyncSleep` trait must be implemented,\nand that implementation given to the config builder via the `sleep_impl` method. Alternatively, retry can be\nexplicitly turned off by setting the retry config to `RetryConfig::disabled()`, which will result in successful\nclient creation without an async sleep implementation.\n",
@@ -118,7 +118,7 @@
         "aws-sdk-rust#586"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).\n\nBefore this change, modifying operations before sending them required using lower-level APIs:\n\n```rust\nlet input = SomeOperationInput::builder().some_value(5).build()?;\n\nlet operation = {\n    let op = input.make_operation(&service_config).await?;\n    let (request, response) = op.into_request_response();\n\n    let request = request.augment(|req, _props| {\n        req.headers_mut().insert(\n            HeaderName::from_static(\"x-some-header\"),\n            HeaderValue::from_static(\"some-value\")\n        );\n        Result::<_, Infallible>::Ok(req)\n    })?;\n\n    Operation::from_parts(request, response)\n};\n\nlet response = smithy_client.call(operation).await?;\n```\n\nNow, users may easily modify operations before sending with the `customize` method:\n\n```rust\nlet response = client.some_operation()\n    .some_value(5)\n    .customize()\n    .await?\n    .mutate_request(|mut req| {\n        req.headers_mut().insert(\n            HeaderName::from_static(\"x-some-header\"),\n            HeaderValue::from_static(\"some-value\")\n        );\n    })\n    .send()\n    .await?;\n```\n",
@@ -133,7 +133,7 @@
         "smithy-rs#1112"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The AWS STS SDK now automatically retries `IDPCommunicationError` when calling `AssumeRoleWithWebIdentity`",
@@ -148,7 +148,7 @@
         "smithy-rs#1718"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The `SdkError::ResponseError`, typically caused by a connection terminating before the full response is received, is now treated as a transient failure and retried.",
@@ -163,7 +163,7 @@
         "smithy-rs#1717"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "`ClassifyResponse` was renamed to `ClassifyRetry` and is no longer implemented for the unit type.",
@@ -178,7 +178,7 @@
         "smithy-rs#1717"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The `with_retry_policy` and `retry_policy` functions on `aws_smithy_http::operation::Operation` have been\nrenamed to `with_retry_classifier` and `retry_classifier` respectively. Public member `retry_policy` on\n`aws_smithy_http::operation::Parts` has been renamed to `retry_classifier`.\n",
@@ -193,7 +193,7 @@
         "smithy-rs#1717"
       ],
       "since-commit": "3952a10c44ec1f2eed4a8d5e401d36e07e8a2c73",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Bump MSRV to be 1.62.0.",
@@ -207,7 +207,7 @@
         "smithy-rs#1825"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The SDK, by default, now times out if socket connect or time to first byte read takes longer than\n3.1 seconds. There are a large number of breaking changes that come with this change that may\naffect you if you customize the client configuration at all.\nSee [the upgrade guide](https://github.com/awslabs/aws-sdk-rust/issues/622) for information\non how to configure timeouts, and how to resolve compilation issues after upgrading.\n",
@@ -222,7 +222,7 @@
         "smithy-rs#256"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Setting connect/read timeouts with `SdkConfig` now works. Previously, these timeout config values\nwere lost during connector creation, so the only reliable way to set them was to manually override\nthe HTTP connector.\n",
@@ -237,7 +237,7 @@
         "smithy-rs#256"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "It is now possible to programmatically customize the locations of the profile config/credentials files in `aws-config`:\n```rust\nuse aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};\nuse aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};\n\nlet profile_files = ProfileFiles::builder()\n    .with_file(ProfileFileKind::Credentials, \"some/path/to/credentials-file\")\n    .build();\nlet credentials_provider = ProfileFileCredentialsProvider::builder()\n    .profile_files(profile_files.clone())\n    .build();\nlet region_provider = ProfileFileRegionProvider::builder()\n    .profile_files(profile_files)\n    .build();\n\nlet sdk_config = aws_config::from_env()\n    .credentials_provider(credentials_provider)\n    .region(region_provider)\n    .load()\n    .await;\n```\n",
@@ -252,7 +252,7 @@
         "smithy-rs#1770"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Paginators now stop on encountering a duplicate token by default rather than panic. This behavior can be customized by toggling the `stop_on_duplicate_token` property on the paginator before calling `send`.",
@@ -267,7 +267,7 @@
         "smithy-rs#1748"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The client Config now has getters for every value that it holds.",
@@ -281,7 +281,7 @@
         "smithy-rs#1747"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix regression where `connect_timeout` and `read_timeout` fields are unused in the IMDS client",
@@ -295,7 +295,7 @@
         "smithy-rs#1822"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Ability to override the IMDS client in `DefaultCredentialsChain`",
@@ -309,7 +309,7 @@
         "aws-sdk-rust#625"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix aws-sigv4 canonical request formatting fallibility.",
@@ -323,7 +323,7 @@
         "smithy-rs#1656"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add test to exercise excluded headers in aws-sigv4.",
@@ -337,6 +337,353 @@
         "smithy-rs#1890"
       ],
       "since-commit": "79b7274d180085a70cbcb565ea406a88b6f3cecb",
+      "age": 2
+    },
+    {
+      "message": "Add test to exercise excluded headers in aws-sigv4.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#1890"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This architecture cannot compile `ring`, so the implementation has been updated to rely on `hamc` + `sha2` to achive the same result with broader platform compatibility and higher performance. We also updated the CI which is now running as many tests as possible against i686 and PowerPC 32 and 64 bit.",
+      "meta": {
+        "bug": true,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "crisidev",
+      "references": [
+        "smithy-rs#1847"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Add test ensuring that a response will error if the response body returns an EOF before the entire body has been read.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1801"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Fix cargo audit issue on criterion.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#1923"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "<details>\n<summary>The HTTP connector used when making requests is now configurable through `SdkConfig`.</summary>\n\n```rust\nuse std::time::Duration;\nuse aws_smithy_client::{Client, hyper_ext};\nuse aws_smithy_client::erase::DynConnector;\nuse aws_smithy_client::http_connector::ConnectorSettings;\nuse aws_types::SdkConfig;\n\nlet https_connector = hyper_rustls::HttpsConnectorBuilder::new()\n    .with_webpki_roots()\n    .https_only()\n    .enable_http1()\n    .enable_http2()\n    .build();\n\nlet smithy_connector = hyper_ext::Adapter::builder()\n    // Optionally set things like timeouts as well\n    .connector_settings(\n        ConnectorSettings::builder()\n            .connect_timeout(Duration::from_secs(5))\n            .build()\n    )\n    .build(https_connector);\n\nlet sdk_config = aws_config::from_env()\n    .http_connector(smithy_connector)\n    .load()\n    .await;\n\nlet client = Client::new(&sdk_config);\n\n// When sent, this operation will go through the custom smithy connector instead of\n// the default HTTP connector.\nlet op = client\n    .get_object()\n    .bucket(\"some-test-bucket\")\n    .key(\"test.txt\")\n    .send()\n    .await\n    .unwrap();\n```\n\n</details>\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1225",
+        "smithy-rs#1918"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "`<service>::Client::from_conf_conn` has been removed since it's now possible to configure the connection from the\nshared and service configs. To update your code, pass connections to the `http_connector` method during config creation.\n\n<details>\n<summary>Example</summary>\n\nbefore:\n\n```rust\n    let conf = aws_sdk_sts::Config::builder()\n        // The builder has no defaults but setting other fields is omitted for brevity...\n        .build();\n    let (server, request) = capture_request(None);\n    let client = aws_sdk_sts::Client::from_conf_conn(conf, server);\n```\n\nafter:\n\n```rust\n    let (server, request) = capture_request(None);\n    let conf = aws_sdk_sts::Config::builder()\n        // The builder has no defaults but setting other fields is omitted for brevity...\n        .http_connector(server)\n        .build();\n    let client = aws_sdk_sts::Client::from_conf(conf);\n```\n\n</details>\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1225",
+        "smithy-rs#1918"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Add `to_vec` method to `aws_smithy_http::byte_stream::AggregatedBytes`.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1918"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Ability to add an inline policy or a list of policy ARNs to the `AssumeRoleProvider` builder.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "albe-rosado",
+      "references": [
+        "aws-sdk-rust#641",
+        "smithy-rs#1892"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Removed re-export of `aws_smithy_client::retry::Config` from the `middleware` module.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1935"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "It was possible in some cases to send some S3 requests without a required upload ID, causing a risk of unintended data\ndeletion and modification. Now, when an operation has query parameters that are marked as required, the omission of\nthose query parameters will cause a BuildError, preventing the invalid operation from being sent.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1957"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Several breaking changes have been made to errors. See [the upgrade guide](https://github.com/awslabs/aws-sdk-rust/issues/657) for more information.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1926",
+        "smithy-rs#1819"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Generate enums that guide the users to write match expressions in a forward-compatible way.\nBefore this change, users could write a match expression against an enum in a non-forward-compatible way:\n```rust\nmatch some_enum {\n    SomeEnum::Variant1 => { /* ... */ },\n    SomeEnum::Variant2 => { /* ... */ },\n    Unknown(value) if value == \"NewVariant\" => { /* ... */ },\n    _ => { /* ... */ },\n}\n```\nThis code can handle a case for \"NewVariant\" with a version of SDK where the enum does not yet include `SomeEnum::NewVariant`, but breaks with another version of SDK where the enum defines `SomeEnum::NewVariant` because the execution will hit a different match arm, i.e. the last one.\nAfter this change, users are guided to write the above match expression as follows:\n```rust\nmatch some_enum {\n    SomeEnum::Variant1 => { /* ... */ },\n    SomeEnum::Variant2 => { /* ... */ },\n    other @ _ if other.as_str() == \"NewVariant\" => { /* ... */ },\n    _ => { /* ... */ },\n}\n```\nThis is forward-compatible because the execution will hit the second last match arm regardless of whether the enum defines `SomeEnum::NewVariant` or not.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#1945"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Functions on `aws_smithy_http::endpoint::Endpoint` now return a `Result` instead of panicking.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1984",
+        "smithy-rs#1496"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "`Endpoint::mutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::mutable_uri`.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1984",
+        "smithy-rs#1496"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "`Endpoint::immutable` now takes `impl AsRef<str>` instead of `Uri`. For the old functionality, use `Endpoint::immutable_uri`.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1984",
+        "smithy-rs#1496"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Normalize URI paths per RFC3986 when constructing canonical requests, except for S3.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#2018"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Implementation of the Debug trait for container shapes now redacts what is printed per the sensitive trait.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#1983",
+        "smithy-rs#2029"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "`SdkBody` callbacks have been removed. If you were using these, please [file an issue](https://github.com/awslabs/aws-sdk-rust/issues/new) so that we can better understand your use-case and provide the support you need.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2065"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "`AwsEndpointStage`, a middleware which set endpoints and auth has been split into `AwsAuthStage` and `SmithyEndpointStage`. Related types have also been renamed.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#2063"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "The SDK clients now default max idle connections to 70 (previously unlimited) to reduce the likelihood of hitting max file handles in AWS Lambda.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2064",
+        "aws-sdk-rust#632"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "The Unit type for a Union member is no longer rendered. The serializers and parsers generated now function accordingly in the absence of the inner data associated with the Unit type.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#1989"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Fixed and improved the request `tracing` span hierarchy to improve log messages, profiling, and debuggability.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2044",
+        "smithy-rs#371"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Add more `tracing` events to signing and event streams",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2057",
+        "smithy-rs#371"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
+      "age": 1
+    },
+    {
+      "message": "Log an `info` on credentials cache miss and adjust level of some credential `tracing` spans/events.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2062"
+      ],
+      "since-commit": "c3de8a3f93201f969c28deb9313c903c1315054d",
       "age": 1
     }
   ],

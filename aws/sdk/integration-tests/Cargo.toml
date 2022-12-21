@@ -8,6 +8,7 @@ members = [
     "iam",
     "kms",
     "lambda",
+    "no-default-features",
     "polly",
     "qldbsession",
     "s3",

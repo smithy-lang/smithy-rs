@@ -6,9 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -37,14 +35,14 @@ open class ServerOperationHandlerGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "Tower" to ServerCargoDependency.Tower.asType(),
-        "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "Phantom" to ServerRuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "http" to RuntimeType.http,
+        "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
+        "Tower" to ServerCargoDependency.Tower.toType(),
+        "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
+        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "Phantom" to RuntimeType.Phantom,
+        "ServerOperationHandler" to ServerRuntimeType.operationHandler(runtimeConfig),
+        "http" to RuntimeType.Http,
     )
 
     open fun render(writer: RustWriter) {

@@ -6,9 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators.http
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -38,7 +36,7 @@ class RestRequestSpecGenerator(
                 "PathSegment",
                 "QuerySegment",
             ).map {
-                it to requestSpecModule.member(it)
+                it to requestSpecModule.resolve(it)
             }.toTypedArray()
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
@@ -87,7 +85,7 @@ class RestRequestSpecGenerator(
                 *extraCodegenScope,
                 "PathSegmentsVec" to pathSegmentsVec,
                 "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to CargoDependency.Http.asType().member("Method"),
+                "Method" to RuntimeType.Http.resolve("Method"),
             )
         }
     }

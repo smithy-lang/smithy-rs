@@ -13,6 +13,7 @@ Server runtime for Smithy Rust Server Framework.
 publish = true
 
 [features]
+aws-lambda = ["dep:lambda_http"]
 unredacted-logging = []
 
 [dependencies]
@@ -26,7 +27,7 @@ futures-util = { version = "0.3", default-features = false }
 http = "0.2"
 http-body = "0.4"
 hyper = { version = "0.14.12", features = ["server", "http1", "http2", "tcp", "stream"] }
-lambda_http = "0.6.0"
+lambda_http = { version = "0.7.1", optional = true }
 mime = "0.3"
 nom = "7"
 pin-project-lite = "0.2"
@@ -34,7 +35,7 @@ once_cell = "1.13"
 regex = "1.5.5"
 serde_urlencoded = "0.7"
 strum_macros = "0.24"
-thiserror = "1"
+thiserror = "1.0.0"
 tracing = "0.1.35"
 tokio = { version = "1.8.4", features = ["full"] }
 tower = { version = "0.4.11", features = ["util", "make"], default-features = false }

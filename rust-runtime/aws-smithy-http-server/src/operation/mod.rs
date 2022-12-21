@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! # Operations.
-//!
 //! The shape of a [Smithy operation] is modelled by the [`OperationShape`] trait. Its associated types
 //! [`OperationShape::Input`], [`OperationShape::Output`], and [`OperationShape::Error`] map to the structures
 //! representing the Smithy inputs, outputs, and errors respectively. When an operation error is not specified
 //! [`OperationShape::Error`] is [`Infallible`](std::convert::Infallible).
 //!
-//! We should generate a zero-sized type (ZST) for each Smithy operation and [`OperationShape`] should be implemented
-//! on it. This will be used as a helper - providing static methods and parameterizing other traits.
+//! We generate a marker struct for each Smithy operation and implement [`OperationShape`] on them. This
+//! is used as a helper - providing static methods and parameterizing other traits.
 //!
 //! The model
 //!
@@ -41,7 +39,7 @@
 //! }
 //! ```
 //!
-//! The behavior of a Smithy operation is encoded by an [`Operation`]. The [`OperationShape`] ZSTs can be used to
+//! The behavior of a Smithy operation is encoded by an [`Operation`]. The [`OperationShape`] types can be used to
 //! construct specific operations using [`OperationShapeExt::from_handler`] and [`OperationShapeExt::from_service`].
 //! The [from_handler](OperationShapeExt::from_handler) constructor takes a [`Handler`] whereas the
 //! [from_service](OperationShapeExt::from_service) takes a [`OperationService`]. Both traits serve a similar purpose -
@@ -52,7 +50,7 @@
 //! The [`Handler`] trait is implemented by all async functions which accept [`OperationShape::Input`] as their first
 //! argument, the remaining arguments implement [`FromParts`](crate::request::FromParts), and return either
 //! [`OperationShape::Output`] when [`OperationShape::Error`] is [`Infallible`](std::convert::Infallible) or
-//! [`Result`]<[`OperationShape::Output`],[`OperationShape::Error`]>. The following are examples of closures which
+//! [`Result`]<[`OperationShape::Output`],[`OperationShape::Error`]>. The following are examples of async functions which
 //! implement [`Handler`]:
 //!
 //! ```rust,no_run
@@ -201,7 +199,7 @@ pub struct Operation<S, L = Identity> {
 }
 
 impl<S, L> Operation<S, L> {
-    /// Applies a [`Layer`] to the operation _after_ it has been upgraded via [`Operation::upgrade`].
+    /// Applies a [`Layer`](tower::Layer) to the operation _after_ it has been upgraded via [`Operation::upgrade`].
     pub fn layer<NewL>(self, layer: NewL) -> Operation<S, Stack<L, NewL>> {
         Operation {
             inner: self.inner,

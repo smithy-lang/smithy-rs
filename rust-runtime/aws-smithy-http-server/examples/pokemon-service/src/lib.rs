@@ -19,7 +19,6 @@ use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, o
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
-#[doc(hidden)]
 pub mod plugin;
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -33,7 +32,7 @@ const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
 
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
-    let format = tracing_subscriber::fmt::layer().pretty();
+    let format = tracing_subscriber::fmt::layer().json();
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
@@ -58,7 +57,7 @@ struct PokemonTranslations {
 /// **NOTE: It is up to the implementation of the state structure to handle concurrency by protecting**
 /// **its attributes using synchronization mechanisms.**
 ///
-/// The framework stores the `Arc<T>` inside an [`http::Extensions`] and conveniently passes it to
+/// The framework stores the `Arc<T>` inside an `http::Extensions` and conveniently passes it to
 /// the operation's implementation, making it able to handle operations with two different async signatures:
 /// * `FnOnce(InputType) -> Future<OutputType>`
 /// * `FnOnce(InputType, Extension<Arc<T>>) -> Future<OutputType>`
@@ -176,7 +175,7 @@ pub async fn get_pokemon_species(
     }
 }
 
-/// Retrieves the users storage.
+/// Retrieves the user's storage.
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
@@ -214,7 +213,7 @@ pub async fn capture_pokemon(
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     if input.region != "Kanto" {
         return Err(error::CapturePokemonError::UnsupportedRegionError(
-            error::UnsupportedRegionError::builder().build(),
+            error::UnsupportedRegionError { region: input.region },
         ));
     }
     let output_stream = stream! {
@@ -230,7 +229,9 @@ pub async fn capture_pokemon(
                             if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
                                 yield Err(
                                     crate::error::CapturePokemonEventsError::InvalidPokeballError(
-                                        crate::error::InvalidPokeballError::builder().pokeball(pokeball).build()
+                                        crate::error::InvalidPokeballError {
+                                            pokeball: pokeball.to_owned()
+                                        }
                                     )
                                 );
                             } else {
@@ -253,11 +254,12 @@ pub async fn capture_pokemon(
                                         .to_string();
                                     let pokedex: Vec<u8> = (0..255).collect();
                                     yield Ok(crate::model::CapturePokemonEvents::Event(
-                                        crate::model::CaptureEvent::builder()
-                                        .name(pokemon)
-                                        .shiny(shiny)
-                                        .pokedex_update(Blob::new(pokedex))
-                                        .build(),
+                                        crate::model::CaptureEvent {
+                                            name: Some(pokemon),
+                                            shiny: Some(shiny),
+                                            pokedex_update: Some(Blob::new(pokedex)),
+                                            captured: Some(true),
+                                        }
                                     ));
                                 }
                             }

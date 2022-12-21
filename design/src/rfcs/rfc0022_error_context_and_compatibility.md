@@ -1,7 +1,7 @@
 RFC: Error Context and Compatibility
 ====================================
 
-> Status: Accepted
+> Status: Implemented
 >
 > Applies to: Generated clients and shared rust-runtime crates
 
@@ -185,7 +185,7 @@ What could be improved:
 
 ### Hyper 1.0
 
-Hyper is has outlined [some problems they want to address with errors](https://github.com/hyperium/hyper/blob/bd7928f3dd6a8461f0f0fdf7ee0fd95c2f156f88/docs/ROADMAP.md#errors)
+Hyper has outlined [some problems they want to address with errors](https://github.com/hyperium/hyper/blob/bd7928f3dd6a8461f0f0fdf7ee0fd95c2f156f88/docs/ROADMAP.md#errors)
 for the coming 1.0 release. To summarize:
 
 - It's difficult to match on specific errors (Hyper 0.x's `Error` relies
@@ -387,9 +387,9 @@ fn write_err(f: &mut fmt::Formatter<'_>, err: &dyn Error) -> fmt::Result {
 Changes Checklist
 -----------------
 
-- [ ] Update every struct/enum that implements `Error` in all the non-server Rust runtime crates
-- [ ] Hide error source type in `Unhandled` variant in code generated errors
-- [ ] Remove `Clone` from `ProfileParseError` and any others that have it
+- [x] Update every struct/enum that implements `Error` in all the non-server Rust runtime crates
+- [x] Hide error source type in `Unhandled` variant in code generated errors
+- [x] Remove `Clone` from `ProfileParseError` and any others that have it
 
 Error Code Review Checklist
 ---------------------------
@@ -404,4 +404,4 @@ This is a checklist meant to aid code review of new errors:
 - [ ] Error enums are `#[non_exhaustive]`
 - [ ] Error enum variants that don't have a separate error context struct are `#[non_exhaustive]`
 - [ ] Error context is exposed via accessors rather than by public fields
-- [ ] Errors and their context structs are in an `error` submodule for any given module. They are not mixed with other non-error code
+- [ ] Actionable errors and their context structs are in an `error` submodule for any given module. They are not mixed with other non-error code

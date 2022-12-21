@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
-class AccountIdAutofill() : OperationCustomization() {
+class AccountIdAutofill : OperationCustomization() {
     override fun mutSelf(): Boolean = true
     override fun consumesSelf(): Boolean = false
     override fun section(section: OperationSection): Writable {
