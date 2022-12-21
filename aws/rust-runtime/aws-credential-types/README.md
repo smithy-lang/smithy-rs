@@ -1,6 +1,6 @@
 # aws-credential-types
 
-This crate provides the items concerned with AWS SDK credentials including:
+This crate provides types concerned with AWS SDK credentials including:
 * A trait for credentials providers
 * An opaque struct representing credentials
 * Concrete implementations of credentials caching
