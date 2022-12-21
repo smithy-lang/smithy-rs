@@ -6,6 +6,7 @@
 object CrateSet {
     val AWS_SDK_RUNTIME = listOf(
         "aws-config",
+        "aws-credential-types",
         "aws-endpoint",
         "aws-http",
         "aws-hyper",
