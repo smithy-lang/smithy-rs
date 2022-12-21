@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -68,15 +67,15 @@ class PythonApplicationGenerator(
     private val operations: List<OperationShape>,
 ) {
     private val symbolProvider = codegenContext.symbolProvider
-    private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
+    private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val service = codegenContext.serviceShape
     private val serviceName = service.id.name.toPascalCase()
     private val model = codegenContext.model
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "pyo3" to PythonServerCargoDependency.PyO3.toType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
             "tokio" to PythonServerCargoDependency.Tokio.toType(),
@@ -85,9 +84,9 @@ class PythonApplicationGenerator(
             "tower_http" to PythonServerCargoDependency.TowerHttp.toType(),
             "num_cpus" to PythonServerCargoDependency.NumCpus.toType(),
             "hyper" to PythonServerCargoDependency.Hyper.toType(),
-            "HashMap" to RustType.HashMap.RuntimeType,
+            "HashMap" to RuntimeType.HashMap,
             "parking_lot" to PythonServerCargoDependency.ParkingLot.toType(),
-            "http" to RuntimeType.http,
+            "http" to RuntimeType.Http,
         )
 
     fun render(writer: RustWriter) {
@@ -265,7 +264,7 @@ class PythonApplicationGenerator(
                     Ok(())
                 }
                 /// Main entrypoint: start the server on multiple workers.
-                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers)")]
+                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers, tls)")]
                 pub fn run(
                     &mut self,
                     py: #{pyo3}::Python,
@@ -273,12 +272,12 @@ class PythonApplicationGenerator(
                     port: Option<i32>,
                     backlog: Option<i32>,
                     workers: Option<usize>,
+                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
                 ) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
-                    self.run_server(py, address, port, backlog, workers)
+                    self.run_server(py, address, port, backlog, workers, tls)
                 }
                 /// Lambda entrypoint: start the server on Lambda.
-                ##[cfg(feature = "aws-lambda")]
                 ##[pyo3(text_signature = "(${'$'}self)")]
                 pub fn run_lambda(
                     &mut self,
@@ -288,17 +287,18 @@ class PythonApplicationGenerator(
                     self.run_lambda_handler(py)
                 }
                 /// Build the service and start a single worker.
-                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number)")]
+                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls)")]
                 pub fn start_worker(
                     &mut self,
                     py: pyo3::Python,
                     socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
                     worker_number: isize,
+                    tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
                 ) -> pyo3::PyResult<()> {
                     use #{SmithyPython}::PyApp;
                     let event_loop = self.configure_python_event_loop(py)?;
                     let service = self.build_and_configure_service(py, event_loop)?;
-                    self.start_hyper_worker(py, socket, event_loop, service, worker_number)
+                    self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
                 }
                 """,
                 *codegenScope,

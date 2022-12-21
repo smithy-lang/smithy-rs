@@ -4,9 +4,9 @@
  */
 
 use aws_config::SdkConfig;
-use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::credentials::SharedCredentialsProvider;
 use bytes::BytesMut;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -30,9 +30,7 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
             "test",
         )))
         .region(Region::new("us-east-1"))
-        .endpoint_resolver(
-            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
-        )
+        .endpoint_url(format!("http://{server_addr}"))
         .build();
 
     let client = Client::new(&sdk_config);
@@ -111,15 +109,13 @@ Hello"#;
                 }
             }
 
-            if socket.writable().await.is_ok() {
-                if time_to_respond {
-                    // The content length is 12 but we'll only write 5 bytes
-                    socket.try_write(&response).unwrap();
-                    // We break from the R/W loop after sending a partial response in order to
-                    // close the connection early.
-                    debug!("faulty server has written partial response, now closing connection");
-                    break;
-                }
+            if socket.writable().await.is_ok() && time_to_respond {
+                // The content length is 12 but we'll only write 5 bytes
+                socket.try_write(response).unwrap();
+                // We break from the R/W loop after sending a partial response in order to
+                // close the connection early.
+                debug!("faulty server has written partial response, now closing connection");
+                break;
             }
         }
     }

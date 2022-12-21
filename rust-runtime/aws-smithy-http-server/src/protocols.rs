@@ -7,6 +7,7 @@
 use crate::rejection::MissingContentTypeReason;
 #[allow(deprecated)]
 use crate::request::RequestParts;
+use http::HeaderMap;
 
 /// When there are no modeled inputs,
 /// a request body is empty and the content-type request header must not be set
@@ -19,13 +20,7 @@ pub fn content_type_header_empty_body_no_modeled_input<B>(
     }
     let headers = req.headers().unwrap();
     if headers.contains_key(http::header::CONTENT_TYPE) {
-        let found_mime = headers
-            .get(http::header::CONTENT_TYPE)
-            .unwrap() // The header is present, `unwrap` will not panic.
-            .to_str()
-            .map_err(MissingContentTypeReason::ToStrError)?
-            .parse::<mime::Mime>()
-            .map_err(MissingContentTypeReason::MimeParseError)?;
+        let found_mime = parse_content_type(headers)?;
         Err(MissingContentTypeReason::UnexpectedMimeType {
             expected_mime: None,
             found_mime: Some(found_mime),
@@ -33,6 +28,16 @@ pub fn content_type_header_empty_body_no_modeled_input<B>(
     } else {
         Ok(())
     }
+}
+
+fn parse_content_type(headers: &HeaderMap) -> Result<mime::Mime, MissingContentTypeReason> {
+    headers
+        .get(http::header::CONTENT_TYPE)
+        .unwrap() // The header is present, `unwrap` will not panic.
+        .to_str()
+        .map_err(MissingContentTypeReason::ToStrError)?
+        .parse::<mime::Mime>()
+        .map_err(MissingContentTypeReason::MimeParseError)
 }
 
 /// Checks that the content-type in request headers is valid
@@ -49,31 +54,25 @@ pub fn content_type_header_classifier<B>(
     if !headers.contains_key(http::header::CONTENT_TYPE) {
         return Ok(());
     }
-    let client_type = headers
-        .get(http::header::CONTENT_TYPE)
-        .unwrap() // The header is present, `unwrap` will not panic.
-        .to_str()
-        .map_err(MissingContentTypeReason::ToStrError)?
-        .parse::<mime::Mime>()
-        .map_err(MissingContentTypeReason::MimeParseError)?;
+    let found_mime = parse_content_type(headers)?;
     // There is a content-type header
     // If there is an implied content type, they must match
     if let Some(expected_content_type) = expected_content_type {
-        let content_type = expected_content_type
+        let expected_mime = expected_content_type
             .parse::<mime::Mime>()
             // `expected_content_type` comes from the codegen.
             .expect("BUG: MIME parsing failed, expected_content_type is not valid. Please file a bug report under https://github.com/awslabs/smithy-rs/issues");
-        if expected_content_type != client_type {
+        if expected_content_type != found_mime {
             return Err(MissingContentTypeReason::UnexpectedMimeType {
-                expected_mime: Some(content_type),
-                found_mime: Some(client_type),
+                expected_mime: Some(expected_mime),
+                found_mime: Some(found_mime),
             });
         }
     } else {
         // Content-type header and no modeled input (mismatch)
         return Err(MissingContentTypeReason::UnexpectedMimeType {
             expected_mime: None,
-            found_mime: Some(client_type),
+            found_mime: Some(found_mime),
         });
     }
     Ok(())
@@ -166,7 +165,7 @@ mod tests {
 
     #[test]
     fn check_invalid_content_type() {
-        let invalid = vec!["application/ajson", "text/xml"];
+        let invalid = vec!["application/jason", "text/xml"];
         for invalid_mime in invalid {
             let request = req_content_type(invalid_mime);
             let result = content_type_header_classifier(&request, EXPECTED_MIME_APPLICATION_JSON);

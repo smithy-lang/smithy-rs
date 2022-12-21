@@ -15,7 +15,7 @@
 use crate::credential_process::CommandWithSensitiveArgs;
 use crate::profile::credentials::ProfileFileError;
 use crate::profile::{Profile, ProfileSet};
-use aws_types::Credentials;
+use aws_credential_types::Credentials;
 
 /// Chain of Profile Providers
 ///
@@ -123,9 +123,9 @@ pub(super) fn resolve_chain<'a>(
     // - There is not default profile
     // Then:
     // - Treat this situation as if no profiles were defined
-    if profile_override == None
+    if profile_override.is_none()
         && profile_set.selected_profile() == "default"
-        && profile_set.get_profile("default") == None
+        && profile_set.get_profile("default").is_none()
     {
         tracing::debug!("No default profile defined");
         return Err(ProfileFileError::NoProfilesDefined);

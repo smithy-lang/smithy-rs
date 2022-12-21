@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -95,11 +97,12 @@ class UnconstrainedMapGenerator(
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
                 if (isKeyConstrained(keyShape, symbolProvider) || isValueConstrained(valueShape, model, symbolProvider)) {
-                    val resolveToNonPublicConstrainedValueType =
+                    val resolvesToNonPublicConstrainedValueType =
                         isValueConstrained(valueShape, model, symbolProvider) &&
                             !valueShape.isDirectlyConstrained(symbolProvider) &&
-                            !valueShape.isStructureShape
-                    val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
+                            valueShape !is StructureShape &&
+                            valueShape !is UnionShape
+                    val constrainedValueSymbol = if (resolvesToNonPublicConstrainedValueType) {
                         pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
                     } else {
                         constrainedShapeSymbolProvider.toSymbol(valueShape)
@@ -154,7 +157,7 @@ class UnconstrainedMapGenerator(
                     )
 
                     val constrainedValueTypeIsNotFinalType =
-                        resolveToNonPublicConstrainedValueType && shape.isDirectlyConstrained(symbolProvider)
+                        resolvesToNonPublicConstrainedValueType && shape.isDirectlyConstrained(symbolProvider)
                     if (constrainedValueTypeIsNotFinalType) {
                         // The map is constrained. Its value shape reaches a constrained shape, but the value shape itself
                         // is not directly constrained. The value shape must be an aggregate shape. But it is not a

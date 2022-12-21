@@ -8,17 +8,14 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -29,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 /**
  * Inserts a UserAgent configuration into the operation
  */
-class UserAgentDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class UserAgentDecorator : ClientCodegenDecorator {
     override val name: String = "UserAgent"
     override val order: Byte = 10
 
@@ -56,9 +53,6 @@ class UserAgentDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientC
     ): List<OperationCustomization> {
         return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**
@@ -72,19 +66,15 @@ private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serv
             // PKG_VERSION comes from CrateVersionGenerator
             rust(
                 "static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);",
-                runtimeConfig.userAgentModule(),
+                AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
             )
 
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
-            rustTemplate("pub use #{AppName};", "AppName" to runtimeConfig.appName())
+            rustTemplate("pub use #{AppName};", "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"))
         }
         else -> emptySection
     }
 }
-
-private fun RuntimeConfig.userAgentModule() = awsHttp().toType().member("user_agent")
-private fun RuntimeConfig.env(): RuntimeType = RuntimeType("Env", awsTypes(), "aws_types::os_shim_internal")
-private fun RuntimeConfig.appName(): RuntimeType = RuntimeType("AppName", awsTypes(this), "aws_types::app_name")
 
 private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
@@ -100,8 +90,8 @@ private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : Opera
                 }
                 ${section.request}.properties_mut().insert(user_agent);
                 """,
-                "ua_module" to runtimeConfig.userAgentModule(),
-                "Env" to runtimeConfig.env(),
+                "ua_module" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
+                "Env" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("os_shim_internal::Env"),
             )
         }
         else -> emptySection
@@ -109,7 +99,9 @@ private class UserAgentFeature(private val runtimeConfig: RuntimeConfig) : Opera
 }
 
 private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val codegenScope = arrayOf("AppName" to runtimeConfig.appName())
+    private val codegenScope = arrayOf(
+        "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
+    )
 
     override fun section(section: ServiceConfig): Writable =
         when (section) {

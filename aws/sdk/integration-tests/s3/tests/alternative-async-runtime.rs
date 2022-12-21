@@ -118,7 +118,7 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
 
     assert_eq!("TimeoutError(TimeoutError { source: RequestTimeoutError { kind: \"operation timeout (all attempts including retries)\", duration: 500ms } })", format!("{:?}", err));
     // Assert 500ms have passed with a 10ms margin of error
-    assert_elapsed!(now, Duration::from_millis(500), Duration::from_millis(10));
+    assert_elapsed!(now, Duration::from_millis(500), Duration::from_millis(100));
 
     Ok(())
 }
@@ -129,9 +129,9 @@ async fn retry_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std::
     let conf = aws_types::SdkConfig::builder()
         .region(Region::new("us-east-2"))
         .http_connector(conn.clone())
-        .credentials_provider(aws_types::credentials::SharedCredentialsProvider::new(
-            credentials,
-        ))
+        .credentials_provider(
+            aws_credential_types::provider::SharedCredentialsProvider::new(credentials),
+        )
         .retry_config(RetryConfig::standard())
         .timeout_config(
             TimeoutConfig::builder()
@@ -148,7 +148,7 @@ async fn retry_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std::
         .expect_err("call should fail");
     assert!(
         matches!(resp, SdkError::TimeoutError { .. }),
-        "expected a timeout error, got: {}",
+        "expected a timeout error, got: {:?}",
         resp
     );
     assert_eq!(

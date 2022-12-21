@@ -74,11 +74,11 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
 
     private val codegenScope = arrayOf(
-        "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
+        "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained(),
+        "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
     fun render(writer: RustWriter) {

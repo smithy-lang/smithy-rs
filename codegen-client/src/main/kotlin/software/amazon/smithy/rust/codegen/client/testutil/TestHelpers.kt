@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
-import software.amazon.smithy.rust.codegen.client.smithy.RustCodegenPlugin
+import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
@@ -48,7 +48,7 @@ fun clientTestRustSettings(
 )
 
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
-    RustCodegenPlugin.baseSymbolProvider(
+    RustClientCodegenPlugin.baseSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
         TestSymbolVisitorConfig,
