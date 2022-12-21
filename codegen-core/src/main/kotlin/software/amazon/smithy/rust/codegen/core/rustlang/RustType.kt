@@ -434,6 +434,7 @@ enum class AttributeKind {
  */
 class Attribute(val inner: Writable) {
     constructor(str: String) : this(writable(str))
+    constructor(runtimeType: RuntimeType) : this(runtimeType.writable)
 
     fun render(writer: RustWriter, attributeKind: AttributeKind = AttributeKind.Outer) {
         // Writing "#[]" with nothing inside it is meaningless
@@ -449,6 +450,7 @@ class Attribute(val inner: Writable) {
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
         val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))
+        val AllowClippyNewWithoutDefault = Attribute(allow("clippy::new_without_default"))
         val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
         val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
         val AllowDeadCode = Attribute(allow("dead_code"))
