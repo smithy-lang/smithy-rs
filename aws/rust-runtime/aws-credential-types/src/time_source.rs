@@ -127,15 +127,18 @@ mod test {
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
-    fn ts_works() {
-        let current = TimeSource::default();
+    fn default_time_source_should_not_panic_on_calling_now() {
+        let time_source = TimeSource::default();
         // no panics
-        let _ = current.now();
+        let _ = time_source.now();
+    }
 
+    #[test]
+    fn testing_time_source_should_behave_as_expected() {
         let mut testing = TestingTimeSource::new(UNIX_EPOCH);
-        let ts = TimeSource::testing(&testing);
-        assert_eq!(ts.now(), UNIX_EPOCH);
+        let time_source = TimeSource::testing(&testing);
+        assert_eq!(time_source.now(), UNIX_EPOCH);
         testing.advance(Duration::from_secs(10));
-        assert_eq!(ts.now(), UNIX_EPOCH + Duration::from_secs(10));
+        assert_eq!(time_source.now(), UNIX_EPOCH + Duration::from_secs(10));
     }
 }
