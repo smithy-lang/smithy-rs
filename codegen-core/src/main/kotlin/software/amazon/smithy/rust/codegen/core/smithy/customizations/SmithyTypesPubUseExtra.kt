@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.customizations
+package software.amazon.smithy.rust.codegen.core.smithy.customizations
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -30,23 +31,19 @@ private fun hasStreamingOperations(model: Model): Boolean {
     }
 }
 
-/** Returns true if the model has any blob shapes or members */
-private fun hasBlobs(model: Model): Boolean {
-    return model.structureShapes.any { structure ->
-        structure.members().any { member -> model.expectShape(member.target).isBlobShape }
+// TODO(https://github.com/awslabs/smithy-rs/issues/2111): Fix this logic to consider collection/map shapes
+private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) -> Boolean): Boolean =
+    model.structureShapes.any { structure ->
+        structure.members().any { member -> predicate(model.expectShape(member.target)) }
     } || model.unionShapes.any { union ->
-        union.members().any { member -> model.expectShape(member.target).isBlobShape }
+        union.members().any { member -> predicate(model.expectShape(member.target)) }
     }
-}
 
-/** Returns true if the model has any timestamp shapes or members */
-private fun hasDateTimes(model: Model): Boolean {
-    return model.structureShapes.any { structure ->
-        structure.members().any { member -> model.expectShape(member.target).isTimestampShape }
-    } || model.unionShapes.any { union ->
-        union.members().any { member -> model.expectShape(member.target).isTimestampShape }
-    }
-}
+/** Returns true if the model uses any blob shapes */
+private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isBlobShape)
+
+/** Returns true if the model uses any timestamp shapes */
+private fun hasDateTimes(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isTimestampShape)
 
 /** Returns a list of types that should be re-exported for the given model */
 internal fun pubUseTypes(runtimeConfig: RuntimeConfig, model: Model): List<RuntimeType> {
