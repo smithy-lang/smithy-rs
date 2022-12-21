@@ -24,6 +24,8 @@ use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
