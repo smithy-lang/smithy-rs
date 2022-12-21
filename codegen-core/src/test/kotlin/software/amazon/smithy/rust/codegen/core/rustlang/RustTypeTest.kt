@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 internal class RustTypesTest {
     private fun forInputExpectOutput(t: Writable, expectedOutput: String) {
@@ -139,5 +140,21 @@ internal class RustTypesTest {
         val type = RustType.Box(RustType.Option(RustType.Reference("a", RustType.Vec(RustType.String))))
         type.render(false) shouldBe "Box<Option<&'a Vec<String>>>"
         type.render(true) shouldBe "std::boxed::Box<std::option::Option<&'a std::vec::Vec<std::string::String>>>"
+    }
+
+    @Test
+    fun `attribute macros render properly`() {
+        val attributeMacro = Attribute(
+            Attribute.cfg(
+                Attribute.all(
+                    Attribute.pair("feature" to writable("unstable".dq())),
+                    Attribute.any(
+                        Attribute.pair("feature" to writable("serialize".dq())),
+                        Attribute.pair("feature" to writable("deserialize".dq())),
+                    ),
+                ),
+            ),
+        )
+        forInputExpectOutput(writable { attributeMacro.render(this) }, "#[cfg(all(feature = \"unstable\", any(feature = \"serialize\", feature = \"deserialize\")))]\n")
     }
 }

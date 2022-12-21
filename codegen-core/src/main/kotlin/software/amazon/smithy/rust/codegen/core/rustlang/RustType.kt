@@ -5,8 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
@@ -199,11 +199,10 @@ fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */
-fun RustType.asArgumentValue(name: String) =
-    when (this) {
-        is RustType.String, is RustType.Box -> "$name.into()"
-        else -> name
-    }
+fun RustType.asArgumentValue(name: String) = when (this) {
+    is RustType.String, is RustType.Box -> "$name.into()"
+    else -> name
+}
 
 /**
  * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
@@ -241,6 +240,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
                 "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
             }
         }
+
         is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
@@ -299,6 +299,7 @@ fun RustType.asDeref(): RustType = when (this) {
     } else {
         this
     }
+
     is RustType.Box -> RustType.Reference(null, member)
     is RustType.String -> RustType.Opaque("str")
     is RustType.Vec -> RustType.Slice(member)
@@ -325,42 +326,45 @@ fun RustType.isCopy(): Boolean = when (this) {
 }
 
 enum class Visibility {
-    PRIVATE,
-    PUBCRATE,
-    PUBLIC;
+    PRIVATE, PUBCRATE, PUBLIC;
 
     companion object {
-        fun publicIf(condition: Boolean, ifNot: Visibility): Visibility =
-            if (condition) {
-                PUBLIC
-            } else {
-                ifNot
-            }
+        fun publicIf(condition: Boolean, ifNot: Visibility): Visibility = if (condition) {
+            PUBLIC
+        } else {
+            ifNot
+        }
     }
 
-    fun toRustQualifier(): String =
-        when (this) {
-            PRIVATE -> ""
-            PUBCRATE -> "pub(crate)"
-            PUBLIC -> "pub"
-        }
+    fun toRustQualifier(): String = when (this) {
+        PRIVATE -> ""
+        PUBCRATE -> "pub(crate)"
+        PUBLIC -> "pub"
+    }
 }
 
 /**
  * Meta information about a Rust construction (field, struct, or enum).
  */
 data class RustMetadata(
-    val derives: Attribute.Derives = Attribute.Derives.Empty,
+    val derives: Set<RuntimeType> = setOf(),
     val additionalAttributes: List<Attribute> = listOf(),
     val visibility: Visibility = Visibility.PRIVATE,
 ) {
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
-        this.copy(derives = derives.copy(derives = derives.derives + newDerive))
+        this.copy(derives = derives + newDerive)
 
     fun withoutDerives(vararg withoutDerives: RuntimeType) =
-        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives.toSet()))
+        this.copy(derives = derives - withoutDerives.toSet())
 
-    private fun attributes(): List<Attribute> = additionalAttributes + derives
+    private fun attributes(): List<Attribute> {
+        val deriveAttribute = Attribute(
+            derive(
+                *derives.toTypedArray(),
+            ),
+        )
+        return additionalAttributes + deriveAttribute
+    }
 
     fun renderAttributes(writer: RustWriter): RustMetadata {
         attributes().forEach {
@@ -389,10 +393,29 @@ data class RustMetadata(
         val TestModule = RustMetadata(
             visibility = Visibility.PRIVATE,
             additionalAttributes = listOf(
-                Attribute.Cfg("test"),
+                Attribute.CfgTest,
             ),
         )
     }
+}
+
+data class Argument(val argument: String, val value: String, val type: String)
+
+/**
+ * AttributeKind differentiates between the two kinds of attribute macros: inner and outer.
+ * See the variant docs for more info, and the official Rust [Attribute Macro](https://doc.rust-lang.org/reference/attributes.html)
+ * for even MORE info.
+ */
+enum class AttributeKind {
+    /**
+     * Inner attributes, written with a bang (!) after the hash (#), apply to the item that the attribute is declared within.
+     */
+    Inner,
+
+    /**
+     * Outer attributes, written without the bang after the hash, apply to the thing that follows the attribute.
+     */
+    Outer
 }
 
 /**
@@ -401,129 +424,96 @@ data class RustMetadata(
  *
  * For example:
  * ```rust
- *
  * #[derive(Clone, PartialEq, Serialize)] // <-- this is an attribute
  * #[serde(serialize_with = "abc")] // <-- this is an attribute
  * struct Abc {
  *   a: i64
  * }
+ * ```
  */
-sealed class Attribute {
-    abstract fun render(writer: RustWriter)
+class Attribute(val inner: Writable) {
+    fun render(writer: RustWriter, attributeKind: AttributeKind = AttributeKind.Outer) {
+        when (attributeKind) {
+            AttributeKind.Inner -> writer.rust("##![#W]", inner)
+            AttributeKind.Outer -> writer.rust("##[#W]", inner)
+        }
+    }
 
     companion object {
-        val AllowDeadCode = Custom("allow(dead_code)")
-        val AllowDeprecated = Custom("allow(deprecated)")
-        val AllowUnused = Custom("allow(unused)")
-        val AllowUnusedMut = Custom("allow(unused_mut)")
-        val DocHidden = Custom("doc(hidden)")
-        val DocInline = Custom("doc(inline)")
+        val AllowClippyBoxedLocal = Attribute(allow(writable("clippy::boxed_local")))
+        val AllowClippyLetAndReturn = Attribute(allow(writable("clippy::let_and_return")))
+        val AllowClippyNeedlessBorrow = Attribute(allow(writable("clippy::needless_borrow")))
+        val AllowClippyUnnecessaryWraps = Attribute(allow(writable("clippy::unnecessary_wraps")))
+        val AllowDeadCode = Attribute(allow(writable("dead_code")))
+        val AllowDeprecated = Attribute(allow(writable("deprecated")))
+        val AllowIrrefutableLetPatterns = Attribute(allow(writable("irrefutable_let_patterns")))
+        val AllowUnreachableCode = Attribute(allow(writable("unreachable_code")))
+        val AllowUnused = Attribute(allow(writable("unused")))
+        val AllowUnusedMut = Attribute(allow(writable("unused_mut")))
+        val AllowUnusedVariables = Attribute(allow(writable("unused_variables")))
+        val CfgTest = Attribute(writable("test"))
+        val DocHidden = Attribute(doc(writable("hidden")))
+        val DocInline = Attribute(doc(writable("inline")))
+        val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
          * indicates that more fields may be added in the future
          */
-        val NonExhaustive = Custom("non_exhaustive")
-    }
+        val NonExhaustive = Attribute(writable("non_exhaustive"))
 
-    data class Deprecated(val since: String?, val note: String?) : Attribute() {
-        override fun render(writer: RustWriter) {
-            writer.raw("#[deprecated")
-            if (since != null || note != null) {
-                writer.raw("(")
-                if (since != null) {
-                    writer.raw("""since = "$since"""")
+        /**
+         * Mark the following type as deprecated. If you know why and in what version something was deprecated, then
+         * using [deprecated] is preferred.
+         */
+        val Deprecated = Attribute(writable("deprecated"))
 
-                    if (note != null) {
-                        writer.raw(", ")
-                    }
-                }
-
-                if (note != null) {
-                    writer.raw("""note = "$note"""")
-                }
-                writer.raw(")")
-            }
-            writer.raw("]")
-        }
-    }
-
-    data class Derives(val derives: Set<RuntimeType>) : Attribute() {
-        override fun render(writer: RustWriter) {
-            if (derives.isEmpty()) {
-                return
-            }
-            writer.raw("#[derive(")
-            derives.sortedBy { it.path }.forEach { derive ->
-                writer.writeInline("#T, ", derive)
-            }
-            writer.write(")]")
+        private fun inner(name: String, vararg attrMacros: RustWriter.() -> Unit): Writable = {
+            // TODO Harry please explain how to remove the `toList` call
+            rustInline("$name(#W)", attrMacros.toList().join(", "))
         }
 
-        companion object {
-            val Empty = Derives(setOf())
-        }
-    }
+        fun all(vararg attrMacros: Writable): Writable = inner("all", *attrMacros)
+        fun allow(lints: List<String>): Writable = inner("allow", *(lints.map { writable(it) }.toTypedArray()))
+        fun allow(vararg attrMacros: Writable): Writable = inner("allow", *attrMacros)
+        fun allow(vararg lints: String): Writable = inner("allow", *(lints.map { writable(it) }.toTypedArray()))
+        fun any(vararg attrMacros: Writable): Writable = inner("any", *attrMacros)
+        fun cfg(vararg attrMacros: Writable): Writable = inner("cfg", *attrMacros)
+        fun doc(vararg attrMacros: Writable): Writable = inner("doc", *attrMacros)
+        fun not(vararg attrMacros: Writable): Writable = inner("not", *attrMacros)
 
-    /**
-     * A custom Attribute
-     *
-     * [annotation] represents the body of the attribute, e.g. `cfg(foo)` in `#[cfg(foo)]`
-     * If [container] is set, this attribute refers to its container rather than its successor. This generates `#![cfg(foo)]`
-     *
-     * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
-     * `#[serde(Serialize)]` where `Serialize` is actually a symbol that must be imported.
-     */
-    data class Custom(
-        val annotation: String,
-        val symbols: List<RuntimeType> = listOf(),
-        val container: Boolean = false,
-    ) : Attribute() {
-        override fun render(writer: RustWriter) {
-            val bang = if (container) "!" else ""
-            writer.raw("#$bang[$annotation]")
-            symbols.forEach {
-                try {
-                    writer.addDependency(it.dependency)
-                } catch (ex: Exception) {
-                    PANIC("failed to add dependency for RuntimeType $it")
+        // TODO ensure uses of this are passing args in expected order
+        fun deprecated(since: String?, note: String?): Writable {
+            val optionalFields = mutableListOf<Writable>()
+            if (!note.isNullOrEmpty()) {
+                optionalFields.add(pair("note" to writable(note.dq())))
+            }
+
+            if (!since.isNullOrEmpty()) {
+                optionalFields.add(pair("since" to writable(since.dq())))
+            }
+
+            return {
+                rustInline("deprecated")
+                if (optionalFields.isNotEmpty()) {
+                    rustInline("(#W)", optionalFields.join(", "))
                 }
             }
         }
 
-        companion object {
-            /**
-             * Renders a
-             * [`#[deprecated]`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-deprecated-attribute)
-             * attribute.
-             */
-            fun deprecated(note: String? = null, since: String? = null): Custom {
-                val builder = StringBuilder()
-                builder.append("deprecated")
-
-                if (note != null && since != null) {
-                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
-                } else if (note != null) {
-                    builder.append("(note = ${note.dq()})")
-                } else if (since != null) {
-                    builder.append("(since = ${since.dq()})")
-                } else {
-                    // No-op. Rustc would emit a default message.
-                }
-                return Custom(builder.toString())
-            }
-        }
-    }
-
-    data class Cfg(val cond: String) : Attribute() {
-        override fun render(writer: RustWriter) {
-            writer.raw("#[cfg($cond)]")
+        fun derive(vararg runtimeTypes: RuntimeType): Writable = {
+            val writables = runtimeTypes.map { it.writable }.join(", ")
+            rustInline("derive(#W)", writables)
         }
 
-        companion object {
-            fun feature(feature: String) = Cfg("feature = ${feature.dq()}")
+        fun derive(runtimeTypes: Set<RuntimeType>): Writable = {
+            val writables = runtimeTypes.map { it.writable }.join(", ")
+            rustInline("derive(#W)", writables)
+        }
+
+        fun pair(pair: Pair<String, Writable>): Writable = {
+            val (key, value) = pair
+            rustInline("$key = #W", value)
         }
     }
 }
-
-data class Argument(val argument: String, val value: String, val type: String)
