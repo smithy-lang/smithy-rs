@@ -23,6 +23,7 @@ use std::path::PathBuf;
 /// ```
 /// use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
 /// use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+/// use std::sync::Arc;
 ///
 /// # async fn example() {
 /// let profile_files = ProfileFiles::builder()
@@ -36,7 +37,7 @@ use std::path::PathBuf;
 ///     .build();
 ///
 /// let sdk_config = aws_config::from_env()
-///     .credentials_provider(credentials_provider)
+///     .credentials_provider(Arc::new(credentials_provider))
 ///     .region(region_provider)
 ///     .load()
 ///     .await;

@@ -6,7 +6,7 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
-use aws_credential_types::lazy_caching::{self, LazyCachingCredentialsProvider};
+use aws_credential_types::cache::LazyBuilder;
 use aws_credential_types::provider::{self, future, ProvideCredentials};
 use tracing::Instrument;
 
@@ -60,7 +60,9 @@ pub async fn default_provider() -> impl ProvideCredentials {
 ///     .build();
 /// ```
 #[derive(Debug)]
-pub struct DefaultCredentialsChain(LazyCachingCredentialsProvider);
+pub struct DefaultCredentialsChain {
+    provider_chain: CredentialsProviderChain,
+}
 
 impl DefaultCredentialsChain {
     /// Builder for `DefaultCredentialsChain`
@@ -69,7 +71,7 @@ impl DefaultCredentialsChain {
     }
 
     async fn credentials(&self) -> provider::Result {
-        self.0
+        self.provider_chain
             .provide_credentials()
             .instrument(tracing::debug_span!("provide_credentials", provider = %"default_chain"))
             .await
@@ -92,7 +94,7 @@ pub struct Builder {
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
-    credential_cache: lazy_caching::Builder,
+    credential_cache: LazyBuilder,
     region_override: Option<Box<dyn ProvideRegion>>,
     region_chain: crate::default_provider::region::Builder,
     conf: Option<ProviderConfig>,
@@ -252,12 +254,8 @@ impl Builder {
             .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
-        let cached_provider = self
-            .credential_cache
-            .configure(conf.sleep(), conf.time_source())
-            .load(provider_chain);
 
-        DefaultCredentialsChain(cached_provider.build())
+        DefaultCredentialsChain { provider_chain }
     }
 }
 
