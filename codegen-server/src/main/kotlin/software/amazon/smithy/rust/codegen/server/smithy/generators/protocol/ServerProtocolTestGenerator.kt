@@ -25,6 +25,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -42,7 +43,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -179,7 +179,7 @@ class ServerProtocolTestGenerator(
             PROTOCOL_TEST_HELPER_MODULE_NAME,
             RustMetadata(
                 additionalAttributes = listOf(
-                    Attribute.Cfg("test"),
+                    Attribute.CfgTest,
                     Attribute.AllowDeadCode,
                 ),
                 visibility = Visibility.PUBCRATE,
@@ -257,8 +257,8 @@ class ServerProtocolTestGenerator(
                 "server_${operationName.toSnakeCase()}_test",
                 RustMetadata(
                     additionalAttributes = listOf(
-                        Attribute.Cfg("test"),
-                        Attribute.Custom("allow(unreachable_code, unused_variables)"),
+                        Attribute.CfgTest,
+                        Attribute(allow("unreachable_code", "unused_variables")),
                     ),
                     visibility = Visibility.PRIVATE,
                 ),
@@ -365,7 +365,7 @@ class ServerProtocolTestGenerator(
         testModuleWriter.rust("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
 
-        TokioTest.render(testModuleWriter)
+        Attribute.TokioTest.render(testModuleWriter)
 
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")

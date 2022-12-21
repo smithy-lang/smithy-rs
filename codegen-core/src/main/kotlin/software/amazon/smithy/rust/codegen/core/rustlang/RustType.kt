@@ -351,25 +351,18 @@ data class RustMetadata(
     val additionalAttributes: List<Attribute> = listOf(),
     val visibility: Visibility = Visibility.PRIVATE,
 ) {
-    fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
-        this.copy(derives = derives + newDerive)
+    fun withDerives(vararg newDerives: RuntimeType): RustMetadata =
+        this.copy(derives = derives + newDerives)
 
     fun withoutDerives(vararg withoutDerives: RuntimeType) =
         this.copy(derives = derives - withoutDerives.toSet())
 
-    private fun attributes(): List<Attribute> {
-        val deriveAttribute = Attribute(
-            derive(
-                *derives.toTypedArray(),
-            ),
-        )
-        return additionalAttributes + deriveAttribute
-    }
-
     fun renderAttributes(writer: RustWriter): RustMetadata {
-        attributes().forEach {
+        additionalAttributes.forEach {
             it.render(writer)
         }
+        Attribute(derive(derives)).render(writer)
+
         return this
     }
 
@@ -387,6 +380,14 @@ data class RustMetadata(
     fun render(writer: RustWriter) {
         renderAttributes(writer)
         renderVisibility(writer)
+    }
+
+    /**
+     * If `true`, the Rust symbol that this metadata references derives a `Debug` implementation.
+     * If `false`, then it doesn't.
+     */
+    fun hasDebugDerive(): Boolean {
+        return derives.contains(RuntimeType.Debug)
     }
 
     companion object {
@@ -432,65 +433,87 @@ enum class AttributeKind {
  * ```
  */
 class Attribute(val inner: Writable) {
+    constructor(str: String) : this(writable(str))
+
     fun render(writer: RustWriter, attributeKind: AttributeKind = AttributeKind.Outer) {
-        when (attributeKind) {
-            AttributeKind.Inner -> writer.rust("##![#W]", inner)
-            AttributeKind.Outer -> writer.rust("##[#W]", inner)
+        // Writing "#[]" with nothing inside it is meaningless
+        if (inner.isNotEmpty()) {
+            when (attributeKind) {
+                AttributeKind.Inner -> writer.rust("##![#W]", inner)
+                AttributeKind.Outer -> writer.rust("##[#W]", inner)
+            }
         }
     }
 
     companion object {
-        val AllowClippyBoxedLocal = Attribute(allow(writable("clippy::boxed_local")))
-        val AllowClippyLetAndReturn = Attribute(allow(writable("clippy::let_and_return")))
-        val AllowClippyNeedlessBorrow = Attribute(allow(writable("clippy::needless_borrow")))
-        val AllowClippyUnnecessaryWraps = Attribute(allow(writable("clippy::unnecessary_wraps")))
-        val AllowDeadCode = Attribute(allow(writable("dead_code")))
-        val AllowDeprecated = Attribute(allow(writable("deprecated")))
-        val AllowIrrefutableLetPatterns = Attribute(allow(writable("irrefutable_let_patterns")))
-        val AllowUnreachableCode = Attribute(allow(writable("unreachable_code")))
-        val AllowUnused = Attribute(allow(writable("unused")))
-        val AllowUnusedMut = Attribute(allow(writable("unused_mut")))
-        val AllowUnusedVariables = Attribute(allow(writable("unused_variables")))
-        val CfgTest = Attribute(writable("test"))
-        val DocHidden = Attribute(doc(writable("hidden")))
-        val DocInline = Attribute(doc(writable("inline")))
+        val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
+        val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
+        val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))
+        val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
+        val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
+        val AllowDeadCode = Attribute(allow("dead_code"))
+        val AllowDeprecated = Attribute(allow("deprecated"))
+        val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
+        val AllowUnreachableCode = Attribute(allow("unreachable_code"))
+        val AllowUnused = Attribute(allow("unused"))
+        val AllowUnusedImports = Attribute(allow("unused_imports"))
+        val AllowUnusedMut = Attribute(allow("unused_mut"))
+        val AllowUnusedVariables = Attribute(allow("unused_variables"))
+        val CfgTest = Attribute(cfg("test"))
+        val DenyMissingDocs = Attribute(deny("missing_docs"))
+        val DocHidden = Attribute(doc("hidden"))
+        val DocInline = Attribute(doc("inline"))
+        val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
          * indicates that more fields may be added in the future
          */
-        val NonExhaustive = Attribute(writable("non_exhaustive"))
+        val NonExhaustive = Attribute("non_exhaustive")
 
         /**
          * Mark the following type as deprecated. If you know why and in what version something was deprecated, then
          * using [deprecated] is preferred.
          */
-        val Deprecated = Attribute(writable("deprecated"))
+        val Deprecated = Attribute("deprecated")
 
-        private fun inner(name: String, vararg attrMacros: RustWriter.() -> Unit): Writable = {
-            // TODO Harry please explain how to remove the `toList` call
-            rustInline("$name(#W)", attrMacros.toList().join(", "))
+        private fun macroWithArgs(name: String, vararg args: RustWriter.() -> Unit): Writable = {
+            // Macros that require args can't be empty
+            if (args.isNotEmpty()) {
+                rustInline("$name(#W)", args.toList().join(", "))
+            }
         }
 
-        fun all(vararg attrMacros: Writable): Writable = inner("all", *attrMacros)
-        fun allow(lints: List<String>): Writable = inner("allow", *(lints.map { writable(it) }.toTypedArray()))
-        fun allow(vararg attrMacros: Writable): Writable = inner("allow", *attrMacros)
-        fun allow(vararg lints: String): Writable = inner("allow", *(lints.map { writable(it) }.toTypedArray()))
-        fun any(vararg attrMacros: Writable): Writable = inner("any", *attrMacros)
-        fun cfg(vararg attrMacros: Writable): Writable = inner("cfg", *attrMacros)
-        fun doc(vararg attrMacros: Writable): Writable = inner("doc", *attrMacros)
-        fun not(vararg attrMacros: Writable): Writable = inner("not", *attrMacros)
+        private fun macroWithArgs(name: String, vararg args: String): Writable = {
+            // Macros that require args can't be empty
+            if (args.isNotEmpty()) {
+                rustInline("$name(${args.joinToString(", ")})")
+            }
+        }
+
+        fun all(vararg attrMacros: Writable): Writable = macroWithArgs("all", *attrMacros)
+
+        // TODO is there any way to avoid `toTypedArray`?
+        fun allow(lints: Collection<String>): Writable = macroWithArgs("allow", *lints.toTypedArray())
+        fun allow(vararg lints: String): Writable = macroWithArgs("allow", *lints)
+        fun deny(vararg lints: String): Writable = macroWithArgs("deny", *lints)
+        fun any(vararg attrMacros: Writable): Writable = macroWithArgs("any", *attrMacros)
+        fun cfg(vararg attrMacros: Writable): Writable = macroWithArgs("cfg", *attrMacros)
+        fun cfg(vararg attrMacros: String): Writable = macroWithArgs("cfg", *attrMacros)
+        fun doc(vararg attrMacros: Writable): Writable = macroWithArgs("doc", *attrMacros)
+        fun doc(str: String): Writable = macroWithArgs("doc", writable(str))
+        fun not(vararg attrMacros: Writable): Writable = macroWithArgs("not", *attrMacros)
 
         // TODO ensure uses of this are passing args in expected order
-        fun deprecated(since: String?, note: String?): Writable {
+        fun deprecated(since: String? = null, note: String? = null): Writable {
             val optionalFields = mutableListOf<Writable>()
             if (!note.isNullOrEmpty()) {
-                optionalFields.add(pair("note" to writable(note.dq())))
+                optionalFields.add(pair("note" to note.dq()))
             }
 
             if (!since.isNullOrEmpty()) {
-                optionalFields.add(pair("since" to writable(since.dq())))
+                optionalFields.add(pair("since" to since.dq()))
             }
 
             return {
@@ -502,18 +525,19 @@ class Attribute(val inner: Writable) {
         }
 
         fun derive(vararg runtimeTypes: RuntimeType): Writable = {
-            val writables = runtimeTypes.map { it.writable }.join(", ")
-            rustInline("derive(#W)", writables)
+            // Empty derives are meaningless
+            if (runtimeTypes.isNotEmpty()) {
+                // Sorted derives look nicer than unsorted, and it makes test output easier to predict
+                val writables = runtimeTypes.sortedBy { it.path }.map { it.writable }.join(", ")
+                rustInline("derive(#W)", writables)
+            }
         }
 
-        fun derive(runtimeTypes: Set<RuntimeType>): Writable = {
-            val writables = runtimeTypes.map { it.writable }.join(", ")
-            rustInline("derive(#W)", writables)
-        }
+        fun derive(runtimeTypes: Collection<RuntimeType>): Writable = derive(*runtimeTypes.toTypedArray())
 
-        fun pair(pair: Pair<String, Writable>): Writable = {
+        fun pair(pair: Pair<String, String>): Writable = {
             val (key, value) = pair
-            rustInline("$key = #W", value)
+            rustInline("$key = $value")
         }
     }
 }

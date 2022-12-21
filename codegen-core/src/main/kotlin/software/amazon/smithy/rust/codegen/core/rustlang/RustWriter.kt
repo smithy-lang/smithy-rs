@@ -335,7 +335,7 @@ fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
     val note = deprecatedTrait.message.orNull()
     val since = deprecatedTrait.since.orNull()
 
-    Attribute(deprecated(note, since)).render(this)
+    Attribute(deprecated(since, note)).render(this)
 
     return this
 }

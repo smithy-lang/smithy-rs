@@ -82,11 +82,12 @@ open class MakeOperationGenerator(
         val fnType = if (public) "pub async fn" else "async fn"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
-        Attribute.AllowUnusedMut.render(implBlockWriter) // For codegen simplicity
-        Attribute.Custom("allow(clippy::let_and_return)")
-            .render(implBlockWriter) // For codegen simplicity, allow `let x = ...; x`
-        Attribute.Custom("allow(clippy::needless_borrow)")
-            .render(implBlockWriter) // Allows builders that don’t consume the input borrow
+        // For codegen simplicity
+        Attribute.AllowUnusedMut.render(implBlockWriter)
+        // For codegen simplicity, allow `let x = ...; x`
+        Attribute.AllowClippyLetAndReturn.render(implBlockWriter)
+        // Allows builders that don’t consume the input borrow
+        Attribute.AllowClippyNeedlessBorrow.render(implBlockWriter)
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope,
@@ -100,7 +101,7 @@ open class MakeOperationGenerator(
 
             // When the payload is a `ByteStream`, `into_inner()` already returns an `SdkBody`, so we mute this
             // Clippy warning to make the codegen a little simpler in that case.
-            Attribute.Custom("allow(clippy::useless_conversion)").render(this)
+            Attribute.AllowClippyUselessConversion.render(this)
             withBlockTemplate("let body = #{SdkBody}::from(", ");", *codegenScope) {
                 bodyGenerator.generatePayload(this, "self", shape)
                 val streamingMember = shape.inputShape(model).findStreamingMember(model)

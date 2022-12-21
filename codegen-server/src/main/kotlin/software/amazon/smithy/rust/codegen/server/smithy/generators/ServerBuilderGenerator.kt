@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -168,9 +169,10 @@ class ServerBuilderGenerator(
         // Matching derives to the main structure, - `PartialEq` (see class documentation for why), + `Default`
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = builderDerives).render(writer)
-        writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate)" else "" } struct Builder") {
+        // Filter out any derive that isn't Debug or Clone. Then add a Default derive
+        val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        Attribute(derive(builderDerives)).render(writer)
+        writer.rustBlock("${visibility.toRustQualifier()} struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }
 
@@ -187,7 +189,7 @@ class ServerBuilderGenerator(
             renderBuildFn(this)
         }
 
-        if (!builderDerives.contains(RuntimeType.Debug)) {
+        if (!structureSymbol.expectRustMetadata().hasDebugDerive()) {
             renderImplDebugForBuilder(writer)
         }
     }
@@ -308,7 +310,7 @@ class ServerBuilderGenerator(
             // to the heap. However, that will make the builder take in a value whose type does not exactly match the
             // shape member's type.
             // We don't want to introduce API asymmetry just for this particular case, so we disable the lint.
-            Attribute.Custom("allow(clippy::boxed_local)").render(writer)
+            Attribute.AllowClippyBoxedLocal.render(writer)
         }
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             withBlock("self.$memberName = ", "; self") {

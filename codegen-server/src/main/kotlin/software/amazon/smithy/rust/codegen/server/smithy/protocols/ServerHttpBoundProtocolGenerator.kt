@@ -402,7 +402,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val inputSymbol = symbolProvider.toSymbol(inputShape)
 
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             // The last conversion trait bound is needed by the `hyper::body::to_bytes(body).await?` call.
             rustBlockTemplate(
                 """
@@ -437,7 +437,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
 
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
 
             // Note we only need to take ownership of the output in the case that it contains streaming members.
             // However, we currently always take ownership here, but worth noting in case in the future we want
@@ -468,7 +468,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_error"
         val errorSymbol = operationShape.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
