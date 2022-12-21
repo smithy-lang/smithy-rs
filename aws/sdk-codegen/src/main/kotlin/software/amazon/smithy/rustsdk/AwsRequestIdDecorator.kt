@@ -73,6 +73,9 @@ private class AwsRequestIdOperationCustomization(
                     "apply_request_id" to codegenContext.requestIdModule().resolve("apply_request_id"),
                 )
             }
+            is OperationSection.MutateOutput -> {
+                rust("output._set_request_id(#T::request_id(response).map(str::to_string));", codegenContext.requestIdTrait())
+            }
             else -> {}
         }
     }

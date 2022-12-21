@@ -20,8 +20,20 @@ fn get_request_id_from_unmodeled_error() {
     let err = ListFunctions::new()
         .parse_loaded(&resp.map(Bytes::from))
         .expect_err("status was 500, this is an error");
-    dbg!(&err);
     assert!(matches!(err.kind, ListFunctionsErrorKind::Unhandled(_)));
     assert_eq!(Some("correct-request-id"), err.request_id());
     assert_eq!(Some("correct-request-id"), err.meta().request_id());
+}
+
+#[test]
+fn get_request_id_from_successful_response() {
+    let resp = http::Response::builder()
+        .header("x-amzn-RequestId", "correct-request-id")
+        .status(200)
+        .body(r#"{"Functions":[],"NextMarker":null}"#)
+        .unwrap();
+    let output = ListFunctions::new()
+        .parse_loaded(&resp.map(Bytes::from))
+        .expect("valid successful response");
+    assert_eq!(Some("correct-request-id"), output.request_id());
 }

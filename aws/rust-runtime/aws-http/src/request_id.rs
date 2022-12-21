@@ -43,6 +43,12 @@ impl RequestId for operation::Response {
     }
 }
 
+impl<B> RequestId for http::Response<B> {
+    fn request_id(&self) -> Option<&str> {
+        extract_request_id(self.headers())
+    }
+}
+
 impl<O, E> RequestId for Result<O, E>
 where
     O: RequestId,
