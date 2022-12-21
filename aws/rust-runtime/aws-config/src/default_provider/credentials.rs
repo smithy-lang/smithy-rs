@@ -382,7 +382,7 @@ mod test {
         tokio::time::pause();
         let conf = ProviderConfig::no_configuration()
             .with_tcp_connector(BoxCloneService::new(NeverConnected::new()))
-            .with_time_source(TimeSource::real())
+            .with_time_source(TimeSource::default())
             .with_sleep(TokioSleep::new());
         let provider = DefaultCredentialsChain::builder()
             .configure(conf)

@@ -74,13 +74,13 @@ impl ProviderConfig {
     /// Unlike [`ProviderConfig::empty`] where `env` and `fs` will use their non-mocked implementations,
     /// this method will use an empty mock environment and an empty mock file system.
     pub fn no_configuration() -> Self {
-        use aws_credential_types::time_source::ManualTimeSource;
+        use aws_credential_types::time_source::TestingTimeSource;
         use std::collections::HashMap;
         use std::time::UNIX_EPOCH;
         Self {
             env: Env::from_slice(&[]),
             fs: Fs::from_raw_map(HashMap::new()),
-            time_source: TimeSource::manual(&ManualTimeSource::new(UNIX_EPOCH)),
+            time_source: TimeSource::testing(&TestingTimeSource::new(UNIX_EPOCH)),
             connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
