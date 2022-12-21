@@ -37,7 +37,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class AwsEndpointDecorator : ClientCodegenDecorator {
     override val name: String = "AwsEndpoint"
-    override val order: Byte = -100
+    override val order: Byte = 100
 
     override fun transformModel(service: ServiceShape, model: Model): Model {
         val customServices = setOf(
@@ -213,13 +213,13 @@ class EndpointConfigCustomization(
                 *codegenScope,
             )
 
-            ServiceConfig.BuilderBuild -> rust("endpoint_url: self.endpoint_url")
-            ServiceConfig.BuilderStruct -> rust("endpoint_url: Option<String>")
+            ServiceConfig.BuilderBuild -> rust("endpoint_url: self.endpoint_url,")
+            ServiceConfig.BuilderStruct -> rust("endpoint_url: Option<String>,")
             ServiceConfig.ConfigImpl -> {
                 Attribute.AllowDeadCode.render(this)
                 rust("pub(crate) fn endpoint_url(&self) -> Option<&str> { self.endpoint_url.as_deref() }")
             }
-            ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>")
+            ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>,")
             ServiceConfig.ConfigStructAdditionalDocs -> emptySection
             ServiceConfig.Extras -> emptySection
         }

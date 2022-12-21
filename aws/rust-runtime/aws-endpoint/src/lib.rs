@@ -178,8 +178,7 @@ fn smithy_to_aws(value: &SmithyEndpoint) -> Result<EndpointMetadata, Box<dyn Err
         });
     let (_, v4) = auth_schemes
         .clone()
-        .filter(|(name, _doc)| name.as_deref() == Some("sigv4"))
-        .next()
+        .find(|(name, _doc)| name.as_deref() == Some("sigv4"))
         .ok_or_else(|| {
             format!(
                 "No auth schemes were supported. The Rust SDK only supports sigv4. \

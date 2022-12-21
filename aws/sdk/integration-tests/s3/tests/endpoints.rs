@@ -49,6 +49,26 @@ async fn force_path_style() {
 }
 
 #[tokio::test]
+async fn fips() {
+    let (captured_request, client) = test_client(|b| b.use_fips(true));
+    let _ = client.list_objects_v2().bucket("test-bucket").send().await;
+    assert_eq!(
+        captured_request.expect_request().uri().to_string(),
+        "https://test-bucket.s3-fips.us-west-4.amazonaws.com/?list-type=2"
+    );
+}
+
+#[tokio::test]
+async fn dual_stack() {
+    let (captured_request, client) = test_client(|b| b.use_dual_stack(true));
+    let _ = client.list_objects_v2().bucket("test-bucket").send().await;
+    assert_eq!(
+        captured_request.expect_request().uri().to_string(),
+        "https://test-bucket.s3.dualstack.us-west-4.amazonaws.com/?list-type=2"
+    );
+}
+
+#[tokio::test]
 async fn multi_region_access_points() {
     let (_captured_request, client) = test_client(|b| b);
     let response = client
