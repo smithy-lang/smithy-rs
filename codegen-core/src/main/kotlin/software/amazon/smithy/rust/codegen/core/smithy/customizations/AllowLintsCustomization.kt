@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.client.smithy.customizations
+package software.amazon.smithy.rust.codegen.core.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
-val AllowedRustcLints = listOf(
+private val allowedRustcLints = listOf(
     // Deprecated items should be safe to compile, so don't block the compilation.
     "deprecated",
 )
 
-val AllowedClippyLints = listOf(
+private val allowedClippyLints = listOf(
     // Sometimes operations are named the same as our module e.g. output leading to `output::output`.
     "module_inception",
 
@@ -54,16 +54,16 @@ val AllowedClippyLints = listOf(
     // "result_large_err",
 )
 
-val AllowedRustdocLints = listOf(
+private val allowedRustdocLints = listOf(
     // Rust >=1.53.0 requires links to be wrapped in `<link>`. This is extremely hard to enforce for
     // docs that come from the modeled documentation, so we need to disable this lint
     "bare_urls",
 )
 
-class AllowLintsGenerator(
-    private val rustcLints: List<String> = AllowedRustcLints,
-    private val clippyLints: List<String> = AllowedClippyLints,
-    private val rustdocLints: List<String> = AllowedRustdocLints,
+class AllowLintsCustomization(
+    private val rustcLints: List<String> = allowedRustcLints,
+    private val clippyLints: List<String> = allowedClippyLints,
+    private val rustdocLints: List<String> = allowedRustdocLints,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Attributes -> writable {

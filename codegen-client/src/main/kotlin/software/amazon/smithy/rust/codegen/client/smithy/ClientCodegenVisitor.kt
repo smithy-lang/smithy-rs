@@ -70,12 +70,14 @@ class ClientCodegenVisitor(
                 nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
             )
         val baseModel = baselineTransform(context.model)
-        val service = settings.getService(baseModel)
+        val untransformedService = settings.getService(baseModel)
         val (protocol, generator) = ClientProtocolLoader(
-            codegenDecorator.protocols(service.id, ClientProtocolLoader.DefaultProtocols),
-        ).protocolFor(context.model, service)
+            codegenDecorator.protocols(untransformedService.id, ClientProtocolLoader.DefaultProtocols),
+        ).protocolFor(context.model, untransformedService)
         protocolGeneratorFactory = generator
-        model = codegenDecorator.transformModel(service, baseModel)
+        model = codegenDecorator.transformModel(untransformedService, baseModel)
+        // the model transformer _might_ change the service shape
+        val service = settings.getService(model)
         symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)

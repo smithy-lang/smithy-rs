@@ -26,4 +26,4 @@ Smithy introduces a few concepts that are defined here:
 
 4. Generators: A Generator, e.g. `StructureGenerator`, `UnionGenerator` generates more complex Rust code from a Smithy model. Protocol generators pull these individual tools together to generate code for an entire service / protocol.
 
-A developer's view of code generation can be found in [this document](../docs/code_generation.md).
+A developer's view of code generation can be found in [this document](../server/code_generation.md).
