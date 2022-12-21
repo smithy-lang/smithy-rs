@@ -43,7 +43,7 @@ class PythonServerStructureGenerator(
             Attribute(
                 writable {
                     rustInlineTemplate(
-                        "#{pyclass:W}(extends = #{PyException:W})",
+                        "#{pyclass}(extends = #{PyException})",
                         "pyclass" to pyO3.resolve("pyclass"),
                         "PyException" to pyO3.resolve("exceptions::PyException"),
                     )
