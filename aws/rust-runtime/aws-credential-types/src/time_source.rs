@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime};
 
 /// Time source abstraction
 ///
-/// Simple abstraction representing time either real-time or manually-specified
+/// Simple abstraction representing time either real-time or manually-specified for testing
 ///
 /// # Examples
 ///
@@ -24,35 +24,31 @@ use std::time::{Duration, SystemTime};
 /// #     }
 /// # }
 /// use aws_credential_types::time_source::TimeSource;
-/// let time = TimeSource::real();
+/// let time = TimeSource::default();
 /// let client = Client::with_timesource(time);
 /// ```
 #[derive(Debug, Clone)]
 pub struct TimeSource(Inner);
 
 impl TimeSource {
-    /// Creates `TimeSource` from the current system time.
-    pub fn real() -> Self {
-        TimeSource(Inner::Real)
-    }
-
     /// Creates `TimeSource` from the manually specified `time_source`.
-    pub fn manual(time_source: &ManualTimeSource) -> Self {
-        TimeSource(Inner::Manual(time_source.clone()))
+    pub fn testing(time_source: &TestingTimeSource) -> Self {
+        TimeSource(Inner::Testing(time_source.clone()))
     }
 
     /// Returns the current system time based on the mode.
     pub fn now(&self) -> SystemTime {
         match &self.0 {
-            Inner::Real => SystemTime::now(),
-            Inner::Manual(manual) => manual.now(),
+            Inner::Default => SystemTime::now(),
+            Inner::Testing(testing) => testing.now(),
         }
     }
 }
 
 impl Default for TimeSource {
+    /// Creates `TimeSource` from the current system time.
     fn default() -> Self {
-        TimeSource::real()
+        TimeSource(Inner::Default)
     }
 }
 
@@ -70,20 +66,20 @@ impl Default for TimeSource {
 /// #         Client { }
 /// #     }
 /// # }
-/// use aws_credential_types::time_source::{ManualTimeSource, TimeSource};
+/// use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
 /// use std::time::{UNIX_EPOCH, Duration};
-/// let mut time = ManualTimeSource::new(UNIX_EPOCH);
-/// let client = Client::with_timesource(TimeSource::manual(&time));
+/// let mut time = TestingTimeSource::new(UNIX_EPOCH);
+/// let client = Client::with_timesource(TimeSource::testing(&time));
 /// time.advance(Duration::from_secs(100));
 /// ```
 #[derive(Clone, Debug)]
-pub struct ManualTimeSource {
+pub struct TestingTimeSource {
     queries: Arc<Mutex<Vec<SystemTime>>>,
     now: Arc<Mutex<SystemTime>>,
 }
 
-impl ManualTimeSource {
-    /// Creates `ManualTimeSource` with `start_time`.
+impl TestingTimeSource {
+    /// Creates `TestingTimeSource` with `start_time`.
     pub fn new(start_time: SystemTime) -> Self {
         Self {
             queries: Default::default(),
@@ -108,7 +104,7 @@ impl ManualTimeSource {
         self.queries.lock().unwrap()
     }
 
-    /// Returns the current time understood by `ManualTimeSource`.
+    /// Returns the current time understood by `TestingTimeSource`.
     pub fn now(&self) -> SystemTime {
         let ts = *self.now.lock().unwrap();
         self.queries.lock().unwrap().push(ts);
@@ -116,30 +112,33 @@ impl ManualTimeSource {
     }
 }
 
-// In the future, if needed we can add a time source trait, however, the manual time source
+// In the future, if needed we can add a time source trait, however, the testing time source
 // should cover most test use cases.
 #[derive(Debug, Clone)]
 enum Inner {
-    Real,
-    Manual(ManualTimeSource),
+    Default,
+    Testing(TestingTimeSource),
 }
 
 #[cfg(test)]
 mod test {
-    use super::{ManualTimeSource, TimeSource};
+    use super::{TestingTimeSource, TimeSource};
 
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
-    fn ts_works() {
-        let real = TimeSource::real();
+    fn default_time_source_should_not_panic_on_calling_now() {
+        let time_source = TimeSource::default();
         // no panics
-        let _ = real.now();
+        let _ = time_source.now();
+    }
 
-        let mut manual = ManualTimeSource::new(UNIX_EPOCH);
-        let ts = TimeSource::manual(&manual);
-        assert_eq!(ts.now(), UNIX_EPOCH);
-        manual.advance(Duration::from_secs(10));
-        assert_eq!(ts.now(), UNIX_EPOCH + Duration::from_secs(10));
+    #[test]
+    fn testing_time_source_should_behave_as_expected() {
+        let mut testing = TestingTimeSource::new(UNIX_EPOCH);
+        let time_source = TimeSource::testing(&testing);
+        assert_eq!(time_source.now(), UNIX_EPOCH);
+        testing.advance(Duration::from_secs(10));
+        assert_eq!(time_source.now(), UNIX_EPOCH + Duration::from_secs(10));
     }
 }

@@ -291,7 +291,7 @@ mod test {
     use crate::sts::AssumeRoleProvider;
     use aws_credential_types::credential_fn::provide_credentials_fn;
     use aws_credential_types::provider::ProvideCredentials;
-    use aws_credential_types::time_source::{ManualTimeSource, TimeSource};
+    use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
     use aws_credential_types::Credentials;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
@@ -305,7 +305,7 @@ mod test {
         let (server, request) = capture_request(None);
         let provider_conf = ProviderConfig::empty()
             .with_sleep(TokioSleep::new())
-            .with_time_source(TimeSource::manual(&ManualTimeSource::new(
+            .with_time_source(TimeSource::testing(&TestingTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
             )))
             .with_http_connector(DynConnector::new(server));
@@ -342,7 +342,7 @@ mod test {
         ]);
         let provider_conf = ProviderConfig::empty()
             .with_sleep(TokioSleep::new())
-            .with_time_source(TimeSource::manual(&ManualTimeSource::new(
+            .with_time_source(TimeSource::testing(&TestingTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
             )))
             .with_http_connector(DynConnector::new(conn));

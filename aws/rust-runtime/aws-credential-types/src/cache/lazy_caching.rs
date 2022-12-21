@@ -289,7 +289,7 @@ mod tests {
 
     use crate::{
         cache::ProvideCachedCredentials, credential_fn::provide_credentials_fn,
-        provider::error::CredentialsError, time_source::ManualTimeSource, Credentials,
+        provider::error::CredentialsError, time_source::TestingTimeSource, Credentials,
     };
 
     use super::{
@@ -338,13 +338,13 @@ mod tests {
     #[traced_test]
     #[tokio::test]
     async fn initial_populate_credentials() {
-        let time = ManualTimeSource::new(UNIX_EPOCH);
+        let time = TestingTimeSource::new(UNIX_EPOCH);
         let provider = Arc::new(provide_credentials_fn(|| async {
             info!("refreshing the credentials");
             Ok(credentials(1000))
         }));
         let credentials_cache = LazyCredentialsCache::new(
-            TimeSource::manual(&time),
+            TimeSource::testing(&time),
             Arc::new(TokioSleep::new()),
             provider,
             DEFAULT_LOAD_TIMEOUT,
@@ -365,9 +365,9 @@ mod tests {
     #[traced_test]
     #[tokio::test]
     async fn reload_expired_credentials() {
-        let mut time = ManualTimeSource::new(epoch_secs(100));
+        let mut time = TestingTimeSource::new(epoch_secs(100));
         let credentials_cache = test_provider(
-            TimeSource::manual(&time),
+            TimeSource::testing(&time),
             vec![
                 Ok(credentials(1000)),
                 Ok(credentials(2000)),
@@ -388,9 +388,9 @@ mod tests {
     #[traced_test]
     #[tokio::test]
     async fn load_failed_error() {
-        let mut time = ManualTimeSource::new(epoch_secs(100));
+        let mut time = TestingTimeSource::new(epoch_secs(100));
         let credentials_cache = test_provider(
-            TimeSource::manual(&time),
+            TimeSource::testing(&time),
             vec![
                 Ok(credentials(1000)),
                 Err(CredentialsError::not_loaded("failed")),
@@ -414,9 +414,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let time = ManualTimeSource::new(epoch_secs(0));
+        let time = TestingTimeSource::new(epoch_secs(0));
         let credentials_cache = Arc::new(test_provider(
-            TimeSource::manual(&time),
+            TimeSource::testing(&time),
             vec![
                 Ok(credentials(500)),
                 Ok(credentials(1500)),
@@ -458,9 +458,9 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn load_timeout() {
-        let time = ManualTimeSource::new(epoch_secs(100));
+        let time = TestingTimeSource::new(epoch_secs(100));
         let credentials_cache = LazyCredentialsCache::new(
-            TimeSource::manual(&time),
+            TimeSource::testing(&time),
             Arc::new(TokioSleep::new()),
             Arc::new(provide_credentials_fn(|| async {
                 aws_smithy_async::future::never::Never::new().await;
