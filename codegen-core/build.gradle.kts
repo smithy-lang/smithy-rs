@@ -8,7 +8,6 @@ import java.io.ByteArrayOutputStream
 
 plugins {
     kotlin("jvm")
-    id("org.jetbrains.dokka")
     jacoco
     `maven-publish`
 }
@@ -21,7 +20,6 @@ group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
 val smithyVersion: String by project
-val kotestVersion: String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
@@ -31,9 +29,6 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
-    runtimeOnly(project(":rust-runtime"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-    testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
 fun gitCommitHash(): String {
@@ -78,10 +73,6 @@ tasks.compileKotlin {
     dependsOn(generateSmithyRuntimeCrateVersion)
 }
 
-tasks.compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-}
-
 // Reusable license copySpec
 val licenseSpec = copySpec {
     from("${project.rootDir}/LICENSE")
@@ -104,36 +95,44 @@ val sourcesJar by tasks.creating(Jar::class) {
     from(sourceSets.getByName("main").allSource)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-        exceptionFormat = TestExceptionFormat.FULL
-        showCauses = true
-        showExceptions = true
-        showStackTraces = true
-        showStandardStreams = true
+val isTestingEnabled: String by project
+if (isTestingEnabled.toBoolean()) {
+    val kotestVersion: String by project
+
+    dependencies {
+        runtimeOnly(project(":rust-runtime"))
+        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
     }
-}
 
-tasks.dokkaHtml.configure {
-    outputDirectory.set(buildDir.resolve("javadoc"))
-}
-
-// Always build documentation
-tasks["build"].finalizedBy(tasks["dokkaHtml"])
-
-// Configure jacoco (code coverage) to generate an HTML report
-tasks.jacocoTestReport {
-    reports {
-        xml.required.set(false)
-        csv.required.set(false)
-        html.outputLocation.set(file("$buildDir/reports/jacoco"))
+    tasks.compileTestKotlin {
+        kotlinOptions.jvmTarget = "1.8"
     }
-}
 
-// Always run the jacoco test report after testing.
-tasks["test"].finalizedBy(tasks["jacocoTestReport"])
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+            exceptionFormat = TestExceptionFormat.FULL
+            showCauses = true
+            showExceptions = true
+            showStackTraces = true
+            showStandardStreams = true
+        }
+    }
+
+    // Configure jacoco (code coverage) to generate an HTML report
+    tasks.jacocoTestReport {
+        reports {
+            xml.required.set(false)
+            csv.required.set(false)
+            html.outputLocation.set(file("$buildDir/reports/jacoco"))
+        }
+    }
+
+    // Always run the jacoco test report after testing.
+    tasks["test"].finalizedBy(tasks["jacocoTestReport"])
+}
 
 publishing {
     publications {

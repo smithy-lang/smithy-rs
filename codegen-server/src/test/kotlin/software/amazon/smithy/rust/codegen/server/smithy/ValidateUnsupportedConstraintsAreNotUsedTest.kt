@@ -12,6 +12,7 @@ import io.kotest.matchers.collections.shouldHaveAtLeastSize
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -56,7 +57,17 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(model, service)
 
         validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "Operation test#TestOperation takes in input that is constrained"
+
+        // Asserts the exact message, to ensure the formatting is appropriate.
+        validationResult.messages[0].message shouldBe """Operation test#TestOperation takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation exception. You must model this behavior in the operation shape in your model file.
+```smithy
+use smithy.framework#ValidationException
+
+operation TestOperation {
+    ...
+    errors: [..., ValidationException] // <-- Add this.
+}
+```"""
     }
 
     @Test
@@ -120,35 +131,36 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         }
     }
 
+    val constrainedShapesInEventStreamModel =
+        """
+        $baseModel
+
+        structure TestInputOutput {
+            eventStream: EventStream
+        }
+
+        @streaming
+        union EventStream {
+            message: Message,
+            error: Error
+        }
+
+        structure Message {
+            lengthString: LengthString
+        }
+
+        structure Error {
+            @required
+            message: String
+        }
+
+        @length(min: 1)
+        string LengthString
+        """.asSmithyModel()
+
     @Test
     fun `it should detect when constraint traits in event streams are used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                eventStream: EventStream
-            }
-
-            @streaming
-            union EventStream {
-                message: Message,
-                error: Error
-            }
-
-            structure Message {
-                lengthString: LengthString
-            }
-
-            structure Error {
-                @required
-                message: String
-            }
-
-            @length(min: 1)
-            string LengthString
-            """.asSmithyModel()
-        val validationResult = validateModel(EventStreamNormalizer.transform(model))
+        val validationResult = validateModel(EventStreamNormalizer.transform(constrainedShapesInEventStreamModel))
 
         validationResult.messages shouldHaveSize 2
         validationResult.messages.forOne {
@@ -156,15 +168,29 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
                 """
                 The string shape `test#LengthString` has the constraint trait `smithy.api#length` attached.
                 This shape is also part of an event stream; it is unclear what the semantics for constrained shapes in event streams are.
+                Please remove the trait from the shape to synthesize your model.
                 """.trimIndent().replace("\n", " ")
+            it.message shouldNotContain "If you want to go ahead and generate the server SDK ignoring unsupported constraint traits"
         }
         validationResult.messages.forOne {
             it.message shouldContain
                 """
                 The member shape `test#Error${"$"}message` has the constraint trait `smithy.api#required` attached.
                 This shape is also part of an event stream; it is unclear what the semantics for constrained shapes in event streams are.
+                Please remove the trait from the shape to synthesize your model.
                 """.trimIndent().replace("\n", " ")
+            it.message shouldNotContain "If you want to go ahead and generate the server SDK ignoring unsupported constraint traits"
         }
+    }
+
+    @Test
+    fun `it should abort when constraint traits in event streams are used, despite opting into ignoreUnsupportedConstraintTraits`() {
+        val validationResult = validateModel(
+            EventStreamNormalizer.transform(constrainedShapesInEventStreamModel),
+            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+        )
+
+        validationResult.shouldAbort shouldBe true
     }
 
     @Test
@@ -183,7 +209,9 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val validationResult = validateModel(model)
 
         validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached"
+
+        // This test additionally asserts the exact message, to ensure the formatting is appropriate.
+        validationResult.messages[0].message shouldBe "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached. This is not supported in the smithy-rs server SDK. It will be supported in the future. See the tracking issue (https://github.com/awslabs/smithy-rs/issues/1401). If you want to go ahead and generate the server SDK ignoring unsupported constraint traits, set the key `ignoreUnsupportedConstraints` inside the `runtimeConfig.codegenConfig` JSON object in your `smithy-build.json` to `true`."
     }
 
     @Test
