@@ -28,6 +28,7 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -552,12 +553,17 @@ class ServerBuilderGenerator(
                             // Use `unwrap_or_default` to make clippy happy.
                             ".unwrap_or_default()"
                         } else {
-                            val into = if (!member.canReachConstrainedShape(model, symbolProvider)) {
-                                ""
+                            if (!member.canReachConstrainedShape(model, symbolProvider)) {
+                                val unwrapOr = when (model.expectShape(member.target)) {
+                                    is NumberShape, is EnumShape, is BooleanShape -> ".unwrap_or("
+                                    else -> ".unwrap_or_else(||"
+                                }
+                                """$unwrapOr $it)"""
                             } else {
-                                """.try_into().expect("This check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")"""
+                                val into =
+                                    """.try_into().expect("This check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")"""
+                                """.unwrap_or_else(|| $it$into)"""
                             }
-                            """.unwrap_or_else(|| $it$into)"""
                         }
                     }
 
