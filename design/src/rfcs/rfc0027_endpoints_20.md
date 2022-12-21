@@ -13,7 +13,7 @@ This RFC defines how the Rust SDK will integrate with the next generation of end
 Endpoints 2.0 defines a rules language for resolving endpoints. The Rust SDK will code-generate Rust code from this
 intermediate language and use this to create service-specific endpoint resolvers.
 
-Endpoints 2.0 will be a native Smithy feature and be available for vanilla SDKs as well as the AWS SDK.
+Endpoints 2.0 will be a core feature and be available for generic clients as well as the AWS SDK.
 
 <!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
 Terminology
@@ -182,9 +182,9 @@ _Alternative Design_: [Context Aware Endpoint Trait](#context-aware-endpoint-tra
 
 ### New Endpoint Traits
 
-The new endpoint resolution trait and `Endpoint` struct will be Smithy-native. AWS endpoint middleware will pull
-the `Endpoint`
-out of the property bag and read the properties to determine auth/signing + any other AWS metadata that may be required.
+The new endpoint resolution trait and `Endpoint` struct will be available for generic clients. AWS endpoint middleware
+will pull the `Endpoint` out of the property bag and read the properties to determine auth/signing + any other AWS
+metadata that may be required.
 
 An example of the `Endpoint` struct is below. This struct will be in `aws-smithy-types`, however, it should initially be
 gated with documentation warning about stability.
@@ -505,6 +505,7 @@ authentication should be used. The Rust SDK will set `SigningRegion` and `Signin
 as part of `make_operation`.
 
 ### Implementing the rules engine
+
 The Rust SDK code converts the rules into Rust code that will be compiled.
 
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
