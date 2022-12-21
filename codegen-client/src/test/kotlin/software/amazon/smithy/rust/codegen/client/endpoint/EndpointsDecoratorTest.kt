@@ -42,7 +42,15 @@ class EndpointsDecoratorTest {
                 ],
                 "type": "endpoint",
                 "endpoint": {
-                    "url": "https://www.{Region}.example.com"
+                    "url": "https://www.{Region}.example.com",
+                    "properties": {
+                        "first-properties": {
+                            "z-first": "zazz",
+                            "y-second": "bar",
+                            "x-third": "baz"
+                        },
+                        "second-properties": [1,2,3]
+                    }
                 }
             }],
             "parameters": {
@@ -73,6 +81,14 @@ class EndpointsDecoratorTest {
               "expect": {
                 "endpoint": {
                     "url": "https://failingtest.com"
+                    "properties": {
+                        "first-properties": {
+                            "a-first": "zazz",
+                            "b-second": "bar",
+                            "c-third": "baz"
+                        },
+                        "second-properties": [1,2,3]
+                    }
                 }
               }
             }
