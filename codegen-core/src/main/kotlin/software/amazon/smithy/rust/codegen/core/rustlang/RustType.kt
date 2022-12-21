@@ -496,7 +496,6 @@ class Attribute(val inner: Writable) {
 
         fun all(vararg attrMacros: Writable): Writable = macroWithArgs("all", *attrMacros)
 
-        // TODO is there any way to avoid `toTypedArray`?
         fun allow(lints: Collection<String>): Writable = macroWithArgs("allow", *lints.toTypedArray())
         fun allow(vararg lints: String): Writable = macroWithArgs("allow", *lints)
         fun deny(vararg lints: String): Writable = macroWithArgs("deny", *lints)
@@ -507,7 +506,6 @@ class Attribute(val inner: Writable) {
         fun doc(str: String): Writable = macroWithArgs("doc", writable(str))
         fun not(vararg attrMacros: Writable): Writable = macroWithArgs("not", *attrMacros)
 
-        // TODO ensure uses of this are passing args in expected order
         fun deprecated(since: String? = null, note: String? = null): Writable {
             val optionalFields = mutableListOf<Writable>()
             if (!note.isNullOrEmpty()) {
