@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::types::SdkError;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
@@ -30,7 +29,7 @@ async fn api_call_timeout_retries() {
     let conf = SdkConfig::builder()
         .region(Region::new("us-east-2"))
         .http_connector(conn.clone())
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "stub", "stub", None, None, "test",
         )))
         .timeout_config(
@@ -65,7 +64,7 @@ async fn no_retries_on_operation_timeout() {
     let conf = SdkConfig::builder()
         .region(Region::new("us-east-2"))
         .http_connector(conn.clone())
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "stub", "stub", None, None, "test",
         )))
         .timeout_config(

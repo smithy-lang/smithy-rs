@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 class CredentialsCacheDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsCache"
     override val order: Byte = 0
-
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
@@ -44,7 +43,6 @@ class CredentialsCacheDecorator : ClientCodegenDecorator {
 class CredentialCacheConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "cache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache"),
-        "DefaultCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache::CredentialsCache::lazy"),
         "DefaultProvider" to defaultProvider(),
     )
 
@@ -91,7 +89,17 @@ class CredentialCacheConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization(
                 """
                 credentials_cache: self
                     .credentials_cache
-                    .unwrap_or_else(#{DefaultCredentialsCache})
+                    .unwrap_or_else({
+                        let sleep = self.sleep_impl.clone();
+                        || match sleep {
+                            Some(sleep) => {
+                                #{cache}::CredentialsCache::lazy_builder()
+                                    .sleep(sleep)
+                                    .into_credentials_cache()
+                            }
+                            None => #{cache}::CredentialsCache::lazy(),
+                        }
+                    })
                     .create_cache(
                         self.credentials_provider.unwrap_or_else(|| {
                             std::sync::Arc::new(#{DefaultProvider})

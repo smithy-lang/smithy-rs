@@ -4,10 +4,10 @@
  */
 
 use aws_config::SdkConfig;
-use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
 use http::HeaderValue;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn recursion_detection_applied() {
@@ -15,7 +15,7 @@ async fn recursion_detection_applied() {
     std::env::set_var("_X_AMZN_TRACE_ID", "traceid");
     let (conn, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "ANOTREAL",
             "notrealrnrELgWzOk3IfjzDKtFBhDby",
             Some("notarealsessiontoken".to_string()),

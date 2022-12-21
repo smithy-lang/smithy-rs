@@ -4,15 +4,15 @@
  */
 
 use aws_config::SdkConfig;
-use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::{AppName, Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn user_agent_app_name() {
     let (conn, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "ANOTREAL",
             "notrealrnrELgWzOk3IfjzDKtFBhDby",
             Some("notarealsessiontoken".to_string()),

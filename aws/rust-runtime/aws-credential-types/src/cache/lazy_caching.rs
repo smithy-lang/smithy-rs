@@ -161,7 +161,7 @@ mod builder {
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
-        pub fn sleep(mut self, sleep: impl AsyncSleep + 'static) -> Self {
+        pub fn sleep(mut self, sleep: Arc<dyn AsyncSleep>) -> Self {
             self.set_sleep(Some(sleep));
             self
         }
@@ -171,8 +171,8 @@ mod builder {
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
-        pub fn set_sleep(&mut self, sleep: Option<impl AsyncSleep + 'static>) -> &mut Self {
-            self.sleep = sleep.map(|s| Arc::new(s) as Arc<dyn AsyncSleep>);
+        pub fn set_sleep(&mut self, sleep: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
+            self.sleep = sleep;
             self
         }
 

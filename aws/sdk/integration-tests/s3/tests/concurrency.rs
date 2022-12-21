@@ -8,7 +8,6 @@ use std::iter::repeat_with;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -39,7 +38,7 @@ async fn test_concurrency_on_multi_thread_against_dummy_server() {
     let (server, server_addr) = start_agreeable_server().await;
     let _ = tokio::spawn(server);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "ANOTREAL",
             "notrealrnrELgWzOk3IfjzDKtFBhDby",
             Some("notarealsessiontoken".to_string()),
@@ -58,7 +57,7 @@ async fn test_concurrency_on_single_thread_against_dummy_server() {
     let (server, server_addr) = start_agreeable_server().await;
     let _ = tokio::spawn(server);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "ANOTREAL",
             "notrealrnrELgWzOk3IfjzDKtFBhDby",
             Some("notarealsessiontoken".to_string()),

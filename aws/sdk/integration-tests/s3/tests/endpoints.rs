@@ -4,16 +4,16 @@
  */
 
 use aws_config::SdkConfig;
-use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn virtual_hosted_buckets() {
     let (conn, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "ANOTREAL",
             "notrealrnrELgWzOk3IfjzDKtFBhDby",
             Some("notarealsessiontoken".to_string()),
@@ -35,7 +35,7 @@ async fn virtual_hosted_buckets() {
 async fn force_path_style() {
     let (conn, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+        .credentials_provider(Arc::new(Credentials::new(
             "ANOTREAL",
             "notrealrnrELgWzOk3IfjzDKtFBhDby",
             Some("notarealsessiontoken".to_string()),
