@@ -387,9 +387,6 @@ async fn example(read_builder: bool) -> Result<(), Error> {
 }
 ```
 
-## [Use Case Examples](UseCaseExamples)
-
-
 
 Changes checklist
 -----------------
