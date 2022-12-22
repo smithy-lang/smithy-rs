@@ -33,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamUnmarshallTe
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import kotlin.streams.toList
 
 data class TestEventStreamProject(
     val model: Model,
@@ -123,14 +122,11 @@ object EventStreamTestTools {
         val project = TestWorkspace.testProject(symbolProvider)
         val operationSymbol = symbolProvider.toSymbol(operationShape)
         project.withModule(ErrorsModule) {
-            val errors = model.shapes()
-                .filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }
-                .map { it.asStructureShape().get() }
-                .toList()
+            val errors = model.structureShapes.filter { shape -> shape.hasTrait<ErrorTrait>() }
             requirements.renderOperationError(this, model, symbolProvider, operationSymbol, errors)
             requirements.renderOperationError(this, model, symbolProvider, symbolProvider.toSymbol(unionShape), errors)
-            for (shape in model.shapes().filter { shape -> shape is StructureShape && shape.hasTrait<ErrorTrait>() }) {
-                StructureGenerator(model, symbolProvider, this, shape as StructureShape).render(codegenTarget)
+            for (shape in errors) {
+                StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
                 requirements.renderBuilderForShape(this, codegenContext, shape)
             }
         }

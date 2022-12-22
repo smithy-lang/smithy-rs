@@ -21,13 +21,13 @@ use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
 
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
-use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::SigningRegion;
-use aws_types::Credentials;
 use aws_types::SigningService;
 
 type Client<C> = aws_smithy_client::Client<C, DefaultMiddleware>;
