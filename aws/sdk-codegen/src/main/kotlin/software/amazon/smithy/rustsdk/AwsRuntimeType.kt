@@ -41,7 +41,6 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 }
 
 object AwsRuntimeType {
-    val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
     val Presigning by lazy {
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
     }

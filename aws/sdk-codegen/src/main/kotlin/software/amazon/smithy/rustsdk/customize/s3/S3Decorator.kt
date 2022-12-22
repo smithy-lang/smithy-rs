@@ -18,22 +18,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rustsdk.AwsRuntimeType
 import java.util.logging.Logger
 
 /**
@@ -64,17 +56,6 @@ class S3Decorator : ClientCodegenDecorator {
                 (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
             }
         }.let(StripBucketFromHttpPath()::transform)
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations + listOf(S3ParseExtendedRequestId())
-
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations + S3PubUse()
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
@@ -117,35 +98,5 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
                 )
             }
         }
-    }
-}
-
-/**
- * Customizes error parsing logic to add S3's extended request ID to the `aws_smithy_types::error::Error`'s extras.
- */
-class S3ParseExtendedRequestId() : OperationCustomization() {
-    override fun section(section: OperationSection): Writable = writable {
-        when (section) {
-            is OperationSection.PopulateGenericErrorExtras -> {
-                rust(
-                    "${section.builderName} = #T::apply_extended_error(${section.builderName}, ${section.responseName}.headers());",
-                    AwsRuntimeType.S3Errors,
-                )
-            }
-            else -> {}
-        }
-    }
-}
-
-class S3PubUse : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable = when (section) {
-        is LibRsSection.Body -> writable {
-            rust(
-                "pub use #T::ErrorExt;",
-                AwsRuntimeType.S3Errors,
-            )
-        }
-
-        else -> emptySection
     }
 }

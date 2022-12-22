@@ -80,8 +80,7 @@ fn extract_request_id(headers: &HeaderMap<HeaderValue>) -> Option<&str> {
     headers
         .get("x-amzn-requestid")
         .or_else(|| headers.get("x-amz-request-id"))
-        .map(|value| std::str::from_utf8(value.as_bytes()).ok())
-        .flatten()
+        .and_then(|value| value.to_str().ok())
 }
 
 #[cfg(test)]

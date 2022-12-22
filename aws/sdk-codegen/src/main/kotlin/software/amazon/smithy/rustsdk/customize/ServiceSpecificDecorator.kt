@@ -24,8 +24,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCusto
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorCustomization
 
 /** Only apply this decorator to the given service ID */
-fun ClientCodegenDecorator.onlyApplyTo(serviceId: String): ServiceSpecificDecorator =
-    ServiceSpecificDecorator(ShapeId.from(serviceId), this)
+fun ClientCodegenDecorator.onlyApplyTo(serviceId: String): List<ClientCodegenDecorator> =
+    listOf(ServiceSpecificDecorator(ShapeId.from(serviceId), this))
+
+/** Apply the given decorators only to this service ID */
+fun String.applyDecorators(vararg decorators: ClientCodegenDecorator): List<ClientCodegenDecorator> =
+    decorators.map { it.onlyApplyTo(this) }.flatten()
 
 /**
  * Delegating decorator that only applies to a configured service ID
