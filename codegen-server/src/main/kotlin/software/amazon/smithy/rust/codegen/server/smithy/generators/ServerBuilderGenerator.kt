@@ -531,7 +531,6 @@ class ServerBuilderGenerator(
                             rust(".ok_or(ConstraintViolation::${it.name()})?")
                         }
                     }
-
                 }
             }
         }

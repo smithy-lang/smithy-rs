@@ -93,7 +93,7 @@ class ServerBuilderDefaultValuesTest {
         builderGeneratorKind: BuilderGeneratorKind,
         assertValues: Map<String, String?>,
     ) {
-        println("Running test with params = requiredTrait: $requiredTrait, nullDefault: $nullDefault, applyDefaultValues: $applyDefaultValues, builderGeneratorKind: $builderGeneratorKind, assertValues: $assertValues");
+        println("Running test with params = requiredTrait: $requiredTrait, nullDefault: $nullDefault, applyDefaultValues: $applyDefaultValues, builderGeneratorKind: $builderGeneratorKind, assertValues: $assertValues")
         val initialSetValues = this.defaultValues.mapValues { if (nullDefault) null else it.value }
         val model = generateModel(requiredTrait, applyDefaultValues, nullDefault, initialSetValues)
         val symbolProvider = serverTestSymbolProvider(model)
@@ -133,7 +133,7 @@ class ServerBuilderDefaultValuesTest {
                             applyDefaultValues,
                             nullDefault,
                             requiredTrait,
-                            applyDefaultValues
+                            applyDefaultValues,
                         ),
                         "Setters" to setters,
                     )
@@ -345,11 +345,11 @@ class ServerBuilderDefaultValuesTest {
 
             TestConfig(defaultValues, requiredTrait = true, nullDefault = false, applyDefaultValues = true),
             TestConfig(customValues, requiredTrait = true, nullDefault = false, applyDefaultValues = true),
-            ).flatMap { (assertValues, requiredTrait, nullDefault, applyDefaultValues) ->
-                builderGeneratorKindList.stream().map { builderGeneratorKind ->
-                    Arguments.of(requiredTrait, nullDefault, applyDefaultValues, builderGeneratorKind, assertValues)
-                }
+        ).flatMap { (assertValues, requiredTrait, nullDefault, applyDefaultValues) ->
+            builderGeneratorKindList.stream().map { builderGeneratorKind ->
+                Arguments.of(requiredTrait, nullDefault, applyDefaultValues, builderGeneratorKind, assertValues)
             }
+        }
     }
 
     data class TestConfig(
