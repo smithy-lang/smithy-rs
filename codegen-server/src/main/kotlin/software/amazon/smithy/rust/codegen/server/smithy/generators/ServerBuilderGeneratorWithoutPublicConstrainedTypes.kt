@@ -42,7 +42,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
  * when `publicConstrainedTypes` is false.
  */
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
 ) {
     companion object {
@@ -88,6 +88,9 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     )
 
     fun render(writer: RustWriter) {
+        check(!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+            "ServerBuilderGeneratorWithoutPublicConstrainedTypes should only be used when `publicConstrainedTypes` is false"
+        }
         writer.docs("See #D.", structureSymbol)
         writer.withInlineModule(builderSymbol.module()) {
             renderBuilder(this)
@@ -167,7 +170,14 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                     if (member.hasNonNullDefault()) {
                         // 1a. If a `@default` value is modeled and the user did not set a value, fall back to using the
                         // default value.
-                        generateFallbackCodeToDefaultValue(this, member, model, runtimeConfig, symbolProvider)
+                        generateFallbackCodeToDefaultValue(
+                            this,
+                            member,
+                            model,
+                            runtimeConfig,
+                            symbolProvider,
+                            codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                        )
                     } else {
                         // 1b. If the member is `@required` and has no `@default` value, the user must set a value;
                         // otherwise, we fail with a `ConstraintViolation::Missing*` variant.

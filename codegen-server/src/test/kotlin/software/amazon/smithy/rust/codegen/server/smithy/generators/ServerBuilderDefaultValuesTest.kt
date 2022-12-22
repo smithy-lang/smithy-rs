@@ -322,7 +322,6 @@ class ServerBuilderDefaultValuesTest {
     }
 
     private fun testParameters(): Stream<Arguments> {
-        // TODO Use cross-product.
         val builderGeneratorKindList = listOf(
             BuilderGeneratorKind.SERVER_BUILDER_GENERATOR,
             BuilderGeneratorKind.SERVER_BUILDER_GENERATOR_WITHOUT_PUBLIC_CONSTRAINED_TYPES,

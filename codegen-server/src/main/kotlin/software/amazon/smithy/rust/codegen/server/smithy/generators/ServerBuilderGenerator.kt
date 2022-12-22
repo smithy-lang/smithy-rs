@@ -523,7 +523,14 @@ class ServerBuilderGenerator(
                     if (member.hasNonNullDefault()) {
                         // 2a. If a `@default` value is modeled and the user did not set a value, fall back to using the
                         // default value.
-                        generateFallbackCodeToDefaultValue(this, member, model, runtimeConfig, symbolProvider)
+                        generateFallbackCodeToDefaultValue(
+                            this,
+                            member,
+                            model,
+                            runtimeConfig,
+                            symbolProvider,
+                            publicConstrainedTypes,
+                        )
                     } else {
                         // 2b. If the member is `@required` and has no `@default` value, the user must set a value;
                         // otherwise, we fail with a `ConstraintViolation::Missing*` variant.

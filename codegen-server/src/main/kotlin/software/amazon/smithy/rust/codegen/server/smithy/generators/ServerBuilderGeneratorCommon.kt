@@ -39,7 +39,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.hasPublicConstrainedWrapperTupleType
 
 /**
  * Some common freestanding functions shared across:
@@ -60,7 +60,7 @@ fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol) = wri
 }
 
 /**
- * Renders code to fallback to the modeled `@default` value on a [member] shape.
+ * Renders code to fall back to the modeled `@default` value on a [member] shape.
  * The code is expected to be interpolated right after a value of type `Option<T>`, where `T` is the type of the
  * default value.
  */
@@ -70,15 +70,16 @@ fun generateFallbackCodeToDefaultValue(
     model: Model,
     runtimeConfig: RuntimeConfig,
     symbolProvider: RustSymbolProvider,
+    publicConstrainedTypes: Boolean,
 ) {
     val defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
     val targetShape = model.expectShape(member.target)
 
     if (member.isStreaming(model)) {
         writer.rust(".unwrap_or_default()")
-    } else if (targetShape !is EnumShape && member.canReachConstrainedShape(model, symbolProvider)) {
-        // TODO: Instead of panicking here, which will ungracefully shut down the service, potentially
-        //  causing data corruption, perform the `try_into()` check _once_ at service startup time, perhaps
+    } else if (targetShape.hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)) {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2134): Instead of panicking here, which will ungracefully
+        //  shut down the service, perform the `try_into()` check _once_ at service startup time, perhaps
         //  storing the result in a `OnceCell` that could be reused.
         writer.rustTemplate(
             """
