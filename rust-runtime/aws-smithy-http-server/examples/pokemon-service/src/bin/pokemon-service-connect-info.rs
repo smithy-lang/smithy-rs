@@ -5,9 +5,10 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use aws_smithy_http_server::request::connect_info::ConnectInfo;
-#[cfg(feature = "request-id")]
-use aws_smithy_http_server::{request::request_id::ServerRequestId, request::request_id::ServerRequestIdProviderLayer};
+use aws_smithy_http_server::{
+    request::connect_info::ConnectInfo, request::request_id::ServerRequestId,
+    request::request_id::ServerRequestIdProviderLayer,
+};
 use clap::Parser;
 use pokemon_service::{capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing};
 use pokemon_service_server_sdk::{
@@ -55,13 +56,11 @@ pub async fn get_storage_with_local_approved(
     Err(GetStorageError::NotAuthorized(NotAuthorized {}))
 }
 
-#[cfg(feature = "request-id")]
-pub async fn do_nothing(_input: DoNothingInput, server_request_id: ServerRequestId) -> DoNothingOutput {
+pub async fn do_nothing_but_log_request_ids(
+    _input: DoNothingInput,
+    server_request_id: ServerRequestId,
+) -> DoNothingOutput {
     tracing::debug!("This request has this server ID: {}", server_request_id);
-    DoNothingOutput {}
-}
-#[cfg(not(feature = "request-id"))]
-pub async fn do_nothing(_input: DoNothingInput) -> DoNothingOutput {
     DoNothingOutput {}
 }
 
@@ -74,12 +73,11 @@ async fn main() {
         .get_storage(get_storage_with_local_approved)
         .get_server_statistics(get_server_statistics)
         .capture_pokemon(capture_pokemon)
-        .do_nothing(do_nothing)
+        .do_nothing(do_nothing_but_log_request_ids)
         .check_health(check_health)
         .build()
         .expect("failed to build an instance of PokemonService");
 
-    #[cfg(feature = "request-id")]
     let app = app.layer(&ServerRequestIdProviderLayer::new());
 
     // Start the [`hyper::Server`].
