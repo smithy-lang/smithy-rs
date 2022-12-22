@@ -49,6 +49,7 @@
   - [RFC-0024: RequestID](./rfcs/rfc0024_request_id.md)
   - [RFC-0025: Constraint traits](./rfcs/rfc0025_constraint_traits.md)
   - [RFC-0026: Client Crate Organization](./rfcs/rfc0026_client_crate_organization.md)
+  - [RFC-0027: Endpoints 2.0](./rfcs/rfc0027_endpoints_20.md)
   - [RFC-0028: Serialization And Deserialization](./rfcs/rfc0028_serialization_and_deserialization.md)
 
 - [Contributing](./contributing/overview.md)

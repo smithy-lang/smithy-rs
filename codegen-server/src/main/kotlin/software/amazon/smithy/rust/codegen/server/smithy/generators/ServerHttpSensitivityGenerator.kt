@@ -19,7 +19,6 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.plus
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -35,7 +34,7 @@ import java.util.Optional
 /** Models the ways status codes can be bound and sensitive. */
 class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: RuntimeConfig) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
     )
 
     /** Returns the type of the `MakeFmt`. */
@@ -65,7 +64,8 @@ data class GreedyLabel(
 
 /** Models the ways labels can be bound and sensitive. */
 class LabelSensitivity(internal val labelIndexes: List<Int>, internal val greedyLabel: GreedyLabel?, runtimeConfig: RuntimeConfig) {
-    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType())
+    private val codegenScope =
+        arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType())
 
     /** Returns the closure used during construction. */
     fun closure(): Writable = writable {
@@ -117,8 +117,8 @@ sealed class HeaderSensitivity(
     runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "Http" to CargoDependency.Http.toType(),
     )
 
     /** The case where `prefixHeaders` value is not sensitive. */
@@ -192,7 +192,6 @@ sealed class HeaderSensitivity(
                 {
                     |name: &#{Http}::header::HeaderName| {
                         let name_match = #{NameMatch:W};
-
                         #{SuffixAndValue:W}
                         #{SmithyHttpServer}::instrumentation::sensitivity::headers::HeaderMarker { key_suffix, value }
                     }
@@ -219,7 +218,8 @@ sealed class QuerySensitivity(
     val allKeysSensitive: Boolean,
     runtimeConfig: RuntimeConfig,
 ) {
-    private val codegenScope = arrayOf("SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType())
+    private val codegenScope =
+        arrayOf("SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType())
 
     /** The case where the `httpQueryParams` value is not sensitive. */
     class NotSensitiveMapValue(
@@ -307,8 +307,8 @@ class ServerHttpSensitivityGenerator(
     private val runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "Http" to CargoDependency.Http.asType(),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "Http" to CargoDependency.Http.toType(),
     )
 
     /** Constructs `StatusCodeSensitivity` of a `Shape` */

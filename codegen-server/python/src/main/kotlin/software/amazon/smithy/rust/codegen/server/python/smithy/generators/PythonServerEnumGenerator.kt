@@ -5,21 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 
 /**
@@ -28,15 +24,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGe
  * some utility functions like `__str__()` and `__repr__()`.
  */
 class PythonServerEnumGenerator(
-    model: Model,
-    symbolProvider: RustSymbolProvider,
+    codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
-    private val shape: StringShape,
-    enumTrait: EnumTrait,
-    runtimeConfig: RuntimeConfig,
-) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
+    shape: StringShape,
+) : ServerEnumGenerator(codegenContext, writer, shape) {
 
-    private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
+    private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.toType())
 
     override fun render() {
         renderPyClass()
@@ -46,11 +39,6 @@ class PythonServerEnumGenerator(
 
     private fun renderPyClass() {
         Attribute.Custom("pyo3::pyclass", symbols = pyo3Symbols).render(writer)
-    }
-
-    override fun renderFromForStr() {
-        renderPyClass()
-        super.renderFromForStr()
     }
 
     private fun renderPyO3Methods() {

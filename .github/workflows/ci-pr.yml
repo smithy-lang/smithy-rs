@@ -38,6 +38,8 @@ jobs:
   ci:
     needs: acquire-base-image
     uses: ./.github/workflows/ci.yml
+    with:
+      run_sdk_examples: true
 
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:

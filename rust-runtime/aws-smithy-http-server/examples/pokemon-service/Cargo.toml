@@ -19,6 +19,10 @@ path = "src/bin/pokemon-service-tls.rs"
 name = "pokemon-service-lambda"
 path = "src/bin/pokemon-service-lambda.rs"
 
+[[bin]]
+name = "pokemon-service-connect-info"
+path = "src/bin/pokemon-service-connect-info.rs"
+
 [dependencies]
 async-stream = "0.3"
 clap = { version = "~3.2.1", features = ["derive"] }
@@ -28,7 +32,7 @@ tokio = "1.20.1"
 tower = "0.4"
 tower-http = { version = "0.3", features = ["trace"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
 
 # These dependencies are only required for the `pokemon-service-tls` program.
 tls-listener = { version = "0.5.1", features = ["rustls", "hyper-h2"] }
@@ -37,10 +41,10 @@ rustls-pemfile = "1.0.1"
 futures-util = "0.3"
 
 # This dependency is only required for the `pokemon-service-lambda` program.
-lambda_http = "0.6.0"
+lambda_http = "0.7.1"
 
 # Local paths
-aws-smithy-http-server = { path = "../../" }
+aws-smithy-http-server = { path = "../../", features = ["aws-lambda"] }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
 
 [dev-dependencies]
@@ -55,4 +59,5 @@ hyper-rustls = { version = "0.23.0", features = ["http2"] }
 # Local paths
 aws-smithy-client = { path = "../../../aws-smithy-client/", features = ["rustls"] }
 aws-smithy-http = { path = "../../../aws-smithy-http/" }
+aws-smithy-types = { path = "../../../aws-smithy-types/" }
 pokemon-service-client = { path = "../pokemon-service-client/" }

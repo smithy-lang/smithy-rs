@@ -9,6 +9,8 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 hardcoded-credentials = []
+# This feature is to be used only for doc comments
+examples = ["aws-smithy-client/client-hyper", "aws-smithy-client/rustls", "hyper-rustls"]
 
 [dependencies]
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
@@ -18,6 +20,10 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 tracing = "0.1"
 zeroize = "1"
 http = "0.2.6"
+# cargo does not support optional test dependencies, so to completely disable rustls when
+# the native-tls feature is enabled, we need to add the webpki-roots feature here.
+# https://github.com/rust-lang/cargo/issues/1596
+hyper-rustls = { version = "0.23.0", optional = true, features = ["rustls-native-certs", "http2", "webpki-roots"] }
 
 [dev-dependencies]
 futures-util = "0.3.16"

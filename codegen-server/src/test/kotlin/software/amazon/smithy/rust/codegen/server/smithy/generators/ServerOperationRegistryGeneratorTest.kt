@@ -68,7 +68,7 @@ class ServerOperationRegistryGeneratorTest {
 
         val index = TopDownIndex.of(serverCodegenContext.model)
         val operations = index.getContainedOperations(serverCodegenContext.serviceShape).sortedBy { it.id }
-        val protocol = ServerProtocol.fromCoreProtocol(protocolGeneratorFactory.protocol(serverCodegenContext))
+        val protocol = protocolGeneratorFactory.protocol(serverCodegenContext) as ServerProtocol
 
         val generator = ServerOperationRegistryGenerator(serverCodegenContext, protocol, operations)
         val writer = RustWriter.forModule("operation_registry")

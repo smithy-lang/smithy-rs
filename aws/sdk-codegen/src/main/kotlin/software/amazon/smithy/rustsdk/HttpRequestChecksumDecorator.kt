@@ -8,15 +8,12 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -32,17 +29,15 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
         "http_body_checksum", visibility = Visibility.PUBLIC,
         CargoDependency.Http,
         CargoDependency.HttpBody,
-        CargoDependency.SmithyHttp(this),
-        CargoDependency.SmithyChecksums(this),
-        CargoDependency.SmithyTypes(this),
+        CargoDependency.smithyHttp(this),
+        CargoDependency.smithyChecksums(this),
+        CargoDependency.smithyTypes(this),
         CargoDependency.Bytes,
         CargoDependency.Tracing,
-        this.sigAuth(),
-        this.awsHttp(),
     ),
 )
 
-class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
 
@@ -53,9 +48,6 @@ class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientProtocolGenerato
     ): List<OperationCustomization> {
         return baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private fun HttpChecksumTrait.requestAlgorithmMember(
@@ -99,13 +91,13 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             let checksum_algorithm = match checksum_algorithm {
                 Some(algo) => Some(
                     algo.parse::<#{ChecksumAlgorithm}>()
-                    .map_err(|err| #{BuildError}::Other(Box::new(err)))?
+                    .map_err(#{BuildError}::other)?
                 ),
                 None => None,
             };
             """,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to CargoDependency.SmithyChecksums(runtimeConfig).asType().member("ChecksumAlgorithm"),
+            "ChecksumAlgorithm" to RuntimeType.smithyChecksums(runtimeConfig).resolve("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing
@@ -160,7 +152,7 @@ class HttpRequestChecksumCustomization(
                                 operationShape,
                             ),
                             "add_checksum_calculation_to_request" to runtimeConfig.awsInlineableBodyWithChecksum()
-                                .member("add_checksum_calculation_to_request"),
+                                .resolve("add_checksum_calculation_to_request"),
                             "BuildError" to runtimeConfig.operationBuildError(),
                         )
                     }

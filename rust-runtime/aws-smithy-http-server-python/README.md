@@ -13,8 +13,8 @@ instead of the [Hyper](https://hyper.rs/) HTTP server.
 In your `app.py`:
 
 ```diff
-from libpokemon_service_server_sdk import App
-from libpokemon_service_server_sdk.error import ResourceNotFoundException
+from pokemon_service_server_sdk import App
+from pokemon_service_server_sdk.error import ResourceNotFoundException
 
 # ...
 
@@ -44,19 +44,19 @@ FROM public.ecr.aws/lambda/python:3.8-x86_64
 
 # Copy your application code to `LAMBDA_TASK_ROOT`
 COPY app.py ${LAMBDA_TASK_ROOT}
-# When you build your Server SDK for your service you get a shared library
-# that is importable in Python. You need to copy that shared library to same folder
-# with your application code, so it can be imported by your application.
-# Note that you need to build your library for Linux,
-# if you are on a different platform you can consult to
-# https://pyo3.rs/latest/building_and_distribution.html#cross-compiling
-# for cross compiling.
-COPY lib_pokemon_service_server_sdk.so ${LAMBDA_TASK_ROOT}
 
-# You can install your application's dependencies using file `requirements.txt`
-# from your project folder, if you have any.
-# COPY requirements.txt  .
-# RUN  pip3 install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
+# When you build your Server SDK for your service, you will get a Python wheel.
+# You just need to copy that wheel and install it via `pip` inside your image.
+# Note that you need to build your library for Linux, and Python version used to
+# build your SDK should match with your image's Python version.
+# For cross compiling, you can consult to:
+# https://pyo3.rs/latest/building_and_distribution.html#cross-compiling
+COPY wheels/ ${LAMBDA_TASK_ROOT}/wheels
+RUN pip3 install ${LAMBDA_TASK_ROOT}/wheels/*.whl
+
+# You can install your application's other dependencies listed in `requirements.txt`.
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
 # Create a symlink for your application's entrypoint,
 # so we can use `/app.py` to refer it
@@ -68,6 +68,9 @@ RUN ln -s ${LAMBDA_TASK_ROOT}/app.py /app.py
 ENTRYPOINT [ "/var/lang/bin/python3.8" ]
 CMD [ "/app.py" ]
 ```
+
+See [https://docs.aws.amazon.com/lambda/latest/dg/images-create.html#images-create-from-base](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html#images-create-from-base) 
+for more details on building your custom image.
 
 <!-- anchor_start:footer -->
 This crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) and the [smithy-rs](https://github.com/awslabs/smithy-rs) code generator. In most cases, it should not be used directly.

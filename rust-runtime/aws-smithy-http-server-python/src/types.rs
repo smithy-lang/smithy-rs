@@ -286,7 +286,7 @@ impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
 pub struct ByteStream(Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>);
 
 impl futures::stream::Stream for ByteStream {
-    type Item = Result<Bytes, aws_smithy_http::byte_stream::Error>;
+    type Item = Result<Bytes, aws_smithy_http::byte_stream::error::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let stream = self.0.lock();

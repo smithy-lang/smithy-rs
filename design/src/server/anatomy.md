@@ -51,13 +51,14 @@ async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemon
 let get_pokemon_species_op = GetPokemonSpecies::from_handler(get_pokemon_species).layer(/* some `tower::Layer` */);
 
 // Use the service builder to create `PokemonService`.
-let pokemon_service = PokemonService::builder()
+let pokemon_service = PokemonService::builder_without_plugins()
     // Pass the handler directly to the service builder...
     .get_pokemon_species(get_pokemon_species)
     // ...or pass the layered handler.
     .get_pokemon_species_operation(get_pokemon_species_op)
     /* other operation setters */
-    .build();
+    .build()
+    .expect("failed to create an instance of the Pokémon service");
 ```
 
 ## Operations
@@ -111,7 +112,7 @@ impl OperationShape for GetPokemonSpecies {
 
 where `GetPokemonSpeciesInput`, `GetPokemonSpeciesOutput` are both generated from the Smithy structures and `GetPokemonSpeciesError` is an enum generated from the `errors: [ResourceNotFoundException]`.
 
-Note that the `GetPokemonSpecies` marker structure is a zero-sized type (ZST), and therefore does not allocate - only existing in the type system as a way to hang operation specific data on.
+Note that the `GetPokemonSpecies` marker structure is a zero-sized type (ZST), and therefore does not exist at runtime - it is a way to attach operation-specific data on an entity within the type system.
 
 The following nomenclature will aid us in our survey. We describe a `tower::Service` as a "model service" if its request and response are Smithy structures, as defined by the `OperationShape` trait - the `GetPokemonSpeciesInput`, `GetPokemonSpeciesOutput`, and `GetPokemonSpeciesError` described above. Similarly, we describe a `tower::Service` as a "HTTP service" if its request and response are [`http`](https://github.com/hyperium/http) structures - `http::Request` and `http::Response`.
 
@@ -203,7 +204,7 @@ impl<S, L> Operation<S, L> {
 }
 ```
 
-where [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) is used to chains layers together.
+where [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) is used to chain layers together.
 
 A typical use of this might be:
 
@@ -271,7 +272,7 @@ stateDiagram-v2
     into_response --> [*]: HTTP Response
 ```
 
-This is formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L76-L84) HTTP service. The `tower::Service` implementation is approximately:
+This is formalized by the [`Upgrade<Protocol, Op, S>`](https://github.com/awslabs/smithy-rs/blob/9a6de1f533f8743dbbc3fa6ad974d104c8b841f4/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L74-L82) HTTP service. The `tower::Service` implementation is approximately:
 
 ```rust
 impl<P, Op, S> Service<http::Request> for Upgrade<P, Op, S>
@@ -318,40 +319,13 @@ stateDiagram-v2
 
 Note that the `S` and `L` are specified by logic written, in Rust, by the customer, whereas `Upgrade`/`UpgradeLayer` is specified entirely by Smithy model via the protocol, [HTTP bindings](https://awslabs.github.io/smithy/2.0/spec/http-bindings.html), etc.
 
-The procedure of taking a struct and transforming it into a HTTP service is formalized by the [`Upgradable`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L222-L229) trait:
+The procedure of taking a struct and transforming it into a HTTP service is formalized by the [`Upgradable`](https://github.com/awslabs/smithy-rs/blob/9a6de1f533f8743dbbc3fa6ad974d104c8b841f4/rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs#L220-L225) trait:
 
 ```rust
-impl<P, Op, S, L> Upgradable<P, Op> for Operation<S, L>
-where
-    // `Op` is used to specify the operation shape
-    Op: OperationShape,
-
-    // Smithy input must convert from a HTTP request
-    Op::Input: FromRequest<P>,
-    // Smithy output must convert into a HTTP response
-    Op::Output: IntoResponse<P>,
-    // Smithy error must convert into a HTTP response
-    Op::Error: IntoResponse<P>,
-
-    // The signature of the inner service is correct
-    S: Service<Op::Input, Response = Op::Output, Error = Op::Error> + Clone,
-
-    // The modified Layer applies correctly to `Upgrade<P, Op, S>`
-    L: Layer<Upgrade<P, Op, S>>,
-
-    // The signature of the output is correct
-    L::Service: Service<http::Request<B>, Response = http::Response<BoxBody>>,
-{
-    type Service = L::Service;
-
-    /// Takes the [`Operation<S, L>`](Operation), then applies [`UpgradeLayer`] to `S`, then finally applies the `L`.
-    ///
-    /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self) -> Self::Service {
-        let Operation { inner, layer } = self;
-        let layer = Stack::new(UpgradeLayer::new(), layer);
-        layer.layer(inner)
-    }
+/// An interface to convert a representation of a Smithy operation into a [`Route`].
+pub trait Upgradable<Protocol, Operation> {
+    /// Upgrade the representation of a Smithy operation to a [`Route`].
+    fn upgrade(self, plugin: &Plugin) -> Route<Body>;
 }
 ```
 
@@ -365,14 +339,13 @@ Below we give an example of a ZST which can be provided to the builder, which al
 /// This _does_ implement [`Upgradable`] but produces a [`Service`] which always returns an internal failure message.
 pub struct FailOnMissingOperation;
 
-impl<P, Op, B> Upgradable<P, Op> for FailOnMissingOperation
+impl<Protocol, Operation> Upgradable<Protocol, Operation> for FailOnMissingOperation
 where
-    InternalFailureException: IntoResponse<P>,
+    InternalFailureException: IntoResponse<Protocol>,
+    Protocol: 'static,
 {
-    type Service = MissingFailure<P>;
-
-    fn upgrade(self, _plugin: &Pl) -> Self::Service {
-        MissingFailure { _protocol: PhantomData }
+    fn upgrade(self, _plugin: &Plugin) -> Route<Body> {
+        Route::new(MissingFailure { _protocol: PhantomData })
     }
 }
 ```
@@ -452,179 +425,79 @@ state in <<fork>>
 
 ## Builders
 
-The service builder is the primary public API, it can be generated for every [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html). At a high-level, the purpose of a service builder is to take a function for each Smithy Operation, whose signature is constrained by the Smithy model, and produce a single HTTP service.
+The service builder is the primary public API, generated for every [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html).
+At a high-level, the service builder takes as input a function for each Smithy Operation and returns a single HTTP service. The signature of each function, also known as _handlers_, must match the constraints of the corresponding Smithy model.
+
+You can create an instance of a service builder by calling either `builder_without_plugins` or `builder_with_plugins` on the corresponding service struct.
+
+> Plugins? What plugins? Don't worry, they'll be covered in a [dedicated section](#plugins) later on!
 
 ```rust
 /// The service builder for [`PokemonService`].
 ///
 /// Constructed via [`PokemonService::builder`].
-pub struct PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
-    capture_pokemon_operation: Op1,
-    empty_operation: Op2,
-    get_pokemon_species: Op3,
-    get_server_statistics: Op4,
-    get_storage: Op5,
-    health_check_operation: Op6,
+pub struct PokemonServiceBuilder<Body, Plugin> {
+    capture_pokemon_operation: Option<Route<Body>>,
+    empty_operation: Option<Route<Body>>,
+    get_pokemon_species: Option<Route<Body>>,
+    get_server_statistics: Option<Route<Body>>,
+    get_storage: Option<Route<Body>>,
+    health_check_operation: Option<Route<Body>>,
+    plugin: Plugin
 }
 ```
 
-The builder has one generic type parameter for each [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) in the [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service). Each setter switches the type of the `Op{N}` type parameter:
+The builder has two setter methods for each [Smithy Operation](https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation) in the [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html#service):
 
 ```rust
+    /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
+    ///
+    /// This should be an async function satisfying the [`Handler`](aws_smithy_http_server::operation::Handler) trait.
+    /// See the [operation module documentation](aws_smithy_http_server::operation) for more information.
+    pub fn get_pokemon_species<HandlerType, Extensions>(
+        self,
+        handler: HandlerType,
+    ) -> Self
+    where
+        HandlerType: Handler<GetPokemonSpecies, Extensions>,
+        Operation<IntoService<GetPokemonSpecies, HandlerType>>:
+            Upgradable<RestJson1, GetPokemonSpecies, Extensions, Body, Plugin>,
+    {
+        self.get_pokemon_species_operation(GetPokemonSpecies::from_handler(handler))
+    }
+
     /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
     ///
     /// This should be an [`Operation`](aws_smithy_http_server::operation::Operation) created from
     /// [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) using either
     /// [`OperationShape::from_handler`](aws_smithy_http_server::operation::OperationShapeExt::from_handler) or
     /// [`OperationShape::from_service`](aws_smithy_http_server::operation::OperationShapeExt::from_service).
-    pub fn get_pokemon_species_operation<NewOp>(
+    pub fn get_pokemon_species_operation<Operation, Extensions>(
         self,
-        value: NewOp,
-    ) -> PokemonServiceBuilder<
-        Op1,
-        Op2,
-        NewOp,
-        Op4,
-        Op5,
-        Op6,
-    > {
-        PokemonServiceBuilder {
-            capture_pokemon_operation: self.capture_pokemon_operation,
-            empty_operation: self.empty_operation,
-            get_pokemon_species: value,
-            get_server_statistics: self.get_server_statistics,
-            get_storage: self.get_storage,
-            health_check_operation: self.health_check_operation,
-        }
-    }
-
-    /// Sets the [`GetPokemonSpecies`](crate::operation_shape::GetPokemonSpecies) operation.
-    ///
-    /// This should be an async function satisfying the [`Handler`](aws_smithy_http_server::operation::Handler) trait.
-    /// See the [operation module documentation](aws_smithy_http_server::operation) for more information.
-    pub fn get_pokemon_species<H, NewExts>(
-        self,
-        value: H,
-    ) -> PokemonServiceBuilder<
-        Op1,
-        Op2,
-        Operation<IntoService<GetPokemonSpecies, H>>,
-        Op4,
-        Op5,
-        Op6,
-    >
+        operation: Operation,
+    ) -> Self
     where
-        H: Handler<GetPokemonSpecies>,
+        Operation: Upgradable<RestJson1, GetPokemonSpecies, Extensions, Body, Plugin>,
     {
-        self.get_pokemon_species_operation(GetPokemonSpecies::from_handler(value))
+        self.get_pokemon_species = Some(operation.upgrade(&self.plugin))
     }
 ```
 
-To finalize the build and construct the complete service, `PokemonService`, each builder has a `build` method whose bounds list out all the requirements for composition:
+Handlers and operations are upgraded to a [`Route`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52) as soon as they are registered against the service builder. You can think of `Route` as a boxing layer in disguise.
 
-```rust
-    /// Constructs a [`PokemonService`] from the arguments provided to the builder.
-    pub fn build(self) -> PokemonService<Route>
-    where
-        Op1: Upgradable<RestJson1, CheckHealth>,
-        Op1::Service: tower::Service<http::Request, Error = Infallible>,
+You can transform a builder instance into a complete service (`PokemonService`) using one of the following methods:
 
-        Op2: Upgradable<RestJson1, DoNothing>,
-        Op2::Service: tower::Service<http::Request, Error = Infallible>,
+- `build`. The transformation fails if one or more operations do not have a registered handler;
+- `build_unchecked`. The transformation never fails, but we return `500`s for all operations that do not have a registered handler.
 
-        /* ... */
+Both builder methods take care of:
 
-        Op6: Upgradable<RestJson1, GetStorage>,
-        Op6::Service: tower::Service<http::Request, Error = Infallible>,
-```
+1. Pair each handler with the routing information for the corresponding operation;
+2. Collect all `(routing_info, handler)` pairs into a `Router`;
+3. Transform the `Router` implementation into a HTTP service via `RouterService`;
+4. Wrap the `RouterService` in a newtype given by the service name, `PokemonService`.
 
-Notice the general form: `Op{N}` must upgrade to a HTTP service.
-
-We provide two builder constructors:
-
-```rust
-    /// Constructs a builder for [`PokemonService`].
-    pub fn builder() -> PokemonServiceBuilder<
-        MissingOperation,
-        MissingOperation,
-        MissingOperation,
-        MissingOperation,
-        MissingOperation,
-        MissingOperation,
-    > {
-        PokemonServiceBuilder {
-            check_health: MissingOperation,
-            do_nothing: MissingOperation,
-            get_pokemon_species: MissingOperation,
-            get_server_statistics: MissingOperation,
-            capture_pokemon: MissingOperation,
-            get_storage: MissingOperation,
-        }
-    }
-
-    /// Constructs an unchecked builder for [`PokemonService`].
-    ///
-    /// This will not enforce that all operations are set, however if an unset operation is used at runtime
-    /// it will return status code 500 and log an error.
-    pub fn unchecked_builder() -> PokemonServiceBuilder<
-        FailOnMissingOperation,
-        FailOnMissingOperation,
-        FailOnMissingOperation,
-        FailOnMissingOperation,
-        FailOnMissingOperation,
-        FailOnMissingOperation,
-    > {
-        PokemonServiceBuilder {
-            check_health: FailOnMissingOperation,
-            do_nothing: FailOnMissingOperation,
-            get_pokemon_species: FailOnMissingOperation,
-            get_server_statistics: FailOnMissingOperation,
-            capture_pokemon: FailOnMissingOperation,
-            get_storage: FailOnMissingOperation,
-        }
-    }
-```
-
-The `builder` constructor provides a `PokemonServiceBuilder` where `build` cannot be called until all operations are set because `MissingOperation` purposefully doesn't implement `Upgradable`. In contrast, the `unchecked_builder` which sets all `Op{N}` to `FailOnMissingOperation` can be immediately built, however any unset operations are upgraded into a service which always returns status code 500, as noted in [Upgrading a Model Service](#upgrading-a-model-service).
-
-The build method then proceeds as follows:
-
-1. Upgrade all `Op{N}` to a HTTP service via their `Upgradable::upgrade` method.
-2. Type erase them via [`Route`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52) (basically amounts to `Box`ing them).
-3. Pair each of them with their routing information and collect them all into a `Router`.
-4. Transform the `Router` implementation into a HTTP service via `RouterService`.
-5. Wrap the `RouterService` in a newtype given by the service name, `PokemonService`.
-
-```rust
-    /// Constructs a [`PokemonService`] from the arguments provided to the builder.
-    pub fn build(self) -> PokemonService<Route>
-    where
-        Op1: Upgradable<RestJson1, CheckHealth>,
-        Op1::Service: tower::Service<http::Request, Error = Infallible>,
-
-        Op2: Upgradable<RestJson1, DoNothing>,
-        Op2::Service: tower::Service<http::Request, Error = Infallible>,
-
-        /* ... */
-{
-    let router = RestRouter::from_iter([
-        (
-            /* `CheckHealth` (Op1) routing information */,
-            Route::new(self.check_health.upgrade())
-        ),
-        (
-            /* `DoNothing` (Op2) routing information */,
-            Route::new(self.do_nothing.upgrade())
-        ),
-        /* ... */
-    ]);
-    PokemonService {
-        router: RoutingService::new(router)
-    }
-}
-```
-
-where
+The final outcome, an instance of `PokemonService`, looks roughly like this:
 
 ```rust
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
@@ -710,18 +583,15 @@ impl<S> PokemonService<S> {
 }
 ```
 
-The plugin system solves the general problem of modifying `Operation<S, L>` prior to the upgrade procedure in a way parameterized by the protocol and operation marker structures. This parameterization removes the excessive boiler plate above.
+The plugin system solves the general problem of modifying `Operation<S, L>` prior to the upgrade procedure in a way parameterized by the protocol and operation marker structures. This parameterization removes the excessive boilerplate above.
 
 The central trait is [`Plugin`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L31-L41):
 
 ```rust
 /// A mapping from one [`Operation`] to another. Used to modify the behavior of
-/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder,
+/// [`Upgradable`](crate::operation::Upgradable) and therefore the resulting service builder.
 ///
 /// The generics `Protocol` and `Op` allow the behavior to be parameterized.
-///
-/// Every service builder enjoys [`Pluggable`] and therefore can be provided with a [`Plugin`] using
-/// [`Pluggable::apply`].
 pub trait Plugin<Protocol, Op, S, L> {
     type Service;
     type Layer;
@@ -738,10 +608,10 @@ The `Upgradable::upgrade` method on `Operation<S, L>`, previously presented in [
     /// the modified `S`, then finally applies the modified `L`.
     ///
     /// The composition is made explicit in the method constraints and return type.
-    fn upgrade(self, plugin: &Pl) -> Self::Service {
-        let Operation { inner, layer } = plugin.map(self);
-        let layer = Stack::new(UpgradeLayer::new(), layer);
-        layer.layer(inner)
+    fn upgrade(self, plugin: &Pl) -> Route<B> {
+        let mapped = plugin.map(self);
+        let layer = Stack::new(UpgradeLayer::new(), mapped.layer);
+        Route::new(layer.layer(mapped.inner))
     }
 ```
 
@@ -780,73 +650,46 @@ stateDiagram-v2
 
 An example `Plugin` implementation can be found in [aws-smithy-http-server/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/plugin.rs).
 
-The service builder implements the [`Pluggable`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/plugin.rs#L8-L29) trait, which allows them to apply plugins to service builders:
+The service builder API requires plugins to be specified upfront - they must be passed as an argument to `builder_with_plugins` and cannot be modified afterwards.
+This constraint is in place to ensure that all handlers are upgraded using the same set of plugins.
+
+You might find yourself wanting to apply _multiple_ plugins to your service.
+This can be accommodated via [`PluginPipeline`].
 
 ```rust
-/// Provides a standard interface for applying [`Plugin`]s to a service builder. This is implemented automatically for
-/// all builders.
-///
-/// As [`Plugin`]s modify the way in which [`Operation`]s are [`upgraded`](crate::operation::Upgradable) we can use
-/// [`Pluggable`] as a foundation to write extension traits which are implemented for all service builders.
-///
-/// # Example
-///
-/// ```
-/// # struct PrintPlugin;
-/// # use aws_smithy_http_server::plugin::Pluggable;
-/// trait PrintExt: Pluggable<PrintPlugin> {
-///     fn print(self) -> Self::Output where Self: Sized {
-///         self.apply(PrintPlugin)
-///     }
-/// }
-///
-/// impl<Builder> PrintExt for Builder where Builder: Pluggable<PrintPlugin> {}
-/// ```
-pub trait Pluggable<NewPlugin> {
-    type Output;
+use aws_smithy_http_server::plugin::PluginPipeline;
+# use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+# use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 
-    /// Applies a [`Plugin`] to the service builder.
-    fn apply(self, plugin: NewPlugin) -> Self::Output;
-}
+let pipeline = PluginPipeline::new().push(LoggingPlugin).push(MetricsPlugin);
 ```
 
-As seen in the `Pluggable` documentation, third-parties can use extension traits over `Pluggable` to extend the API of builders. In addition to all the `Op{N}` the service builder also holds a `Pl`:
+The plugins' runtime logic is executed in registration order.
+In the example above, `LoggingPlugin` would run first, while `MetricsPlugin` is executed last.
+
+If you are vending a plugin, you can leverage `PluginPipeline` as an extension point: you can add custom methods to it using an extension trait.
+For example:
 
 ```rust
-/// The service builder for [`PokemonService`].
-///
-/// Constructed via [`PokemonService::builder`].
-pub struct PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Pl> {
-    capture_pokemon_operation: Op1,
-    empty_operation: Op2,
-    get_pokemon_species: Op3,
-    get_server_statistics: Op4,
-    get_storage: Op5,
-    health_check_operation: Op6,
+use aws_smithy_http_server::plugin::{PluginPipeline, PluginStack};
+# use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+# use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
 
-    plugin: Pl
+pub trait AuthPluginExt<CurrentPlugins> {
+    fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>>;
 }
-```
 
-which allows the following `Pluggable` implementation to be generated:
-
-```rust
-impl<Op1, Op2, /* ... */, Pl, NewPl> Pluggable<NewPl> for PokemonServiceBuilder<Op1, Op2, /* ... */, Pl>
-{
-    type Output = PokemonServiceBuilder<Op1, Exts1, PluginStack<Pl, NewPl>>;
-    fn apply(self, plugin: NewPl) -> Self::Output {
-        PokemonServiceBuilder {
-            capture_pokemon_operation: self.capture_pokemon_operation,
-            empty_operation: self.empty_operation,
-            /* ... */,
-
-            plugin: PluginStack::new(self.plugin, plugin),
-        }
+impl<CurrentPlugins> AuthPluginExt<CurrentPlugins> for PluginPipeline<CurrentPlugins> {
+    fn with_auth(self) -> PluginPipeline<PluginStack<AuthPlugin, CurrentPlugins>> {
+        self.push(AuthPlugin)
     }
 }
-```
 
-Here `PluginStack` works in a similar way to [`tower::layer::util::Stack`](https://docs.rs/tower/latest/tower/layer/util/struct.Stack.html) - allowing users to stack a new plugin rather than replacing the currently set one.
+let pipeline = PluginPipeline::new()
+    .push(LoggingPlugin)
+    // Our custom method!
+    .with_auth();
+```
 
 ## Accessing Unmodelled Data
 
@@ -858,6 +701,7 @@ use http::request::Parts;
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the
 /// [`Parts`], in contrast to [`FromRequest`].
 pub trait FromParts<Protocol>: Sized {
+    /// The type of the failures yielded extraction attempts.
     type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.

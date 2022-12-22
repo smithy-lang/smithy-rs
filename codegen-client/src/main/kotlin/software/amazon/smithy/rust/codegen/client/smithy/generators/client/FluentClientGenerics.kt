@@ -28,7 +28,7 @@ interface FluentClientGenerics {
     val bounds: Writable
 
     /** Bounds for generated `send()` functions */
-    fun sendBounds(operation: Symbol, output: Symbol, error: RuntimeType, retryClassifier: RuntimeType): Writable
+    fun sendBounds(operation: Symbol, operationOutput: Symbol, operationError: RuntimeType, retryClassifier: RuntimeType): Writable
 
     /** Convert this `FluentClientGenerics` into the more general `RustGenerics` */
     fun toRustGenerics(): RustGenerics
@@ -90,9 +90,9 @@ data class FlexibleClientGenerics(
     }
 
     override fun toRustGenerics(): RustGenerics = RustGenerics(
-        GenericTypeArg("C", client.member("bounds::SmithyConnector")),
-        GenericTypeArg("M", client.member("bounds::SmithyMiddleware<C>")),
-        GenericTypeArg("R", client.member("retry::NewRequestPolicy")),
+        GenericTypeArg("C", client.resolve("bounds::SmithyConnector")),
+        GenericTypeArg("M", client.resolve("bounds::SmithyMiddleware<C>")),
+        GenericTypeArg("R", client.resolve("retry::NewRequestPolicy")),
     )
 
     private fun defaultType(default: RuntimeType?) = writable {

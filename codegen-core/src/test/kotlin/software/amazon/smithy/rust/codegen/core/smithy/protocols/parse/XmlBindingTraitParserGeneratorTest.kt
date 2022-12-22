@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbolFn
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -53,7 +54,9 @@ internal class XmlBindingTraitParserGeneratorTest {
 
             top: Top,
 
-            blob: Blob
+            blob: Blob,
+
+            unit: Unit,
         }
 
         @enum([{name: "FOO", value: "FOO"}])
@@ -96,6 +99,7 @@ internal class XmlBindingTraitParserGeneratorTest {
         val parserGenerator = XmlBindingTraitParserGenerator(
             codegenContext,
             RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
+            builderSymbolFn(symbolProvider),
         ) { _, inner -> inner("decoder") }
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))

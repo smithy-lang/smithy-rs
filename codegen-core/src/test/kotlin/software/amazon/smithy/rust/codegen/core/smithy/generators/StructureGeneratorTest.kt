@@ -13,10 +13,10 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -100,20 +100,21 @@ class StructureGeneratorTest {
 
     @Test
     fun `generate structures with public fields`() {
+        val project = TestWorkspace.testProject()
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.root()
-        writer.rust("##![allow(deprecated)]")
-        writer.withModule(RustModule.public("model")) {
+
+        project.lib { rust("##![allow(deprecated)]") }
+        project.withModule(ModelsModule) {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
             innerGenerator.render()
         }
-        writer.withModule(RustModule.public("structs")) {
+        project.withModule(RustModule.public("structs")) {
             val generator = StructureGenerator(model, provider, this, struct)
             generator.render()
         }
         // By putting the test in another module, it can't access the struct
         // fields if they are private
-        writer.withModule(RustModule.public("inline")) {
+        project.unitTest {
             raw("#[test]")
             rustBlock("fn test_public_fields()") {
                 write(
@@ -124,7 +125,7 @@ class StructureGeneratorTest {
                 )
             }
         }
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     @Test
@@ -179,15 +180,16 @@ class StructureGeneratorTest {
                nested2: Inner
         }""".asSmithyModel()
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.root()
-        writer.docs("module docs")
-        Attribute.Custom("deny(missing_docs)").render(writer)
-        writer.withModule(RustModule.public("model")) {
+        val project = TestWorkspace.testProject(provider)
+        project.lib {
+            Attribute.Custom("deny(missing_docs)").render(this)
+        }
+        project.withModule(ModelsModule) {
             StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
             StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
         }
 
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     @Test
@@ -224,9 +226,9 @@ class StructureGeneratorTest {
             structure Qux {}
         """.asSmithyModel()
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.root()
-        writer.rust("##![allow(deprecated)]")
-        writer.withModule(RustModule.public("model")) {
+        val project = TestWorkspace.testProject(provider)
+        project.lib { rust("##![allow(deprecated)]") }
+        project.withModule(ModelsModule) {
             StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Baz")).render()
@@ -234,7 +236,7 @@ class StructureGeneratorTest {
         }
 
         // turn on clippy to check the semver-compliant version of `since`.
-        writer.compileAndTest(clippy = true)
+        project.compileAndTest(runClippy = true)
     }
 
     @Test
@@ -257,15 +259,15 @@ class StructureGeneratorTest {
             structure Bar {}
         """.asSmithyModel()
         val provider = testSymbolProvider(model)
-        val writer = RustWriter.root()
-        writer.rust("##![allow(deprecated)]")
-        writer.withModule(RustModule.public("model")) {
+        val project = TestWorkspace.testProject(provider)
+        project.lib { rust("##![allow(deprecated)]") }
+        project.withModule(ModelsModule) {
             StructureGenerator(model, provider, this, model.lookup("test#Nested")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
             StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
         }
 
-        writer.compileAndTest()
+        project.compileAndTest()
     }
 
     @Test

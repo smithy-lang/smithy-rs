@@ -21,11 +21,9 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -44,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
@@ -93,15 +92,15 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     private val target = codegenContext.target
     private val serviceShape = codegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
-    private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
-    private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
+    private val smithyQuery = RuntimeType.smithyQuery(runtimeConfig)
     private val serdeUtil = SerializerUtil(model)
     private val codegenScope = arrayOf(
         "String" to RuntimeType.String,
         "Error" to serializerError,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "QueryWriter" to smithyQuery.member("QueryWriter"),
-        "QueryValueWriter" to smithyQuery.member("QueryValueWriter"),
+        "QueryWriter" to smithyQuery.resolve("QueryWriter"),
+        "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
     )
     private val operationSerModule = RustModule.private("operation_ser")
     private val querySerModule = RustModule.private("query_ser")
@@ -152,6 +151,21 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     }
 
     private fun RustWriter.serializeStructure(context: Context<StructureShape>) {
+        // We proceed with the rest of the method only when context.shape.members() is nonempty.
+        // If it were empty, the method would generate the following code:
+        //   #[allow(unused_mut)]
+        //   pub fn serialize_structure_crate_model_unit(
+        //       mut writer: aws_smithy_query::QueryValueWriter,
+        //       input: &crate::model::Unit,
+        //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+        //       let (_, _) = (writer, input);
+        //       Ok(())
+        //   }
+        // However, this would cause a compilation error at a call site because it cannot
+        // extract data out of the Unit type that corresponds to the variable "input" above.
+        if (context.shape.members().isEmpty()) {
+            return
+        }
         val fnName = symbolProvider.serializeFunctionName(context.shape)
         val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = RuntimeType.forInlineFun(fnName, querySerModule) {
@@ -161,9 +175,6 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 "Input" to structureSymbol,
                 *codegenScope,
             ) {
-                if (context.shape.members().isEmpty()) {
-                    rust("let (_, _) = (writer, input);") // Suppress unused argument warnings
-                }
                 serializeStructureInner(context)
                 rust("Ok(())")
             }
@@ -219,16 +230,16 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number"),
+                    smithyTypes.resolve("Number"),
                 )
             }
             is BlobShape -> rust(
                 "$writer.string(&#T(${value.name}));",
-                RuntimeType.Base64Encode(runtimeConfig),
+                RuntimeType.base64Encode(runtimeConfig),
             )
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 rust("$writer.date_time(${value.name}, #T)?;", timestampFormatType)
             }
             is CollectionShape -> serializeCollection(context, Context(writer, context.valueExpression, target))
@@ -312,8 +323,12 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             ) {
                 rustBlock("match input") {
                     for (member in context.shape.members()) {
-                        val variantName = symbolProvider.toMemberName(member)
-                        withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
+                        val variantName = if (member.isTargetUnit()) {
+                            "${symbolProvider.toMemberName(member)}"
+                        } else {
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                        withBlock("#T::$variantName => {", "},", unionSymbol) {
                             serializeMember(
                                 MemberContext.unionMember(
                                     context.copy(writerExpression = "writer"),

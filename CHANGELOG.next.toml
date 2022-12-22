@@ -11,53 +11,58 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[smithy-rs]]
-message = "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This architecture cannot compile `ring`, so the implementation has been updated to rely on `hamc` + `sha2` to achive the same result with broader platform compatibility and higher performance. We also updated the CI which is now running as many tests as possible against i686 and PowerPC 32 and 64 bit."
-references = ["smithy-rs#1847"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "crisidev"
+[[aws-sdk-rust]]
+message = """Integrate Endpoints 2.0 into the Rust SDK. Endpoints 2.0 enables features like S3 virtual addressing & S3
+object lambda. As part of this change, there are several breaking changes although efforts have been made to deprecate
+where possible to smooth the upgrade path.
+1. `aws_smithy_http::endpoint::Endpoint` and the `endpoint_resolver` methods have been deprecated. In general, these usages
+   should be replaced with usages of `endpoint_url` instead. `endpoint_url` accepts a string so an `aws_smithy_http::Endpoint`
+   does not need to be constructed. This structure and methods will be removed in a future release.
+2. The `endpoint_resolver` method on `<service>::config::Builder` now accepts a service specific endpoint resolver instead
+   of an implementation of `ResolveAwsEndpoint`. Most users will be able to replace these usages with a usage of `endpoint_url`.
+3. `ResolveAwsEndpoint` has been deprecated and will be removed in a future version of the SDK.
+4. The SDK does not support "pseudo regions" anymore. Specifically, regions like `iam-fips` will no longer resolve to a FIPS endpoint.
+"""
+references = ["smithy-rs#1784", "smithy-rs#2074"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Add test to exercise excluded headers in aws-sigv4."
-references = ["smithy-rs#1890"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "ysaito1001"
+message = """Add additional configuration parameters to `aws_sdk_s3::Config`.
 
-[[aws-sdk-rust]]
-message = "Support Sigv4 signature generation on PowerPC 32 and 64 bit. This architecture cannot compile `ring`, so the implementation has been updated to rely on `hamc` + `sha2` to achive the same result with broader platform compatibility and higher performance. We also updated the CI which is now running as many tests as possible against i686 and PowerPC 32 and 64 bit."
-references = ["smithy-rs#1847"]
-meta = { "breaking" = true, "tada" = false, "bug" = true }
-author = "crisidev"
+The launch of endpoints 2.0 includes more configuration options for S3. The default behavior for endpoint resolution has
+been changed. Before, all requests hit the path-style endpoint. Going forward, all requests that can be routed to the
+virtually hosted bucket will be routed there automatically.
+- `force_path_style`: Requests will now default to the virtually-hosted endpoint `<bucketname>.s3.<region>.amazonaws.com`
+- `use_arn_region`: Enables this client to use an ARN’s region when constructing an endpoint instead of the client’s configured region.
+- `accelerate`: Enables this client to use S3 Transfer Acceleration endpoints.
 
-[[aws-sdk-rust]]
-message = "Add test ensuring that a response will error if the response body returns an EOF before the entire body has been read."
-references = ["smithy-rs#1801"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[smithy-rs]]
-message = "Replace bool with enum for a function parameter of `label::fmt_string`."
-references = ["smithy-rs#1875"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "`aws_smithy_http_server::routing::Router` is exported from the crate root again. This reverts unintentional breakage that was introduced in `aws-smithy-http-server` v0.51.0 only."
-references = ["smithy-rs#1910"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
-author = "david-perez"
-
-[[smithy-rs]]
-message = "Fix bug that can cause panics in paginators"
-references = ["smithy-rs#1903", "smithy-rs#1902"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+Note: the AWS SDK for Rust does not currently support Multi Region Access Points (MRAP).
+"""
+references = ["smithy-rs#1784", "smithy-rs#2074"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "rcoh"
 
 [[smithy-rs]]
-message = """
-Operation metadata is now added to the property bag before sending requests allowing middlewares to behave
-differently depending on the operation being sent.
-"""
-references = ["smithy-rs#1919"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
-author = "Velfi"
+message = "In 0.52, `@length`-constrained collection shapes whose members are not constrained made the server code generator crash. This has been fixed."
+references = ["smithy-rs#2103"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+author = "david-perez"
+
+[[smithy-rs]]
+message = "The Rust client codegen plugin is now called `rust-client-codegen` instead of `rust-codegen`. Be sure to update your `smithy-build.json` files to refer to the correct plugin name."
+references = ["smithy-rs#2099"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Client codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`)."
+references = ["smithy-rs#2099"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Server codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`)."
+references = ["smithy-rs#2099"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
+author = "jdisanti"

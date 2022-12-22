@@ -12,13 +12,9 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -79,11 +75,7 @@ class PaginatorGenerator private constructor(
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo =
         idx.getPaginationInfo(service, operation).orNull() ?: PANIC("failed to load pagination info")
-    private val module = RustModule(
-        "paginator",
-        RustMetadata(visibility = Visibility.PUBLIC),
-        documentation = "Paginators for the service",
-    )
+    private val module = RustModule.public("paginator", "Paginators for the service")
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
@@ -100,7 +92,12 @@ class PaginatorGenerator private constructor(
         "generics" to generics.decl,
         "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
-        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryClassifier),
+        "send_bounds" to generics.sendBounds(
+            symbolProvider.toSymbol(operation),
+            outputType,
+            errorType,
+            retryClassifier,
+        ),
 
         // Operation Types
         "operation" to symbolProvider.toSymbol(operation),
@@ -110,13 +107,12 @@ class PaginatorGenerator private constructor(
         "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
 
         // SDK Types
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType()
-            .copy(name = "result::SdkError"),
-        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
-        "fn_stream" to CargoDependency.SmithyAsync(runtimeConfig).asType().member("future::fn_stream"),
+        "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        "client" to RuntimeType.smithyClient(runtimeConfig),
+        "fn_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::fn_stream"),
 
         // External Types
-        "Stream" to CargoDependency.TokioStream.asType().member("Stream"),
+        "Stream" to RuntimeType.TokioStream.resolve("Stream"),
 
     )
 
@@ -172,14 +168,14 @@ class PaginatorGenerator private constructor(
                     let handle = self.handle;
                     #{fn_stream}::FnStream::new(move |tx| Box::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
-                        let mut input = match builder.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into())) {
+                        let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
                             Ok(input) => input,
                             Err(e) => { let _ = tx.send(Err(e)).await; return; }
                         };
                         loop {
                             let op = match input.make_operation(&handle.conf)
                                 .await
-                                .map_err(|err| #{SdkError}::ConstructionFailure(err.into())) {
+                                .map_err(#{SdkError}::construction_failure) {
                                 Ok(op) => op,
                                 Err(e) => {
                                     let _ = tx.send(Err(e)).await;
@@ -289,7 +285,8 @@ class PaginatorGenerator private constructor(
     private fun pageSizeSetter() = writable {
         paginationInfo.pageSizeMember.orNull()?.also {
             val memberName = symbolProvider.toMemberName(it)
-            val pageSizeT = symbolProvider.toSymbol(it).rustType().stripOuter<RustType.Option>().render(true)
+            val pageSizeT =
+                symbolProvider.toSymbol(it).rustType().stripOuter<RustType.Option>().render(true)
             rust(
                 """
                 /// Set the page size

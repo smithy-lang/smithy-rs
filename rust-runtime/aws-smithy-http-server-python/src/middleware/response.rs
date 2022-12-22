@@ -3,77 +3,128 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Python-compatible middleware [http::Request] implementation.
-use std::{collections::HashMap, convert::TryInto};
+//! Python-compatible middleware [http::Response] implementation.
+
+use std::collections::HashMap;
+use std::mem;
+use std::sync::Arc;
 
 use aws_smithy_http_server::body::{to_boxed, BoxBody};
-use http::{Response, StatusCode};
-use pyo3::prelude::*;
+use http::{response::Parts, Response};
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use tokio::sync::Mutex;
+
+use super::{PyHeaderMap, PyMiddlewareError};
 
 /// Python-compatible [Response] object.
-///
-/// For performance reasons, there is not support yet to pass the body to the Python middleware,
-/// as it requires to consume and clone the body, which is a very expensive operation.
-///
-// TODO(if customers request for it, we can implemented an opt-in functionality to also pass
-// the body around).
 #[pyclass(name = "Response")]
 #[pyo3(text_signature = "(status, headers, body)")]
-#[derive(Debug, Clone)]
 pub struct PyResponse {
-    #[pyo3(get, set)]
-    status: u16,
-    #[pyo3(get, set)]
-    body: Vec<u8>,
-    headers: HashMap<String, String>,
+    parts: Option<Parts>,
+    headers: PyHeaderMap,
+    body: Arc<Mutex<Option<BoxBody>>>,
+}
+
+impl PyResponse {
+    /// Create a new Python-compatible [Response] structure from the Rust side.
+    pub fn new(response: Response<BoxBody>) -> Self {
+        let (mut parts, body) = response.into_parts();
+        let headers = mem::take(&mut parts.headers);
+        Self {
+            parts: Some(parts),
+            headers: PyHeaderMap::new(headers),
+            body: Arc::new(Mutex::new(Some(body))),
+        }
+    }
+
+    // Consumes self by taking the inner Response.
+    // This method would have been `into_inner(self) -> Response<BoxBody>`
+    // but we can't do that because we are crossing Python boundary.
+    pub fn take_inner(&mut self) -> Option<Response<BoxBody>> {
+        let headers = self.headers.take_inner()?;
+        let mut parts = self.parts.take()?;
+        parts.headers = headers;
+        let body = {
+            let body = mem::take(&mut self.body);
+            let body = Arc::try_unwrap(body).ok()?;
+            body.into_inner().take()?
+        };
+        Some(Response::from_parts(parts, body))
+    }
 }
 
 #[pymethods]
 impl PyResponse {
     /// Python-compatible [Response] object from the Python side.
     #[new]
-    fn newpy(status: u16, headers: Option<HashMap<String, String>>, body: Option<Vec<u8>>) -> Self {
-        Self {
-            status,
-            body: body.unwrap_or_default(),
-            headers: headers.unwrap_or_default(),
+    fn newpy(
+        status: u16,
+        headers: Option<HashMap<String, String>>,
+        body: Option<Vec<u8>>,
+    ) -> PyResult<Self> {
+        let mut builder = Response::builder().status(status);
+
+        if let Some(headers) = headers {
+            for (k, v) in headers {
+                builder = builder.header(k, v);
+            }
         }
+
+        let response = builder
+            .body(body.map(to_boxed).unwrap_or_default())
+            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+
+        Ok(Self::new(response))
+    }
+
+    /// Return the HTTP status of this response.
+    #[getter]
+    fn status(&self) -> PyResult<u16> {
+        self.parts
+            .as_ref()
+            .map(|parts| parts.status.as_u16())
+            .ok_or_else(|| PyMiddlewareError::ResponseGone.into())
+    }
+
+    /// Return the HTTP version of this response.
+    #[getter]
+    fn version(&self) -> PyResult<String> {
+        self.parts
+            .as_ref()
+            .map(|parts| format!("{:?}", parts.version))
+            .ok_or_else(|| PyMiddlewareError::ResponseGone.into())
     }
 
     /// Return the HTTP headers of this response.
-    // TODO(can we use `Py::clone_ref()` to prevent cloning the hashmap?)
-    #[pyo3(text_signature = "($self)")]
-    fn headers(&self) -> HashMap<String, String> {
+    #[getter]
+    fn headers(&self) -> PyHeaderMap {
         self.headers.clone()
     }
 
-    /// Insert a new key/value into this response's headers.
-    #[pyo3(text_signature = "($self, key, value)")]
-    fn set_header(&mut self, key: &str, value: &str) {
-        self.headers.insert(key.to_string(), value.to_string());
+    /// Return the HTTP body of this response.
+    /// Note that this is a costly operation because the whole response body is cloned.
+    #[getter]
+    fn body<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let body = self.body.clone();
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let body = {
+                let mut body_guard = body.lock().await;
+                let body = body_guard.take().ok_or(PyMiddlewareError::RequestGone)?;
+                let body = hyper::body::to_bytes(body)
+                    .await
+                    .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+                let buf = body.clone();
+                body_guard.replace(to_boxed(body));
+                buf
+            };
+            // TODO(Perf): can we use `PyBytes` here?
+            Ok(body.to_vec())
+        })
     }
 
-    /// Return a header value of this response.
-    #[pyo3(text_signature = "($self, key)")]
-    fn get_header(&self, key: &str) -> Option<&String> {
-        self.headers.get(key)
-    }
-}
-
-/// Allow to convert between a [PyResponse] and a [Response].
-impl From<PyResponse> for Response<BoxBody> {
-    fn from(pyresponse: PyResponse) -> Self {
-        let mut response = Response::builder()
-            .status(
-                StatusCode::from_u16(pyresponse.status)
-                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-            )
-            .body(to_boxed(pyresponse.body))
-            .unwrap_or_default();
-        match (&pyresponse.headers).try_into() {
-            Ok(headers) => *response.headers_mut() = headers,
-            Err(e) => tracing::error!("Error extracting HTTP headers from PyResponse: {e}"),
-        };
-        response
+    /// Set the HTTP body of this response.
+    #[setter]
+    fn set_body(&mut self, buf: &[u8]) {
+        self.body = Arc::new(Mutex::new(Some(to_boxed(buf.to_owned()))));
     }
 }
