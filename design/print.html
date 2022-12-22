@@ -9226,7 +9226,7 @@ Evaluate the introduction of a <code>PluginBuilder</code> as the primary API to 
 </div>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-requestid-in-business-logic-handlers"><a class="header" href="#rfc-requestid-in-business-logic-handlers">RFC: RequestID in business logic handlers</a></h1>
 <blockquote>
-<p>Status: RFC</p>
+<p>Status: Implemented</p>
 <p>Applies to: server</p>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0024_request_id.html#changes-checklist">Changes Checklist</a> section.</p>
@@ -9302,7 +9302,7 @@ where
     }
 
     fn call(&amp;mut self, mut req: http::Request&lt;R&gt;) -&gt; Self::Future {
-        request.extensions_mut().insert(ServerRequestId::new());
+        req.extensions_mut().insert(ServerRequestId::new());
         self.inner.call(req)
     }
 }
@@ -9347,15 +9347,17 @@ where
 <p>Although the generated ID is opaque, this will give guarantees to customers as to what they can expect, if the server ID is ever updated to a different format.</p>
 <h2 id="changes-checklist-18"><a class="header" href="#changes-checklist-18">Changes checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Implement <code>ServerRequestId</code>: a <code>new()</code> function that generates a UUID, with <code>Display</code>, <code>Debug</code> and <code>ToStr</code> implementations</li>
 <li><input disabled="" type="checkbox"/>
 Implement <code>ClientRequestId</code>: <code>new()</code> that wraps a string (the header value) and the header in which the value could be found, with <code>Display</code>, <code>Debug</code> and <code>ToStr</code> implementations</li>
 <li><input disabled="" type="checkbox" checked=""/>
 Implement <code>FromParts</code> for <code>Extension&lt;ServerRequestId&gt;</code></li>
-<li><input disabled="" type="checkbox" checked=""/>
+<li><input disabled="" type="checkbox"/>
 Implement <code>FromParts</code> for <code>Extension&lt;ClientRequestId&gt;</code></li>
 </ul>
+<h2 id="changes-since-the-rfc-has-been-approved"><a class="header" href="#changes-since-the-rfc-has-been-approved">Changes since the RFC has been approved</a></h2>
+<p>This RFC has been changed to only implement <code>ServerRequestId</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-constraint-traits"><a class="header" href="#rfc-constraint-traits">RFC: Constraint traits</a></h1>
 <blockquote>
 <p>Status: Implemented.</p>
