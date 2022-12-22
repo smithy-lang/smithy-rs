@@ -289,29 +289,42 @@ Users are advised to consider the use of software such as [sccache](https://gith
 
 - `aws-sdk-dynamodb`
 
-| command                                                     | real time | user time | sys time  |
-| ----------------------------------------------------------- | --------- | --------- | --------- |
-| cargo build                                                 | 0m35.728s | 2m24.243s | 0m11.868s |
-| cargo build --release                                       | 0m52.040s | 5m0.841s  | 0m11.313s |
-| cargo build --features unstable-serde-serialize             | 0m38.079s | 2m26.082s | 0m11.631s |
-| cargo build --release --features unstable-serde-serialize   | 0m53.153s | 5m4.069s  | 0m11.577s |
-| cargo build --features unstable-serde-deserialize           | 0m45.689s | 2m34.000s | 0m11.978s |
-| cargo build --release --features unstable-serde-deserialize | 1m0.107s  | 5m10.231s | 0m11.699s |
-| cargo build --all-features                                  | 0m48.959s | 2m45.688s | 0m13.359s |
-| cargo build --release --all-features                        | 1m3.198s  | 5m26.076s | 0m12.311s |
+  - when compiled with debug profile
+  
+    | command                                           | real time | user time | sys time  |
+    | ------------------------------------------------- | --------- | --------- | --------- |
+    | cargo build                                       | 0m35.728s | 2m24.243s | 0m11.868s |
+    | cargo build --features unstable-serde-serialize   | 0m38.079s | 2m26.082s | 0m11.631s |
+    | cargo build --features unstable-serde-deserialize | 0m45.689s | 2m34.000s | 0m11.978s |
+    | cargo build --all-features                        | 0m48.959s | 2m45.688s | 0m13.359s |
+  
+  - when compiled with release profile
+   
+    | command                                                     | real time | user time | sys time  |
+    | ----------------------------------------------------------- | --------- | --------- | --------- |
+    | cargo build --release                                       | 0m52.040s | 5m0.841s  | 0m11.313s |
+    | cargo build --release --features unstable-serde-serialize   | 0m53.153s | 5m4.069s  | 0m11.577s |
+    | cargo build --release --features unstable-serde-deserialize | 1m0.107s  | 5m10.231s | 0m11.699s |
+    | cargo build --release --all-features                        | 1m3.198s  | 5m26.076s | 0m12.311s |
 
 - `aws-sdk-ec2`
+  - when compiled with debug profile
 
-| command                                                     | real time | user time  | sys time  |
-| ----------------------------------------------------------- | --------- | ---------- | --------- |
-| cargo build                                                 | 1m20.041s | 2m14.592s  | 0m6.611s  |
-| cargo build --release                                       | 2m29.480s | 9m19.530s  | 0m15.957s |
-| cargo build --features unstable-serde-serialize             | 2m0.555s  | 4m24.881s  | 0m16.131s |
-| cargo build --release --features unstable-serde-serialize   | 2m45.002s | 9m43.098s  | 0m16.886s |
-| cargo build --features unstable-serde-deserialize           | 3m10.857s | 5m34.246s  | 0m18.844s |
-| cargo build --release --features unstable-serde-deserialize | 3m47.531s | 10m52.017s | 0m18.404s |
-| cargo build --all-features                                  | 3m31.473s | 6m1.052s   | 0m19.681s |
-| cargo build --release --all-features                        | 3m45.208s | 8m46.168s  | 0m10.211s |
+    | command                                           | real time | user time | sys time  |
+    | ------------------------------------------------- | --------- | --------- | --------- |
+    | cargo build                                       | 1m20.041s | 2m14.592s | 0m6.611s  |
+    | cargo build --features unstable-serde-serialize   | 2m0.555s  | 4m24.881s | 0m16.131s |
+    | cargo build --features unstable-serde-deserialize | 3m10.857s | 5m34.246s | 0m18.844s |
+    | cargo build --all-features                        | 3m31.473s | 6m1.052s  | 0m19.681s |
+
+  - when compiled with release profile
+
+    | command                                                     | real time | user time  | sys time  |
+    | ----------------------------------------------------------- | --------- | ---------- | --------- |
+    | cargo build --release                                       | 2m29.480s | 9m19.530s  | 0m15.957s |
+    | cargo build --release --features unstable-serde-serialize   | 2m45.002s | 9m43.098s  | 0m16.886s |
+    | cargo build --release --features unstable-serde-deserialize | 3m47.531s | 10m52.017s | 0m18.404s |
+    | cargo build --release --all-features                        | 3m45.208s | 8m46.168s  | 0m10.211s |
 
 
 ## Misleading Results
