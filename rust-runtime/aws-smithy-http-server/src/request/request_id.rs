@@ -21,7 +21,7 @@
 //!
 //! Your handler can now optionally take as input a [`ServerRequestId`].
 //!
-//! ```rust
+//! ```rust,ignore
 //! pub async fn handler(
 //!     _input: Input,
 //!     server_request_id: ServerRequestId,
