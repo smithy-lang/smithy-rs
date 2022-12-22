@@ -7,10 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.model.shapes.BooleanShape
-import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -28,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
-import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 
@@ -169,26 +165,15 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
                 withBlock("$memberName: self.$memberName", ",") {
                     if (member.hasNonNullDefault()) {
-                        if (member.isStreaming(model)) {
-                            rustTemplate(".unwrap_or_default()")
-                        } else {
-                            val unwrapOr = when (model.expectShape(member.target)) {
-                                is NumberShape, is EnumShape, is BooleanShape -> ".unwrap_or("
-                                else -> ".unwrap_or_else(||"
-                            }
-                            rustTemplate(
-                                "#{Default:W}",
-                                "Default" to renderDefaultBuilder(
-                                    model,
-                                    runtimeConfig,
-                                    symbolProvider,
-                                    member,
-                                ) { "$unwrapOr $it)" },
-                            )
+                        // 1a. If a `@default` value is modeled and the user did not set a value, fall back to using the
+                        // default value.
+                        generateFallbackCodeToDefaultValue(this, member, model, runtimeConfig, symbolProvider)
+                    } else {
+                        // 1b. If the member is `@required` and has no `@default` value, the user must set a value;
+                        // otherwise, we fail with a `ConstraintViolation::Missing*` variant.
+                        serverBuilderConstraintViolations.forMember(member)?.also {
+                            rust(".ok_or(ConstraintViolation::${it.name()})?")
                         }
-                    }
-                    serverBuilderConstraintViolations.forMember(member)?.also {
-                        rust(".ok_or(ConstraintViolation::${it.name()})?")
                     }
                 }
             }
