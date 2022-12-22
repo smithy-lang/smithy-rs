@@ -30,7 +30,9 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.util.stream.Stream
 
@@ -167,7 +169,12 @@ class ServerBuilderDefaultValuesTest {
 
     private fun writeServerBuilderGeneratorWithoutPublicConstrainedTypes(writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
-        val codegenContext = serverTestCodegenContext(model)
+        val codegenContext = serverTestCodegenContext(
+            model,
+            settings = serverTestRustSettings(
+                codegenConfig = ServerCodegenConfig(publicConstrainedTypes = false),
+            ),
+        )
         val builderGenerator = ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, struct)
 
         writer.implBlock(struct, symbolProvider) {
