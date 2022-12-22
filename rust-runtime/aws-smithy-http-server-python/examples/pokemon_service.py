@@ -10,32 +10,32 @@ from threading import Lock
 from dataclasses import dataclass
 from typing import List, Optional, Callable, Awaitable
 
-from libpokemon_service_server_sdk import App
-from libpokemon_service_server_sdk.tls import TlsConfig  # type: ignore
-from libpokemon_service_server_sdk.aws_lambda import LambdaContext  # type: ignore
-from libpokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
-from libpokemon_service_server_sdk.input import (  # type: ignore
+from pokemon_service_server_sdk import App
+from pokemon_service_server_sdk.tls import TlsConfig  # type: ignore
+from pokemon_service_server_sdk.aws_lambda import LambdaContext  # type: ignore
+from pokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
+from pokemon_service_server_sdk.input import (  # type: ignore
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
     CheckHealthInput,
     StreamPokemonRadioInput,
 )
-from libpokemon_service_server_sdk.logging import TracingHandler  # type: ignore
-from libpokemon_service_server_sdk.middleware import (  # type: ignore
+from pokemon_service_server_sdk.logging import TracingHandler  # type: ignore
+from pokemon_service_server_sdk.middleware import (  # type: ignore
     MiddlewareException,
     Response,
     Request,
 )
-from libpokemon_service_server_sdk.model import FlavorText, Language  # type: ignore
-from libpokemon_service_server_sdk.output import (  # type: ignore
+from pokemon_service_server_sdk.model import FlavorText, Language  # type: ignore
+from pokemon_service_server_sdk.output import (  # type: ignore
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
     CheckHealthOutput,
     StreamPokemonRadioOutput,
 )
-from libpokemon_service_server_sdk.types import ByteStream  # type: ignore
+from pokemon_service_server_sdk.types import ByteStream  # type: ignore
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.

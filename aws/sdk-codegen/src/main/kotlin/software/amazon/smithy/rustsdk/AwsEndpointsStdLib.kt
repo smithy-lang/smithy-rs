@@ -8,12 +8,10 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import kotlin.io.path.readText
 
 /**
@@ -23,14 +21,10 @@ import kotlin.io.path.readText
  *
  * For test purposes, [awsStandardLib] can be used directly with a manually supplied partitions.json
  */
-class AwsEndpointsStdLib() : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class AwsEndpointsStdLib() : ClientCodegenDecorator {
     private var partitionsCache: ObjectNode? = null
     override val name: String = "AwsEndpointsStdLib"
     override val order: Byte = 0
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean {
-        return clazz.isAssignableFrom(ClientCodegenContext::class.java)
-    }
 
     private fun partitionMetadata(sdkSettings: SdkSettings): ObjectNode {
         if (partitionsCache == null) {

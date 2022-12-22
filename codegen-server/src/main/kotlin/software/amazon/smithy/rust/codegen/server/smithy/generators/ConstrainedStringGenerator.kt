@@ -81,7 +81,8 @@ class ConstrainedStringGenerator(
         // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
         // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
         // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
-        writer.documentShape(shape, model, note = rustDocsNote(name))
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
         constrainedTypeMetadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {

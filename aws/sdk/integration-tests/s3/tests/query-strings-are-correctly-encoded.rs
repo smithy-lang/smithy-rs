@@ -4,10 +4,10 @@
  */
 
 use aws_config::SdkConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_http::user_agent::AwsUserAgent;
 use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
-use aws_types::credentials::SharedCredentialsProvider;
 use std::convert::Infallible;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -60,7 +60,7 @@ async fn test_s3_signer_query_string_with_all_valid_chars() {
 
     // This is a snapshot test taken from a known working test result
     let snapshot_signature =
-        "Signature=775f88213304a5233ff295f869571554140e3db171a2d4a64f63902c49f79880";
+        "Signature=647aa91c7f91f1f1c498ef376fea370b48d0cd8c80a53c8e2cd64e3fc527a5e0";
     assert!(
         auth_header
             .to_str()
