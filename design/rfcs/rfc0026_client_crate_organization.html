@@ -141,7 +141,352 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="rfc-0026-client-crate-organization"><a class="header" href="#rfc-0026-client-crate-organization">RFC-0026: Client Crate Organization</a></h1>
+                        <h1 id="rfc-client-crate-organization"><a class="header" href="#rfc-client-crate-organization">RFC: Client Crate Organization</a></h1>
+<blockquote>
+<p>Status: Accepted</p>
+<p>Applies to: clients (and may impact servers due to shared codegen)</p>
+</blockquote>
+<p>This RFC proposes changing the organization structure of the generated client crates to:</p>
+<ol>
+<li>Make discovery in the crate documentation easier.</li>
+<li>Facilitate re-exporting types from runtime crates in related modules without name collisions.</li>
+<li>Facilitate feature gating operations for faster compile times in the future.</li>
+</ol>
+<h2 id="previous-organization"><a class="header" href="#previous-organization">Previous Organization</a></h2>
+<p>Previously, crates were organized as such:</p>
+<pre><code class="language-text">.
+├── client
+|   ├── fluent_builders
+|   |   └── &lt;One fluent builder per operation&gt;
+|   ├── Builder (*)
+|   └── Client
+├── config
+|   ├── retry
+|   |   ├── RetryConfig (*)
+|   |   ├── RetryConfigBuilder (*)
+|   |   └── RetryMode (*)
+|   ├── timeout
+|   |   ├── TimeoutConfig (*)
+|   |   └── TimeoutConfigBuilder (*)
+|   ├── AsyncSleep (*)
+|   ├── Builder
+|   ├── Config
+|   └── Sleep (*)
+├── error
+|   ├── &lt;One module per error to contain a single struct named `Builder`&gt;
+|   ├── &lt;One struct per error named `${error}`&gt;
+|   ├── &lt;One struct per operation named `${operation}Error`&gt;
+|   └── &lt;One enum per operation named `${operation}ErrorKind`&gt;
+├── http_body_checksum (empty)
+├── input
+|   ├── &lt;One module per input to contain a single struct named `Builder`&gt;
+|   └── &lt;One struct per input named `${operation}Input`&gt;
+├── lens (empty)
+├── middleware
+|   └── DefaultMiddleware
+├── model
+|   ├── &lt;One module per shape to contain a single struct named `Builder`&gt;
+|   └── &lt;One struct per shape&gt;
+├── operation
+|   ├── customize
+|   |   ├── ClassifyRetry (*)
+|   |   ├── CustomizableOperation
+|   |   ├── Operation (*)
+|   |   ├── RetryKind (*)
+|   └── &lt;One struct per operation&gt;
+├── output
+|   ├── &lt;One module per output to contain a single struct named `Builder`&gt;
+|   └── &lt;One struct per output named `${operation}Input`&gt;
+├── paginator
+|   ├── &lt;One struct per paginated operation named `${operation}Paginator`&gt;
+|   └── &lt;Zero to one struct(s) per paginated operation named `${operation}PaginatorItems`&gt;
+├── presigning
+|   ├── config
+|   |   ├── Builder
+|   |   ├── Error
+|   |   └── PresigningConfig
+|   └── request
+|       └── PresignedRequest
+├── types
+|   ├── AggregatedBytes (*)
+|   ├── Blob (*)
+|   ├── ByteStream (*)
+|   ├── DateTime (*)
+|   └── SdkError (*)
+├── AppName (*)
+├── Client
+├── Config
+├── Credentials (*)
+├── Endpoint (*)
+├── Error
+├── ErrorExt (for some services)
+├── PKG_VERSION
+└── Region (*)
+</code></pre>
+<p><code>(*)</code> - signifies that a type is re-exported from one of the runtime crates</p>
+<h2 id="proposed-changes"><a class="header" href="#proposed-changes">Proposed Changes</a></h2>
+<p>This RFC proposes reorganizing types by operation first and foremost, and then rearranging
+other pieces to reduce codegen collision risk.</p>
+<h3 id="establish-a-pattern-for-builder-organization"><a class="header" href="#establish-a-pattern-for-builder-organization">Establish a pattern for builder organization</a></h3>
+<p>Builders (distinct from fluent builders) are generated alongside all inputs, outputs, models, and errors.
+They all follow the same overall pattern (where <code>shapeType</code> is <code>Input</code>, <code>Output</code>, or empty for models/errors):</p>
+<pre><code class="language-text">.
+└── module
+    ├── &lt;One module per shape to contain a single struct named `Builder`&gt;
+    └── &lt;One struct per shape named `${prefix}${shapeType}`&gt;
+</code></pre>
+<p>This results in large lists of modules that all have exactly one item in them, which makes browsing
+the documentation difficult, and introduces the possibility of name collisions when re-exporting modules
+from the runtime crates.</p>
+<p>Builders should adopt a prefix and go into a single <code>builders</code> module, similar to how the fluent builders
+currently work:</p>
+<pre><code class="language-text">.
+├── module
+|   └── builders
+|       └── &lt;One struct per shape named `${prefix}${shapeType}Builder`&gt;
+└──---- &lt;One struct per shape named `${prefix}${shapeType}`&gt;
+</code></pre>
+<h3 id="organize-code-generated-types-by-operation"><a class="header" href="#organize-code-generated-types-by-operation">Organize code generated types by operation</a></h3>
+<p>All code generated for an operation that isn't shared between operations will go into
+operation-specific modules. This includes inputs, outputs, errors, parsers, and paginators.
+Types shared across operations will remain in another module (discussed below), and
+serialization/deserialization logic for those common types will also reside in that
+common location for now. If operation feature gating occurs in the future, further
+optimization can be done to track which of these are used by feature, or they can
+be reorganized (this would be discussed in a future RFC and is out of scope here).</p>
+<p>With code generated operations living in <code>crate::operation</code>, there is a high chance of name
+collision with the <code>customize</code> module. To resolve this, <code>customize</code> will be moved into
+<code>crate::client</code>.</p>
+<p>The new <code>crate::operation</code> module will look as follows:</p>
+<pre><code class="language-text">.
+└── operation
+    └── &lt;One module per operation named after the operation in lower_snake_case&gt;
+        ├── paginator
+        |   ├── `${operation}Paginator`
+        |   └── `${operation}PaginatorItems`
+        ├── builders
+        |   ├── `${operation}FluentBuilder`
+        |   ├── `${operation}InputBuilder`
+        |   └── `${operation}OutputBuilder`
+        ├── `${operation}Error`
+        ├── `${operation}Input`
+        ├── `${operation}Output`
+        └── `${operation}Parser` (private/doc hidden)
+</code></pre>
+<h3 id="reorganize-the-crate-root"><a class="header" href="#reorganize-the-crate-root">Reorganize the crate root</a></h3>
+<p>The crate root should only host the most frequently used types, or phrased differently,
+the types that are critical to making a service call with default configuration,
+or that are required for the most frequent config changes (such as setting credentials,
+or changing the region/endpoint).</p>
+<p>Previously, the following were exported in root:</p>
+<pre><code>.
+├── AppName
+├── Client
+├── Config
+├── Credentials
+├── Endpoint
+├── Error
+├── ErrorExt (for some services)
+├── PKG_VERSION
+└── Region
+</code></pre>
+<p>The <code>AppName</code> is infrequently set, and will be moved into <code>crate::config</code>. Customers are encouraged
+to use <code>aws-config</code> crate to resolve credentials, region, and endpoint. Thus, these types no longer
+need to be at the top-level, and will be moved into <code>crate::config</code>. <code>ErrorExt</code> will be moved into
+<code>crate::error</code>, but <code>Error</code> will stay in the crate root so that customers that alias the SDK crate
+can easily reference it in their <code>Result</code>s:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_s3 as s3;
+
+fn some_function(/* ... */) -&gt; Result&lt;(), s3::Error&gt; {
+    /* ... */
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The <code>PKG_VERSION</code> should move into a new <code>meta</code> module, which can also include other values in the future
+such as the SHA-256 hash of the model used to produce the crate, or the version of smithy-rs that generated it.</p>
+<h3 id="conditionally-remove-builder-from-crateclient"><a class="header" href="#conditionally-remove-builder-from-crateclient">Conditionally remove <code>Builder</code> from <code>crate::client</code></a></h3>
+<p>Previously, the Smithy <code>Client</code> builder was re-exported alongside the SDK fluent <code>Client</code>
+so that non-SDK clients could easily customize the underlying Smithy client by using
+the fluent client's <code>Client::with_config</code> function or <code>From&lt;aws_smithy_client::client::Client&lt;C, M, R&gt;&gt;</code>
+trait implementation.</p>
+<p>This makes sense for non-SDK clients where customization of the connector and middleware types is supported
+generically, but less sense for SDKs since the SDK clients are hardcoded to use <code>DynConnector</code> and <code>DynMiddleware</code>.</p>
+<p>Thus, the Smithy client <code>Builder</code> should not be re-exported for SDKs.</p>
+<h3 id="create-a-primitives-module"><a class="header" href="#create-a-primitives-module">Create a <code>primitives</code> module</a></h3>
+<p>Previously, <code>crate::types</code> held re-exported types from <code>aws-smithy-types</code> that are used
+by code generated structs/enums.</p>
+<p>This module will be renamed to <code>crate::primitives</code> so that the name <code>types</code> can be
+repurposed in the next section.</p>
+<h3 id="repurpose-the-types-module"><a class="header" href="#repurpose-the-types-module">Repurpose the <code>types</code> module</a></h3>
+<p>The name <code>model</code> is meaningless outside the context of code generation (although there is precedent
+since both the Java V2 and Kotlin SDKs use the term). Previously, this module held all the generated
+structs/enums that are referenced by inputs, outputs, and errors.</p>
+<p>This RFC proposes that this module be renamed to <code>types</code>, and that all code generated types
+for shapes that are reused between operations (basically anything that is not an input, output,
+or error) be moved here. This would look as follows:</p>
+<pre><code class="language-text">.
+└── types
+    ├── error
+    |   ├── builders
+    |   |   └── &lt;One struct per error named `${error}Builder`&gt;
+    |   └── &lt;One struct per error named `${error}`&gt;
+    ├── builders
+    |   └── &lt;One struct per shape named `${shape}Builder`&gt;
+    └── &lt;One struct per shape&gt;
+</code></pre>
+<p>Customers using the fluent builder should be able to just <code>use ${crate}::types::*;</code> to immediately
+get access to all the shared types needed by the operations they are calling.</p>
+<p>Additionally, moving the top-level code generated error types into <code>crate::types</code> will eliminate a name
+collision issue in the <code>crate::error</code> module.</p>
+<h3 id="repurpose-the-original-crateerror-module"><a class="header" href="#repurpose-the-original-crateerror-module">Repurpose the original <code>crate::error</code> module</a></h3>
+<p>The <code>error</code> module is significantly smaller after all the code generated error types
+are moved out of it. This top-level module is now available for re-exports and utilities.</p>
+<p>The following will be re-exported in <code>crate::error</code>:</p>
+<ul>
+<li><code>aws_smithy_http::result::SdkError</code></li>
+<li><code>aws_smithy_types::error::display::DisplayErrorContext</code></li>
+</ul>
+<p>For crates that have an <code>ErrorExt</code>, it will also be moved into <code>crate::error</code>.</p>
+<h3 id="flatten-the-presigning-module"><a class="header" href="#flatten-the-presigning-module">Flatten the <code>presigning</code> module</a></h3>
+<p>The <code>crate::presigning</code> module only has four members, so it should be flattened from:</p>
+<pre><code class="language-text">.
+└── presigning
+    ├── config
+    |   ├── Builder
+    |   ├── Error
+    |   └── PresigningConfig
+    └── request
+        └── PresignedRequest
+</code></pre>
+<p>to:</p>
+<pre><code class="language-text">.
+└── presigning
+    ├── PresigningConfigBuilder
+    ├── PresigningConfigError
+    ├── PresigningConfig
+    └── PresignedRequest
+</code></pre>
+<p>At the same time, <code>Builder</code> and <code>Error</code> will be renamed to <code>PresigningConfigBuilder</code> and <code>PresigningConfigError</code>
+respectively since these will rarely be referred to directly (preferring <code>PresigningConfig::builder()</code> instead; the
+error will almost always be unwrapped).</p>
+<h3 id="remove-the-empty-modules"><a class="header" href="#remove-the-empty-modules">Remove the empty modules</a></h3>
+<p>The <code>lens</code> and <code>http_body_checksum</code> modules have nothing inside them,
+and their documentation descriptions are not useful to customers:</p>
+<blockquote>
+<p><code>lens</code>: Generated accessors for nested fields</p>
+</blockquote>
+<blockquote>
+<p><code>http_body_checksum</code>: Functions for modifying requests and responses for the purposes of checksum validation</p>
+</blockquote>
+<p>These modules hold private functions that are used by other generated code, and should just be made
+private or <code>#[doc(hidden)]</code> if necessary.</p>
+<h2 id="new-organization"><a class="header" href="#new-organization">New Organization</a></h2>
+<p>All combined, the following is the new publicly visible organization:</p>
+<pre><code class="language-text">.
+├── client
+|   ├── customize
+|   |   ├── ClassifyRetry (*)
+|   |   ├── CustomizableOperation
+|   |   ├── Operation (*)
+|   |   └── RetryKind (*)
+|   ├── Builder (only in non-SDK crates) (*)
+|   └── Client
+├── config
+|   ├── retry
+|   |   ├── RetryConfig (*)
+|   |   ├── RetryConfigBuilder (*)
+|   |   └── RetryMode (*)
+|   ├── timeout
+|   |   ├── TimeoutConfig (*)
+|   |   └── TimeoutConfigBuilder (*)
+|   ├── AppName (*)
+|   ├── AsyncSleep (*)
+|   ├── Builder
+|   ├── Config
+|   ├── Credentials (*)
+|   ├── Endpoint (*)
+|   ├── Region (*)
+|   └── Sleep (*)
+├── error
+|   ├── DisplayErrorContext (*)
+|   ├── ErrorExt (for some services)
+|   └── SdkError (*)
+├── meta
+|   └── PKG_VERSION
+├── middleware
+|   └── DefaultMiddleware
+├── operation
+|   └── &lt;One module per operation named after the operation in lower_snake_case&gt;
+|       ├── paginator
+|       |   ├── `${operation}Paginator`
+|       |   └── `${operation}PaginatorItems`
+|       ├── builders
+|       |   ├── `${operation}FluentBuilder`
+|       |   ├── `${operation}InputBuilder`
+|       |   └── `${operation}OutputBuilder`
+|       ├── `${operation}Error`
+|       ├── `${operation}Input`
+|       ├── `${operation}Output`
+|       └── `${operation}Parser` (private/doc hidden)
+├── presigning
+|   ├── PresigningConfigBuilder
+|   ├── PresigningConfigError
+|   ├── PresigningConfig
+|   └── PresignedRequest
+├── primitives
+|   ├── AggregatedBytes (*)
+|   ├── Blob (*)
+|   ├── ByteStream (*)
+|   └── DateTime (*)
+├── types
+|   ├── error
+|   |   ├── builders
+|   |   |   └── &lt;One struct per error named `${error}Builder`&gt;
+|   |   └── &lt;One struct per error named `${error}`&gt;
+|   ├── builders
+|   |   └── &lt;One struct per shape named `${shape}Builder`&gt;
+|   └── &lt;One struct per shape&gt;
+├── Client
+├── Config
+└── Error
+</code></pre>
+<p><code>(*)</code> - signifies that a type is re-exported from one of the runtime crates</p>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Move <code>crate::AppName</code>, <code>crate::Endpoint</code>, <code>crate::Credentials</code>, and <code>crate::Region</code> into <code>crate::config</code></li>
+<li><input disabled="" type="checkbox"/>
+Move <code>crate::PKG_VERSION</code> into a new <code>crate::meta</code> module</li>
+<li><input disabled="" type="checkbox"/>
+Move <code>crate::operation::customize</code> into <code>crate::client</code></li>
+<li><input disabled="" type="checkbox"/>
+Organize code generated types by operation</li>
+<li><input disabled="" type="checkbox"/>
+Reorganize builders that aren't per-operation</li>
+<li><input disabled="" type="checkbox"/>
+Only re-export <code>aws_smithy_client::client::Builder</code> for non-SDK clients (remove from SDK clients)</li>
+<li><input disabled="" type="checkbox"/>
+Rename <code>crate::types</code> to <code>crate::primitives</code></li>
+<li><input disabled="" type="checkbox"/>
+Rename <code>crate::model</code> to <code>crate::types</code></li>
+<li><input disabled="" type="checkbox"/>
+Move <code>crate::error</code> into <code>crate::types</code></li>
+<li><input disabled="" type="checkbox"/>
+Move <code>crate::ErrorExt</code> into <code>crate::error</code></li>
+<li><input disabled="" type="checkbox"/>
+Re-export <code>aws_smithy_types::error::display::DisplayErrorContext</code> and <code>aws_smithy_http::result::SdkError</code> in <code>crate::error</code></li>
+<li><input disabled="" type="checkbox"/>
+Move <code>crate::paginator</code> into <code>crate::operation</code></li>
+<li><input disabled="" type="checkbox"/>
+Flatten <code>crate::presigning</code></li>
+<li><input disabled="" type="checkbox"/>
+Remove/hide operation <code>ParseResponse</code> implementations in <code>crate::operation</code></li>
+<li><input disabled="" type="checkbox"/>
+Hide or remove <code>crate::lens</code> and <code>crate::http_body_checksum</code></li>
+<li><input disabled="" type="checkbox"/>
+Update &quot;Crate Organization&quot; top-level section in generated crate docs</li>
+</ul>
 
                     </main>
 
