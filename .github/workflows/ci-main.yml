@@ -54,3 +54,5 @@ jobs:
   ci:
     needs: rebuild-docker-build-image
     uses: ./.github/workflows/ci.yml
+    with:
+      run_sdk_examples: true

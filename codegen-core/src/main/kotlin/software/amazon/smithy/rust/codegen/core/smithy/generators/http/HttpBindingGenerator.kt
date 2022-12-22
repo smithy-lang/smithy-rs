@@ -26,7 +26,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -125,9 +124,9 @@ class HttpBindingGenerator(
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
-    private val headerUtil = CargoDependency.smithyHttp(runtimeConfig).toType().member("header")
+    private val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
-    private val dateTime = RuntimeType.DateTime(runtimeConfig).toSymbol().rustType()
+    private val dateTime = RuntimeType.dateTime(runtimeConfig).toSymbol().rustType()
     private val httpSerdeModule = RustModule.private("http_serde")
 
     /**
@@ -149,7 +148,7 @@ class HttpBindingGenerator(
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
             rustBlock(
                 "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
-                RuntimeType.http,
+                RuntimeType.Http,
                 outputT,
                 headerUtil,
             ) {
@@ -168,7 +167,7 @@ class HttpBindingGenerator(
         val inner = RuntimeType.forInlineFun("${fnName}_inner", httpSerdeModule) {
             rustBlock(
                 "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
-                RuntimeType.http,
+                RuntimeType.Http,
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
                 headerUtil,
             ) {
@@ -179,7 +178,7 @@ class HttpBindingGenerator(
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) {
             rustBlock(
                 "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
-                RuntimeType.http,
+                RuntimeType.Http,
                 returnTypeSymbol,
                 headerUtil,
             ) {
@@ -368,7 +367,7 @@ class HttpBindingGenerator(
                     HttpBinding.Location.HEADER,
                     defaultTimestampFormat,
                 )
-            val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+            val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
             rust(
                 "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?;",
                 headerUtil,
@@ -393,7 +392,7 @@ class HttpBindingGenerator(
                             .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new("base64 encoded data was not valid utf-8")))
                         ).collect();
                     """,
-                    "base_64_decode" to RuntimeType.Base64Decode(runtimeConfig),
+                    "base_64_decode" to RuntimeType.base64Decode(runtimeConfig),
                     "header" to headerUtil,
                 )
                 rust("let $parsedValue = $parsedValue?;")
@@ -635,7 +634,7 @@ class HttpBindingGenerator(
 
         val block: RustWriter.(value: ValueExpression) -> Unit = { variableName ->
             if (shape.isPrimitive()) {
-                val encoder = CargoDependency.smithyTypes(runtimeConfig).toType().member("primitive::Encoder")
+                val encoder = RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder")
                 rust("let mut encoder = #T::from(${variableName.asValue()});", encoder)
             }
             val formatted = headerFmtFun(
@@ -737,7 +736,7 @@ class HttpBindingGenerator(
         fun quoteValue(value: String): String {
             // Timestamp shapes are not quoted in header lists
             return if (isMultiValuedHeader && !target.isTimestampShape) {
-                val quoteFn = writer.format(headerUtil.member("quote_header_value"))
+                val quoteFn = writer.format(headerUtil.resolve("quote_header_value"))
                 "$quoteFn($value)"
             } else {
                 value
@@ -746,7 +745,7 @@ class HttpBindingGenerator(
         return when {
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
-                    val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
+                    val func = writer.format(RuntimeType.base64Encode(runtimeConfig))
                     "$func(&$targetName)"
                 } else {
                     quoteValue("$targetName.as_str()")
@@ -754,7 +753,7 @@ class HttpBindingGenerator(
             }
 
             target.isTimestampShape -> {
-                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                val timestampFormatType = RuntimeType.timestampFormat(runtimeConfig, timestampFormat)
                 quoteValue("$targetName.fmt(${writer.format(timestampFormatType)})?")
             }
 

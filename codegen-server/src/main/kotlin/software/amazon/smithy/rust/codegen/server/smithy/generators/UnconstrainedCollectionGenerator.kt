@@ -6,8 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -38,6 +42,8 @@ class UnconstrainedCollectionGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
+    private val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
+    private val name = symbol.name
     private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
     private val constraintViolationSymbolProvider =
         with(codegenContext.constraintViolationSymbolProvider) {
@@ -47,22 +53,20 @@ class UnconstrainedCollectionGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
         constrainedShapeSymbolProvider.toSymbol(shape)
     } else {
         pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
     }
+    private val innerShape = model.expectShape(shape.member.target)
 
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
-        val name = symbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
-        val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
-        val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
         unconstrainedModuleWriter.withInlineModule(symbol.module()) {
             rustTemplate(
@@ -75,29 +79,57 @@ class UnconstrainedCollectionGenerator(
                         Self::Unconstrained(value)
                     }
                 }
+                """,
+                "InnerUnconstrainedSymbol" to innerUnconstrainedSymbol,
+                "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
+            )
 
-                impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
-                    type Error = #{ConstraintViolationSymbol};
+            renderTryFromUnconstrainedForConstrained(this)
+        }
+    }
 
-                    fn try_from(value: $name) -> Result<Self, Self::Error> {
-                        let res: Result<_, (usize, #{InnerConstraintViolationSymbol})> = value
+    private fun renderTryFromUnconstrainedForConstrained(writer: RustWriter) {
+        writer.rustBlock("impl std::convert::TryFrom<$name> for #{T}", constrainedSymbol) {
+            rust("type Error = #T;", constraintViolationSymbol)
+
+            rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
+                if (innerShape.canReachConstrainedShape(model, symbolProvider)) {
+                    val resolvesToNonPublicConstrainedValueType =
+                        innerShape.canReachConstrainedShape(model, symbolProvider) &&
+                            !innerShape.isDirectlyConstrained(symbolProvider) &&
+                            innerShape !is StructureShape &&
+                            innerShape !is UnionShape
+                    val innerConstrainedSymbol = if (resolvesToNonPublicConstrainedValueType) {
+                        pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
+                    } else {
+                        constrainedShapeSymbolProvider.toSymbol(innerShape)
+                    }
+                    val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
+
+                    rustTemplate(
+                        """
+                        let res: Result<std::vec::Vec<#{InnerConstrainedSymbol}>, (usize, #{InnerConstraintViolationSymbol})> = value
                             .0
                             .into_iter()
                             .enumerate()
                             .map(|(idx, inner)| inner.try_into().map_err(|inner_violation| (idx, inner_violation)))
                             .collect();
-                        res.map(Self)
-                           .map_err(|(idx, inner_violation)| #{ConstraintViolationSymbol}::Member(idx, inner_violation))
-                    }
+                        let inner = res.map_err(|(idx, inner_violation)| Self::Error::Member(idx, inner_violation))?;
+                        """,
+                        "InnerConstrainedSymbol" to innerConstrainedSymbol,
+                        "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
+                        "TryFrom" to RuntimeType.TryFrom,
+                    )
+                } else {
+                    rust("let inner = value.0;")
                 }
-                """,
-                "InnerUnconstrainedSymbol" to innerUnconstrainedSymbol,
-                "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
-                "ConstrainedSymbol" to constrainedSymbol,
-                "ConstraintViolationSymbol" to constraintViolationSymbol,
-                "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
-                "TryFrom" to RuntimeType.TryFrom,
-            )
+
+                if (shape.isDirectlyConstrained(symbolProvider)) {
+                    rust("Self::try_from(inner)")
+                } else {
+                    rust("Ok(Self(inner))")
+                }
+            }
         }
     }
 }

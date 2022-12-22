@@ -37,14 +37,14 @@ class ConstrainedTraitForEnumGenerator(
             impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = $unconstrainedType;
             }
-            
+
             impl From<$unconstrainedType> for #{MaybeConstrained} {
                 fn from(value: $unconstrainedType) -> Self {
                     Self::Unconstrained(value)
                 }
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
         )
     }

@@ -4,17 +4,17 @@
  */
 
 use aws_config::SdkConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::model::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization,
 };
-use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
+use aws_sdk_s3::{Client, Credentials, Region};
 use aws_smithy_async::assert_elapsed;
 use aws_smithy_async::rt::sleep::{default_async_sleep, TokioSleep};
 use aws_smithy_client::never::NeverConnector;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::credentials::SharedCredentialsProvider;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -81,11 +81,10 @@ async fn test_read_timeout() {
         (
             async move {
                 while shutdown_receiver.try_recv().is_err() {
-                    if let Ok(result) = timeout(Duration::from_millis(100), listener.accept()).await
+                    if let Ok(Ok((_socket, _))) =
+                        timeout(Duration::from_millis(100), listener.accept()).await
                     {
-                        if let Ok((_socket, _)) = result {
-                            tokio::time::sleep(Duration::from_millis(1000)).await;
-                        }
+                        tokio::time::sleep(Duration::from_millis(1000)).await;
                     }
                 }
             },
@@ -104,9 +103,7 @@ async fn test_read_timeout() {
                 .read_timeout(Duration::from_millis(300))
                 .build(),
         )
-        .endpoint_resolver(
-            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
-        )
+        .endpoint_url(format!("http://{server_addr}"))
         .region(Some(Region::from_static("us-east-1")))
         .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
             "test", "test", None, None, "test",
@@ -148,12 +145,9 @@ async fn test_connect_timeout() {
                 .connect_timeout(Duration::from_millis(300))
                 .build(),
         )
-        .endpoint_resolver(
-            Endpoint::immutable(
-                // Emulate a connect timeout error by hitting an unroutable IP
-                "http://172.255.255.0:18104",
-            )
-            .expect("valid endpoint"),
+        .endpoint_url(
+            // Emulate a connect timeout error by hitting an unroutable IP
+            "http://172.255.255.0:18104",
         )
         .region(Some(Region::from_static("us-east-1")))
         .credentials_provider(SharedCredentialsProvider::new(Credentials::new(

@@ -14,17 +14,15 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -42,7 +40,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
  * - sets a default `OperationSigningConfig` A future enhancement will customize this for specific services that need
  *   different behavior.
  */
-class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class SigV4SigningDecorator : ClientCodegenDecorator {
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
@@ -75,9 +73,6 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
             )
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SigV4SigningConfig(
@@ -86,11 +81,7 @@ class SigV4SigningConfig(
     private val sigV4Trait: SigV4Trait,
 ) : EventStreamSigningConfig(runtimeConfig) {
     private val codegenScope = arrayOf(
-        "SigV4Signer" to RuntimeType(
-            "SigV4Signer",
-            runtimeConfig.awsRuntimeDependency("aws-sig-auth", setOf("sign-eventstream")),
-            "aws_sig_auth::event_stream",
-        ),
+        "SigV4Signer" to AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).resolve("event_stream::SigV4Signer"),
     )
 
     override fun configImplSection(): Writable {
@@ -150,8 +141,10 @@ class SigV4SigningFeature(
     private val service: ServiceShape,
 ) :
     OperationCustomization() {
-    private val codegenScope =
-        arrayOf("sig_auth" to runtimeConfig.sigAuth().toType(), "aws_types" to awsTypes(runtimeConfig).toType())
+    private val codegenScope = arrayOf(
+        "sig_auth" to AwsRuntimeType.awsSigAuth(runtimeConfig),
+        "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
+    )
 
     private val serviceIndex = ServiceIndex.of(model)
 
@@ -215,4 +208,4 @@ class SigV4SigningFeature(
     }
 }
 
-fun RuntimeConfig.sigAuth() = awsRuntimeDependency("aws-sig-auth")
+fun RuntimeConfig.sigAuth() = awsRuntimeCrate("aws-sig-auth")

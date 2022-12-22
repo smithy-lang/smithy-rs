@@ -16,15 +16,16 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 class ResiliencyConfigCustomization(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
-    private val sleepModule = smithyAsyncRtSleep(codegenContext.runtimeConfig)
-    private val timeoutModule = smithyTypesTimeout(codegenContext.runtimeConfig)
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
+    private val sleepModule = RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep")
+    private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
-        "AsyncSleep" to sleepModule.member("AsyncSleep"),
-        "RetryConfig" to retryConfig.member("RetryConfig"),
-        "Sleep" to sleepModule.member("Sleep"),
-        "TimeoutConfig" to timeoutModule.member("TimeoutConfig"),
+        "AsyncSleep" to sleepModule.resolve("AsyncSleep"),
+        "RetryConfig" to retryConfig.resolve("RetryConfig"),
+        "Sleep" to sleepModule.resolve("Sleep"),
+        "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -245,22 +246,10 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
                     pub use #{timeout}::{TimeoutConfig, TimeoutConfigBuilder};
                 }
                 """,
-                "types_retry" to smithyTypesRetry(runtimeConfig),
-                "sleep" to smithyAsyncRtSleep(runtimeConfig),
-                "timeout" to smithyTypesTimeout(runtimeConfig),
+                "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
+                "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
+                "timeout" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout"),
             )
         }
     }
 }
-
-// Generate path to the retry module in aws_smithy_types
-private fun smithyTypesRetry(runtimeConfig: RuntimeConfig) =
-    RuntimeType("retry", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")
-
-// Generate path to the root module in aws_smithy_async
-private fun smithyAsyncRtSleep(runtimeConfig: RuntimeConfig) =
-    RuntimeType("sleep", runtimeConfig.runtimeCrate("async"), "aws_smithy_async::rt")
-
-// Generate path to the timeout module in aws_smithy_types
-private fun smithyTypesTimeout(runtimeConfig: RuntimeConfig) =
-    RuntimeType("timeout", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")

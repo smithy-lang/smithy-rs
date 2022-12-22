@@ -7,11 +7,14 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -72,7 +75,8 @@ class ConstrainedMapGenerator(
             "ConstraintViolation" to constraintViolation,
         )
 
-        writer.documentShape(shape, model, note = rustDocsNote(name))
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
         constrainedTypeMetadata.render(writer)
         writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
@@ -115,7 +119,12 @@ class ConstrainedMapGenerator(
             *codegenScope,
         )
 
-        if (!publicConstrainedTypes && isValueConstrained(shape, model, symbolProvider)) {
+        val valueShape = model.expectShape(shape.value.target)
+        if (!publicConstrainedTypes &&
+            isValueConstrained(valueShape, model, symbolProvider) &&
+            valueShape !is StructureShape &&
+            valueShape !is UnionShape
+        ) {
             writer.rustTemplate(
                 """
                 impl #{From}<$name> for #{FullyUnconstrainedSymbol} {
@@ -140,7 +149,7 @@ class ConstrainedMapGenerator(
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
                 """,
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
                 "UnconstrainedSymbol" to unconstrainedSymbol,
             )
         }

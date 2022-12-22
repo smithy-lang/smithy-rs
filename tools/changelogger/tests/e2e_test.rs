@@ -15,7 +15,7 @@ use std::process::Command;
 use tempfile::TempDir;
 use time::OffsetDateTime;
 
-const SOURCE_TOML: &'static str = r#"
+const SOURCE_TOML: &str = r#"
     [[aws-sdk-rust]]
     message = "Some change"
     references = ["aws-sdk-rust#123", "smithy-rs#456"]
@@ -37,7 +37,7 @@ const SOURCE_TOML: &'static str = r#"
     author = "another-dev"
     "#;
 
-const SDK_MODEL_SOURCE_TOML: &'static str = r#"
+const SDK_MODEL_SOURCE_TOML: &str = r#"
     [[aws-sdk-model]]
     module = "aws-sdk-ec2"
     version = "0.12.0"
@@ -390,7 +390,7 @@ Old entry contents
 /// set, which should result in the default
 #[test]
 fn render_smithy_entries() {
-    const NEXT_CHANGELOG: &'static str = r#"
+    const NEXT_CHANGELOG: &str = r#"
 # Example changelog entries
 # [[aws-sdk-rust]]
 # message = "Fix typos in module documentation for generated crates"
@@ -499,7 +499,7 @@ Old entry contents
 /// aws_sdk_rust should not be allowed to have target entries
 #[test]
 fn aws_sdk_cannot_have_target() {
-    const NEXT_CHANGELOG: &'static str = r#"
+    const NEXT_CHANGELOG: &str = r#"
 # Example changelog entries
 # [[aws-sdk-rust]]
 # message = "Fix typos in module documentation for generated crates"
@@ -565,8 +565,8 @@ author = "rcoh"
         change_set: ChangeSet::SmithyRs,
         independent_versioning: true,
         source: vec![source_path.clone()],
-        source_to_truncate: source_path.clone(),
-        changelog_output: dest_path.clone(),
+        source_to_truncate: source_path,
+        changelog_output: dest_path,
         release_manifest_output: Some(tmp_dir.path().into()),
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         previous_release_versions_manifest: None,
@@ -579,9 +579,6 @@ author = "rcoh"
             .find("aws-sdk-rust changelog entry cannot have an affected target");
         assert!(index.is_some());
     } else {
-        assert!(
-            false,
-            "This should have been error that aws-sdk-rust has a target entry"
-        );
+        panic!("This should have been error that aws-sdk-rust has a target entry");
     }
 }
