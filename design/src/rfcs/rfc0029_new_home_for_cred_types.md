@@ -128,7 +128,7 @@ An alternative design is to move the following items to a separate crate (tentat
 - All items in `aws_config::meta::credentials` and their dependencies
 
 The reason for the first bullet point is that the builder needs to be somewhere it has access to the credentials caching factory function, `CredentialsCache::create_cache`. The factory function is in `aws-XXX` and if the builder stayed in `aws-types`, it would cause a cyclic dependency between those two crates.
-	
+
 A result of the above arrangement will give us the following module dependencies:
 <p align="center">
   <img width="800" alt="Option A" src="https://user-images.githubusercontent.com/15333866/206587781-6eca3662-5096-408d-a435-d4023929e727.png">
