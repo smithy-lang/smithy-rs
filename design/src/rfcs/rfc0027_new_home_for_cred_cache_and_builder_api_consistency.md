@@ -109,7 +109,7 @@ We propose to move the following items to a new crate called `aws-credential-typ
 
 For the first bullet point, we move types and traits associated with credentials out of `aws-types`. Crucially, the `ProvideCredentials` trait now lives in `aws-credential-types`.
 
-For the second bullet point, we move the items related to credentials caching. `CredentialsCache` with its `Lazy` variant and builder lives in `aws-credential-types` and `CredentialsCache::create_cahe` will be marked as `pub`. One area where we make an adjustment, though, is that `LazyCredentialsCache` depends on `aws_types::os_shim_internal::TimeSource` so we need to move `TimeSource` into `aws-credentials-types` as well.
+For the second bullet point, we move the items related to credentials caching. `CredentialsCache` with its `Lazy` variant and builder lives in `aws-credential-types` and `CredentialsCache::create_cache` will be marked as `pub`. One area where we make an adjustment, though, is that `LazyCredentialsCache` depends on `aws_types::os_shim_internal::TimeSource` so we need to move `TimeSource` into `aws-credentials-types` as well.
 
 A result of the above arrangement will give us the following module dependencies (only showing what's relevant):
 <p align="center">
