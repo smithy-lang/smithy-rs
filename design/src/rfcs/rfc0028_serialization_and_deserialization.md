@@ -257,7 +257,7 @@ These builder types are available to users, however, no API requires users to bu
 We considered removing traits from these data types.
 
 Removing serde traits on these types will help reduce compile time, however, builder type can be useful, for example, for testing.
-We have prepared an example here [Use Case Examples](UseCaseExamples).
+We have prepared examples [here](UseCaseExamples).
 
 ## `fn set_fields` to allow users to use externally created `Input`
 
@@ -274,8 +274,7 @@ pub fn set_fields(mut self, input_type: path::to::input_type) -> path::to::input
 ```
 
 Users can use `fn set_fields` to replace the parameters in fluent builders.
-You can find an example at [use case examples](#UseCaseExamples).
-
+You can find examples [here](#UseCaseExamples).
 
 # Other Concerns
 ## Model evolution
