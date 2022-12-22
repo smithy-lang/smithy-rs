@@ -3,7 +3,7 @@ RFC: Serialization and Deserialization
 
 > Status: RFC
 >
-> Applies to: Output, Input and Builder types as well as `DateTime`, `Document`, `Blob` and `Number` implemented in `aws_smithy_types` crate.
+> Applies to: Output, Input, and Builder types as well as `DateTime`, `Document`, `Blob`, and `Number` implemented in `aws_smithy_types` crate.
 
 # Terminology
 - Builder
@@ -22,13 +22,13 @@ Data types that are going to be affected are;
 - builder data types
 - operation `Input` types
 - operation `Output` types
-- data types that builder types may have on its field(s)
+- data types that builder types may have on their field(s)
 - `aws_smithy_types::DateTime`
 - `aws_smithy_types::Document`
 - `aws_smithy_types::Blob`
 - `aws_smithy_types::Number`
 
-`DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format; We must emphasize that these 2 formats are not compatible to each other. Reason for this is explained at the [Blob](#blob) section and [Date Time](#datetime).
+`DateTime` and `Blob` implements different serialization/deserialization format for human-readable and non-human readable format; We must emphasize that these 2 formats are not compatible with each other. The reason for this is explained in the [Blob](#blob) section and [Date Time](#datetime).
 
 Additionally, we add `fn set_fields` to fluent builders to allow users to set the data they deserialized to fluent builders.
 
@@ -63,18 +63,18 @@ In this case, the implementation will depend on the implementation of the librar
 
 There are many different crates, so we decided to survey how some of the most popular crates implement this feature.
 
-| library    | version | implementation  | all time downloads on crate.io as of writing (Dec, 2022) |
+| library    | version | implementation  | all-time downloads on crate.io as of writing (Dec 2022) |
 | ---------- | ------- | --------------- | -------------------------------------------------------- |
 | serde_json | 1.0     | Array of number | 109,491,713                                              |
 | toml       | 0.5.9   | Array of number | 63,601,994                                               |
 | serde_yaml | 0.9.14  | Unsupported     | 23,767,300                                               |
 
-First of all, bytes could have hundreds of elements; reading an array of hundred of numbers will never be a pleasing experience, and it is especially troubling when you are writing data for test cases.
-Additionally, it has come to our attention that some crates just doesn't support it, which would hinder users ability to be productive and tie users' hand.
+First of all, bytes could have hundreds of elements; reading an array of hundreds of numbers will never be a pleasing experience, and it is especially troubling when you are writing data for test cases.
+Additionally, it has come to our attention that some crates just doesn't support it, which would hinder users' ability to be productive and tie users' hand.
 
 For the reasons described above, we believe that it is crucial to encode them to string and base64 is favourable over other encoding schemes such as base 16, 32, or Ascii85.
 
-- Reason behind the implementation of non-human readable format
+- Reason behind the implementation of a non-human readable format
 We considered using the same logic for non-human readable format as well.
 However, readable-ness is not necessary for non-human readable format.
 Additionally, non-human readable format tends to emphasize resource efficiency over human-readable format; Base64 encoded string would take up more space, which is not what the users would want.
@@ -112,7 +112,7 @@ Serde can distinguish each variant without a tag as each variant's content is di
 
 ## Builder Types and Non-Builder Types
 Builder types and non Builder types implement `Serialize` and `Deserialize` with derive macro.
-Derive macro will be implemented behind a feature-gate; Users must enable `serialize` to use `serde::Serialize`, and `deserialize` to use `serde::Deserialize` respectively. Additionally, user must enable `unstable` until the stablization of this RFC.
+Derive macro will be implemented behind a feature-gate; Users must enable `serialize` to use `serde::Serialize`, and `deserialize` to use `serde::Deserialize` respectively. Additionally, users must enable `unstable` until the stabilization of this RFC.
 
 ```rust
 #[allow(missing_docs)] // documentation missing in model
@@ -132,7 +132,7 @@ pub struct UploadPartCopyOutput {
 ```
 
 ## Enum Representation
-`serde` allows programmers to use one of four different tagging ([internal, external, adjacent and untagged](https://serde.rs/enum-representations.html)) when serializing an enum.
+`serde` allows programmers to use one of four different tagging ([internal, external, adjacent, and untagged](https://serde.rs/enum-representations.html)) when serializing an enum.
 ### untagged
   You cannot deserialize serialized data in some cases.
   For example, [aws_sdk_dynamodb::model::AttributeValue](https://docs.rs/aws-sdk-dynamodb/latest/aws_sdk_dynamodb/model/enum.AttributeValue.html) has `Null(bool)` and `Bool(bool)`, which you cannot distinguish serialized values without a tag.
@@ -158,7 +158,7 @@ We are going to skip serialization and deserialization of fields that have the f
 - `aws_smithy_http::event_stream::Receiver`
 - `aws_smithy_http::event_stream::EventStreamSender`
 
-Any fields with these data types are tagged with `#[serde(skip, default = "..name of the function for tailored serilaization/de-serialization")]`.
+Any fields with these data types are tagged with `#[serde(skip, default = "..name of the function for tailored serialization/de-serialization")]`.
 
 Here are some examples of data types affected by this decision:
 - `aws_sdk_transcribestreaming::client::fluent_builders::StartMedicalStreamTranscription`
@@ -167,7 +167,7 @@ Here are some examples of data types affected by this decision:
 We considered serializing them as bytes, however, it could take some time for a stream to reach the end, and the resulting serialized data may be too big for itself to fit into the ram.
 Additionally, those data types are sometimes used to represent bi-directional data transfer, which is not serializable.
 
-Here is an example of struct with a field which comes with custom serialization/de-serialization logic.
+Here is an example of struct with a field that comes with custom serialization/de-serialization logic.
 ```rust
 #[allow(missing_docs)]
 #[cfg_attr(
@@ -205,12 +205,12 @@ These builder types are available to users, however, no API requires users to bu
 We considered removing traits from these data types, however, the code-gen framework does not carry the necessary metadata to determine whether the data is the builder type of an output type or not.
 We conclude that we must avoid such a technical challenge to bring this RFC to life.
 
-## `fn set_fields` to allow users to use externally created `Input`s
+## `fn set_fields` to allow users to use externally created `Input`
 
-Currently, to set value to fluent builders, users must call setter methods for each field.
-SDK does not have a method that allows users use deserialized `Input` .
+Currently, to set the value to fluent builders, users must call setter methods for each field.
+SDK does not have a method that allows users to use deserialized `Input`.
 Thus, we add a new method `fn set_fields` to `Client` types.
-This method accepts inputs and replace all parameters that `Client` has with the new one.
+This method accepts inputs and replaces all parameters that `Client` has with the new one.
 
 ```rust
 pub fn set_fields(mut self, input_type: path::to::input_type) -> path::to::input_type {
@@ -236,7 +236,7 @@ async fn main() -> Result<(), Error> {
       let input: aws_sdk_dynamodb::input::ListTablesInput = serde_json::from_str(include_str!("./input.json"))
       input
     };
-    
+
     let res = client.list_tables().set_fields(input).send().await?;
     println!("Current DynamoDB tables: {:?}", res.table_names);
 
@@ -248,30 +248,30 @@ async fn main() -> Result<(), Error> {
 
 # Other Concerns
 ## Model evolution
-SDK will introduce new fields and it is possible that we may see new data types in future.
+SDK will introduce new fields and we may see new data types in the future.
 
 We believe that this will not be a problem.
 
 ### Introduction of New Fields
 Most fields are `Option<T>` type.
-When user de-serializes data written for a format before the new fields were introduced, new field will be assigned with `None` type.
+When the user de-serializes data written for a format before the new fields were introduced, new fields will be assigned with `None` type.
 
 If a field isn't `Option`, `serde` uses `Default` trait unless a custom de-serialization/serialization is specified to generate data to fill the field.
 If the new field is not an `Option<T>` type and has no `Default` implementation, we must implement a custom de-serialization logic.
 
-In case of serilization, introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.
+In the case of serialization, the introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.
 
 ## Introduction of New Data Type
 If a new field introduces a new data type, it will not require any additional work if the data type can derive `serde` traits.
 
-If the data cannot derive `serde` traits on it's own, then we have two options.
+If the data cannot derive `serde` traits on its own, then we have two options.
 To clarify, this is the same approach we took on `Data Type to skip` section.
 1. skip
    We will simply skip serializing/de-serializing. However, we may need to implement custom serialization/de-serialization logic if a value is not wrapped with `Option`.
 2. custom serialization/de-serialization logic
    We can implement tailored serialization/de-serialization logic.
 
-Either way, we will mention this on the generated docs to avoid suprising users.
+Either way, we will mention this on the generated docs to avoid surprising users.
 
 e.g.
 ```rust
@@ -297,16 +297,16 @@ struct OutputV2 {
 # Discussions
 
 ## Serialization and de-serialization support for an entire response/request
-The problem with serialization/de-serialization of an entire response/request the lack of data type that can be mapped to `serde`'s data model field by field.
+The problem with serialization/de-serialization of an entire response/request is the lack of data type that can be mapped to `serde`'s data model field by field.
 
 Currently, SDK has no data type that represents an entire response or request that can be mapped to `serde`'s data model; Thus, you must introduce a schema and implement logics that allows users to serialize/de-serialize their data.
 
-Although this RFC does not solve this issue, we believe that this RFC will help future contirbutor who wishes to implement serialization and de-serialization support for an entire response/request.
+Although this RFC does not solve this issue, we believe that this RFC will help future contributors who wish to implement serialization and de-serialization support for an entire response/request.
 
 
 ## Sensitive Information
 If serialized data contains sensitive information, it will not be masked.
-We mention that fields can compromised such information on every struct field to ensure that users know this.
+We mention that fields can compromise such information on every struct field to ensure that users know this.
 
 ## Compile Time
 We ran the following benchmark on C6a.2xlarge instance with 50gb of GP2 SSD.
@@ -318,16 +318,16 @@ Users are advised to consider the use of software such as [sccache](https://gith
 - `aws-sdk-dynamodb`
 
   - when compiled with debug profile
-  
+
     | command                                           | real time | user time | sys time  |
     | ------------------------------------------------- | --------- | --------- | --------- |
     | cargo build                                       | 0m35.728s | 2m24.243s | 0m11.868s |
     | cargo build --features unstable-serde-serialize   | 0m38.079s | 2m26.082s | 0m11.631s |
     | cargo build --features unstable-serde-deserialize | 0m45.689s | 2m34.000s | 0m11.978s |
     | cargo build --all-features                        | 0m48.959s | 2m45.688s | 0m13.359s |
-  
+
   - when compiled with release profile
-   
+
     | command                                                     | real time | user time | sys time  |
     | ----------------------------------------------------------- | --------- | --------- | --------- |
     | cargo build --release                                       | 0m52.040s | 5m0.841s  | 0m11.313s |
@@ -357,7 +357,7 @@ Users are advised to consider the use of software such as [sccache](https://gith
 
 ## Misleading Results
 SDK team previously expressed concern that serialized data may be misleading.
-We believe that features implemented as part of this RFC does not produce misleading result as we focus on builder types and it's corresponding data types which are mapped to serde's data type model with the derive macro.
+We believe that features implemented as part of this RFC do not produce a misleading result as we focus on builder types and it's corresponding data types which are mapped to serde's data type model with the derive macro.
 
 # Feature Gate
 `Serde` traits are implemented behind feature gates.
@@ -371,12 +371,12 @@ We conclude that this brings no benefit to the users.
 ## Keeping both features behind the same feature gate
 We considered keeping both features behind the same feature gate.
 There is no significant difference in the complexity of implementation.
-We do not see any benefit in keeping them behind a same feature-gate as this will only result in increase of compile time when users are not in need of one of the feature.
+We do not see any benefit in keeping them behind the same feature gate as this will only increase compile time when users do not need one of the features.
 
 ## Different feature gates for different data types
-We considered implementing different feature gates for output, input and their corresponding data types.
+We considered implementing different feature gates for output, input, and their corresponding data types.
 For example, output and input types can have `output-serde-*` and `input-serde-*`.
-We are unable to do this as relevant meta data is not available during the code-gen.
+We are unable to do this as relevant metadata is not available during the code-gen.
 
 
 Changes checklist
