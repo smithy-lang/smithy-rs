@@ -61,8 +61,6 @@ interface ProtocolTraitImplGenerator {
     fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>)
 }
 
-abstract class MakeOperationGenerator
-
 /**
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
@@ -74,11 +72,6 @@ abstract class ProtocolGenerator(
      * and an output shape is build from an `http::Response`.
      */
     private val protocol: Protocol,
-    /**
-     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
-     * This is the serializer side of request dispatch
-     */
-    private val clientMakeOperationGenerator: MakeOperationGenerator,
     /**
      * Operations generate implementations of ParseHttpResponse or ParseStrictResponse.
      * This is the deserializer side of request dispatch (parsing the response)

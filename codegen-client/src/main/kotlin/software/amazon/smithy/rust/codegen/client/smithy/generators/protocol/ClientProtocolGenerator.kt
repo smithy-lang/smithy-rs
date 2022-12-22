@@ -28,9 +28,13 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 open class ClientProtocolGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
+    /**
+     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
+     * This is the serializer side of request dispatch
+     */
     private val clientMakeOperationGenerator: ClientMakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
-) : ProtocolGenerator(codegenContext, protocol, clientMakeOperationGenerator, traitGenerator) {
+) : ProtocolGenerator(codegenContext, protocol, traitGenerator) {
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
      *

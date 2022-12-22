@@ -74,7 +74,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShap
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerMakeOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
@@ -91,7 +90,6 @@ class ServerHttpBoundProtocolGenerator(
 ) : ServerProtocolGenerator(
     codegenContext,
     protocol,
-    serverMakeOperationGenerator = ServerMakeOperationGenerator(),
     ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
