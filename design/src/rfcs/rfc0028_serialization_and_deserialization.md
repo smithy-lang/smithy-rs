@@ -256,7 +256,8 @@ These builder types are available to users, however, no API requires users to bu
 
 We considered removing traits from these data types.
 
-Removing serde traits on these types will help reduce compile time, however, this will not be benefitial to users who wishes to
+Removing serde traits on these types will help reduce compile time, however, builder type can be useful, for example, for testing.
+We have prepared an example here [Use Case Examples](UseCaseExamples).
 
 ## `fn set_fields` to allow users to use externally created `Input`
 
@@ -412,10 +413,22 @@ async fn example(read_builder: bool) -> Result<(), Error> {
     let res = client.list_tables().set_fields(deserialized_input).send().await?;
     println!("DynamoDB tables: {:?}", res.table_names);
 
+    let out: aws_sdk_dynamodb::output::ListTablesOutput = {
+      // say you want some of the field to have certain values
+      let mut out_builder: aws_sdk_dynamodb::output::list_tables_output::Builder = serde_json::from_str(r#"
+        {
+          table_names: [ "table1", "table2" ]
+        }
+      "#);
+      // but you don't really care about some other values
+      out_builder.set_last_evaluated_table_name(res.last_evaluated_table_name()).build()
+    };
+    assert_eq!(res, out);
+
     // serializing json output
     let json_output = serde_json::to_string(res).unwrap();
     // you can save the serialized input
-    save_serialized_output(json_output);
+    println!(json_output);
     Ok(())
 }
 ```
