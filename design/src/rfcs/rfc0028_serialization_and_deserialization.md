@@ -205,16 +205,44 @@ These builder types are available to users, however, no API requires users to bu
 We considered removing traits from these data types, however, the code-gen framework does not carry the necessary metadata to determine whether the data is the builder type of an output type or not.
 We conclude that we must avoid such a technical challenge to bring this RFC to life.
 
-## `fn set_fields` to allow users supply externally created `Input`s
+## `fn set_fields` to allow users to use externally created `Input`s
 
-SDK does not have a method that allows users supply deserialized inputs.
+Currently, to set value to fluent builders, users must call setter methods for each field.
+SDK does not have a method that allows users use deserialized `Input` .
 Thus, we add a new method `fn set_fields` to `Client` types.
 This method accepts inputs and replace all parameters that `Client` has with the new one.
 
 ```rust
-pub fn set_fields(mut self, builder: path::to::builder_type) -> path::to::builder_type {
-    self.inner = new_parameter;
+pub fn set_fields(mut self, input_type: path::to::input_type) -> path::to::input_type {
+    self.inner = input_type;
     self
+}
+```
+
+Users can use `fn set_fields` to replace the parameters in fluent builders.
+
+Example:
+```rust
+use aws_sdk_dynamodb::{Client, Error};
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    let shared_config = aws_config::load_from_env().await;
+    let client = Client::new(&shared_config);
+    let input = if cfg!(builder) {
+      let mut parameter: aws_sdk_dynamodb::input::list_tables_input::Builder = serde_json::from_str(include_str!("./builder.json"))
+      parameter.set_exclusive_start_table_name("some_name").build()
+    } else {
+      let input: aws_sdk_dynamodb::input::ListTablesInput = serde_json::from_str(include_str!("./input.json"))
+      input
+    };
+    
+    let res = client.list_tables().set_fields(input).send().await?;
+    println!("Current DynamoDB tables: {:?}", res.table_names);
+
+    let json_output = serde_json::to_string(res).unwrap();
+    save_serialized_output(json_output);
+    Ok(())
 }
 ```
 
