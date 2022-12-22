@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -58,7 +57,6 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
          * This builder only enforces the `required` trait.
          */
         fun hasFallibleBuilder(
-            model: Model,
             structureShape: StructureShape,
             symbolProvider: SymbolProvider,
         ): Boolean {
@@ -81,8 +79,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val structureSymbol = symbolProvider.toSymbol(shape)
 
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
-    private val moduleName = builderSymbol.namespace.split("::").last()
-    private val isBuilderFallible = hasFallibleBuilder(model, shape, symbolProvider)
+    private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
 
@@ -180,8 +177,8 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                                 else -> ".unwrap_or_else(||"
                             }
                             rustTemplate(
-                                """#{default:W}""",
-                                "default" to renderDefaultBuilder(
+                                "#{Default:W}",
+                                "Default" to renderDefaultBuilder(
                                     model,
                                     runtimeConfig,
                                     symbolProvider,
@@ -236,11 +233,10 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
-        val errorType = if (!isBuilderFallible) "std::convert::Infallible" else "ConstraintViolation"
         writer.rustTemplate(
             """
             impl #{TryFrom}<Builder> for #{Structure} {
-                type Error = $errorType;
+                type Error = ConstraintViolation;
 
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
                     builder.build()

@@ -139,15 +139,15 @@ class ServerBuilderGenerator(
 
             val notFallible = members.all {
                 if (structureShape.isReachableFromOperationInput()) {
-                    // When deserializing an input structure, constraints might not be satisfied.
-                    // For this member not to be fallible, it must not be constrained (constraints in input must always be checked)
-                    // and either optional (no need to set this; not required)
-                    // or has a default value (some value will always be present)
+                    // When deserializing an input structure, constraints might not be satisfied by the data in the
+                    // incoming request.
+                    // For this builder not to be fallible, no members must be constrained (constraints in input must
+                    // always be checked) and all members must _either_ be optional (no need to set it; not required)
+                    // or have a default value.
                     isNotConstrained(it) && (isOptional(it) || hasDefault(it))
                 } else {
-                    // This structure will be constructed manually.
-                    // Constraints will have to be dealt with
-                    // before members are set in the builder
+                    // This structure will be constructed manually by the user.
+                    // Constraints will have to be dealt with before members are set in the builder.
                     isOptional(it) || hasDefault(it)
                 }
             }
@@ -446,11 +446,10 @@ class ServerBuilderGenerator(
     }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
-        val errorType = if (!isBuilderFallible) "std::convert::Infallible" else "ConstraintViolation"
         writer.rustTemplate(
             """
             impl #{TryFrom}<Builder> for #{Structure} {
-                type Error = $errorType;
+                type Error = ConstraintViolation;
 
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
                     builder.build()
@@ -549,20 +548,18 @@ class ServerBuilderGenerator(
                 withBlock("$memberName: self.$memberName", ",") {
                     val wrapDefault: (String) -> String = {
                         if (member.isStreaming(model)) {
-                            // We set ByteStream to Default::default() until it is easier to use the full namespace for python.
-                            // Use `unwrap_or_default` to make clippy happy.
                             ".unwrap_or_default()"
                         } else {
-                            if (!member.canReachConstrainedShape(model, symbolProvider)) {
+                            if (member.canReachConstrainedShape(model, symbolProvider)) {
+                                val into =
+                                    """.try_into().expect("this check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")"""
+                                """.unwrap_or_else(|| $it$into)"""
+                            } else {
                                 val unwrapOr = when (model.expectShape(member.target)) {
                                     is NumberShape, is EnumShape, is BooleanShape -> ".unwrap_or("
                                     else -> ".unwrap_or_else(||"
                                 }
                                 """$unwrapOr $it)"""
-                            } else {
-                                val into =
-                                    """.try_into().expect("This check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")"""
-                                """.unwrap_or_else(|| $it$into)"""
                             }
                         }
                     }
@@ -622,10 +619,10 @@ class ServerBuilderGenerator(
                                 )
                                 // This is to avoid a `allow(clippy::useless_conversion)` on `try_into()`
                                 // Removing this `if` and leaving the `else if` below a plain `if` will make no difference
-                                //  to the compilation, but to clippy.
+                                // to the compilation, but to clippy.
                                 if (member.hasNonNullDefault()) {
                                     rustTemplate(
-                                        """#{Default:W}""",
+                                        "#{Default:W}",
                                         "Default" to renderDefaultBuilder(
                                             model,
                                             runtimeConfig,
@@ -633,24 +630,22 @@ class ServerBuilderGenerator(
                                             member,
                                         ) {
                                             if (member.isStreaming(model)) {
-                                                // We set ByteStream to Default::default() until it is easier to use the full namespace for python.
-                                                // Use `unwrap_or_default` to make clippy happy.
                                                 ".unwrap_or_default()"
                                             } else {
-                                                // The conversion is done above
-                                                """.unwrap_or($it)"""
+                                                ".unwrap_or($it)"
                                             }
                                         },
                                     )
                                     if (!isBuilderFallible) {
-                                        // Unwrap the Option
+                                        // Unwrap the `Option`.
+                                        // TODO This should be expect.
                                         rust(".unwrap()")
                                     }
                                 }
                             } else {
                                 if (member.hasNonNullDefault()) {
                                     rustTemplate(
-                                        """#{Default:W}""",
+                                        "#{Default:W}",
                                         "Default" to renderDefaultBuilder(
                                             model,
                                             runtimeConfig,
@@ -660,7 +655,8 @@ class ServerBuilderGenerator(
                                         ),
                                     )
                                     if (!isBuilderFallible) {
-                                        // unwrap the Option
+                                        // Unwrap the `Option`.
+                                        // TODO This should be expect.
                                         rust(".unwrap()")
                                     }
                                 }
@@ -674,7 +670,7 @@ class ServerBuilderGenerator(
                             )
                         }
                     }
-                    // This won't run if there is a default value
+                    // This won't run if there is a default value.
                     serverBuilderConstraintViolations.forMember(member)?.also {
                         rust(".ok_or(ConstraintViolation::${it.name()})?")
                     }
@@ -692,7 +688,13 @@ fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol) = wri
     }
 }
 
-fun renderDefaultBuilder(model: Model, runtimeConfig: RuntimeConfig, symbolProvider: RustSymbolProvider, member: MemberShape, wrap: (s: String) -> String = { it }): Writable {
+fun renderDefaultBuilder(
+    model: Model,
+    runtimeConfig: RuntimeConfig,
+    symbolProvider: RustSymbolProvider,
+    member: MemberShape,
+    wrap: (s: String) -> String = { it },
+): Writable {
     return writable {
         val node = member.expectTrait<DefaultTrait>().toNode()!!
         val name = member.memberName
@@ -702,12 +704,14 @@ fun renderDefaultBuilder(model: Model, runtimeConfig: RuntimeConfig, symbolProvi
                 val value = when (target) {
                     is IntEnumShape -> node.expectNumberNode().value
                     is EnumShape -> node.expectStringNode().value
-                    else -> throw CodegenException("Default value for $name must be of EnumShape or IntEnumShape")
+                    else -> throw CodegenException("Default value for shape ${target.id} must be of EnumShape or IntEnumShape")
                 }
                 val enumValues = when (target) {
                     is IntEnumShape -> target.enumValues
                     is EnumShape -> target.enumValues
-                    else -> UNREACHABLE("It must be an [Int]EnumShape, otherwise it'd have failed above")
+                    else -> UNREACHABLE(
+                        "Target shape ${target.id} must be an `EnumShape` or an `IntEnumShape` at this point, otherwise it would have failed above",
+                    )
                 }
                 val variant = enumValues
                     .entries
@@ -795,17 +799,9 @@ fun renderDefaultBuilder(model: Model, runtimeConfig: RuntimeConfig, symbolProvi
                 }
             }
 
-            is BlobShape -> {
-                val value = if (member.isStreaming(model)) {
-                    /* ByteStream to work in Python and Rust without explicit dependency */
-                    "Default::default()"
-                } else {
-                    "Vec::new()"
-                }
-                rust(wrap(value))
-            }
+            is BlobShape -> rust(wrap("Default::default()"))
 
-            else -> throw CodegenException("Default value for $name is unsupported or cannot exist")
+            else -> throw CodegenException("Default value for shape ${member.id} is unsupported or cannot exist; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
         }
     }
 }

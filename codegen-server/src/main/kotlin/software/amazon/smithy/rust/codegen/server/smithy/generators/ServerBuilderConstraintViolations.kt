@@ -62,7 +62,9 @@ class ServerBuilderConstraintViolations(
         nonExhaustive: Boolean,
         shouldRenderAsValidationExceptionFieldList: Boolean,
     ) {
-        check(all.isNotEmpty()) { shape }
+        check(all.isNotEmpty()) {
+            "Attempted to render constraint violations for the builder for structure shape ${shape.id}, but calculation of the constraint violations resulted in no variants"
+        }
 
         Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
         writer.docs("Holds one variant for each of the ways the builder can fail.")
