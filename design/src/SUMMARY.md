@@ -51,6 +51,7 @@
   - [RFC-0026: Client Crate Organization](./rfcs/rfc0026_client_crate_organization.md)
   - [RFC-0027: Endpoints 2.0](./rfcs/rfc0027_endpoints_20.md)
   - [RFC-0028: SDK Credential Cache Type Safety](./rfcs/rfc0028_sdk_credential_cache_type_safety.md)
+  - [RFC-0029: Finding New Home for Credential Types](./rfcs/rfc0029_new_home_for_cred_types.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)

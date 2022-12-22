@@ -1,7 +1,7 @@
 RFC: SDK Credential Cache Type Safety
 =====================================
 
-> Status: RFC
+> Status: Implemented in [smithy-rs#2122](https://github.com/awslabs/smithy-rs/pull/2122)
 >
 > Applies to: AWS SDK for Rust
 
