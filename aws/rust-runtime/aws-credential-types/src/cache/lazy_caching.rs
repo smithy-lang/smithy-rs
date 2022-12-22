@@ -145,17 +145,6 @@ mod builder {
             Default::default()
         }
 
-        /// Override configuration for the [Builder]
-        pub fn configure(
-            mut self,
-            sleep: Option<Arc<dyn AsyncSleep>>,
-            time_source: TimeSource,
-        ) -> Self {
-            self.sleep = sleep;
-            self.time_source = Some(time_source);
-            self
-        }
-
         /// Implementation of [`AsyncSleep`] to use for timeouts.
         ///
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
@@ -173,6 +162,18 @@ mod builder {
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
         pub fn set_sleep(&mut self, sleep: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
             self.sleep = sleep;
+            self
+        }
+
+        #[doc(hidden)] // because they only exist for tests
+        pub fn time_source(mut self, time_source: TimeSource) -> Self {
+            self.set_time_source(Some(time_source));
+            self
+        }
+
+        #[doc(hidden)] // because they only exist for tests
+        pub fn set_time_source(&mut self, time_source: Option<TimeSource>) -> &mut Self {
+            self.time_source = time_source;
             self
         }
 

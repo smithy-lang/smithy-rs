@@ -491,7 +491,9 @@ mod loader {
             let credentials_cache = if let Some(cache) = self.credentials_cache {
                 cache
             } else {
-                CredentialsCache::lazy()
+                let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
+                builder.set_sleep(conf.sleep());
+                builder.into_credentials_cache()
             };
 
             let credentials_provider = if let Some(provider) = self.credentials_provider {

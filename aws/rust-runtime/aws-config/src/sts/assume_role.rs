@@ -191,9 +191,11 @@ impl AssumeRoleProviderBuilder {
     /// Build a credentials provider for this role authorized by the given `provider`.
     pub fn build(self, provider: impl ProvideCredentials + 'static) -> AssumeRoleProvider {
         let conf = self.conf.unwrap_or_default();
-        let credentials_cache = CredentialsCache::lazy_builder()
-            .configure(conf.sleep(), conf.time_source())
-            .into_credentials_cache();
+
+        let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
+        builder.set_sleep(conf.sleep());
+        let credentials_cache = builder.into_credentials_cache();
+
         let config = aws_sdk_sts::Config::builder()
             .credentials_cache(credentials_cache)
             .credentials_provider(provider)
