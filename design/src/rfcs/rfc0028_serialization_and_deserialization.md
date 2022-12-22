@@ -41,6 +41,58 @@ We have created this RFC with the following use cases in mind.
 2. [Tests](https://awslabs.github.io/smithy-rs/design/faq.html#why-dont-the-sdk-service-crates-implement-serdeserialize-or-serdedeserialize-for-any-types) as suggested in the design FAQ.
 3. Building tools
 
+# Feature Gate
+
+## Enabling Feature
+To enable any of the features from this RFC, user must pass `--cfg aws-sdk-unstable` to rustc.
+
+You can do this by specifying it on env-variable or by config.toml.
+
+- specifying it on .cargo/config.toml
+
+```toml
+[build]
+rustflags = ["--cfg", "aws-sdk-unstable"]
+```
+
+- As an environment variable
+
+```bash
+export RUSTFLAGS="--cfg aws-sdk-unstable"
+cargo build
+```
+
+We considered allowing users to enable this feature on a crate-level.
+
+e.g.
+```toml
+[dependencies]
+aws_sdk_dynamodb = { version = "0.22.0", features = ["unstable", "serialize"] }
+```
+
+Compared to the cfg approach, it is lot easier for the users to enable this feature.
+However, we believe that cfg approach ensure users won't enable this feature by surprise, and communicate to users that features behind this feature gate can be taken-away or exprience breaking changes any time in future.
+
+## Feature Gate for Serialization and De-serialization
+`Serde` traits are implemented behind feature gates.
+`Serialize` is implemented behind `serialize`, while `Deserialize` is implemented behind `deserialize`.
+Users must enable the `unstable` feature to expose those features.
+
+We considered giving each feature a dedicated feature gate such as `unstable-serde-serialize`.
+In this case, we will need to change the name of feature gates entirely once it leaves the unstable status which will cause users to make changes to their code base.
+We conclude that this brings no benefit to the users.
+
+## Keeping both features behind the same feature gate
+We considered keeping both features behind the same feature gate.
+There is no significant difference in the complexity of implementation.
+We do not see any benefit in keeping them behind the same feature gate as this will only increase compile time when users do not need one of the features.
+
+## Different feature gates for different data types
+We considered implementing different feature gates for output, input, and their corresponding data types.
+For example, output and input types can have `output-serde-*` and `input-serde-*`.
+We are unable to do this as relevant metadata is not available during the code-gen.
+
+
 # Implementation
 ## Smithy Types
 `aws_smithy_types` is a crate that implements smithy's data types.
@@ -152,13 +204,13 @@ The resulting size of the serialized data is smaller when tagged externally, as 
 For the reasons mentioned above, we implement an enum that is externally tagged.
 
 ## Data Types to Skip
-We are going to skip serialization and deserialization of fields that have the following datatypes.
+We are going to skip serialization and deserialization of fields that have the datatype that corresponds to `@streaming blob` and `@streaming union` from smithy.
+Any fields with these data types are tagged with `#[serde(skip, default = "..name of the function for tailored serialization/de-serialization")]`.
 
+As of writing, this decision affects following Rust data types.
 - `aws_smithy_http::byte_stream::ByteStream`
 - `aws_smithy_http::event_stream::Receiver`
 - `aws_smithy_http::event_stream::EventStreamSender`
-
-Any fields with these data types are tagged with `#[serde(skip, default = "..name of the function for tailored serialization/de-serialization")]`.
 
 Here are some examples of data types affected by this decision:
 - `aws_sdk_transcribestreaming::client::fluent_builders::StartMedicalStreamTranscription`
@@ -336,25 +388,6 @@ Users are advised to consider the use of software such as [sccache](https://gith
 ## Misleading Results
 SDK team previously expressed concern that serialized data may be misleading.
 We believe that features implemented as part of this RFC do not produce a misleading result as we focus on builder types and it's corresponding data types which are mapped to serde's data type model with the derive macro.
-
-# Feature Gate
-`Serde` traits are implemented behind feature gates.
-`Serialize` is implemented behind `serialize`, while `Deserialize` is implemented behind `deserialize`.
-Users must enable the `unstable` feature to expose those features.
-
-We considered giving each feature a dedicated feature gate such as `unstable-serde-serialize`.
-In this case, we will need to change the name of feature gates entirely once it leaves the unstable status which will cause users to make changes to their code base.
-We conclude that this brings no benefit to the users.
-
-## Keeping both features behind the same feature gate
-We considered keeping both features behind the same feature gate.
-There is no significant difference in the complexity of implementation.
-We do not see any benefit in keeping them behind the same feature gate as this will only increase compile time when users do not need one of the features.
-
-## Different feature gates for different data types
-We considered implementing different feature gates for output, input, and their corresponding data types.
-For example, output and input types can have `output-serde-*` and `input-serde-*`.
-We are unable to do this as relevant metadata is not available during the code-gen.
 
 # Appendix
 ## [Use Case Examples](UseCaseExamples)
