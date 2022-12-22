@@ -49,7 +49,7 @@
   - [RFC-0024: RequestID](./rfcs/rfc0024_request_id.md)
   - [RFC-0025: Constraint traits](./rfcs/rfc0025_constraint_traits.md)
   - [RFC-0026: Client Crate Organization](./rfcs/rfc0026_client_crate_organization.md)
-  - [RFC-0027: Finding New Home for Credential Cache and Ensuring Consistency for Builder API](./rfcs/rfc0027_new_home_for_cred_cache_and_builder_api_consistency.md)
+  - [RFC-0027: Finding New Home for Credential Types](./rfcs/rfc0027_new_home_for_cred_cache_and_builder_api_consistency.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
