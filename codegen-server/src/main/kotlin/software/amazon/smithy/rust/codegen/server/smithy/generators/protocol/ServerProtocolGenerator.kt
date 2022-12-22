@@ -8,16 +8,18 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ClientMakeOperationGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
+
+class ServerMakeOperationGenerator : MakeOperationGenerator()
 
 open class ServerProtocolGenerator(
     codegenContext: CodegenContext,
     val protocol: ServerProtocol,
-    clientMakeOperationGenerator: ClientMakeOperationGenerator,
+    serverMakeOperationGenerator: ServerMakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
-) : ProtocolGenerator(codegenContext, protocol, clientMakeOperationGenerator, traitGenerator) {
+) : ProtocolGenerator(codegenContext, protocol, serverMakeOperationGenerator, traitGenerator) {
     /**
      * The server implementation uses this method to generate implementations of the `from_request` and `into_response`
      * traits for operation input and output shapes, respectively.

@@ -46,7 +46,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ClientMakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -75,6 +74,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShap
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerMakeOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
@@ -91,13 +91,7 @@ class ServerHttpBoundProtocolGenerator(
 ) : ServerProtocolGenerator(
     codegenContext,
     protocol,
-    ClientMakeOperationGenerator(
-        codegenContext,
-        protocol,
-        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
-        public = true,
-        includeDefaultPayloadHeaders = true,
-    ),
+    serverMakeOperationGenerator = ServerMakeOperationGenerator(),
     ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
@@ -985,17 +979,17 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                 }
             }
-            val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
+            val (queryBindingsTargetingCollection, queryBindingsTargetingSimple) =
                 queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
-            queryBindingsTargettingSimple.forEach {
+            queryBindingsTargetingSimple.forEach {
                 rust("let mut seen_${symbolProvider.toMemberName(it.member)} = false;")
             }
-            queryBindingsTargettingCollection.forEach {
+            queryBindingsTargetingCollection.forEach {
                 rust("let mut ${symbolProvider.toMemberName(it.member)} = Vec::new();")
             }
 
             rustBlock("for (k, v) in pairs") {
-                queryBindingsTargettingSimple.forEach {
+                queryBindingsTargetingSimple.forEach {
                     val deserializer = generateParseStrFn(it, false)
                     val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
@@ -1010,7 +1004,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         "deserializer" to deserializer,
                     )
                 }
-                queryBindingsTargettingCollection.forEachIndexed { idx, it ->
+                queryBindingsTargetingCollection.forEachIndexed { idx, it ->
                     rustBlock("${if (idx > 0) "else " else ""}if k == ${it.locationName.dq()}") {
                         val targetCollectionShape = model.expectShape(it.member.target, CollectionShape::class.java)
                         val memberShape = model.expectShape(targetCollectionShape.member.target)
@@ -1098,7 +1092,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                 }
             }
-            queryBindingsTargettingCollection.forEach { binding ->
+            queryBindingsTargetingCollection.forEach { binding ->
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
                 val hasConstrainedTarget =

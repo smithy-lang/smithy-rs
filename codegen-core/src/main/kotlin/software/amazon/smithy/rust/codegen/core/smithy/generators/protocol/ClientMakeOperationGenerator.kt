@@ -42,7 +42,7 @@ open class ClientMakeOperationGenerator(
     /** Whether to include default values for content-length and content-type */
     private val includeDefaultPayloadHeaders: Boolean,
     private val functionName: String = "make_operation",
-) {
+) : MakeOperationGenerator() {
     protected val model = codegenContext.model
     protected val runtimeConfig = codegenContext.runtimeConfig
     protected val symbolProvider = codegenContext.symbolProvider
