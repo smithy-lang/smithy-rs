@@ -34,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamUnmarshallTe
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import kotlin.streams.toList
 
 data class TestEventStreamProject(
     val model: Model,
