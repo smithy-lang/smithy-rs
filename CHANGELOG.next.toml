@@ -75,3 +75,35 @@ A new AWS runtime crate called `aws-credential-types` has been introduced. Types
 references = ["smithy-rs#2108"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = """Request IDs can now be easily retrieved on successful responses. For example, with S3:
+```rust
+// Import the trait to get the `request_id` method on outputs
+use aws_sdk_s3::types::RequestId;
+
+let output = client.list_buckets().send().await?;
+println!("Request ID: {:?}", output.request_id());
+```
+"""
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Retrieving a request ID from errors now requires importing the `RequestId` trait. For example, with S3:
+```rust
+use aws_sdk_s3::types::RequestId;
+
+println!("Request ID: {:?}", error.request_id());
+```
+"""
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Generic clients no longer expose a `request_id()` function on errors. To get request ID functionality, use the SDK code generator."
+references = ["smithy-rs#76", "smithy-rs#2129"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
