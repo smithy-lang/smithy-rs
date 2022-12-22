@@ -52,7 +52,7 @@ class ConstrainedBlobGenerator(
     fun render() {
         val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
-        val inner = RuntimeType.Blob(codegenContext.runtimeConfig).toSymbol().rustType().render()
+        val inner = RuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType().render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
         val constrainedTypeVisibility = if (publicConstrainedTypes) {
@@ -65,7 +65,8 @@ class ConstrainedBlobGenerator(
             visibility = constrainedTypeVisibility,
         )
 
-        writer.documentShape(shape, model, note = rustDocsNote(name))
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
         constrainedTypeMetadata.render(writer)
         writer.rust("struct $name(pub(crate) $inner);")
         if (constrainedTypeVisibility == Visibility.PUBCRATE) {
@@ -106,7 +107,7 @@ class ConstrainedBlobGenerator(
                 }
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "ConstraintViolation" to constraintViolation,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,
