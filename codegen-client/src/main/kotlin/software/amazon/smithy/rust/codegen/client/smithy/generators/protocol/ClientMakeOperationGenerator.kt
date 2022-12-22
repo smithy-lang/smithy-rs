@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators.protocol
+package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.BlobShape
@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -30,8 +31,6 @@ import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
-
-// TODO(https://github.com/awslabs/smithy-rs/issues/1901): Move to `codegen-client`.
 
 /** Generates the `make_operation` function on input structs */
 open class ClientMakeOperationGenerator(
@@ -46,7 +45,7 @@ open class ClientMakeOperationGenerator(
     protected val model = codegenContext.model
     protected val runtimeConfig = codegenContext.runtimeConfig
     protected val symbolProvider = codegenContext.symbolProvider
-    protected val httpBindingResolver = protocol.httpBindingResolver
+    private val httpBindingResolver = protocol.httpBindingResolver
     private val defaultClassifier = RuntimeType.smithyHttp(runtimeConfig)
         .resolve("retry::DefaultResponseRetryClassifier")
 
