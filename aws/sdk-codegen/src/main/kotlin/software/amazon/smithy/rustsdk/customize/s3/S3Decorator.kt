@@ -48,45 +48,33 @@ class S3Decorator : ClientCodegenDecorator {
         ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
     )
 
-    private fun applies(serviceId: ShapeId) =
-        serviceId == ShapeId.from("com.amazonaws.s3#AmazonS3")
-
     override fun protocols(
         serviceId: ShapeId,
         currentProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>,
-    ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> =
-        currentProtocols.letIf(applies(serviceId)) {
-            it + mapOf(
-                RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
-                    S3ProtocolOverride(protocolConfig)
-                },
-            )
-        }
+    ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> = currentProtocols + mapOf(
+        RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
+            S3ProtocolOverride(protocolConfig)
+        },
+    )
 
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        return model.letIf(applies(service.id)) {
-            ModelTransformer.create().mapShapes(model) { shape ->
-                shape.letIf(isInInvalidXmlRootAllowList(shape)) {
-                    logger.info("Adding AllowInvalidXmlRoot trait to $it")
-                    (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
-                }
-            }.let(StripBucketFromHttpPath()::transform)
-        }
-    }
+    override fun transformModel(service: ServiceShape, model: Model): Model =
+        ModelTransformer.create().mapShapes(model) { shape ->
+            shape.letIf(isInInvalidXmlRootAllowList(shape)) {
+                logger.info("Adding AllowInvalidXmlRoot trait to $it")
+                (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+            }
+        }.let(StripBucketFromHttpPath()::transform)
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) { it + listOf(S3ParseExtendedRequestId()) }
+    ): List<OperationCustomization> = baseCustomizations + listOf(S3ParseExtendedRequestId())
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) {
-        it + S3PubUse()
-    }
+    ): List<LibRsCustomization> = baseCustomizations + S3PubUse()
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
