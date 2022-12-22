@@ -49,7 +49,7 @@ class LiteralGenerator(private val ownership: Ownership, private val context: Co
                 "let mut out = #{HashMap}::<String, #{Document}>::new();",
                 *codegenScope,
             )
-            members.forEach { (identifier, literal) ->
+            members.keys.sortedBy { it.toString() }.map { k -> k to members[k]!! }.forEach { (identifier, literal) ->
                 rust(
                     "out.insert(${identifier.toString().dq()}.to_string(), #W.into());",
                     // When writing into the hashmap, it always needs to be an owned type

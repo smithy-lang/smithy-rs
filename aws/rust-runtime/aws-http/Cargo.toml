@@ -8,6 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
+aws-credential-types = { path = "../aws-credential-types" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
