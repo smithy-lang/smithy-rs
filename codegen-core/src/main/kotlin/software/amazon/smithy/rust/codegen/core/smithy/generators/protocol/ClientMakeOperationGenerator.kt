@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 // TODO(https://github.com/awslabs/smithy-rs/issues/1901): Move to `codegen-client`.
 
 /** Generates the `make_operation` function on input structs */
-open class MakeOperationGenerator(
+open class ClientMakeOperationGenerator(
     protected val codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val bodyGenerator: ProtocolPayloadGenerator,

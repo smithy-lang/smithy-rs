@@ -76,7 +76,7 @@ abstract class ProtocolGenerator(
      * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
      * This is the serializer side of request dispatch
      */
-    private val makeOperationGenerator: MakeOperationGenerator,
+    private val clientMakeOperationGenerator: ClientMakeOperationGenerator,
     /**
      * Operations generate implementations of ParseHttpResponse or ParseStrictResponse.
      * This is the deserializer side of request dispatch (parsing the response)

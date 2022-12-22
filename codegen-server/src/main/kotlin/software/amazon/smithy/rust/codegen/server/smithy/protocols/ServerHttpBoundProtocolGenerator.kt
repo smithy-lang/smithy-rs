@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ClientMakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -91,7 +91,7 @@ class ServerHttpBoundProtocolGenerator(
 ) : ServerProtocolGenerator(
     codegenContext,
     protocol,
-    MakeOperationGenerator(
+    ClientMakeOperationGenerator(
         codegenContext,
         protocol,
         HttpBoundProtocolPayloadGenerator(codegenContext, protocol),

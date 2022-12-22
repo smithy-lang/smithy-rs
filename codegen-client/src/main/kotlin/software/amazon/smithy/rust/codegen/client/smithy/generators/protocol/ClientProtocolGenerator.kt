@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ClientMakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -28,15 +28,15 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 open class ClientProtocolGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
-    private val makeOperationGenerator: MakeOperationGenerator,
+    private val clientMakeOperationGenerator: ClientMakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
-) : ProtocolGenerator(codegenContext, protocol, makeOperationGenerator, traitGenerator) {
+) : ProtocolGenerator(codegenContext, protocol, clientMakeOperationGenerator, traitGenerator) {
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
      *
      * This primarily relies on two components:
      * 1. [traitGenerator]: Generate implementations of the `ParseHttpResponse` trait for the operations
-     * 2. [makeOperationGenerator]: Generate the `make_operation()` method which is used to serialize operations
+     * 2. [clientMakeOperationGenerator]: Generate the `make_operation()` method which is used to serialize operations
      *    to HTTP requests
      */
     fun renderOperation(
@@ -56,7 +56,7 @@ open class ClientProtocolGenerator(
                 customizations,
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
             )
-            makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
+            clientMakeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
 
             // pub fn builder() -> ... { }
             builderGenerator.renderConvenienceMethod(this)
