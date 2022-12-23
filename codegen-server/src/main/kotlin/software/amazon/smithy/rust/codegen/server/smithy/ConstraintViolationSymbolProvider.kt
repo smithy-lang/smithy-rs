@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -127,7 +128,7 @@ class ConstraintViolationSymbolProvider(
                     .build()
             }
 
-            is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape -> {
+            is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
                 val module = shape.shapeModule()
                 val rustType = RustType.Opaque(constraintViolationName, module.fullyQualifiedPath())
                 Symbol.builder()
