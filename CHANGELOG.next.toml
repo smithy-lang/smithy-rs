@@ -75,3 +75,15 @@ A new AWS runtime crate called `aws-credential-types` has been introduced. Types
 references = ["smithy-rs#2108"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Servers support the `@default` trait: models can specify default values. Default values will be automatically supplied when not manually set."
+references = ["smithy-rs#1879"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+author = "82marbag"
+
+[[smithy-rs]]
+message = "The constraint `@length` on non-streaming blob shapes is supported."
+references = ["smithy-rs#2131"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+author = "82marbag"
