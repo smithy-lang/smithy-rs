@@ -5,9 +5,10 @@
 
 use crate::fs::Fs;
 use crate::package::{
-    discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
+    discover_and_validate_package_batches, expected_package_owners, Package, PackageBatch,
+    PackageHandle, PackageStats,
 };
-use crate::publish::CRATES_IO_CLIENT;
+use crate::publish::{publish, CRATES_IO_CLIENT};
 use crate::retry::{run_with_retry, BoxError, ErrorClass};
 use crate::{cargo, SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
@@ -15,6 +16,7 @@ use clap::Parser;
 use crates_io_api::Error;
 use dialoguer::Confirm;
 use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::package::PackageCategory;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -69,7 +71,7 @@ pub async fn subcommand_publish(
             } else {
                 info!("`{}` was already published", package.handle);
             }
-            correct_owner(&package).await?;
+            correct_owner(&package.handle, &package.category).await?;
         }
         if any_published {
             info!("Sleeping 30 seconds after completion of the batch");
@@ -91,24 +93,6 @@ pub fn resolve_publish_location(location: &Path) -> PathBuf {
         // Otherwise, publish from the given path (likely the smithy-rs runtime bundle)
         Err(_) => location.into(),
     }
-}
-
-async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
-    info!("Publishing `{}`...", handle);
-    run_with_retry(
-        &format!("Publishing `{}`", handle),
-        5,
-        Duration::from_secs(30),
-        || async {
-            cargo::Publish::new(handle.clone(), &crate_path)
-                .spawn()
-                .await?;
-            Result::<_, BoxError>::Ok(())
-        },
-        |_err| ErrorClass::Retry,
-    )
-    .await?;
-    Ok(())
 }
 
 async fn is_published(handle: &PackageHandle) -> Result<bool> {
@@ -157,24 +141,24 @@ async fn wait_for_eventual_consistency(package: &Package) -> Result<()> {
 }
 
 /// Corrects the crate ownership.
-async fn correct_owner(package: &Package) -> Result<()> {
+pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -> Result<()> {
     run_with_retry(
-        &format!("Correcting ownership of `{}`", package.handle.name),
+        &format!("Correcting ownership of `{}`", handle.name),
         3,
         Duration::from_secs(5),
         || async {
-            let actual_owners: HashSet<String> = cargo::GetOwners::new(&package.handle.name).spawn().await?.into_iter().collect();
-            let expected_owners = package.expected_owners();
+            let actual_owners: HashSet<String> = cargo::GetOwners::new(&handle.name).spawn().await?.into_iter().collect();
+            let expected_owners = expected_package_owners(&category, &handle.name);
 
             let owners_to_be_added = expected_owners.difference(&actual_owners);
             let incorrect_owners = actual_owners.difference(&expected_owners);
 
             let mut added_individual = false;
             for crate_owner in owners_to_be_added {
-                cargo::AddOwner::new(&package.handle.name, crate_owner)
+                cargo::AddOwner::new(&handle.name, crate_owner)
                     .spawn()
                     .await?;
-                info!("Added `{}` as owner of `{}`", crate_owner, package.handle);
+                info!("Added `{}` as owner of `{}`", crate_owner, handle);
                 // Teams in crates.io start with `github:` while individuals are just the GitHub user name
                 added_individual |= !crate_owner.starts_with("github:");
             }
@@ -183,16 +167,16 @@ async fn correct_owner(package: &Package) -> Result<()> {
                 // anyone if an owner was added, as removing the last individual owner may break.
                 // The next publish run will remove the incorrect owner.
                 if !added_individual {
-                    cargo::RemoveOwner::new(&package.handle.name, incorrect_owner)
+                    cargo::RemoveOwner::new(&handle.name, incorrect_owner)
                         .spawn()
                         .await
-                        .context(format!("remove incorrect owner `{}` from crate `{}`", incorrect_owner, package.handle))?;
+                        .context(format!("remove incorrect owner `{}` from crate `{}`", incorrect_owner, handle))?;
                     info!(
                         "Removed incorrect owner `{}` from crate `{}`",
-                        incorrect_owner, package.handle
+                        incorrect_owner, handle
                     );
                 } else {
-                    info!("Skipping removal of incorrect owner `{}` from crate `{}` due to new owners", incorrect_owner, package.handle);
+                    info!("Skipping removal of incorrect owner `{}` from crate `{}` due to new owners", incorrect_owner, handle);
                 }
             }
             Result::<_, BoxError>::Ok(())
