@@ -58,7 +58,7 @@ pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> anyhow:
     Ok(())
 }
 
-async fn claim_crate_name(name: &String) -> anyhow::Result<()> {
+async fn claim_crate_name(name: &str) -> anyhow::Result<()> {
     let temporary_directory = tempfile::tempdir()?;
     let crate_dir_path = temporary_directory.path();
     create_dummy_lib_crate(Fs::Real, name, crate_dir_path.to_path_buf()).await?;
