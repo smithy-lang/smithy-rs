@@ -77,7 +77,7 @@ private class TestProtocolMakeOperationGenerator(
     protocol: Protocol,
     body: String,
     private val httpRequestBuilder: String,
-) : ClientMakeOperationGenerator(
+) : MakeOperationGenerator(
     codegenContext,
     protocol,
     TestProtocolPayloadGenerator(body),

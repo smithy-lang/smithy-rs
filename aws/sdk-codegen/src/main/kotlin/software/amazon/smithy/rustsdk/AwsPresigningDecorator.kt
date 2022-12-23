@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientMakeOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -166,7 +166,7 @@ class AwsInputPresignedMethod(
         val makeOperationFn = "_make_presigned_operation"
 
         val protocol = section.protocol
-        ClientMakeOperationGenerator(
+        MakeOperationGenerator(
             codegenContext,
             protocol,
             HttpBoundProtocolPayloadGenerator(codegenContext, protocol),

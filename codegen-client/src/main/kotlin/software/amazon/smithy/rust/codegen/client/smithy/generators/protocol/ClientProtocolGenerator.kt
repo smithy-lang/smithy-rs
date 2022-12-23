@@ -31,7 +31,7 @@ open class ClientProtocolGenerator(
      * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
      * This is the serializer side of request dispatch
      */
-    private val clientMakeOperationGenerator: ClientMakeOperationGenerator,
+    private val makeOperationGenerator: MakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) : ProtocolGenerator(codegenContext, protocol, traitGenerator) {
     /**
@@ -39,7 +39,7 @@ open class ClientProtocolGenerator(
      *
      * This primarily relies on two components:
      * 1. [traitGenerator]: Generate implementations of the `ParseHttpResponse` trait for the operations
-     * 2. [clientMakeOperationGenerator]: Generate the `make_operation()` method which is used to serialize operations
+     * 2. [makeOperationGenerator]: Generate the `make_operation()` method which is used to serialize operations
      *    to HTTP requests
      */
     fun renderOperation(
@@ -59,7 +59,7 @@ open class ClientProtocolGenerator(
                 customizations,
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
             )
-            clientMakeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
+            makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
 
             // pub fn builder() -> ... { }
             builderGenerator.renderConvenienceMethod(this)

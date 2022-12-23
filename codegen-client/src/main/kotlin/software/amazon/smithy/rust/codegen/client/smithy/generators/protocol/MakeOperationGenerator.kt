@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /** Generates the `make_operation` function on input structs */
-open class ClientMakeOperationGenerator(
+open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val bodyGenerator: ProtocolPayloadGenerator,
