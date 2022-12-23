@@ -136,7 +136,7 @@ export class CanaryStack extends Stack {
             new PolicyStatement({
                 actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
                 effect: Effect.ALLOW,
-                resources: ["arn:aws:logs:*:*:/aws/lambda/canary-lambda-*:*"],
+                resources: ["arn:aws:logs:*:*:/aws/lambda/canary-*:*"],
             }),
         );
 
