@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
@@ -30,15 +32,20 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.CommandFailed
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.util.logging.Logger
@@ -70,12 +77,14 @@ class ClientCodegenVisitor(
                 nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
             )
         val baseModel = baselineTransform(context.model)
-        val service = settings.getService(baseModel)
+        val untransformedService = settings.getService(baseModel)
         val (protocol, generator) = ClientProtocolLoader(
-            codegenDecorator.protocols(service.id, ClientProtocolLoader.DefaultProtocols),
-        ).protocolFor(context.model, service)
+            codegenDecorator.protocols(untransformedService.id, ClientProtocolLoader.DefaultProtocols),
+        ).protocolFor(context.model, untransformedService)
         protocolGeneratorFactory = generator
-        model = codegenDecorator.transformModel(service, baseModel)
+        model = codegenDecorator.transformModel(untransformedService, baseModel)
+        // the model transformer _might_ change the service shape
+        val service = settings.getService(model)
         symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, codegenDecorator)
@@ -214,6 +223,31 @@ class ClientCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
+        }
+        if (shape.isEventStream()) {
+            rustCrate.withModule(RustModule.Error) {
+                val symbol = symbolProvider.toSymbol(shape)
+                val errors = shape.eventStreamErrors()
+                    .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
+                val errorSymbol = shape.eventStreamErrorSymbol(symbolProvider)
+                OperationErrorGenerator(model, symbolProvider, symbol, errors)
+                    .renderErrors(this, errorSymbol, symbol)
+            }
+        }
+    }
+
+    /**
+     * Generate errors for operation shapes
+     */
+    override fun operationShape(shape: OperationShape) {
+        rustCrate.withModule(RustModule.Error) {
+            val operationSymbol = symbolProvider.toSymbol(shape)
+            OperationErrorGenerator(
+                model,
+                symbolProvider,
+                operationSymbol,
+                shape.operationErrors(model).map { it.asStructureShape().get() },
+            ).render(this)
         }
     }
 }

@@ -36,3 +36,6 @@
 - [RFC-0024: RequestID](./rfc0024_request_id.md)
 - [RFC-0025: Constraint traits](./rfc0025_constraint_traits.md)
 - [RFC-0026: Client Crate Organization](./rfc0026_client_crate_organization.md)
+- [RFC-0027: Endpoints 2.0](./rfc0027_endpoints_20.md)
+- [RFC-0028: SDK Credential Cache Type Safety](./rfc0028_sdk_credential_cache_type_safety.md)
+- [RFC-0029: Finding New Home for Credential Types](./rfc0029_new_home_for_cred_types.md)

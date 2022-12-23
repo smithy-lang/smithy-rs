@@ -55,6 +55,7 @@
 //! Override configuration after construction of `SdkConfig`:
 //!
 //! ```no_run
+//! # use aws_credential_types::provider::ProvideCredentials;
 //! # use aws_types::SdkConfig;
 //! # mod aws_sdk_dynamodb {
 //! #   pub mod config {
@@ -62,7 +63,7 @@
 //! #     impl Builder {
 //! #       pub fn credentials_provider(
 //! #         self,
-//! #         credentials_provider: impl aws_types::credentials::ProvideCredentials + 'static) -> Self { self }
+//! #         credentials_provider: impl aws_credential_types::provider::ProvideCredentials + 'static) -> Self { self }
 //! #       pub fn build(self) -> Builder { self }
 //! #     }
 //! #     impl From<&aws_types::SdkConfig> for Builder {
@@ -79,7 +80,7 @@
 //! # }
 //! # async fn docs() {
 //! # use aws_config::meta::region::RegionProviderChain;
-//! # fn custom_provider(base: &SdkConfig) -> impl aws_types::credentials::ProvideCredentials {
+//! # fn custom_provider(base: &SdkConfig) -> impl ProvideCredentials {
 //! #   base.credentials_provider().unwrap().clone()
 //! # }
 //! let sdk_config = aws_config::load_from_env().await;
@@ -106,7 +107,6 @@ const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(test)]
 mod test_case;
 
-mod cache;
 mod fs_util;
 mod http_credential_provider;
 mod json_credentials;
@@ -149,12 +149,12 @@ pub async fn load_from_env() -> aws_types::SdkConfig {
 mod loader {
     use std::sync::Arc;
 
+    use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::{ConnectorSettings, HttpConnector};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
-    use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
     use aws_types::endpoint::ResolveAwsEndpoint;
     use aws_types::SdkConfig;
 
@@ -174,6 +174,7 @@ mod loader {
         app_name: Option<AppName>,
         credentials_provider: Option<SharedCredentialsProvider>,
         endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+        endpoint_url: Option<String>,
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
         sleep: Option<Arc<dyn AsyncSleep>>,
@@ -294,7 +295,7 @@ mod loader {
         ///
         /// Override the credentials provider but load the default value for region:
         /// ```no_run
-        /// # use aws_types::Credentials;
+        /// # use aws_credential_types::Credentials;
         /// # fn create_my_credential_provider() -> Credentials {
         /// #     Credentials::new("example", "example", None, None, "example")
         /// # }
@@ -315,6 +316,8 @@ mod loader {
 
         /// Override the endpoint resolver used for **all** AWS Services
         ///
+        /// This method is deprecated. Use [`Self::endpoint_url`] instead.
+        ///
         /// This method will override the endpoint resolver used for **all** AWS services. This mainly
         /// exists to set a static endpoint for tools like `LocalStack`. For live traffic, AWS services
         /// require the service-specific endpoint resolver they load by default.
@@ -332,11 +335,36 @@ mod loader {
         ///     .await;
         /// # Ok(())
         /// # }
+        #[deprecated(note = "use `.endpoint_url(...)` instead")]
         pub fn endpoint_resolver(
             mut self,
             endpoint_resolver: impl ResolveAwsEndpoint + 'static,
         ) -> Self {
             self.endpoint_resolver = Some(Arc::new(endpoint_resolver));
+            self
+        }
+
+        /// Override the endpoint URL used for **all** AWS services.
+        ///
+        /// This method will override the endpoint URL used for **all** AWS services. This primarily
+        /// exists to set a static endpoint for tools like `LocalStack`. When sending requests to
+        /// production AWS services, this method should only be used for service-specific behavior.
+        ///
+        /// When this method is used, the [`Region`](aws_types::region::Region) is only used for
+        /// signing; it is not used to route the request.
+        ///
+        /// # Examples
+        ///
+        /// Use a static endpoint for all services
+        /// ```no_run
+        /// # async fn create_config() {
+        /// let sdk_config = aws_config::from_env()
+        ///     .endpoint_url("http://localhost:1234")
+        ///     .load()
+        ///     .await;
+        /// # }
+        pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
+            self.endpoint_url = Some(endpoint_url.into());
             self
         }
 
@@ -458,16 +486,17 @@ mod loader {
             builder.set_endpoint_resolver(endpoint_resolver);
             builder.set_app_name(app_name);
             builder.set_sleep_impl(sleep_impl);
+            builder.set_endpoint_url(self.endpoint_url);
             builder.build()
         }
     }
 
     #[cfg(test)]
     mod test {
+        use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::DynConnector;
         use aws_smithy_client::never::NeverConnector;
-        use aws_types::credentials::ProvideCredentials;
         use aws_types::os_shim_internal::Env;
 
         use crate::from_env;

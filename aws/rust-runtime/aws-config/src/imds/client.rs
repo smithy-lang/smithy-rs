@@ -18,7 +18,7 @@ use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_client::{erase::DynConnector, SdkSuccess};
 use aws_smithy_client::{retry, SdkError};
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::Endpoint;
+use aws_smithy_http::endpoint::apply_endpoint;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::{Metadata, Operation};
 use aws_smithy_http::response::ParseStrictResponse;
@@ -128,7 +128,7 @@ pub struct Client {
 
 #[derive(Debug)]
 struct ClientInner {
-    endpoint: Endpoint,
+    endpoint: Uri,
     smithy_client: aws_smithy_client::Client<DynConnector, ImdsMiddleware>,
 }
 
@@ -235,10 +235,7 @@ impl Client {
         let mut base_uri: Uri = path.parse().map_err(|_| {
             ImdsError::unexpected("IMDS path was not a valid URI. Hint: does it begin with `/`?")
         })?;
-        self.inner
-            .endpoint
-            .set_endpoint(&mut base_uri, None)
-            .map_err(ImdsError::unexpected)?;
+        apply_endpoint(&mut base_uri, &self.inner.endpoint, None).map_err(ImdsError::unexpected)?;
         let request = http::Request::builder()
             .uri(base_uri)
             .body(SdkBody::empty())
@@ -434,7 +431,6 @@ impl Builder {
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
         let endpoint = endpoint_source.endpoint(self.mode_override).await?;
-        let endpoint = Endpoint::immutable_uri(endpoint)?;
         let retry_config = retry::Config::default()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
         let token_loader = token::TokenMiddleware::new(
@@ -566,6 +562,7 @@ impl<T, E> ClassifyRetry<SdkSuccess<T>, SdkError<E>> for ImdsResponseRetryClassi
 pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
+    use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
@@ -573,7 +570,7 @@ pub(crate) mod test {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation;
     use aws_smithy_types::retry::RetryKind;
-    use aws_types::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
+    use aws_types::os_shim_internal::{Env, Fs};
     use http::header::USER_AGENT;
     use http::Uri;
     use serde::Deserialize;
@@ -694,13 +691,13 @@ pub(crate) mod test {
                 imds_response(r#"test-imds-output2"#),
             ),
         ]);
-        let mut time_source = ManualTimeSource::new(UNIX_EPOCH);
+        let mut time_source = TestingTimeSource::new(UNIX_EPOCH);
         tokio::time::pause();
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
                     .with_http_connector(DynConnector::new(connection.clone()))
-                    .with_time_source(TimeSource::manual(&time_source))
+                    .with_time_source(TimeSource::testing(&time_source))
                     .with_sleep(TokioSleep::new()),
             )
             .endpoint_mode(EndpointMode::IpV6)
@@ -747,13 +744,13 @@ pub(crate) mod test {
             ),
         ]);
         tokio::time::pause();
-        let mut time_source = ManualTimeSource::new(UNIX_EPOCH);
+        let mut time_source = TestingTimeSource::new(UNIX_EPOCH);
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
                     .with_sleep(TokioSleep::new())
                     .with_http_connector(DynConnector::new(connection.clone()))
-                    .with_time_source(TimeSource::manual(&time_source)),
+                    .with_time_source(TimeSource::testing(&time_source)),
             )
             .endpoint_mode(EndpointMode::IpV6)
             .token_ttl(Duration::from_secs(600))
