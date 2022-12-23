@@ -230,6 +230,6 @@ let client = aws_sdk_s3::Client::new(&sdk_config);
 
 </details>
 """
-references = ["smithy-rs#2108"]
+references = ["smithy-rs#2122"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
