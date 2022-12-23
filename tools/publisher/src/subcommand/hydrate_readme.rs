@@ -5,11 +5,11 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use fs_err as fs;
 use handlebars::Handlebars;
 use serde::Serialize;
 use serde_json::json;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
-use std::fs;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]

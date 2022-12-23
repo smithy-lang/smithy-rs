@@ -7,28 +7,19 @@ use crate::fs::Fs;
 use crate::package::{
     discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
 };
+use crate::publish::CRATES_IO_CLIENT;
 use crate::retry::{run_with_retry, BoxError, ErrorClass};
-use crate::SDK_REPO_CRATE_PATH;
-use crate::{cargo, SDK_REPO_NAME};
+use crate::{cargo, SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use crates_io_api::{AsyncClient, Error};
+use crates_io_api::Error;
 use dialoguer::Confirm;
-use lazy_static::lazy_static;
 use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::info;
-
-lazy_static! {
-    static ref CRATES_IO_CLIENT: AsyncClient = AsyncClient::new(
-        "AWS_RUST_SDK_PUBLISHER (aws-sdk-rust@amazon.com)",
-        Duration::from_secs(1)
-    )
-    .expect("valid client");
-}
 
 #[derive(Parser, Debug)]
 pub struct PublishArgs {

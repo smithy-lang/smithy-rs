@@ -159,7 +159,6 @@ pub async fn discover_and_validate_package_batches(
         .filter(|package| package.publish == Publish::Allowed)
         .collect::<Vec<Package>>();
     validate_packages(&packages)?;
-
     let batches = batch_packages(packages)?;
     let stats = PackageStats::calculate(&batches);
     Ok((batches, stats))
