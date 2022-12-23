@@ -21,25 +21,19 @@ use tracing::info;
 
 #[derive(Parser, Debug)]
 pub struct ClaimCrateNamesArgs {
-    /// Path containing the crates whose names should be claimed on crates.io.
-    /// Crates will be discovered recursively
-    #[clap(long)]
-    location: PathBuf,
-
     /// Don't prompt for confirmation before publishing
     #[clap(short('y'))]
     skip_confirmation: bool,
 }
 
 pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> anyhow::Result<()> {
-    let ClaimCrateNamesArgs {
-        location,
-        skip_confirmation,
-    } = args;
+    let ClaimCrateNamesArgs { skip_confirmation } = args;
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
-    let packages = discover_publishable_crate_names(location).await?;
+    let smithy_rs_repository_root =
+        git::find_git_repository_root(SDK_REPO_NAME, std::env::current_dir()?)?;
+    let packages = discover_publishable_crate_names(&smithy_rs_repository_root).await?;
     let unpublished_package_names = {
         let mut s = HashSet::new();
         for package_name in packages {
@@ -80,7 +74,7 @@ async fn claim_crate_name(name: &String) -> anyhow::Result<()> {
 }
 
 /// Return the list of publishable crate names in the `smithy-rs` git repository.
-async fn discover_publishable_crate_names(location: &Path) -> anyhow::Result<Vec<String>> {
+async fn discover_publishable_crate_names(repository_root: &Path) -> anyhow::Result<Vec<String>> {
     async fn _discover_publishable_crate_names(
         fs: Fs,
         path: PathBuf,
@@ -104,7 +98,6 @@ async fn discover_publishable_crate_names(location: &Path) -> anyhow::Result<Vec
         Ok(publishable_package_names)
     }
 
-    let repository_root = git::find_git_repository_root(SDK_REPO_NAME, location)?;
     let packages = {
         let mut p = vec![];
         info!("Discovering publishable crates...");

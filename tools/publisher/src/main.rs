@@ -27,6 +27,8 @@ enum Args {
     /// Publishes crates to crates.io
     Publish(PublishArgs),
     /// Publishes an empty library crate to crates.io when a new runtime crate is introduced.
+    ///
+    /// It must be invoked from the `smithy-rs` repository.
     ClaimCrateNames(ClaimCrateNamesArgs),
     /// Yanks an entire SDK release. For individual packages, use `cargo yank` instead.
     /// Only one of the `--github-release-tag` or `--versions-toml` options are required.
