@@ -155,7 +155,7 @@ class AwsInputPresignedMethod(
         }
 
     private fun RustWriter.writeInputPresignedMethod(section: OperationSection.InputImpl) {
-        val operationError = operationShape.errorSymbol(codegenContext.model, symbolProvider, codegenContext.target)
+        val operationError = operationShape.errorSymbol(symbolProvider)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
         val makeOperationOp = if (presignableOp.hasModelTransforms()) {
