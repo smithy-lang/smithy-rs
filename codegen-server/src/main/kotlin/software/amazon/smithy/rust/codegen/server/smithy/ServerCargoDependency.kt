@@ -29,6 +29,7 @@ object ServerCargoDependency {
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+    fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
 }
 
 /**

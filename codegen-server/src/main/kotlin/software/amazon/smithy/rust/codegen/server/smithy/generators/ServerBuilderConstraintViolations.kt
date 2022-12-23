@@ -62,13 +62,18 @@ class ServerBuilderConstraintViolations(
         nonExhaustive: Boolean,
         shouldRenderAsValidationExceptionFieldList: Boolean,
     ) {
+        check(all.isNotEmpty()) {
+            "Attempted to render constraint violations for the builder for structure shape ${shape.id}, but calculation of the constraint violations resulted in no variants"
+        }
+
         Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
         writer.docs("Holds one variant for each of the ways the builder can fail.")
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
         val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
-        writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate) " else "" } enum $constraintViolationSymbolName") {
+        writer.rustBlock("pub${if (visibility == Visibility.PUBCRATE) " (crate) " else ""} enum $constraintViolationSymbolName") {
             renderConstraintViolations(writer)
         }
+
         renderImplDisplayConstraintViolation(writer)
         writer.rust("impl #T for ConstraintViolation { }", RuntimeType.StdError)
 
@@ -93,7 +98,7 @@ class ServerBuilderConstraintViolations(
     fun forMember(member: MemberShape): ConstraintViolation? {
         check(members.contains(member))
         // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
-        return if (symbolProvider.toSymbol(member).isOptional()) {
+        return if (symbolProvider.toSymbol(member).isOptional() || member.hasNonNullDefault()) {
             null
         } else {
             ConstraintViolation(member, ConstraintViolationKind.MISSING_MEMBER)

@@ -96,7 +96,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
 }
 
 fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider): Boolean =
-    this.isDirectlyConstrained(symbolProvider) || (model.expectShape(this.target).isDirectlyConstrained(symbolProvider))
+    this.isDirectlyConstrained(symbolProvider) || model.expectShape(this.target).isDirectlyConstrained(symbolProvider)
 
 fun Shape.isTransitivelyButNotDirectlyConstrained(model: Model, symbolProvider: SymbolProvider): Boolean =
     !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
