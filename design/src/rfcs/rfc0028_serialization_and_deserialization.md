@@ -164,16 +164,15 @@ Serde can distinguish each variant without a tag as each variant's content is di
 
 ## Builder Types and Non-Builder Types
 Builder types and non Builder types implement `Serialize` and `Deserialize` with derive macro.
-Derive macro will be implemented behind a feature-gate; Users must enable `serialize` to use `serde::Serialize`, and `deserialize` to use `serde::Deserialize` respectively. Additionally, users must enable `unstable` until the stabilization of this RFC.
 
+Example:
 ```rust
-#[allow(missing_docs)] // documentation missing in model
 #[cfg_attr(
-    all(feature = "unstable", feature = "serialize"),
+    all(aws-sdk-unstable, feature = "serialize"),
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    all(feature = "unstable", feature = "deserialize"),
+    all(aws-sdk-unstable, feature = "deserialize"),
     derive(serde::Deserialize)
 )]
 #[non_exhaustive]
@@ -223,11 +222,11 @@ Here is an example of struct with a field that comes with custom serialization/d
 ```rust
 #[allow(missing_docs)]
 #[cfg_attr(
-    all(feature = "unstable", feature = "serialize"),
+    all(aws-sdk-unstable, feature = "serialize"),
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    all(feature = "unstable", feature = "deserialize"),
+    all(aws-sdk-unstable, feature = "deserialize"),
     derive(serde::Deserialize)
 )]
 #[non_exhaustive]
@@ -235,8 +234,8 @@ Here is an example of struct with a field that comes with custom serialization/d
 pub struct ExampleStreamTranscriptionOutput {
     #[cfg_attr(
         any(
-            all(feature = "unstable", feature = "deserialize"),
-            all(feature = "unstable", feature = "serialize")
+            all(aws-sdk-unstable, feature = "deserialize"),
+            all(aws-sdk-unstable, feature = "serialize")
         ),
         serde(
             skip,
