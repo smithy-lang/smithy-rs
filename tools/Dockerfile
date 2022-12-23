@@ -86,6 +86,7 @@ RUN set -eux; \
     cargo +${rust_nightly_version} --version;
 
 FROM install_rust AS local_tools
+ARG rust_nightly_version
 COPY . tools/
 # when `checkout_smithy_rs_tools` is set to true, this commit will be checked out
 ARG smithy_rs_commit_hash=main
@@ -108,26 +109,32 @@ RUN set -eux; \
 
 FROM install_rust AS cargo_deny
 ARG cargo_deny_version=0.13.5
+ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
 ARG cargo_udeps_version=0.1.35
+ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-udeps --locked --version ${cargo_udeps_version}
 
 FROM install_rust AS cargo_hack
 ARG cargo_hack_version=0.5.23
+ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
 ARG cargo_minimal_versions_version=0.1.8
+ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
 ARG cargo_check_external_types_version=0.1.6
+ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
 ARG maturin_version=0.14.1
+ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install maturin --locked --version ${maturin_version}
 
 #
