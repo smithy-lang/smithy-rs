@@ -61,9 +61,9 @@ pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> anyhow:
 async fn claim_crate_name(name: &String) -> anyhow::Result<()> {
     let temporary_directory = tempfile::tempdir()?;
     let crate_dir_path = temporary_directory.path();
-    create_dummy_lib_crate(Fs::Real, &name, crate_dir_path.to_path_buf()).await?;
+    create_dummy_lib_crate(Fs::Real, name, crate_dir_path.to_path_buf()).await?;
 
-    let category = PackageCategory::from_package_name(&name);
+    let category = PackageCategory::from_package_name(name);
     let package_handle = PackageHandle::new(name, Version::new(0, 0, 1));
     publish(&package_handle, crate_dir_path).await?;
     // Keep things slow to avoid getting throttled by crates.io
@@ -88,7 +88,7 @@ async fn discover_publishable_crate_names(repository_root: &Path) -> anyhow::Res
             })?;
             let package = manifest
                 .package
-                .ok_or_else(move || Error::InvalidManifest(manifest_path))
+                .ok_or(Error::InvalidManifest(manifest_path))
                 .context("crate manifest doesn't have a `[package]` section")?;
             let name = package.name;
             if let cargo_toml::Publish::Flag(true) = package.publish {
@@ -134,7 +134,7 @@ edition = "2021""#,
         .await?;
     let src_dir_path = directory_path.join("src");
     fs.create_dir_all(&src_dir_path).await?;
-    fs.write_file(src_dir_path.join("lib.rs"), &vec![]).await?;
+    fs.write_file(src_dir_path.join("lib.rs"), &[]).await?;
     Ok(())
 }
 
@@ -153,7 +153,7 @@ fn confirm_user_intent(
         for c in crate_names {
             writeln!(&mut s, "- {c}")?;
         }
-        write!(&mut s, "\n")?;
+        writeln!(&mut s)?;
         s
     };
     if !(skip_confirmation || Confirm::new().with_prompt(&prompt).interact()?) {

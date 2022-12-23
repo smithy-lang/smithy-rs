@@ -148,7 +148,7 @@ pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -
         Duration::from_secs(5),
         || async {
             let actual_owners: HashSet<String> = cargo::GetOwners::new(&handle.name).spawn().await?.into_iter().collect();
-            let expected_owners = expected_package_owners(&category, &handle.name);
+            let expected_owners = expected_package_owners(category, &handle.name);
 
             let owners_to_be_added = expected_owners.difference(&actual_owners);
             let incorrect_owners = actual_owners.difference(&expected_owners);
