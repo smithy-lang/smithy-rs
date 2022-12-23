@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -90,6 +91,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when 
     is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
     is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> this.hasTrait<RangeTrait>()
+    is BlobShape -> this.hasTrait<LengthTrait>()
     else -> false
 }
 
@@ -118,6 +120,7 @@ fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTy
     is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
     is IntegerShape, is ShortShape, is LongShape, is ByteShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
     is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
+    is BlobShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
     else -> false
 }
 

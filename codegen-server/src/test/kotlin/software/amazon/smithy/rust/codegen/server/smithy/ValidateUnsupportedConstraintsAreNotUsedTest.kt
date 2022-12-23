@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.inspectors.forOne
-import io.kotest.inspectors.forSome
 import io.kotest.inspectors.shouldForAll
 import io.kotest.matchers.collections.shouldHaveAtLeastSize
 import io.kotest.matchers.collections.shouldHaveSize
@@ -121,14 +120,11 @@ operation TestOperation {
     fun `it should detect when constraint traits on streaming blob shapes are used`() {
         val validationResult = validateModel(constraintTraitOnStreamingBlobShapeModel)
 
-        validationResult.messages shouldHaveSize 2
-        validationResult.messages.forSome {
-            it.message shouldContain
-                """
-                The blob shape `test#StreamingBlob` has both the `smithy.api#length` and `smithy.api#streaming` constraint traits attached.
-                It is unclear what the semantics for streaming blob shapes are.
-                """.trimIndent().replace("\n", " ")
-        }
+        validationResult.messages shouldHaveSize 1
+        validationResult.messages[0].message shouldContain """
+            The blob shape `test#StreamingBlob` has both the `smithy.api#length` and `smithy.api#streaming` constraint traits attached.
+            It is unclear what the semantics for streaming blob shapes are.
+        """.trimIndent().replace("\n", " ")
     }
 
     val constrainedShapesInEventStreamModel =
@@ -191,27 +187,6 @@ operation TestOperation {
         )
 
         validationResult.shouldAbort shouldBe true
-    }
-
-    @Test
-    fun `it should detect when the length trait on blob shapes is used`() {
-        val model =
-            """
-            $baseModel
-
-            structure TestInputOutput {
-                blob: LengthBlob
-            }
-
-            @length(min: 1)
-            blob LengthBlob
-            """.asSmithyModel()
-        val validationResult = validateModel(model)
-
-        validationResult.messages shouldHaveSize 1
-
-        // This test additionally asserts the exact message, to ensure the formatting is appropriate.
-        validationResult.messages[0].message shouldBe "The blob shape `test#LengthBlob` has the constraint trait `smithy.api#length` attached. This is not supported in the smithy-rs server SDK. It will be supported in the future. See the tracking issue (https://github.com/awslabs/smithy-rs/issues/1401). If you want to go ahead and generate the server SDK ignoring unsupported constraint traits, set the key `ignoreUnsupportedConstraints` inside the `runtimeConfig.codegenConfig` JSON object in your `smithy-build.json` to `true`."
     }
 
     @Test
