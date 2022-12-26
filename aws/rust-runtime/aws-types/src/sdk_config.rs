@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
+use aws_smithy_types::auth::AuthApiKey;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -28,7 +29,7 @@ pub struct SdkConfig {
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
-    api_key: Option<String>,
+    api_key: Option<AuthApiKey>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -46,7 +47,7 @@ pub struct Builder {
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
-    api_key: Option<String>,
+    api_key: Option<AuthApiKey>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -139,14 +140,14 @@ impl Builder {
     /// use aws_types::SdkConfig;
     /// let config = SdkConfig::builder().api_key("some-api-key").build();
     /// ```
-    pub fn api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.set_api_key(Some(api_key.into()));
+    pub fn api_key(&mut self, api_key: impl Into<Option<AuthApiKey>>) -> &mut self {
+        self.api_key = api_key.into();
         self
     }
 
     /// Set the api key to use when making requests.
-    pub fn set_api_key(&mut self, api_key: Option<String>) -> &mut Self {
-        self.api_key = api_key;
+    pub fn set_api_key(&mut self, api_key: impl Into<Option<AuthApiKey>>) -> &mut Self {
+        self.api_key = api_key.into();
         self
     }
 
@@ -486,7 +487,7 @@ impl SdkConfig {
     }
 
     /// Configured API key
-    pub fn api_key(&self) -> Option<&String> {
+    pub fn api_key(&self) -> Option<&AuthApiKey> {
         self.api_key.as_ref()
     }
 
