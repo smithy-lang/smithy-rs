@@ -140,7 +140,7 @@ impl Builder {
     /// use aws_types::SdkConfig;
     /// let config = SdkConfig::builder().api_key("some-api-key").build();
     /// ```
-    pub fn api_key(&mut self, api_key: impl Into<Option<AuthApiKey>>) -> &mut self {
+    pub fn api_key(&mut self, api_key: impl Into<Option<AuthApiKey>>) -> &mut Self {
         self.api_key = api_key.into();
         self
     }
