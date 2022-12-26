@@ -28,6 +28,7 @@ pub struct SdkConfig {
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    api_key: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -45,6 +46,7 @@ pub struct Builder {
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    api_key: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
@@ -128,6 +130,23 @@ impl Builder {
         endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
     ) -> &mut Self {
         self.endpoint_resolver = endpoint_resolver;
+        self
+    }
+
+    /// Set the api key to use when making requests.
+    /// # Examples
+    /// ```
+    /// use aws_types::SdkConfig;
+    /// let config = SdkConfig::builder().api_key("some-api-key").build();
+    /// ```
+    pub fn api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.set_api_key(Some(api_key.into()));
+        self
+    }
+
+    /// Set the api key to use when making requests.
+    pub fn set_api_key(&mut self, api_key: Option<String>) -> &mut Self {
+        self.api_key = api_key;
         self
     }
 
@@ -446,6 +465,7 @@ impl Builder {
             credentials_provider: self.credentials_provider,
             region: self.region,
             endpoint_resolver: self.endpoint_resolver,
+            api_key: self.api_key,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
@@ -463,6 +483,11 @@ impl SdkConfig {
     /// Configured endpoint resolver
     pub fn endpoint_resolver(&self) -> Option<Arc<dyn ResolveAwsEndpoint>> {
         self.endpoint_resolver.clone()
+    }
+
+    /// Configured API key
+    pub fn api_key(&self) -> Option<&String> {
+        self.api_key.as_ref()
     }
 
     /// Configured retry config
