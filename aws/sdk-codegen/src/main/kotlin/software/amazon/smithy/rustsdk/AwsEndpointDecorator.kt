@@ -31,10 +31,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.DetachedSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
 class AwsEndpointDecorator : ClientCodegenDecorator {
     override val name: String = "AwsEndpoint"
@@ -78,7 +81,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations.extendIf(codegenContext.getBuiltIn(Builtins.REGION) != null) {
+        return baseCustomizations.extendIf(regionalized(codegenContext)) {
             AwsEndpointShimCustomization(codegenContext)
         } + SdkEndpointCustomization(
             codegenContext,
@@ -101,7 +104,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
             )
         }
         // generate a region converter if params has a region
-        if (!epTypes.params.toList().any { it.builtIn == Builtins.REGION.builtIn }) {
+        if (!regionalized(codegenContext)) {
             println("not generating a resolver for ${codegenContext.serviceShape}")
             return
         }
@@ -127,6 +130,25 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         }
     }
 
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<DetachedSection<*>, (Section) -> Writable>> {
+        return regionalized(codegenContext).thenSingletonListOf {
+            SdkConfigSection.create { section ->
+                {
+                    rust(
+                        """
+                        ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
+                        ${section.serviceConfigBuilder}.set_endpoint_url(${section.sdkConfig}.endpoint_url().map(|url|url.to_string()));
+                    """,
+                    )
+
+                }
+            }
+        }
+    }
+
+    private fun regionalized(codegenContext: ClientCodegenContext) =
+        codegenContext.getBuiltIn(Builtins.REGION) != null
+
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
             object : EndpointCustomization {
@@ -150,6 +172,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
             "EndpointShim" to endpointShim,
             "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
         )
+
         override fun section(section: ServiceConfig) = writable {
             when (section) {
                 ServiceConfig.BuilderImpl -> rustTemplate(

@@ -21,12 +21,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.customize.DetachedSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
+import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
 /* Example Generated Code */
 /*
@@ -104,6 +107,21 @@ class RegionDecorator : ClientCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations.extendIf(usesRegion(codegenContext)) { PubUseRegion(codegenContext.runtimeConfig) }
+    }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<DetachedSection<*>, (Section) -> Writable>> {
+        return usesRegion(codegenContext).thenSingletonListOf {
+            SdkConfigSection.create { section ->
+                {
+                    rust(
+                        """
+                        ${section.serviceConfigBuilder} = 
+                             ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
+                             """,
+                    )
+                }
+            }
+        }
     }
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
