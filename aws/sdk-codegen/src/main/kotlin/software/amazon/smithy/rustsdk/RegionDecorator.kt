@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.extendIf
 
 /* Example Generated Code */
 /*
@@ -79,11 +80,15 @@ class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
+    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.hasBuiltIn(Builtins.REGION) != null
+
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + RegionProviderConfig(codegenContext)
+        return baseCustomizations.extendIf(usesRegion(codegenContext)) {
+            RegionProviderConfig(codegenContext)
+        }
     }
 
     override fun operationCustomizations(
@@ -91,17 +96,20 @@ class RegionDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + RegionConfigPlugin()
+        return baseCustomizations.extendIf(usesRegion(codegenContext)) { RegionConfigPlugin() }
     }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
+        return baseCustomizations.extendIf(usesRegion(codegenContext)) { PubUseRegion(codegenContext.runtimeConfig) }
     }
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
+        if (!usesRegion(codegenContext)) {
+            return listOf()
+        }
         return listOf(
             object : EndpointCustomization {
                 override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {

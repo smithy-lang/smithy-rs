@@ -110,7 +110,7 @@ class EndpointsCredentialsTest {
                         let _ = dbg!(client.default_auth().send().await);
                         let req = rcvr.expect_request();
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
-                        assert!(auth_header.contains("Credential=example/20221214/us-west-2/foobaz/aws4_request"), "{}", auth_header);
+                        assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
                             .withFeature("test-util").toType().resolve("test_connection::capture_request"),
@@ -132,7 +132,7 @@ class EndpointsCredentialsTest {
                         let _ = dbg!(client.custom_auth().send().await);
                         let req = rcvr.expect_request();
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
-                        assert!(auth_header.contains("Credential=example/20221214/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
+                        assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to CargoDependency.smithyClient(context.runtimeConfig)
                             .withFeature("test-util").toType().resolve("test_connection::capture_request"),
