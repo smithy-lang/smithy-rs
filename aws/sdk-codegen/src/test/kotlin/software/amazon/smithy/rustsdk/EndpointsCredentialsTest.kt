@@ -20,7 +20,7 @@ class EndpointsCredentialsTest {
     // This model has two endpoint rule paths:
     // 1. A rule that sets no authentication scheme—in this case, we should be using the default from the service
     // 2. A rule that sets a custom authentication scheme and that configures signing
-    // These are triggered by static context parameters set on the operation
+    // The chosen path is controlled by static context parameters set on the operation
     private val model = """
         namespace aws.fooBaz
 
@@ -91,7 +91,7 @@ class EndpointsCredentialsTest {
                             .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
-                        let _ = dbg!(client.default_auth().send().await);
+                        let _ = client.default_auth().send().await;
                         let req = rcvr.expect_request();
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
@@ -113,7 +113,7 @@ class EndpointsCredentialsTest {
                             .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
-                        let _ = dbg!(client.custom_auth().send().await);
+                        let _ = client.custom_auth().send().await;
                         let req = rcvr.expect_request();
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
