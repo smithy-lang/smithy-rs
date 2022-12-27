@@ -6,8 +6,6 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -23,7 +21,7 @@ class EndpointsCredentialsTest {
     // 1. A rule that sets no authentication scheme—in this case, we should be using the default from the service
     // 2. A rule that sets a custom authentication scheme and that configures signing
     // These are triggered by static context parameters set on the operation
-    val model = """
+    private val model = """
         namespace aws.fooBaz
 
         use aws.api#service
@@ -79,21 +77,7 @@ class EndpointsCredentialsTest {
 
     @Test
     fun `endpoint rules configure auth in default and non-default case`() {
-        clientIntegrationTest(
-            model, runtimeConfig = AwsTestRuntimeConfig,
-            additionalSettings = ObjectNode.builder()
-                .withMember(
-                    "customizationConfig",
-                    ObjectNode.builder()
-                        .withMember(
-                            "awsSdk",
-                            ObjectNode.builder()
-                                .withMember("integrationTestPath", "../sdk/integration-tests")
-                                .build(),
-                        ).build(),
-                )
-                .withMember("codegen", ObjectNode.builder().withMember("includeFluentClient", false).build()).build(),
-        ) { context, rustCrate ->
+        awsSdkIntegrationTest(model) { context, rustCrate ->
             val moduleName = context.moduleUseName()
             rustCrate.integrationTest("endpoints_auth") {
                 // assert that a rule with no default auth works properly
