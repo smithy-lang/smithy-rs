@@ -21,11 +21,11 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointRulesetIndex
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 
-fun EndpointRuleSet.hasBuiltIn(builtIn: Parameter) = parameters.toList().find { it.builtIn == builtIn.builtIn }
-fun ClientCodegenContext.hasBuiltIn(builtIn: Parameter): Parameter? {
+fun EndpointRuleSet.getBuiltIn(builtIn: Parameter) = parameters.toList().find { it.builtIn == builtIn.builtIn }
+fun ClientCodegenContext.getBuiltIn(builtIn: Parameter): Parameter? {
     val idx = EndpointRulesetIndex.of(model)
     val rules = idx.endpointRulesForService(serviceShape) ?: return null
-    return rules.hasBuiltIn(builtIn)
+    return rules.getBuiltIn(builtIn)
 }
 
 /**
@@ -39,7 +39,7 @@ fun Model.promoteBuiltInToContextParam(serviceId: ShapeId, builtInSrc: Parameter
     val service = model.expectShape(serviceId, ServiceShape::class.java)
     val rules = idx.endpointRulesForService(service) ?: return model
     // load the builtIn with a matching name from the ruleset allowing for any docs updates
-    val builtIn = rules.hasBuiltIn(builtInSrc) ?: return model
+    val builtIn = rules.getBuiltIn(builtInSrc) ?: return model
 
     return ModelTransformer.create().mapShapes(model) { shape ->
         if (shape !is ServiceShape || shape.id != service.id) {

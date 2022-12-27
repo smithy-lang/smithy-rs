@@ -80,7 +80,7 @@ class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
-    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.hasBuiltIn(Builtins.REGION) != null
+    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.getBuiltIn(Builtins.REGION) != null
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,

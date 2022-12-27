@@ -56,7 +56,7 @@ class EndpointsCredentialsTest {
                       }],
             "parameters": {
                 "AuthMode": { "required": false, "type": "String" },
-                "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" }
+                "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
             }
         })
         @restJson1
