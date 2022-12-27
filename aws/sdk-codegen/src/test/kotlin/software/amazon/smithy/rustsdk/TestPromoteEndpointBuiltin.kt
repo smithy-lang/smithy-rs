@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 class TestPromoteEndpointBuiltin {
-    val model = """
+    private val model = """
         namespace aws.testEndpointBuiltIn
 
         use aws.api#service

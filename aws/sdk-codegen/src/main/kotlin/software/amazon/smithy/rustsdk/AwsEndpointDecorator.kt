@@ -142,6 +142,14 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
 
     class AwsEndpointShimCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
         private val moduleUseName = codegenContext.moduleUseName()
+        private val runtimeConfig = codegenContext.runtimeConfig
+        private val resolveAwsEndpoint = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("ResolveAwsEndpoint")
+        private val endpointShim = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("EndpointShim")
+        private val codegenScope = arrayOf(
+            "ResolveAwsEndpoint" to resolveAwsEndpoint,
+            "EndpointShim" to endpointShim,
+            "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
+        )
         override fun section(section: ServiceConfig) = writable {
             when (section) {
                 ServiceConfig.BuilderImpl -> rustTemplate(
@@ -182,6 +190,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                     }
 
                     """,
+                    *codegenScope,
                 )
 
                 else -> emptySection
