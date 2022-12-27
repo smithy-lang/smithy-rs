@@ -37,6 +37,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
     AwsReadmeDecorator(),
     HttpConnectorDecorator(),
     AwsEndpointsStdLib(),
+    AddFIPSDualStackDecorator(),
 
     // Service specific decorators
     ApiGatewayDecorator(),

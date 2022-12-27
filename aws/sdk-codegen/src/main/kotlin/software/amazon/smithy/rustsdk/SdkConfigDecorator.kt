@@ -5,12 +5,14 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -37,6 +39,12 @@ class SdkConfigDecorator : ClientCodegenDecorator {
         val codegenScope = arrayOf(
             "SdkConfig" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("sdk_config::SdkConfig"),
         )
+        val regionalizedBits = writable {
+            if (codegenContext.getBuiltIn(Builtins.REGION) != null) {
+                rust("builder = builder.region(input.region().cloned());")
+                rust("builder.set_aws_endpoint_resolver(input.endpoint_resolver().clone());")
+            }
+        }
         rustCrate.withModule(RustModule.Config) {
             // !!NOTE!! As more items are added to aws_types::SdkConfig, use them here to configure the config builder
             rustTemplate(
@@ -44,8 +52,7 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                 impl From<&#{SdkConfig}> for Builder {
                     fn from(input: &#{SdkConfig}) -> Self {
                         let mut builder = Builder::default();
-                        builder = builder.region(input.region().cloned());
-                        builder.set_aws_endpoint_resolver(input.endpoint_resolver().clone());
+                        #{regionalized}
                         builder.set_endpoint_url(input.endpoint_url().map(|url|url.to_string()));
                         builder.set_retry_config(input.retry_config().cloned());
                         builder.set_timeout_config(input.timeout_config().cloned());
@@ -64,6 +71,7 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                 }
                 """,
                 *codegenScope,
+                "regionalized" to regionalizedBits,
             )
         }
     }
@@ -73,6 +81,7 @@ class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "SdkConfig" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("sdk_config::SdkConfig"),
     )
+
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             ServiceConfig.ConfigImpl -> writable {
@@ -86,6 +95,7 @@ class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
                     *codegenScope,
                 )
             }
+
             else -> emptySection
         }
     }
