@@ -455,7 +455,9 @@ mod loader {
                     .await
             };
 
-            let sleep_impl = if self.sleep.is_none() {
+            let sleep_impl = if self.sleep.is_some() {
+                self.sleep
+            } else {
                 if default_async_sleep().is_none() {
                     tracing::warn!(
                         "An implementation of AsyncSleep was requested by calling default_async_sleep \
@@ -466,8 +468,6 @@ mod loader {
                     );
                 }
                 default_async_sleep()
-            } else {
-                self.sleep
             };
 
             let timeout_config = if let Some(timeout_config) = self.timeout_config {
@@ -479,22 +479,18 @@ mod loader {
                     .await
             };
 
-            let http_connector = if let Some(http_connector) = self.http_connector {
-                http_connector
-            } else {
+            let http_connector = self.http_connector.unwrap_or_else(|| {
                 HttpConnector::Prebuilt(default_connector(
                     &ConnectorSettings::from_timeout_config(&timeout_config),
                     sleep_impl.clone(),
                 ))
-            };
+            });
 
-            let credentials_cache = if let Some(cache) = self.credentials_cache {
-                cache
-            } else {
+            let credentials_cache = self.credentials_cache.unwrap_or_else(|| {
                 let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
                 builder.set_sleep(conf.sleep());
                 builder.into_credentials_cache()
-            };
+            });
 
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
