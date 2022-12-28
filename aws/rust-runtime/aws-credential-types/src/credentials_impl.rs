@@ -140,6 +140,21 @@ impl Credentials {
         )
     }
 
+    /// Creates a test `Credentials`.
+    ///
+    /// Marked as `#[doc(hidden)]` due to the usage limited to testing.
+    /// TODO(https://github.com/rust-lang/cargo/issues/2911): Consider using an auto-activated feature for testing
+    #[doc(hidden)]
+    pub fn for_tests() -> Self {
+        Self::new(
+            "ANOTREAL",
+            "notrealrnrELgWzOk3IfjzDKtFBhDby",
+            Some("notarealsessiontoken".to_string()),
+            None,
+            "test",
+        )
+    }
+
     /// Returns the access key ID.
     pub fn access_key_id(&self) -> &str {
         &self.0.access_key_id
