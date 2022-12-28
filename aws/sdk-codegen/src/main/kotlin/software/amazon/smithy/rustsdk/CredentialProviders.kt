@@ -16,8 +16,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 
@@ -46,6 +48,15 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
+        listOf(
+            SdkConfigSection.create { section ->
+                writable {
+                    rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider().cloned());")
+                }
+            },
+        )
 }
 
 /**
@@ -64,6 +75,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 """pub(crate) credentials_provider: #{provider}::SharedCredentialsProvider,""",
                 *codegenScope,
             )
+
             ServiceConfig.ConfigImpl -> rustTemplate(
                 """
                 /// Returns the credentials provider.
@@ -73,8 +85,10 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
                 """,
                 *codegenScope,
             )
+
             ServiceConfig.BuilderStruct ->
                 rustTemplate("credentials_provider: Option<#{provider}::SharedCredentialsProvider>,", *codegenScope)
+
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """

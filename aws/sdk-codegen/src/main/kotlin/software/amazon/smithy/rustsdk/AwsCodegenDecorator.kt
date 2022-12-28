@@ -38,6 +38,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
     HttpConnectorDecorator(),
     AwsEndpointsStdLib(),
     AddFIPSDualStackDecorator(),
+    GenericSmithySdkConfigSettings(),
 
     // Service specific decorators
     ApiGatewayDecorator(),
