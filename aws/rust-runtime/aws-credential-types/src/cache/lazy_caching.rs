@@ -20,12 +20,6 @@ const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
 const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 
-/// `LazyCredentialsCache` implements [`ProvideCachedCredentials`] by caching
-/// credentials that it loads by calling a user-provided [`ProvideCredentials`] implementation.
-///
-/// For example, you can provide an [`ProvideCredentials`] implementation that calls
-/// AWS STS's AssumeRole operation to get temporary credentials, and `LazyCredentialsCache`
-/// will cache those credentials until they expire.
 #[derive(Debug)]
 pub(crate) struct LazyCredentialsCache {
     time: TimeSource,
@@ -126,6 +120,13 @@ mod builder {
     };
 
     /// Builder for constructing a `LazyCredentialsCache`.
+    ///
+    /// `LazyCredentialsCache` implements [`ProvideCachedCredentials`](crate::cache::ProvideCachedCredentials) by caching
+    /// credentials that it loads by calling a user-provided [`ProvideCredentials`] implementation.
+    ///
+    /// For example, you can provide a [`ProvideCredentials`] implementation that calls
+    /// AWS STS's AssumeRole operation to get temporary credentials, and `LazyCredentialsCache`
+    /// will cache those credentials until they expire.
     ///
     /// Callers outside of this crate cannot call `build` directly. They can instead call
     /// `into_credentials_cache` to obtain a [`CredentialsCache`]. Its `create_cache` then calls

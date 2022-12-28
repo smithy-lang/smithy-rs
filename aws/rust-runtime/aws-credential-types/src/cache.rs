@@ -94,7 +94,7 @@ pub struct CredentialsCache {
 }
 
 impl CredentialsCache {
-    /// Creates a [`CredentialsCache`] from the default [`lazy_caching::Builder`].
+    /// Creates a [`CredentialsCache`] from the default [`LazyBuilder`].
     pub fn lazy() -> Self {
         Self::lazy_builder().into_credentials_cache()
     }

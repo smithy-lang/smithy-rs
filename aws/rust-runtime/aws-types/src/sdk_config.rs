@@ -316,7 +316,7 @@ impl Builder {
         self
     }
 
-    /// Set the credentials cache for the builder
+    /// Set the [`CredentialsCache`] for the builder
     ///
     /// # Examples
     /// ```rust
@@ -331,7 +331,7 @@ impl Builder {
         self
     }
 
-    /// Set the credentials cache for the builder
+    /// Set the [`CredentialsCache`] for the builder
     ///
     /// # Examples
     /// ```rust
