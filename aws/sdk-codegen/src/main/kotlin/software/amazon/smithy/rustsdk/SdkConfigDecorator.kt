@@ -50,9 +50,13 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
                 writable {
                     rust(
                         """
+                        // resiliency
                         ${section.serviceConfigBuilder}.set_retry_config(${section.sdkConfig}.retry_config().cloned());
                         ${section.serviceConfigBuilder}.set_timeout_config(${section.sdkConfig}.timeout_config().cloned());
                         ${section.serviceConfigBuilder}.set_sleep_impl(${section.sdkConfig}.sleep_impl());
+
+                        ${section.serviceConfigBuilder}.set_http_connector(${section.sdkConfig}.http_connector().cloned());
+
                         """,
                     )
                 }
