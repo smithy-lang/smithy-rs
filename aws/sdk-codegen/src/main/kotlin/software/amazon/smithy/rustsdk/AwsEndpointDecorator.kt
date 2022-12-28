@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.DetachedSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -81,7 +81,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations.extendIf(regionalized(codegenContext)) {
+        return baseCustomizations.extendIf(codegenContext.isRegionalized()) {
             AwsEndpointShimCustomization(codegenContext)
         } + SdkEndpointCustomization(
             codegenContext,
@@ -104,7 +104,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
             )
         }
         // generate a region converter if params has a region
-        if (!regionalized(codegenContext)) {
+        if (!codegenContext.isRegionalized()) {
             println("not generating a resolver for ${codegenContext.serviceShape}")
             return
         }
@@ -130,24 +130,20 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<DetachedSection<*>, (Section) -> Writable>> {
-        return regionalized(codegenContext).thenSingletonListOf {
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
+        return codegenContext.isRegionalized().thenSingletonListOf {
             SdkConfigSection.create { section ->
                 {
                     rust(
                         """
                         ${section.serviceConfigBuilder}.set_aws_endpoint_resolver(${section.sdkConfig}.endpoint_resolver().clone());
                         ${section.serviceConfigBuilder}.set_endpoint_url(${section.sdkConfig}.endpoint_url().map(|url|url.to_string()));
-                    """,
+                        """,
                     )
-
                 }
             }
         }
     }
-
-    private fun regionalized(codegenContext: ClientCodegenContext) =
-        codegenContext.getBuiltIn(Builtins.REGION) != null
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
@@ -290,3 +286,5 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         }
     }
 }
+
+fun ClientCodegenContext.isRegionalized() = getBuiltIn(Builtins.REGION) != null

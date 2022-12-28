@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.DetachedSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -49,7 +49,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<DetachedSection<*>, (Section) -> Writable>> =
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
         listOf(
             SdkConfigSection.create { section ->
                 writable {

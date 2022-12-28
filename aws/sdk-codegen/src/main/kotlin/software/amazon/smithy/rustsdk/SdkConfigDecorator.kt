@@ -5,28 +5,25 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-
 import software.amazon.smithy.rust.codegen.core.rustlang.join
-
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.DetachedSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
 /**
  * Section enabling linkage between `SdkConfig` and <service>::Config
  */
-object SdkConfigSection : DetachedSection<SdkConfigSection.CopySdkConfigToClientConfig>("SdkConfig") {
+object SdkConfigSection : AdHocSection<SdkConfigSection.CopySdkConfigToClientConfig>("SdkConfig") {
     /**
      * [sdkConfig]: A reference to the SDK config struct
      * [serviceConfigBuilder]: A reference (owned) to the `<service>::config::Builder` struct.
@@ -47,7 +44,7 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
     override val name: String = "GenericSmithySdkConfigSettings"
     override val order: Byte = 0
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<DetachedSection<*>, (Section) -> Writable>> =
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
         listOf(
             SdkConfigSection.create { section ->
                 writable {
@@ -85,7 +82,6 @@ class SdkConfigDecorator : ClientCodegenDecorator {
             "SdkConfig" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("sdk_config::SdkConfig"),
         )
         rustCrate.withModule(RustModule.Config) {
-            // !!NOTE!! As more items are added to aws_types::SdkConfig, use them here to configure the config builder
             rustTemplate(
                 """
                 impl From<&#{SdkConfig}> for Builder {
