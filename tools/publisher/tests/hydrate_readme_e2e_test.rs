@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use fs_err as fs;
 use publisher::subcommand::hydrate_readme::{subcommand_hydrate_readme, HydrateReadmeArgs};
 use smithy_rs_tool_common::package::PackageCategory;
 use smithy_rs_tool_common::versions_manifest::{CrateVersion, VersionsManifest};
-use std::fs;
 use tempfile::TempDir;
 
 #[test]

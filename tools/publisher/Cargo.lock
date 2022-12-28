@@ -349,6 +349,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-err"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
+
+[[package]]
 name = "futures"
 version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -958,6 +964,7 @@ dependencies = [
  "clap",
  "crates_io_api",
  "dialoguer",
+ "fs-err",
  "handlebars",
  "lazy_static",
  "pretty_assertions",
