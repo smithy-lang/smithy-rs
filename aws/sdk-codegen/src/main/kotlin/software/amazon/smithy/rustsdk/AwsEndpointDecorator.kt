@@ -33,11 +33,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class AwsEndpointDecorator : ClientCodegenDecorator {
     override val name: String = "AwsEndpoint"
-    override val order: Byte = -100
+    override val order: Byte = 100
 
     override fun transformModel(service: ServiceShape, model: Model): Model {
         val customServices = setOf(
@@ -77,7 +78,9 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + EndpointConfigCustomization(
+        return baseCustomizations.extendIf(codegenContext.getBuiltIn(Builtins.REGION) != null) {
+            AwsEndpointShimCustomization(codegenContext)
+        } + SdkEndpointCustomization(
             codegenContext,
         )
     }
@@ -125,118 +128,142 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
     }
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
-        return listOf(object : EndpointCustomization {
-            override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
-                return when (parameter.builtIn) {
-                    Builtins.SDK_ENDPOINT.builtIn -> writable { rust("$configRef.endpoint_url().map(|url|url.to_string())") }
-                    else -> null
+        return listOf(
+            object : EndpointCustomization {
+                override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
+                    return when (parameter.builtIn) {
+                        Builtins.SDK_ENDPOINT.builtIn -> writable { rust("$configRef.endpoint_url().map(|url|url.to_string())") }
+                        else -> null
+                    }
                 }
-            }
-        },
+            },
         )
     }
-}
 
-class EndpointConfigCustomization(
-    codegenContext: CodegenContext,
-) :
-    ConfigCustomization() {
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val resolveAwsEndpoint = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("ResolveAwsEndpoint")
-    private val endpointShim = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("EndpointShim")
-    private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf(
-        "ResolveAwsEndpoint" to resolveAwsEndpoint,
-        "EndpointShim" to endpointShim,
-        "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
-    )
+    class AwsEndpointShimCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+        private val moduleUseName = codegenContext.moduleUseName()
+        private val runtimeConfig = codegenContext.runtimeConfig
+        private val resolveAwsEndpoint = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("ResolveAwsEndpoint")
+        private val endpointShim = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("EndpointShim")
+        private val codegenScope = arrayOf(
+            "ResolveAwsEndpoint" to resolveAwsEndpoint,
+            "EndpointShim" to endpointShim,
+            "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
+        )
+        override fun section(section: ServiceConfig) = writable {
+            when (section) {
+                ServiceConfig.BuilderImpl -> rustTemplate(
+                    """
+                    /// Overrides the endpoint resolver to use when making requests.
+                    ///
+                    /// This method is deprecated, use [`Builder::endpoint_url`] or [`Builder::endpoint_resolver`] instead.
+                    ///
+                    /// When unset, the client will used a generated endpoint resolver based on the endpoint metadata
+                    /// for `$moduleUseName`.
+                    ///
+                    /// ## Examples
+                    /// ```no_run
+                    /// ## fn wrapper() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
+                    /// use #{aws_types}::region::Region;
+                    /// use $moduleUseName::config::{Builder, Config};
+                    /// use $moduleUseName::Endpoint;
+                    ///
+                    /// let config = $moduleUseName::Config::builder()
+                    ///     .endpoint_resolver(Endpoint::immutable("http://localhost:8080")?)
+                    ///     .build();
+                    /// ## Ok(())
+                    /// ## }
+                    /// ```
+                    ##[deprecated(note = "use endpoint_url or set the endpoint resolver directly")]
+                    pub fn aws_endpoint_resolver(mut self, endpoint_resolver: impl #{ResolveAwsEndpoint} + 'static) -> Self {
+                        self.endpoint_resolver = Some(std::sync::Arc::new(#{EndpointShim}::from_resolver(endpoint_resolver)) as _);
+                        self
+                    }
 
-    override fun section(section: ServiceConfig): Writable = writable {
-        when (section) {
-            ServiceConfig.BuilderImpl -> rustTemplate(
-                """
-                /// Overrides the endpoint resolver to use when making requests.
-                ///
-                /// This method is deprecated, use [`Builder::endpoint_url`] or [`Builder::endpoint_resolver`] instead.
-                ///
-                /// When unset, the client will used a generated endpoint resolver based on the endpoint metadata
-                /// for `$moduleUseName`.
-                ///
-                /// ## Examples
-                /// ```no_run
-                /// ## fn wrapper() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
-                /// use #{aws_types}::region::Region;
-                /// use $moduleUseName::config::{Builder, Config};
-                /// use $moduleUseName::Endpoint;
-                ///
-                /// let config = $moduleUseName::Config::builder()
-                ///     .endpoint_resolver(Endpoint::immutable("http://localhost:8080")?)
-                ///     .build();
-                /// ## Ok(())
-                /// ## }
-                /// ```
-                ##[deprecated(note = "use endpoint_url or set the endpoint resolver directly")]
-                pub fn aws_endpoint_resolver(mut self, endpoint_resolver: impl #{ResolveAwsEndpoint} + 'static) -> Self {
-                    self.endpoint_resolver = Some(std::sync::Arc::new(#{EndpointShim}::from_resolver(endpoint_resolver)) as _);
-                    self
-                }
+                    ##[deprecated(note = "use endpoint_url or set the endpoint resolver directly")]
+                    /// Sets the endpoint resolver to use when making requests.
+                    ///
+                    /// This method is deprecated, use [`Builder::endpoint_url`] or [`Builder::endpoint_resolver`] instead.
+                    pub fn set_aws_endpoint_resolver(&mut self, endpoint_resolver: Option<std::sync::Arc<dyn #{ResolveAwsEndpoint}>>) -> &mut Self {
+                        self.endpoint_resolver = endpoint_resolver.map(|res|std::sync::Arc::new(#{EndpointShim}::from_arc(res) ) as _);
+                        self
+                    }
 
-                ##[deprecated(note = "use endpoint_url or set the endpoint resolver directly")]
-                /// Sets the endpoint resolver to use when making requests.
-                ///
-                /// This method is deprecated, use [`Builder::endpoint_url`] or [`Builder::endpoint_resolver`] instead.
-                pub fn set_aws_endpoint_resolver(&mut self, endpoint_resolver: Option<std::sync::Arc<dyn #{ResolveAwsEndpoint}>>) -> &mut Self {
-                    self.endpoint_resolver = endpoint_resolver.map(|res|std::sync::Arc::new(#{EndpointShim}::from_arc(res) ) as _);
-                    self
-                }
+                    """,
+                    *codegenScope,
+                )
 
-                /// Sets the endpoint url used to communicate with this service
-                ///
-                /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
-                /// will be prefixed onto this URL. To fully override the endpoint resolver, use
-                /// [`Builder::endpoint_resolver`].
-                pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
-                    self.endpoint_url = Some(endpoint_url.into());
-                    self
-                }
-
-                /// Sets the endpoint url used to communicate with this service
-                ///
-                /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
-                /// will be prefixed onto this URL. To fully override the endpoint resolver, use
-                /// [`Builder::endpoint_resolver`].
-                pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
-                    self.endpoint_url = endpoint_url;
-                    self
-                }
-                """,
-                *codegenScope,
-            )
-
-            ServiceConfig.BuilderBuild -> rust("endpoint_url: self.endpoint_url")
-            ServiceConfig.BuilderStruct -> rust("endpoint_url: Option<String>")
-            ServiceConfig.ConfigImpl -> {
-                Attribute.AllowDeadCode.render(this)
-                rust("pub(crate) fn endpoint_url(&self) -> Option<&str> { self.endpoint_url.as_deref() }")
+                else -> emptySection
             }
-            ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>")
-            ServiceConfig.ConfigStructAdditionalDocs -> emptySection
-            ServiceConfig.Extras -> emptySection
         }
     }
-}
 
-class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable {
-        return when (section) {
-            is LibRsSection.Body -> writable {
-                rust(
-                    "pub use #T::endpoint::Endpoint;",
-                    CargoDependency.smithyHttp(runtimeConfig).toType(),
+    class SdkEndpointCustomization(
+        codegenContext: CodegenContext,
+    ) :
+        ConfigCustomization() {
+        private val runtimeConfig = codegenContext.runtimeConfig
+        private val resolveAwsEndpoint = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("ResolveAwsEndpoint")
+        private val endpointShim = AwsRuntimeType.awsEndpoint(runtimeConfig).resolve("EndpointShim")
+        private val codegenScope = arrayOf(
+            "ResolveAwsEndpoint" to resolveAwsEndpoint,
+            "EndpointShim" to endpointShim,
+            "aws_types" to AwsRuntimeType.awsTypes(runtimeConfig),
+        )
+
+        override fun section(section: ServiceConfig): Writable = writable {
+            when (section) {
+                ServiceConfig.BuilderImpl -> rustTemplate(
+                    """
+                    /// Sets the endpoint url used to communicate with this service
+                    ///
+                    /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
+                    /// will be prefixed onto this URL. To fully override the endpoint resolver, use
+                    /// [`Builder::endpoint_resolver`].
+                    pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
+                        self.endpoint_url = Some(endpoint_url.into());
+                        self
+                    }
+
+                    /// Sets the endpoint url used to communicate with this service
+                    ///
+                    /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
+                    /// will be prefixed onto this URL. To fully override the endpoint resolver, use
+                    /// [`Builder::endpoint_resolver`].
+                    pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
+                        self.endpoint_url = endpoint_url;
+                        self
+                    }
+                    """,
+                    *codegenScope,
                 )
-            }
 
-            else -> emptySection
+                ServiceConfig.BuilderBuild -> rust("endpoint_url: self.endpoint_url,")
+                ServiceConfig.BuilderStruct -> rust("endpoint_url: Option<String>,")
+                ServiceConfig.ConfigImpl -> {
+                    Attribute.AllowDeadCode.render(this)
+                    rust("pub(crate) fn endpoint_url(&self) -> Option<&str> { self.endpoint_url.as_deref() }")
+                }
+
+                ServiceConfig.ConfigStruct -> rust("endpoint_url: Option<String>,")
+                ServiceConfig.ConfigStructAdditionalDocs -> emptySection
+                ServiceConfig.Extras -> emptySection
+            }
+        }
+    }
+
+    class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+        override fun section(section: LibRsSection): Writable {
+            return when (section) {
+                is LibRsSection.Body -> writable {
+                    rust(
+                        "pub use #T::endpoint::Endpoint;",
+                        CargoDependency.smithyHttp(runtimeConfig).toType(),
+                    )
+                }
+
+                else -> emptySection
+            }
         }
     }
 }

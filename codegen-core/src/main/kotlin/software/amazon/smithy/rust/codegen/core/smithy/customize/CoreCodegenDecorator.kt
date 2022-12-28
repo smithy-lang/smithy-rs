@@ -90,7 +90,7 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
 
     final override fun transformModel(service: ServiceShape, model: Model): Model =
         combineCustomizations(model) { decorator, otherModel ->
-            decorator.transformModel(service, otherModel)
+            decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel)
         }
 
     /**

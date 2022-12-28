@@ -126,7 +126,8 @@ internal class EndpointTestGenerator(
                             "let mut out = #{HashMap}::<String, #{Document}>::new();",
                             *codegenScope,
                         )
-                        // TODO(https://github.com/awslabs/smithy/pull/1555): remove when this is released
+                        // TODO(https://github.com/awslabs/smithy/pull/1555): remove sort by name when upgrading to
+                        //   Smithy version with this PR merged
                         val keys = mutableListOf<Identifier>()
                         value.forEach { id, _ -> keys.add(id) }
                         keys.sortedBy { it.name.value }.forEach { identifier ->
