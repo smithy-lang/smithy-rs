@@ -220,7 +220,7 @@ mod test {
                 properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
                 properties.insert(SigningService::from_static("kinesis"));
                 properties.insert(OperationSigningConfig::default_config());
-                properties.insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
+                properties.insert(Credentials::for_tests());
                 properties.insert(SigningRegion::from(region));
                 Result::<_, Infallible>::Ok(req)
             })
@@ -270,6 +270,7 @@ mod test {
                 .apply(req.try_clone().expect("can clone"))
                 .expect_err("no cred provider"),
         );
+        // use `new` instead of `for_tests` because the presence of a session_token will render `auth_header` below `Sensitive`.
         req.properties_mut()
             .insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
         let req = signer.apply(req).expect("signing succeeded");
