@@ -23,13 +23,7 @@ pub type Client<C> = CoreClient<C, DefaultMiddleware>;
 
 #[tokio::test]
 async fn signv4_use_correct_service_name() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
+    let creds = Credentials::for_tests();
     let conn = TestConnection::new(vec![(
         http::Request::builder()
             .header("content-type", "application/x-amz-json-1.0")
