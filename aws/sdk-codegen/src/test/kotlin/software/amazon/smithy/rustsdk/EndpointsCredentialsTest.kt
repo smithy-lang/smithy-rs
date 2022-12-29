@@ -88,7 +88,7 @@ class EndpointsCredentialsTest {
                         let conf = $moduleName::Config::builder()
                             .http_connector(conn)
                             .region(#{Region}::new("us-west-2"))
-                            .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
+                            .credentials_provider($moduleName::Credentials::for_tests())
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.default_auth().send().await;
@@ -110,7 +110,7 @@ class EndpointsCredentialsTest {
                         let conf = $moduleName::Config::builder()
                             .http_connector(conn)
                             .region(#{Region}::new("us-west-2"))
-                            .credentials_provider($moduleName::Credentials::new("example", "example", None, None, "example"))
+                            .credentials_provider($moduleName::Credentials::for_tests())
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.custom_auth().send().await;
