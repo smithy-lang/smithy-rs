@@ -127,7 +127,10 @@ async fn create_dummy_lib_crate(
         r#"[package]
 name = "{}"
 version = "0.0.1"
-edition = "2021""#,
+edition = "2021"
+description = "Placeholder ahead of the next smithy-rs release"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs""#,
         package_name
     );
     fs.write_file(directory_path.join("Cargo.toml"), cargo_toml.as_bytes())
