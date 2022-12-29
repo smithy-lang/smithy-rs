@@ -5,6 +5,7 @@
 //! Smithy HTTP Auth Types
 
 use std::fmt::Debug;
+use std::cmp::PartialEq;
 
 /// Authentication configuration to connect to an Smithy Service
 #[derive(Clone, Debug)]
@@ -14,8 +15,8 @@ pub struct AuthApiKey {
 
 impl AuthApiKey {
     /// Constructs a new API key.
-    pub fn new(api_key: String) -> AuthApiKey {
-        AuthApiKey {
+    pub fn new(api_key: String) -> Self {
+        Self {
             api_key,
         }
     }
@@ -40,7 +41,6 @@ impl AuthApiKey {
 // As described in the Smithy documentation:
 // https://github.com/awslabs/smithy/blob/main/smithy-model/src/main/resources/software/amazon/smithy/model/loader/prelude.smithy
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct HttpAuthDefinition {
 	/// Defines the location of where the Auth is serialized. This value
     /// can be set to `"header"` or `"query"`.
@@ -53,4 +53,65 @@ pub struct HttpAuthDefinition {
 	/// Defines the security scheme to use on the `Authorization` header value.
 	/// This can only be set if the "in" property is set to `"header"`.
 	scheme: Option<String>,
+}
+
+impl HttpAuthDefinition {
+    /// Constructs a new HTTP auth definition.
+    pub fn new(location: String, name: String, scheme: Option<String>) -> Self {
+        Self {
+            location,
+            name,
+            scheme,
+        }
+    }
+
+    /// Returns the HTTP auth location.
+    pub fn location(self) -> String {
+        self.location
+    }
+
+    /// Sets the value for HTTP auth location.
+    pub fn set_location(
+        mut self,
+        location: impl Into<String> + std::cmp::PartialEq<String> + Debug,
+    ) -> Self {
+        if location != "header".to_string() && location != "query".to_string() {
+            panic!("Location not allowed: Got: {:?}. Expected: `header` or `query`", location);
+        }
+        self.location = location.into();
+        self
+    }
+
+    /// Returns the HTTP auth name.
+    pub fn name(self) -> String {
+        self.name
+    }
+
+    /// Sets the value for HTTP auth name.
+    pub fn set_name(
+        mut self,
+        name: impl Into<String>,
+    ) -> Self {
+        self.name = name.into();
+        self
+    }
+
+    /// Returns the HTTP auth scheme.
+    pub fn scheme(self) -> Option<String> {
+        self.scheme
+    }
+
+    /// Sets the value for HTTP auth scheme.
+    pub fn set_scheme(
+        mut self,
+        scheme: impl Into<String>,
+    ) -> Self {
+        if self.location.eq("header") && self.name.eq_ignore_ascii_case("authorization") {
+            self.scheme = Some(scheme.into());
+            println!("Scheme can only be set when it is set into the `Authorization header`.");
+        } else {
+            self.scheme = None
+        }
+        self
+    }
 }
