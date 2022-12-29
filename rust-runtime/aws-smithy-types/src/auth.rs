@@ -34,3 +34,23 @@ impl AuthApiKey {
         self
     }
 }
+
+/// An HTTP-specific authentication scheme that sends an arbitrary
+/// auth value in a header or query string parameter.
+// As described in the Smithy documentation:
+// https://github.com/awslabs/smithy/blob/main/smithy-model/src/main/resources/software/amazon/smithy/model/loader/prelude.smithy
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+pub struct HttpAuthDefinition {
+	/// Defines the location of where the Auth is serialized. This value
+    /// can be set to `"header"` or `"query"`.
+	location: String,
+
+	/// Defines the name of the HTTP header or query string parameter
+	/// that contains the Auth.
+	name: String,
+
+	/// Defines the security scheme to use on the `Authorization` header value.
+	/// This can only be set if the "in" property is set to `"header"`.
+	scheme: Option<String>,
+}
