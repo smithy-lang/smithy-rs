@@ -130,3 +130,9 @@ let sdk_config = aws_config::from_env()
     .await;
 /// ```
 """
+
+[[smithy-rs]]
+message = "Fix bug where string default values were not supported for endpoint parameters"
+references = ["smithy-rs#2150"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "rcoh"
