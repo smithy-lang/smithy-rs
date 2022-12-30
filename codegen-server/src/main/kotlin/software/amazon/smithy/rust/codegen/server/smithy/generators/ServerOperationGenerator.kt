@@ -24,7 +24,7 @@ class ServerOperationGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to
-                ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
         )
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -37,7 +37,7 @@ class ServerOperationGenerator(
         if (operation.errors.isEmpty()) {
             rust("std::convert::Infallible")
         } else {
-            // Name comes from [ServerCombinedErrorGenerator].
+            // Name comes from [ServerOperationErrorGenerator].
             rust("crate::error::${symbolProvider.toSymbol(operation).name}Error")
         }
     }

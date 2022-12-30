@@ -54,16 +54,14 @@ class HttpBoundProtocolPayloadGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val target = codegenContext.target
     private val httpBindingResolver = protocol.httpBindingResolver
-
     private val operationSerModule = RustModule.private("operation_ser")
-
-    private val smithyEventStream = CargoDependency.smithyEventStream(runtimeConfig)
+    private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.toType(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
-        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
-        "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+        "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
     )
 
     override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {

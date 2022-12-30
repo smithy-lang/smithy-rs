@@ -6,12 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -39,11 +37,11 @@ open class ServerOperationHandlerGenerator(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
         "Tower" to ServerCargoDependency.Tower.toType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
-        "SmithyHttp" to CargoDependency.smithyHttp(runtimeConfig).toType(),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
-        "Phantom" to ServerRuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
-        "http" to RuntimeType.http,
+        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "Phantom" to RuntimeType.Phantom,
+        "ServerOperationHandler" to ServerRuntimeType.operationHandler(runtimeConfig),
+        "http" to RuntimeType.Http,
     )
 
     open fun render(writer: RustWriter) {
@@ -136,7 +134,7 @@ open class ServerOperationHandlerGenerator(
             "Fun: FnOnce($inputName) -> Fut + Clone + Send + 'static,"
         }
         val outputType = if (operation.operationErrors(model).isNotEmpty()) {
-            "Result<${symbolProvider.toSymbol(operation.outputShape(model)).fullName}, ${operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER).fullyQualifiedName()}>"
+            "Result<${symbolProvider.toSymbol(operation.outputShape(model)).fullName}, ${operation.errorSymbol(symbolProvider).fullyQualifiedName()}>"
         } else {
             symbolProvider.toSymbol(operation.outputShape(model)).fullName
         }

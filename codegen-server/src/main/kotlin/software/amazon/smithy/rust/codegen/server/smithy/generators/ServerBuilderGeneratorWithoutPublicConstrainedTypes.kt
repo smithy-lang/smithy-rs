@@ -42,7 +42,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
  * when `publicConstrainedTypes` is false.
  */
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
 ) {
     companion object {
@@ -55,33 +55,42 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         fun hasFallibleBuilder(
             structureShape: StructureShape,
             symbolProvider: SymbolProvider,
-        ): Boolean =
-            structureShape
-                .members()
-                .map { symbolProvider.toSymbol(it) }
-                .any { !it.isOptional() }
+        ): Boolean {
+            val members = structureShape.members()
+            fun isOptional(member: MemberShape) = symbolProvider.toSymbol(member).isOptional()
+            fun hasDefault(member: MemberShape) = member.hasNonNullDefault()
+
+            val notFallible = members.all {
+                isOptional(it) || hasDefault(it)
+            }
+
+            return !notFallible
+        }
     }
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val members: List<MemberShape> = shape.allMembers.values.toList()
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val structureSymbol = symbolProvider.toSymbol(shape)
 
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
-    private val moduleName = builderSymbol.namespace.split("::").last()
     private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
 
     private val codegenScope = arrayOf(
-        "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
+        "RequestRejection" to ServerRuntimeType.requestRejection(codegenContext.runtimeConfig),
         "Structure" to structureSymbol,
         "From" to RuntimeType.From,
         "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained(),
+        "MaybeConstrained" to RuntimeType.MaybeConstrained,
     )
 
     fun render(writer: RustWriter) {
+        check(!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+            "ServerBuilderGeneratorWithoutPublicConstrainedTypes should only be used when `publicConstrainedTypes` is false"
+        }
         writer.docs("See #D.", structureSymbol)
         writer.withInlineModule(builderSymbol.module()) {
             renderBuilder(this)
@@ -158,8 +167,23 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 val memberName = symbolProvider.toMemberName(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
-                    serverBuilderConstraintViolations.forMember(member)?.also {
-                        rust(".ok_or(ConstraintViolation::${it.name()})?")
+                    if (member.hasNonNullDefault()) {
+                        // 1a. If a `@default` value is modeled and the user did not set a value, fall back to using the
+                        // default value.
+                        generateFallbackCodeToDefaultValue(
+                            this,
+                            member,
+                            model,
+                            runtimeConfig,
+                            symbolProvider,
+                            codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                        )
+                    } else {
+                        // 1b. If the member is `@required` and has no `@default` value, the user must set a value;
+                        // otherwise, we fail with a `ConstraintViolation::Missing*` variant.
+                        serverBuilderConstraintViolations.forMember(member)?.also {
+                            rust(".ok_or(ConstraintViolation::${it.name()})?")
+                        }
                     }
                 }
             }

@@ -26,6 +26,8 @@ jobs:
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
+      env:
+        DOCKER_BUILDKIT: 1
       run: ./smithy-rs/tools/ci-build/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
@@ -38,6 +40,8 @@ jobs:
   ci:
     needs: acquire-base-image
     uses: ./.github/workflows/ci.yml
+    with:
+      run_sdk_examples: true
 
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
