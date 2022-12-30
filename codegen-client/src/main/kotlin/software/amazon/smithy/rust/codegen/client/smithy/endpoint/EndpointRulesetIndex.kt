@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Index to ensure that endpoint rulesets are parsed only once
  */
-internal class EndpointRulesetIndex : KnowledgeIndex {
+class EndpointRulesetIndex : KnowledgeIndex {
 
     private val ruleSets: ConcurrentHashMap<ServiceShape, EndpointRuleSet?> = ConcurrentHashMap()
 

@@ -60,7 +60,7 @@ class EventStreamUnmarshallerGenerator(
     private val errorSymbol = if (codegenTarget == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
     } else {
-        unionShape.eventStreamErrorSymbol(model, symbolProvider, codegenTarget).toSymbol()
+        unionShape.eventStreamErrorSymbol(symbolProvider).toSymbol()
     }
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")

@@ -322,6 +322,12 @@ impl ByteStream {
     }
 }
 
+impl Default for ByteStream {
+    fn default() -> Self {
+        Self::new(aws_smithy_http::body::SdkBody::from(""))
+    }
+}
+
 /// ByteStream Abstractions.
 #[pymethods]
 impl ByteStream {

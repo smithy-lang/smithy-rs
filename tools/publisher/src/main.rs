@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use clap::Parser;
+use publisher::subcommand::claim_crate_names::{subcommand_claim_crate_names, ClaimCrateNamesArgs};
 use publisher::subcommand::fix_manifests::subcommand_fix_manifests;
 use publisher::subcommand::fix_manifests::FixManifestsArgs;
 use publisher::subcommand::generate_version_manifest::{
@@ -16,6 +17,7 @@ use publisher::subcommand::publish::PublishArgs;
 use publisher::subcommand::tag_versions_manifest::subcommand_tag_versions_manifest;
 use publisher::subcommand::tag_versions_manifest::TagVersionsManifestArgs;
 use publisher::subcommand::yank_release::{subcommand_yank_release, YankReleaseArgs};
+use tracing_subscriber::fmt::format::FmtSpan;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -24,6 +26,10 @@ enum Args {
     FixManifests(FixManifestsArgs),
     /// Publishes crates to crates.io
     Publish(PublishArgs),
+    /// Publishes an empty library crate to crates.io when a new runtime crate is introduced.
+    ///
+    /// It must be invoked from the `smithy-rs` repository.
+    ClaimCrateNames(ClaimCrateNamesArgs),
     /// Yanks an entire SDK release. For individual packages, use `cargo yank` instead.
     /// Only one of the `--github-release-tag` or `--versions-toml` options are required.
     YankRelease(YankReleaseArgs),
@@ -38,12 +44,14 @@ enum Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .with_env_filter(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "error,publisher=info".to_owned()),
         )
         .init();
 
     match Args::parse() {
+        Args::ClaimCrateNames(args) => subcommand_claim_crate_names(&args).await?,
         Args::Publish(args) => subcommand_publish(&args).await?,
         Args::FixManifests(args) => subcommand_fix_manifests(&args).await?,
         Args::YankRelease(args) => subcommand_yank_release(&args).await?,

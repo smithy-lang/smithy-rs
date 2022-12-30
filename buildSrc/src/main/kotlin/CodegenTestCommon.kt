@@ -233,16 +233,17 @@ fun Project.registerCargoCommandsTasks(
             "generateCargoConfigToml",
             this.tasks.findByName("modifyMtime")?.let { "modifyMtime" },
         )
+
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "check", "--lib", "--tests", "--benches")
+        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "test")
+        commandLine("cargo", "test", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {

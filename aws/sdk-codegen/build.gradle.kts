@@ -19,18 +19,14 @@ group = "software.amazon.software.amazon.smithy.rust.codegen.smithy"
 version = "0.1.0"
 
 val smithyVersion: String by project
-val kotestVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))
     implementation(project(":codegen-client"))
-    runtimeOnly(project(":aws:rust-runtime"))
     implementation("org.jsoup:jsoup:1.14.3")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-    testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
 val generateAwsRuntimeCrateVersion by tasks.registering {
@@ -50,10 +46,6 @@ val generateAwsRuntimeCrateVersion by tasks.registering {
 tasks.compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
     dependsOn(generateAwsRuntimeCrateVersion)
-}
-
-tasks.compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
 }
 
 // Reusable license copySpec
@@ -78,29 +70,44 @@ val sourcesJar by tasks.creating(Jar::class) {
     from(sourceSets.getByName("main").allSource)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-        exceptionFormat = TestExceptionFormat.FULL
-        showCauses = true
-        showExceptions = true
-        showStackTraces = true
-        showStandardStreams = true
-    }
-}
+val isTestingEnabled: String by project
+if (isTestingEnabled.toBoolean()) {
+    val kotestVersion: String by project
 
-// Configure jacoco (code coverage) to generate an HTML report
-tasks.jacocoTestReport {
-    reports {
-        xml.required.set(false)
-        csv.required.set(false)
-        html.outputLocation.set(file("$buildDir/reports/jacoco"))
+    dependencies {
+        runtimeOnly(project(":aws:rust-runtime"))
+        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
     }
-}
 
-// Always run the jacoco test report after testing.
-tasks["test"].finalizedBy(tasks["jacocoTestReport"])
+    tasks.compileTestKotlin {
+        kotlinOptions.jvmTarget = "1.8"
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+            exceptionFormat = TestExceptionFormat.FULL
+            showCauses = true
+            showExceptions = true
+            showStackTraces = true
+            showStandardStreams = true
+        }
+    }
+
+    // Configure jacoco (code coverage) to generate an HTML report
+    tasks.jacocoTestReport {
+        reports {
+            xml.required.set(false)
+            csv.required.set(false)
+            html.outputLocation.set(file("$buildDir/reports/jacoco"))
+        }
+    }
+
+    // Always run the jacoco test report after testing.
+    tasks["test"].finalizedBy(tasks["jacocoTestReport"])
+}
 
 publishing {
     publications {
