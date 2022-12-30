@@ -25,23 +25,26 @@ endif
 # Note on `--compatibility linux`: Maturin by default uses `manylinux_x_y` but it is not supported
 # by our current CI version (3.7.10), we can drop `--compatibility linux` when we switch to higher Python version.
 # For more detail: https://github.com/pypa/manylinux
-build-wheel: ensure-maturin codegen
-	maturin build --manifest-path $(SERVER_SDK_DST)/Cargo.toml --out $(WHEELS) --compatibility linux
+build-wheel: ensure-maturin
+	cd $(SERVER_SDK_DST) && maturin build --out $(WHEELS) --compatibility linux
 
-build-wheel-release: ensure-maturin codegen
-	maturin build --manifest-path $(SERVER_SDK_DST)/Cargo.toml --out $(WHEELS) --compatibility linux --release
+build-wheel-release: ensure-maturin
+	cd $(SERVER_SDK_DST) && maturin build --out $(WHEELS) --compatibility linux --release
 
 install-wheel:
 	find $(WHEELS) -type f -name '*.whl' | xargs python3 -m pip install --user --force-reinstall
 
-build: build-wheel install-wheel
+generate-stubs:
+	python3 $(CUR_DIR)/stubgen.py pokemon_service_server_sdk $(SERVER_SDK_DST)/python/pokemon_service_server_sdk
 
-release: build-wheel-release install-wheel
+build: codegen 
+	$(MAKE) build-wheel
+	$(MAKE) install-wheel
+	$(MAKE) generate-stubs
+	$(MAKE) build-wheel-release
+	$(MAKE) install-wheel
 
 run: build
-	python3 $(CUR_DIR)/pokemon_service.py
-
-run-release: release
 	python3 $(CUR_DIR)/pokemon_service.py
 
 py-check: build
@@ -60,6 +63,6 @@ clean:
 	cargo clean || echo "Unable to run cargo clean"
 
 distclean: clean
-	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) $(WHEELS) $(CUR_DIR)/Cargo.lock
+	rm -rf $(SERVER_SDK_DST) $(SERVER_SDK_SRC) $(CLIENT_SDK_DST) $(CLIENT_SDK_SRC) $(WHEELS) $(CUR_DIR)/Cargo.lock
 
 .PHONY: all

@@ -23,6 +23,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGener
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
+import software.amazon.smithy.rust.codegen.server.python.smithy.pythonType
+import software.amazon.smithy.rust.codegen.server.python.smithy.render
 
 /**
  * To share structures defined in Rust with Python, `pyo3` provides the `PyClass` trait.
@@ -52,6 +55,7 @@ class PythonServerStructureGenerator(
         } else {
             Attribute(pyO3.resolve("pyclass")).render(writer)
         }
+        writer.rustTemplate("#{ConstructorSignature:W}", "ConstructorSignature" to renderConstructorSignature())
         super.renderStructure()
         renderPyO3Methods()
     }
@@ -65,6 +69,7 @@ class PythonServerStructureGenerator(
         writer.addDependency(PythonServerCargoDependency.PyO3)
         // Above, we manually add dependency since we can't use a `RuntimeType` below
         Attribute("pyo3(get, set)").render(writer)
+        writer.rustTemplate("#{Signature:W}", "Signature" to renderSymbolSignature(memberSymbol))
         super.renderStructureMember(writer, member, memberName, memberSymbol)
     }
 
@@ -106,5 +111,21 @@ class PythonServerStructureGenerator(
             forEachMember(members) { _, memberName, _ ->
                 rust("$memberName,")
             }
+        }
+
+    private fun renderConstructorSignature(): Writable =
+        writable {
+            forEachMember(members) { _, memberName, memberSymbol ->
+                val memberType = memberSymbol.rustType().pythonType()
+                rust("/// :param $memberName ${memberType.render()}:")
+            }
+
+            rust("/// :rtype ${PythonType.None.render()}:")
+        }
+
+    private fun renderSymbolSignature(symbol: Symbol): Writable =
+        writable {
+            val pythonType = symbol.rustType().pythonType()
+            rust("/// :type ${pythonType.render()}:")
         }
 }

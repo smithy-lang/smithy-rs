@@ -27,6 +27,9 @@ use tokio_stream::StreamExt;
 use crate::PyError;
 
 /// Python Wrapper for [aws_smithy_types::Blob].
+///
+/// :param input bytes:
+/// :rtype None:
 #[pyclass]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Blob(aws_smithy_types::Blob);
@@ -58,6 +61,8 @@ impl Blob {
     }
 
     /// Python getter for the `Blob` byte array.
+    ///
+    /// :type bytes:
     #[getter(data)]
     pub fn get_data(&self) -> &[u8] {
         self.as_ref()
@@ -134,6 +139,9 @@ impl DateTime {
 #[pymethods]
 impl DateTime {
     /// Creates a `DateTime` from a number of seconds since the Unix epoch.
+    ///
+    /// :param epoch_seconds int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs(epoch_seconds: i64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs(
@@ -142,6 +150,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of milliseconds since the Unix epoch.
+    ///
+    /// :param epoch_millis int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_millis(epoch_millis: i64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs(
@@ -150,6 +161,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of nanoseconds since the Unix epoch.
+    ///
+    /// :param epoch_nanos int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_nanos(epoch_nanos: i128) -> PyResult<Self> {
         Ok(Self(
@@ -159,6 +173,12 @@ impl DateTime {
     }
 
     /// Read 1 date of `format` from `s`, expecting either `delim` or EOF.
+    ///
+    /// TODO: How do we represent `char` in Python?
+    ///
+    /// :param format Format:
+    /// :param delim str:
+    /// :rtype typing.Tuple[DateTime, str]:
     #[staticmethod]
     pub fn read(s: &str, format: Format, delim: char) -> PyResult<(Self, &str)> {
         let (self_, next) = aws_smithy_types::date_time::DateTime::read(s, format.into(), delim)
@@ -167,6 +187,10 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of seconds and a fractional second since the Unix epoch.
+    ///
+    /// :param epoch_seconds int:
+    /// :param fraction float:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_fractional_secs(epoch_seconds: i64, fraction: f64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_fractional_secs(
@@ -176,6 +200,10 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from a number of seconds and sub-second nanos since the Unix epoch.
+    ///
+    /// :param seconds int:
+    /// :param subsecond_nanos int:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs_and_nanos(seconds: i64, subsecond_nanos: u32) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs_and_nanos(
@@ -185,6 +213,9 @@ impl DateTime {
     }
 
     /// Creates a `DateTime` from an `f64` representing the number of seconds since the Unix epoch.
+    ///
+    /// :param epoch_seconds float:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_secs_f64(epoch_seconds: f64) -> Self {
         Self(aws_smithy_types::date_time::DateTime::from_secs_f64(
@@ -193,6 +224,10 @@ impl DateTime {
     }
 
     /// Parses a `DateTime` from a string using the given `format`.
+    ///
+    /// :param s str:
+    /// :param format Format:
+    /// :rtype DateTime:
     #[staticmethod]
     pub fn from_str(s: &str, format: Format) -> PyResult<Self> {
         Ok(Self(
@@ -202,31 +237,43 @@ impl DateTime {
     }
 
     /// Returns the number of nanoseconds since the Unix epoch that this `DateTime` represents.
+    ///
+    /// :rtype int:
     pub fn as_nanos(&self) -> i128 {
         self.0.as_nanos()
     }
 
     /// Returns the `DateTime` value as an `f64` representing the seconds since the Unix epoch.
+    ///
+    /// :rtype float:
     pub fn as_secs_f64(&self) -> f64 {
         self.0.as_secs_f64()
     }
 
     /// Returns true if sub-second nanos is greater than zero.
+    ///
+    /// :rtype bool:
     pub fn has_subsec_nanos(&self) -> bool {
         self.0.has_subsec_nanos()
     }
 
     /// Returns the epoch seconds component of the `DateTime`.
+    ///
+    /// :rtype int:
     pub fn secs(&self) -> i64 {
         self.0.secs()
     }
 
     /// Returns the sub-second nanos component of the `DateTime`.
+    ///
+    /// :rtype int:
     pub fn subsec_nanos(&self) -> u32 {
         self.0.subsec_nanos()
     }
 
     /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.
+    ///
+    /// :rtype int:
     pub fn to_millis(&self) -> PyResult<i64> {
         Ok(self.0.to_millis().map_err(PyError::DateTimeConversion)?)
     }
@@ -283,6 +330,9 @@ impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
 ///
 /// The original Rust [ByteStream](aws_smithy_http::byte_stream::ByteStream) is wrapped inside a `Arc<Mutex>` to allow the type to be
 /// [Clone] (required by PyO3) and to allow internal mutability, required to fetch the next chunk of data.
+///
+/// :param input bytes:
+/// :rtype None:
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct ByteStream(Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>);
@@ -347,6 +397,9 @@ impl ByteStream {
     /// requiring Python to await this method.
     ///
     /// **NOTE:** This method will block the Rust event loop when it is running.
+    ///
+    /// :param path str:
+    /// :rtype ByteStream:
     #[staticmethod]
     pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
         let byte_stream = futures::executor::block_on(async {
@@ -360,6 +413,9 @@ impl ByteStream {
 
     /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a path, forcing
     /// Python to await this coroutine.
+    ///
+    /// :param path str:
+    /// :rtype typing.Awaitable[ByteStream]:
     #[staticmethod]
     pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {

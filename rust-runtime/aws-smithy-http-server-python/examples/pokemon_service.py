@@ -8,34 +8,34 @@ import logging
 import random
 from threading import Lock
 from dataclasses import dataclass
-from typing import List, Optional, Callable, Awaitable
+from typing import Dict, Any, List, Optional, Callable, Awaitable
 
 from pokemon_service_server_sdk import App
-from pokemon_service_server_sdk.tls import TlsConfig  # type: ignore
-from pokemon_service_server_sdk.aws_lambda import LambdaContext  # type: ignore
-from pokemon_service_server_sdk.error import ResourceNotFoundException  # type: ignore
-from pokemon_service_server_sdk.input import (  # type: ignore
+from pokemon_service_server_sdk.tls import TlsConfig
+from pokemon_service_server_sdk.aws_lambda import LambdaContext
+from pokemon_service_server_sdk.error import ResourceNotFoundException
+from pokemon_service_server_sdk.input import (
     DoNothingInput,
     GetPokemonSpeciesInput,
     GetServerStatisticsInput,
     CheckHealthInput,
     StreamPokemonRadioInput,
 )
-from pokemon_service_server_sdk.logging import TracingHandler  # type: ignore
-from pokemon_service_server_sdk.middleware import (  # type: ignore
+from pokemon_service_server_sdk.logging import TracingHandler
+from pokemon_service_server_sdk.middleware import (
     MiddlewareException,
     Response,
     Request,
 )
-from pokemon_service_server_sdk.model import FlavorText, Language  # type: ignore
-from pokemon_service_server_sdk.output import (  # type: ignore
+from pokemon_service_server_sdk.model import FlavorText, Language
+from pokemon_service_server_sdk.output import (
     DoNothingOutput,
     GetPokemonSpeciesOutput,
     GetServerStatisticsOutput,
     CheckHealthOutput,
     StreamPokemonRadioOutput,
 )
-from pokemon_service_server_sdk.types import ByteStream  # type: ignore
+from pokemon_service_server_sdk.types import ByteStream
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.
@@ -270,7 +270,7 @@ def main() -> None:
     parser.add_argument("--tls-cert-path")
     args = parser.parse_args()
 
-    config = dict(workers=1)
+    config: Dict[str, Any] = dict(workers=1)
     if args.enable_tls:
         config["tls"] = TlsConfig(
             key_path=args.tls_key_path,

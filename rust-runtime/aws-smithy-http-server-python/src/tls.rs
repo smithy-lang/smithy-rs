@@ -20,6 +20,11 @@ use tokio_rustls::rustls::{Certificate, Error as RustTlsError, PrivateKey, Serve
 pub mod listener;
 
 /// PyTlsConfig represents TLS configuration created from Python.
+///
+/// :param key_path pathlib.Path:
+/// :param cert_path pathlib.Path:
+/// :param reload_secs int:
+/// :rtype None:
 #[pyclass(
     name = "TlsConfig",
     text_signature = "(*, key_path, cert_path, reload)"
@@ -27,12 +32,18 @@ pub mod listener;
 #[derive(Clone)]
 pub struct PyTlsConfig {
     /// Absolute path of the RSA or PKCS private key.
+    ///
+    /// :type pathlib.Path:
     key_path: PathBuf,
 
     /// Absolute path of the x509 certificate.
+    ///
+    /// :type pathlib.Path:
     cert_path: PathBuf,
 
     /// Duration to reloading certificates.
+    ///
+    /// :type int:
     reload_secs: u64,
 }
 

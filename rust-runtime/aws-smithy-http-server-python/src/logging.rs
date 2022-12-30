@@ -86,6 +86,10 @@ fn setup_tracing_subscriber(
 /// - A new builtin function `logging.py_tracing_event` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
 ///   is not exported in `logging.__all__`, as it is not intended to be called directly.
 /// - A new class `logging.TracingHandler` provides a `logging.Handler` that delivers all records to `python_tracing`.
+///
+/// :param level typing.Optional[int]:
+/// :param logfile typing.Optional[pathlib.Path]:
+/// :rtype None:
 #[pyclass(name = "TracingHandler")]
 #[derive(Debug)]
 pub struct PyTracingHandler {
@@ -104,6 +108,7 @@ impl PyTracingHandler {
         Ok(Self { _guard })
     }
 
+    /// :rtype typing.Any:
     fn handler(&self, py: Python) -> PyResult<Py<PyAny>> {
         let logging = py.import("logging")?;
         logging.setattr(
