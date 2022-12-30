@@ -15,7 +15,7 @@ use tokio_stream::StreamExt;
 mk_canary!(
     "ec2_paginator",
     |sdk_config: &aws_config::SdkConfig, env: &CanaryEnv| {
-        paginator_canary(ec2::Client::new(&sdk_config), env.page_size)
+        paginator_canary(ec2::Client::new(sdk_config), env.page_size)
     }
 );
 
