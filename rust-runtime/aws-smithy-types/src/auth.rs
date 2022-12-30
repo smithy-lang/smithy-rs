@@ -22,8 +22,8 @@ impl AuthApiKey {
     }
 
     /// Returns the underlying api key.
-    pub fn api_key(self) -> String {
-        self.api_key
+    pub fn api_key(&self) -> &str {
+        &self.api_key
     }
 
     /// Sets the value for the api key
@@ -66,8 +66,8 @@ impl HttpAuthDefinition {
     }
 
     /// Returns the HTTP auth location.
-    pub fn location(self) -> String {
-        self.location
+    pub fn location(&self) -> &str {
+        &self.location
     }
 
     /// Sets the value for HTTP auth location.
@@ -83,8 +83,8 @@ impl HttpAuthDefinition {
     }
 
     /// Returns the HTTP auth name.
-    pub fn name(self) -> String {
-        self.name
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Sets the value for HTTP auth name.
@@ -97,8 +97,8 @@ impl HttpAuthDefinition {
     }
 
     /// Returns the HTTP auth scheme.
-    pub fn scheme(self) -> Option<String> {
-        self.scheme
+    pub fn scheme(&self) -> &Option<String> {
+        &self.scheme
     }
 
     /// Sets the value for HTTP auth scheme.
