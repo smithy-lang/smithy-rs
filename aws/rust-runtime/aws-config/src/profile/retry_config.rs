@@ -84,9 +84,7 @@ impl ProfileFileRetryConfigProvider {
     ///
     /// To override the selected profile, set the `AWS_PROFILE` environment variable or use the [Builder].
     pub fn new() -> Self {
-        Self {
-            provider_config: Default::default(),
-        }
+        Self::default()
     }
 
     /// [Builder] to construct a [ProfileFileRetryConfigProvider]

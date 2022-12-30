@@ -78,7 +78,7 @@ pub(crate) fn no_traffic_connector() -> DynConnector {
 }
 
 #[derive(Debug)]
-struct InstantSleep;
+pub(crate) struct InstantSleep;
 impl AsyncSleep for InstantSleep {
     fn sleep(&self, _duration: Duration) -> Sleep {
         Sleep::new(std::future::ready(()))

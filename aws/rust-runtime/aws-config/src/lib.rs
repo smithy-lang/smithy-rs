@@ -161,6 +161,7 @@ mod loader {
     use crate::connector::default_connector;
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
+    use crate::profile::profile_file::ProfileFiles;
     use crate::provider_config::ProviderConfig;
 
     /// Load a cross-service [`SdkConfig`](aws_types::SdkConfig) from the environment
@@ -181,6 +182,8 @@ mod loader {
         timeout_config: Option<TimeoutConfig>,
         provider_config: Option<ProviderConfig>,
         http_connector: Option<HttpConnector>,
+        profile_name_override: Option<String>,
+        profile_files_override: Option<ProfileFiles>,
     }
 
     impl ConfigLoader {
@@ -344,6 +347,73 @@ mod loader {
             self
         }
 
+        /// Provides the ability to programmatically override the profile files that get loaded by the SDK.
+        ///
+        /// The [`Default`] for `ProfileFiles` includes the default SDK config and credential files located in
+        /// `~/.aws/config` and `~/.aws/credentials` respectively.
+        ///
+        /// Any number of config and credential files may be added to the `ProfileFiles` file set, with the
+        /// only requirement being that there is at least one of them. Custom file locations that are added
+        /// will produce errors if they don't exist, while the default config/credentials files paths are
+        /// allowed to not exist even if they're included.
+        ///
+        /// # Example: Using a custom profile file path
+        ///
+        /// ```
+        /// use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
+        /// use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+        ///
+        /// # async fn example() {
+        /// let profile_files = ProfileFiles::builder()
+        ///     .with_file(ProfileFileKind::Credentials, "some/path/to/credentials-file")
+        ///     .build();
+        /// let sdk_config = aws_config::from_env()
+        ///     .profile_files(profile_files)
+        ///     .load()
+        ///     .await;
+        /// # }
+        pub fn profile_files(mut self, profile_files: ProfileFiles) -> Self {
+            self.profile_files_override = Some(profile_files);
+            self
+        }
+
+        /// Override the profile name used by configuration providers
+        ///
+        /// Profile name is selected from an ordered list of sources:
+        /// 1. This override.
+        /// 2. The value of the `AWS_PROFILE` environment variable.
+        /// 3. `default`
+        ///
+        /// Each AWS profile has a name. For example, in the file below, the profiles are named
+        /// `dev`, `prod` and `staging`:
+        /// ```ini
+        /// [dev]
+        /// ec2_metadata_service_endpoint = http://my-custom-endpoint:444
+        ///
+        /// [staging]
+        /// ec2_metadata_service_endpoint = http://my-custom-endpoint:444
+        ///
+        /// [prod]
+        /// ec2_metadata_service_endpoint = http://my-custom-endpoint:444
+        /// ```
+        ///
+        /// # Example: Using a custom profile name
+        ///
+        /// ```
+        /// use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
+        /// use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+        ///
+        /// # async fn example() {
+        /// let sdk_config = aws_config::from_env()
+        ///     .profile_name("prod")
+        ///     .load()
+        ///     .await;
+        /// # }
+        pub fn profile_name(mut self, profile_name: impl Into<String>) -> Self {
+            self.profile_name_override = Some(profile_name.into());
+            self
+        }
+
         /// Override the endpoint URL used for **all** AWS services.
         ///
         /// This method will override the endpoint URL used for **all** AWS services. This primarily
@@ -372,16 +442,14 @@ mod loader {
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
         /// the HTTPs connector used by providers or to stub in an in memory `Env` or `Fs` for testing.
-        /// This **does not set** the HTTP connector used when sending operations. To change that
-        /// connector, use [ConfigLoader::http_connector].
         ///
         /// # Examples
         /// ```no_run
         /// # #[cfg(feature = "hyper-client")]
         /// # async fn create_config() {
         /// use aws_config::provider_config::ProviderConfig;
-        /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new().
-        ///     with_webpki_roots()
+        /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+        ///     .with_webpki_roots()
         ///     .https_only()
         ///     .enable_http1()
         ///     .build();
@@ -404,7 +472,10 @@ mod loader {
         /// This means that if you provide a region provider that does not return a region, no region will
         /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
         pub async fn load(self) -> SdkConfig {
-            let conf = self.provider_config.unwrap_or_default();
+            let conf = self
+                .provider_config
+                .unwrap_or_default()
+                .with_profile_config(self.profile_files_override, self.profile_name_override);
             let region = if let Some(provider) = self.region {
                 provider.region().await
             } else {

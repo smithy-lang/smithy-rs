@@ -42,7 +42,7 @@ pub struct ProviderConfig {
     connector: HttpConnector,
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
-    profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
+    parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
     profile_files: ProfileFiles,
     profile_name_override: Option<Cow<'static, str>>,
 }
@@ -73,7 +73,7 @@ impl Default for ProviderConfig {
             connector,
             sleep: default_async_sleep(),
             region: None,
-            profile: Default::default(),
+            parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
         }
@@ -93,7 +93,7 @@ impl ProviderConfig {
         let fs = Fs::from_raw_map(HashMap::new());
         let env = Env::from_slice(&[]);
         Self {
-            profile: Default::default(),
+            parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             env,
             fs,
@@ -141,7 +141,7 @@ impl ProviderConfig {
             connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
-            profile: Default::default(),
+            parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
         }
@@ -203,7 +203,7 @@ impl ProviderConfig {
 
     pub(crate) async fn try_profile(&self) -> Result<&ProfileSet, &ProfileFileLoadError> {
         let parsed_profile = self
-            .profile
+            .parsed_profile
             .get_or_init(|| async {
                 let profile = profile::load(
                     &self.fs,
@@ -231,22 +231,14 @@ impl ProviderConfig {
         self
     }
 
-    /// Override the profile files for the configuration
-    pub fn with_profile_files(self, profile_files: ProfileFiles) -> Self {
-        ProviderConfig {
-            profile: Default::default(),
-            profile_files,
-            ..self
-        }
-    }
-
     pub(crate) fn with_profile_config(
         self,
         profile_files: Option<ProfileFiles>,
         profile_name_override: Option<String>,
     ) -> Self {
         ProviderConfig {
-            profile: Default::default(),
+            // clear out the profile since we need to reparse it
+            parsed_profile: Default::default(),
             profile_files: profile_files.unwrap_or(self.profile_files),
             profile_name_override: profile_name_override
                 .map(Cow::Owned)
@@ -270,7 +262,7 @@ impl ProviderConfig {
     #[doc(hidden)]
     pub fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig {
-            profile: Default::default(),
+            parsed_profile: Default::default(),
             fs,
             ..self
         }
@@ -279,7 +271,7 @@ impl ProviderConfig {
     #[doc(hidden)]
     pub fn with_env(self, env: Env) -> Self {
         ProviderConfig {
-            profile: Default::default(),
+            parsed_profile: Default::default(),
             env,
             ..self
         }
