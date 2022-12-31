@@ -7,7 +7,7 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
 
-/// Authentication configuration to connect to an Smithy Service
+/// Authentication configuration to connect to a Smithy Service
 #[derive(Clone, Debug)]
 pub struct AuthApiKey {
     api_key: String,
@@ -90,6 +90,7 @@ impl HttpAuthDefinition {
         location: impl Into<String> + std::cmp::PartialEq<String> + Debug,
     ) -> Self {
         if location != "header".to_string() && location != "query".to_string() {
+            // TODO: return auth defined error
             panic!(
                 "Location not allowed: Got: {:?}. Expected: `header` or `query`",
                 location
@@ -119,8 +120,9 @@ impl HttpAuthDefinition {
     pub fn set_scheme(mut self, scheme: impl Into<String>) -> Self {
         if self.location.eq("header") && self.name.eq_ignore_ascii_case("authorization") {
             self.scheme = Some(scheme.into());
-            println!("Scheme can only be set when it is set into the `Authorization header`.");
         } else {
+            // TODO: return auth defined error
+            println!("Scheme can only be set when it is set into the `Authorization header`.");
             self.scheme = None
         }
         self
