@@ -5,7 +5,6 @@
 
 use crate::date_time::{format_date, format_date_time};
 use crate::http_request::error::CanonicalRequestError;
-use crate::http_request::query_writer::QueryWriter;
 use crate::http_request::settings::UriPathNormalizationMode;
 use crate::http_request::sign::SignableRequest;
 use crate::http_request::uri_path_normalization::normalize_uri_path;
@@ -13,6 +12,7 @@ use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
 use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::sign::sha256_hex_string;
+use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
