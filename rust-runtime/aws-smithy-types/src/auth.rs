@@ -94,7 +94,7 @@ impl HttpAuthDefinition {
     pub fn new_with_header(header_name: impl Into<String>, scheme: impl Into<Option<String>>) -> Result<Self, AuthError> {
         let name: String = header_name.into();
         let scheme: Option<String> = scheme.into();
-        if scheme.is_some() && name.eq_ignore_ascii_case("authorization") {
+        if scheme.is_some() && !name.eq_ignore_ascii_case("authorization") {
             return Err(AuthError::from(AuthErrorKind::SchemeNotAllowed));
         }
         HttpAuthDefinition::new("header".to_owned(), name, scheme)
