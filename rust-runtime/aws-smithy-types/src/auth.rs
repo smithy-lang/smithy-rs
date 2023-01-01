@@ -23,7 +23,10 @@ impl std::fmt::Display for AuthError {
         use AuthErrorKind::*;
         match &self.kind {
             InvalidLocation => write!(f, "invalid location: expected `header` or `query`"),
-            SchemeNotAllowed => write!(f, "scheme only allowed when it is set into the `Authorization header`"),
+            SchemeNotAllowed => write!(
+                f,
+                "scheme only allowed when it is set into the `Authorization header`"
+            ),
         }
     }
 }
@@ -91,7 +94,10 @@ impl HttpAuthDefinition {
     }
 
     /// Constructs a new HTTP auth definition in header.
-    pub fn new_with_header(header_name: impl Into<String>, scheme: impl Into<Option<String>>) -> Result<Self, AuthError> {
+    pub fn new_with_header(
+        header_name: impl Into<String>,
+        scheme: impl Into<Option<String>>,
+    ) -> Result<Self, AuthError> {
         let name: String = header_name.into();
         let scheme: Option<String> = scheme.into();
         if scheme.is_some() && !name.eq_ignore_ascii_case("authorization") {
@@ -100,16 +106,37 @@ impl HttpAuthDefinition {
         HttpAuthDefinition::new("header".to_owned(), name, scheme)
     }
 
+    /// Constructs a new HTTP auth definition following the RFC 2617 for Basic Auth.
+    pub fn new_with_basic_auth() -> Self {
+        HttpAuthDefinition::new(
+            "header".to_owned(),
+            "Authorization".to_owned(),
+            Some("Basic".to_owned()),
+        )
+        .unwrap()
+    }
+
+    /// Constructs a new HTTP auth definition following the RFC 2617 for Digest Auth.
+    pub fn new_with_digest_auth() -> Self {
+        HttpAuthDefinition::new(
+            "header".to_owned(),
+            "Authorization".to_owned(),
+            Some("Digest".to_owned()),
+        )
+        .unwrap()
+    }
+
     /// Constructs a new HTTP auth definition following the RFC 6750 for Bearer Auth.
     pub fn new_with_bearer_auth() -> Self {
         HttpAuthDefinition::new(
             "header".to_owned(),
             "Authorization".to_owned(),
             Some("Bearer".to_owned()),
-        ).unwrap()
+        )
+        .unwrap()
     }
 
-    /// Constructs a new HTTP auth definition in header.
+    /// Constructs a new HTTP auth definition in query string.
     pub fn new_with_query(name: impl Into<String>) -> Result<Self, AuthError> {
         HttpAuthDefinition::new("query".to_owned(), name.into(), None)
     }
