@@ -4,8 +4,35 @@
  */
 //! Smithy HTTP Auth Types
 
-use std::cmp::PartialEq;
 use std::fmt::Debug;
+
+#[derive(Debug)]
+enum AuthErrorKind {
+    InvalidLocation,
+    SchemeNotAllowed,
+}
+
+/// Error for Smithy authentication
+#[derive(Debug)]
+pub struct AuthError {
+    kind: AuthErrorKind,
+}
+
+impl std::fmt::Display for AuthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use AuthErrorKind::*;
+        match &self.kind {
+            InvalidLocation => write!(f, "invalid location: expected `header` or `query`"),
+            SchemeNotAllowed => write!(f, "scheme only allowed when it is set into the `Authorization header`"),
+        }
+    }
+}
+
+impl From<AuthErrorKind> for AuthError {
+    fn from(kind: AuthErrorKind) -> Self {
+        Self { kind }
+    }
+}
 
 /// Authentication configuration to connect to a Smithy Service
 #[derive(Clone, Debug)]
@@ -52,16 +79,24 @@ pub struct HttpAuthDefinition {
 
 impl HttpAuthDefinition {
     /// Constructs a new HTTP auth definition.
-    fn new(location: String, name: String, scheme: Option<String>) -> Self {
-        Self {
+    fn new(location: String, name: String, scheme: Option<String>) -> Result<Self, AuthError> {
+        if location != "header" && location != "query" {
+            return Err(AuthError::from(AuthErrorKind::InvalidLocation));
+        }
+        Ok(Self {
             location,
             name,
             scheme,
-        }
+        })
     }
 
     /// Constructs a new HTTP auth definition in header.
-    pub fn new_with_header(name: String, scheme: Option<String>) -> Self {
+    pub fn new_with_header(header_name: impl Into<String>, scheme: impl Into<Option<String>>) -> Result<Self, AuthError> {
+        let name: String = header_name.into();
+        let scheme: Option<String> = scheme.into();
+        if scheme.is_some() && name.eq_ignore_ascii_case("authorization") {
+            return Err(AuthError::from(AuthErrorKind::SchemeNotAllowed));
+        }
         HttpAuthDefinition::new("header".to_owned(), name, scheme)
     }
 
@@ -71,12 +106,12 @@ impl HttpAuthDefinition {
             "header".to_owned(),
             "Authorization".to_owned(),
             Some("Bearer".to_owned()),
-        )
+        ).unwrap()
     }
 
     /// Constructs a new HTTP auth definition in header.
-    pub fn new_with_query(name: String) -> Self {
-        HttpAuthDefinition::new("query".to_owned(), name, None)
+    pub fn new_with_query(name: impl Into<String>) -> Result<Self, AuthError> {
+        HttpAuthDefinition::new("query".to_owned(), name.into(), None)
     }
 
     /// Returns the HTTP auth location.
@@ -84,47 +119,13 @@ impl HttpAuthDefinition {
         &self.location
     }
 
-    /// Sets the value for HTTP auth location.
-    pub fn set_location(
-        mut self,
-        location: impl Into<String> + std::cmp::PartialEq<String> + Debug,
-    ) -> Self {
-        if location != "header".to_string() && location != "query".to_string() {
-            // TODO: return auth defined error
-            panic!(
-                "Location not allowed: Got: {:?}. Expected: `header` or `query`",
-                location
-            );
-        }
-        self.location = location.into();
-        self
-    }
-
     /// Returns the HTTP auth name.
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// Sets the value for HTTP auth name.
-    pub fn set_name(mut self, name: impl Into<String>) -> Self {
-        self.name = name.into();
-        self
-    }
-
     /// Returns the HTTP auth scheme.
     pub fn scheme(&self) -> &Option<String> {
         &self.scheme
-    }
-
-    /// Sets the value for HTTP auth scheme.
-    pub fn set_scheme(mut self, scheme: impl Into<String>) -> Self {
-        if self.location.eq("header") && self.name.eq_ignore_ascii_case("authorization") {
-            self.scheme = Some(scheme.into());
-        } else {
-            // TODO: return auth defined error
-            println!("Scheme can only be set when it is set into the `Authorization header`.");
-            self.scheme = None
-        }
-        self
     }
 }
