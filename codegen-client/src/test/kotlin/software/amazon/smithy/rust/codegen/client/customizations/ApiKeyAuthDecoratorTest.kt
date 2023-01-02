@@ -6,21 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.ApiKeyAuthDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.client.testutil.testCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
-import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
-import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-
+import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
 
 internal class ApiKeyAuthDecoratorTest {
     private val model = """
@@ -53,7 +44,6 @@ internal class ApiKeyAuthDecoratorTest {
     fun `set an api key in the property bag`() {
         val testDir = clientIntegrationTest(
             model,
-            additionalDecorators = listOf(ApiKeyAuthDecorator()),
             // just run integration tests
             command = { "cargo test --test *".runWithWarnings(it) },
         ) { clientCodegenContext, rustCrate ->

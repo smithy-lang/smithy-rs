@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ApiKeyAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
@@ -58,6 +59,7 @@ class RustClientCodegenPlugin : DecoratableBuildPlugin() {
                 FluentClientDecorator(),
                 EndpointsDecorator(),
                 NoOpEventStreamSigningDecorator(),
+                ApiKeyAuthDecorator(),
                 *decorator,
             )
 
