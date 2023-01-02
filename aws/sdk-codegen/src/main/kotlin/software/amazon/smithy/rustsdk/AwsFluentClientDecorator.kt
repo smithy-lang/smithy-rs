@@ -9,13 +9,12 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
@@ -85,7 +84,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override fun toRustGenerics() = RustGenerics()
 }
 
-class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class AwsFluentClientDecorator : ClientCodegenDecorator {
     override val name: String = "FluentClient"
 
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
@@ -130,9 +129,6 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
             }
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private class AwsFluentClientExtensions(types: Types) {

@@ -6,11 +6,13 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointsModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
  * Customization which injects an Endpoints 2.0 Endpoint Resolver into the service config struct
@@ -124,10 +126,28 @@ internal class EndpointConfigCustomization(
                             "DefaultResolver" to defaultResolver,
                         )
                     } else {
+                        val alwaysFailsResolver = RuntimeType.forInlineFun("MissingResolver", EndpointsModule) {
+                            rustTemplate(
+                                """
+                                pub(crate) struct MissingResolver;
+                                impl<T> #{ResolveEndpoint}<T> for MissingResolver {
+                                    fn resolve_endpoint(&self, _params: &T) -> #{Result} {
+                                        Err(#{ResolveEndpointError}::message("an endpoint resolver must be provided."))
+                                    }
+                                }
+                                """,
+                                "ResolveEndpoint" to types.resolveEndpoint,
+                                "ResolveEndpointError" to types.resolveEndpointError,
+                                "Result" to types.smithyHttpEndpointModule.resolve("Result"),
+                            )
+                        }
+                        // To keep this diff under control, rather than `.expect` here, insert a resolver that will
+                        // always fail. In the future, this will be changed to an `expect()`
                         rustTemplate(
                             """
-                            endpoint_resolver: self.endpoint_resolver.expect("an endpoint resolver must be provided")
+                            endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||std::sync::Arc::new(#{FailingResolver})),
                             """,
+                            "FailingResolver" to alwaysFailsResolver,
                         )
                     }
                 }

@@ -14,10 +14,9 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -28,10 +27,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * The SigV4SigningDecorator:
@@ -41,7 +40,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
  * - sets a default `OperationSigningConfig` A future enhancement will customize this for specific services that need
  *   different behavior.
  */
-class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class SigV4SigningDecorator : ClientCodegenDecorator {
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
@@ -51,8 +50,8 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
-            customizations + SigV4SigningConfig(
+        return baseCustomizations.extendIf(applies(codegenContext)) {
+            SigV4SigningConfig(
                 codegenContext.runtimeConfig,
                 codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
                 codegenContext.serviceShape.expectTrait(),
@@ -65,8 +64,8 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations.letIf(applies(codegenContext)) {
-            it + SigV4SigningFeature(
+        return baseCustomizations.extendIf(applies(codegenContext)) {
+            SigV4SigningFeature(
                 codegenContext.model,
                 operation,
                 codegenContext.runtimeConfig,
@@ -74,9 +73,6 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientProtocolGenerator, Clie
             )
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SigV4SigningConfig(
@@ -207,6 +203,7 @@ class SigV4SigningFeature(
                     *codegenScope,
                 )
             }
+
             else -> emptySection
         }
     }

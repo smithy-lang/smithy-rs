@@ -23,6 +23,13 @@ impl Lint for TodosHaveContext {
             extension
                 .map(|ext| {
                     ext.eq_ignore_ascii_case("rs")
+                        || ext.eq_ignore_ascii_case("toml")
+                        || ext.eq_ignore_ascii_case("txt")
+                        // TODO(https://github.com/awslabs/smithy-rs/issues/2077)
+                        // || ext.eq_ignore_ascii_case("md")
+                        || ext.eq_ignore_ascii_case("sh")
+                        || ext.eq_ignore_ascii_case("py")
+                        || ext.eq_ignore_ascii_case("smithy")
                         || ext.eq_ignore_ascii_case("kt")
                         || ext.eq_ignore_ascii_case("kts")
                 })

@@ -3,6 +3,7 @@
 [workspace]
 
 members = [
+    "aws-credential-types",
     "aws-endpoint",
     "aws-http",
     "aws-hyper",

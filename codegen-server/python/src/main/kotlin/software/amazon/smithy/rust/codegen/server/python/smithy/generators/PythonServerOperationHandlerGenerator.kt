@@ -65,7 +65,7 @@ class PythonServerOperationHandlerGenerator(
                 /// Python handler for operation `$operationName`.
                 pub(crate) async fn $fnName(
                     input: $input,
-                    state: #{SmithyServer}::Extension<#{pyo3}::PyObject>,
+                    state: #{SmithyServer}::Extension<#{SmithyPython}::context::PyContext>,
                     handler: #{SmithyPython}::PyHandler,
                 ) -> std::result::Result<$output, $error> {
                     // Async block used to run the handler and catch any Python error.
@@ -95,7 +95,7 @@ class PythonServerOperationHandlerGenerator(
                     let output = if handler.args == 1 {
                         pyhandler.call1((input,))?
                     } else {
-                        pyhandler.call1((input, state.0))?
+                        pyhandler.call1((input, #{pyo3}::ToPyObject::to_object(&state.0, py)))?
                     };
                     output.extract::<$output>()
                 })
@@ -114,7 +114,7 @@ class PythonServerOperationHandlerGenerator(
                     let coroutine = if handler.args == 1 {
                         pyhandler.call1((input,))?
                     } else {
-                        pyhandler.call1((input, state.0))?
+                        pyhandler.call1((input, #{pyo3}::ToPyObject::to_object(&state.0, py)))?
                     };
                     #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;

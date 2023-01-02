@@ -85,7 +85,8 @@ class ConstrainedCollectionGenerator(
             "ConstraintViolation" to constraintViolation,
         )
 
-        writer.documentShape(shape, model, note = rustDocsNote(name))
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
         constrainedTypeMetadata.render(writer)
         writer.rustTemplate(
             """

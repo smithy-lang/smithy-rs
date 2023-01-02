@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::canary::{CanaryError, Clients};
+use crate::canary::CanaryError;
 use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
+use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
 use s3::error::{GetObjectError, GetObjectErrorKind};
 use s3::types::ByteStream;
@@ -13,8 +14,8 @@ use uuid::Uuid;
 
 const METADATA_TEST_VALUE: &str = "some   value";
 
-mk_canary!("s3", |clients: &Clients, env: &CanaryEnv| s3_canary(
-    clients.s3.clone(),
+mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| s3_canary(
+    s3::Client::new(sdk_config),
     env.s3_bucket_name.clone()
 ));
 
