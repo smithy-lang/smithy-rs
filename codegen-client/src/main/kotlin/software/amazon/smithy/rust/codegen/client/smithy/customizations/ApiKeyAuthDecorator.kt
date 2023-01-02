@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
@@ -65,12 +64,7 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
     ): List<OperationCustomization> {
         if (applies(codegenContext) && hasApiKeyAuthScheme(codegenContext, operation)) {
             val service = codegenContext.serviceShape
-            val authDefinition = mutableMapOf<String, Any>()
-            authDefinition.put("in", service.expectTrait(HttpApiKeyAuthTrait::class.java).getIn().toString())
-            authDefinition.put("name", service.expectTrait(HttpApiKeyAuthTrait::class.java).getName())
-            service.expectTrait(HttpApiKeyAuthTrait::class.java).getScheme().ifPresent { scheme ->
-                authDefinition.put("scheme", scheme)
-            }
+            val authDefinition: HttpApiKeyAuthTrait = service.expectTrait(HttpApiKeyAuthTrait::class.java)
             return baseCustomizations + ApiKeyOperationCustomization(codegenContext.runtimeConfig, authDefinition)
         }
         return baseCustomizations
@@ -112,7 +106,7 @@ private class ApiKeyPubUse(private val runtimeConfig: RuntimeConfig) :
     }
 }
 
-private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeConfig, private val authDefinition: Map<String, Any>) : OperationCustomization() {
+private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeConfig, private val authDefinition: HttpApiKeyAuthTrait) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
             rustBlock("if let Some(api_key_config) = ${section.config}.api_key()") {
@@ -122,8 +116,8 @@ private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeCon
                     let api_key = api_key_config.api_key();
                 """,
                 )
-                val definitionName = authDefinition.get("name") as String
-                if (authDefinition.get("in") == "query") {
+                val definitionName = authDefinition.getName()
+                if (authDefinition.getIn() == HttpApiKeyAuthTrait.Location.QUERY) {
                     rustTemplate(
                         """
                         let auth_definition = #{http_auth_definition}::new_with_query(
@@ -136,16 +130,14 @@ private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeCon
                         """,
                         "http_auth_definition" to
                             RuntimeType.smithyTypes(runtimeConfig).resolve("auth::HttpAuthDefinition"),
-                        "definition_name" to authDefinition.get("name") as String,
                         "query_writer" to RuntimeType.smithyHttp(runtimeConfig).resolve("query_writer::QueryWriter"),
                     )
                 } else {
-                    var definitionScheme = authDefinition.get("scheme") as String?
-                    if (definitionScheme != null) {
-                        definitionScheme = "Some(\"" + definitionScheme + "\".to_owned())"
-                    } else {
-                        definitionScheme = "None"
-                    }
+                    val definitionScheme: String = authDefinition.getScheme()
+                        .map { scheme ->
+                            "Some(\"" + scheme + "\".to_owned())"
+                        }
+                        .orElse("None")
                     rustTemplate(
                         """
                         let auth_definition = #{http_auth_definition}::new_with_header(
