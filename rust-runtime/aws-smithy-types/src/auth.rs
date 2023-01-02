@@ -45,8 +45,8 @@ pub struct AuthApiKey {
 
 impl AuthApiKey {
     /// Constructs a new API key.
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self { api_key: api_key.into() }
     }
 
     /// Returns the underlying api key.
@@ -60,6 +60,14 @@ impl AuthApiKey {
         self
     }
 }
+
+impl PartialEq for AuthApiKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.api_key == other.api_key
+    }
+}
+
+trait Eq: PartialEq<Self> {}
 
 /// An HTTP-specific authentication scheme that sends an arbitrary
 /// auth value in a header or query string parameter.
@@ -154,5 +162,24 @@ impl HttpAuthDefinition {
     /// Returns the HTTP auth scheme.
     pub fn scheme(&self) -> &Option<String> {
         &self.scheme
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::auth::AuthApiKey;
+
+    #[test]
+    fn api_key_is_equal() {
+        let api_key_a = AuthApiKey::new("some-api-key");
+        let api_key_b = AuthApiKey::new("some-api-key");
+        assert_eq!(api_key_a, api_key_b);
+    }
+
+    #[test]
+    fn api_key_is_different() {
+        let api_key_a = AuthApiKey::new("some-api-key");
+        let api_key_b = AuthApiKey::new("another-api-key");
+        assert_ne!(api_key_a, api_key_b);
     }
 }
