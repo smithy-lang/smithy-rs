@@ -64,7 +64,7 @@ internal class ApiKeyAuthDecoratorTest {
                     """
                     async fn api_key_is_set() {
                         use aws_smithy_types::auth::AuthApiKey;
-                        let api_key_value = "some-api-key".to_owned();
+                        let api_key_value = "some-api-key";
                         let conf = $moduleName::Config::builder()
                             .api_key(AuthApiKey::new(api_key_value))
                             .build();
