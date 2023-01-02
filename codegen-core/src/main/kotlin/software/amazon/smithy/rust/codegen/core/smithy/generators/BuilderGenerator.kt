@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -238,13 +239,15 @@ class BuilderGenerator(
         writer.rustBlock("impl #T for $builderName", RuntimeType.Debug) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${builderName.dq()});""")
-                members.forEach { member ->
-                    val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+                if (!shape.hasTrait<SensitiveTrait>()) {
+                    members.forEach { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val fieldValue = member.redactIfNecessary(model, "self.$memberName")
 
-                    rust(
-                        "formatter.field(${memberName.dq()}, &$fieldValue);",
-                    )
+                        rust(
+                            "formatter.field(${memberName.dq()}, &$fieldValue);",
+                        )
+                    }
                 }
                 rust("formatter.finish()")
             }

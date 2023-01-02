@@ -69,11 +69,23 @@ class StructureGeneratorTest {
             structure StructWithDoc {
                 doc: Document
             }
+
+            @sensitive
+            structure SecretStructure {
+                secretField: String
+            }
+
+            structure StructWithInnerSecretStructure {
+                public: String,
+                private: SecretStructure,
+            }
             """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val structWithDoc = model.lookup<StructureShape>("com.test#StructWithDoc")
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val credentials = model.lookup<StructureShape>("com.test#Credentials")
+        val secretStructure = model.lookup<StructureShape>("com.test#SecretStructure")
+        val structWithInnerSecretStructure = model.lookup<StructureShape>("com.test#StructWithInnerSecretStructure")
         val error = model.lookup<StructureShape>("com.test#MyError")
     }
 
@@ -143,7 +155,7 @@ class StructureGeneratorTest {
     }
 
     @Test
-    fun `generate a custom debug implementation when the sensitive trait is present`() {
+    fun `generate a custom debug implementation when the sensitive trait is applied to some members`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("lib")
         val generator = StructureGenerator(model, provider, writer, credentials)
@@ -160,6 +172,50 @@ class StructureGeneratorTest {
             """,
         )
         writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate a custom debug implementation when the sensitive trait is applied to the struct`() {
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("lib")
+        val generator = StructureGenerator(model, provider, writer, secretStructure)
+        generator.render()
+        writer.unitTest(
+            "sensitive_structure_redacted",
+            """
+            let secret_structure = SecretStructure {
+                secret_field: Some("secret".to_owned()),
+            };
+            assert_eq!(format!("{:?}", secret_structure), "SecretStructure");
+            """,
+        )
+        writer.compileAndTest()
+    }
+
+    @Test
+    fun `generate a custom debug implementation when the sensitive trait is applied to an inner struct`() {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.useShapeWriter(inner) {
+            val secretGenerator = StructureGenerator(model, provider, this, secretStructure)
+            val generator = StructureGenerator(model, provider, this, structWithInnerSecretStructure)
+            secretGenerator.render()
+            generator.render()
+            unitTest(
+                "sensitive_inner_structure_redacted",
+                """
+                let secret_structure = SecretStructure {
+                    secret_field: Some("secret".to_owned()),
+                };
+                let struct_with_inner_secret_structure = StructWithInnerSecretStructure {
+                    public: Some("Public".to_owned()),
+                    private: Some(secret_structure),
+                };
+                assert_eq!(format!("{:?}", struct_with_inner_secret_structure), "StructWithInnerSecretStructure { public: Some(\"Public\"), private: \"*** Sensitive Data Redacted ***\" }");
+                """,
+            )
+        }
+        project.compileAndTest()
     }
 
     @Test

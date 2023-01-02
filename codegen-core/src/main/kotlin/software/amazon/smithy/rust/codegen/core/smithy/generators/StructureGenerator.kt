@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
@@ -90,13 +91,15 @@ open class StructureGenerator(
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
-                members.forEach { member ->
-                    val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+                if (!shape.hasTrait<SensitiveTrait>()) {
+                    members.forEach { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val fieldValue = member.redactIfNecessary(model, "self.$memberName")
 
-                    rust(
-                        "formatter.field(${memberName.dq()}, &$fieldValue);",
-                    )
+                        rust(
+                            "formatter.field(${memberName.dq()}, &$fieldValue);",
+                        )
+                    }
                 }
                 rust("formatter.finish()")
             }
