@@ -397,6 +397,9 @@ mod loader {
         /// ec2_metadata_service_endpoint = http://my-custom-endpoint:444
         /// ```
         ///
+        /// See [Named profiles](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
+        /// for more information about naming profiles.
+        ///
         /// # Example: Using a custom profile name
         ///
         /// ```
