@@ -8,8 +8,7 @@ use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;
 use crate::proto::rest::router::Error;
 use crate::response::IntoResponse;
-use crate::routers::method_disallowed;
-use crate::routers::UNKNOWN_OPERATION_EXCEPTION;
+use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::RestXml;
 
