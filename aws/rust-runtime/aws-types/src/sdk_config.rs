@@ -162,14 +162,14 @@ impl Builder {
     /// use aws_types::SdkConfig;
     /// let config = SdkConfig::builder().api_key("some-api-key").build();
     /// ```
-    pub fn api_key(&mut self, api_key: impl Into<Option<AuthApiKey>>) -> &mut Self {
-        self.api_key = api_key.into();
+    pub fn api_key(mut self, api_key: impl Into<AuthApiKey>) -> Self {
+        self.set_api_key(Some(api_key.into()));
         self
     }
 
     /// Set the api key to use when making requests.
-    pub fn set_api_key(&mut self, api_key: impl Into<Option<AuthApiKey>>) -> &mut Self {
-        self.api_key = api_key.into();
+    pub fn set_api_key(&mut self, api_key: Option<AuthApiKey>) -> &mut Self {
+        self.api_key = api_key;
         self
     }
 
