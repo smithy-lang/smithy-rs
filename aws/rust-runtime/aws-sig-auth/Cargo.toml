@@ -20,6 +20,7 @@ http = "0.2.2"
 tracing = "0.1"
 
 [dev-dependencies]
+aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-endpoint = { path = "../aws-endpoint" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types"}
 tracing-test = "0.2.1"
