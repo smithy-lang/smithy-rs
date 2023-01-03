@@ -42,8 +42,11 @@ pub struct ProviderConfig {
     connector: HttpConnector,
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
-    parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
+    // An AWS profile created from `ProfileFiles` and a `profile_name`
+    profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
+    // A list of [std::path::Path]s to profile files
     profile_files: ProfileFiles,
+    // An override to use when constructing a `ProfileSet`
     profile_name_override: Option<Cow<'static, str>>,
 }
 
@@ -231,7 +234,7 @@ impl ProviderConfig {
         self
     }
 
-    /// Override profile-file (`~/.aws/config` et al) configuration
+    /// Override the profile file paths (`~/.aws/config` by default) and name (`default` by default)
     pub(crate) fn with_profile_config(
         self,
         profile_files: Option<ProfileFiles>,

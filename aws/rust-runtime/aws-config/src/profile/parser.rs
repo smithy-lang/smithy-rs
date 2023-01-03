@@ -204,7 +204,7 @@ pub enum ProfileFileLoadError {
     #[non_exhaustive]
     ParseError(ProfileParseError),
 
-    /// The profile file (e.g. `~/.aws/config`) encountered an error reading from the filesystem
+    /// Attempt to read the AWS config file (`~/.aws/config` by default) failed with a filesystem error.
     #[non_exhaustive]
     CouldNotReadFile(CouldNotReadProfileFile),
 }
