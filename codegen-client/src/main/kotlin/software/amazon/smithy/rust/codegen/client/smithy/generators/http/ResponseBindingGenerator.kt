@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators.http
+package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
@@ -12,11 +12,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1901) Move to `codegen-client` and update docs.
-//  `MakeOperationGenerator` needs to be moved to `codegen-client` first, which is not easy.
 class ResponseBindingGenerator(
     protocol: Protocol,
     private val codegenContext: CodegenContext,
