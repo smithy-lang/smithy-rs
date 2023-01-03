@@ -91,7 +91,7 @@ class InstantiatorTest {
     // This is the exact same behavior of the client.
     private class BuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
         override fun hasFallibleBuilder(shape: StructureShape) =
-            BuilderGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
+            ClientBuilderGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
 
         override fun setterName(memberShape: MemberShape) = memberShape.setterName()
 
@@ -229,12 +229,12 @@ class InstantiatorTest {
     fun `generate maps of maps`() {
         val data = Node.parse(
             """
-        {
-            "k1": { "map": {} },
-            "k2": { "map": { "k3": {} } },
-            "k3": { }
-        }
-        """,
+            {
+                "k1": { "map": {} },
+                "k2": { "map": { "k3": {} } },
+                "k3": { }
+            }
+            """,
         )
         val sut = Instantiator(
             symbolProvider,
@@ -254,11 +254,11 @@ class InstantiatorTest {
                 }
                 rust(
                     """
-                assert_eq!(result.len(), 3);
-                assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
-                assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
-                assert_eq!(result.get("k3").unwrap().map, None);
-                """,
+                    assert_eq!(result.len(), 3);
+                    assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
+                    assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
+                    assert_eq!(result.get("k3").unwrap().map, None);
+                    """,
                 )
             }
         }

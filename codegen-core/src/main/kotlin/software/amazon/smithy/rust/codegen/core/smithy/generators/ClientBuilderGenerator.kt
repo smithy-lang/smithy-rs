@@ -86,14 +86,14 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
 // Setter names will never hit a reserved word and therefore never need escaping.
 fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
 
-class BuilderGenerator(
+class ClientBuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val shape: StructureShape,
 ) {
     companion object {
         /**
-         * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
+         * Returns whether a structure shape, whose builder has been generated with [ClientBuilderGenerator], requires a
          * fallible builder to be constructed.
          */
         fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =

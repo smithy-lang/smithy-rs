@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
@@ -49,8 +49,8 @@ open class ClientProtocolGenerator(
         customizations: List<OperationCustomization>,
     ) {
         val inputShape = operationShape.inputShape(model)
-        val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
-        builderGenerator.render(inputWriter)
+        val clientBuilderGenerator = ClientBuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
+        clientBuilderGenerator.render(inputWriter)
 
         // impl OperationInputShape { ... }
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -62,7 +62,7 @@ open class ClientProtocolGenerator(
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
 
             // pub fn builder() -> ... { }
-            builderGenerator.renderConvenienceMethod(this)
+            clientBuilderGenerator.renderConvenienceMethod(this)
         }
 
         // pub struct Operation { ... }
@@ -82,7 +82,7 @@ open class ClientProtocolGenerator(
             write("_private: ()")
         }
         operationWriter.implBlock(operationShape, symbolProvider) {
-            builderGenerator.renderConvenienceMethod(this)
+            clientBuilderGenerator.renderConvenienceMethod(this)
 
             rust("/// Creates a new `$operationName` operation.")
             rustBlock("pub fn new() -> Self") {

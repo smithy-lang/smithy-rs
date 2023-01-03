@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
@@ -52,7 +52,7 @@ abstract class ClientEventStreamBaseRequirements : EventStreamTestRequirements<C
         codegenContext: ClientCodegenContext,
         shape: StructureShape,
     ) {
-        BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
+        ClientBuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
             render(writer)
             writer.implBlock(shape, codegenContext.symbolProvider) {
                 renderConvenienceMethod(writer)

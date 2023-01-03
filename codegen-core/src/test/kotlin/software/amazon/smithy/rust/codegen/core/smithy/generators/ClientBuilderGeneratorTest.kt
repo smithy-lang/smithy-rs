@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 
-internal class BuilderGeneratorTest {
+internal class ClientBuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
     private val inner = StructureGeneratorTest.inner
     private val struct = StructureGeneratorTest.struct
@@ -33,12 +33,12 @@ internal class BuilderGeneratorTest {
         writer.rust("##![allow(deprecated)]")
         val innerGenerator = StructureGenerator(model, provider, writer, inner)
         val generator = StructureGenerator(model, provider, writer, struct)
-        val builderGenerator = BuilderGenerator(model, provider, struct)
+        val clientBuilderGenerator = ClientBuilderGenerator(model, provider, struct)
         generator.render()
         innerGenerator.render()
-        builderGenerator.render(writer)
+        clientBuilderGenerator.render(writer)
         writer.implBlock(struct, provider) {
-            builderGenerator.renderConvenienceMethod(this)
+            clientBuilderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(
             """
@@ -82,10 +82,10 @@ internal class BuilderGeneratorTest {
         )
         generator.render()
         innerGenerator.render()
-        val builderGenerator = BuilderGenerator(model, provider, struct)
-        builderGenerator.render(writer)
+        val clientBuilderGenerator = ClientBuilderGenerator(model, provider, struct)
+        clientBuilderGenerator.render(writer)
         writer.implBlock(struct, provider) {
-            builderGenerator.renderConvenienceMethod(this)
+            clientBuilderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(
             """
@@ -101,11 +101,11 @@ internal class BuilderGeneratorTest {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val credsGenerator = StructureGenerator(model, provider, writer, credentials)
-        val builderGenerator = BuilderGenerator(model, provider, credentials)
+        val clientBuilderGenerator = ClientBuilderGenerator(model, provider, credentials)
         credsGenerator.render()
-        builderGenerator.render(writer)
+        clientBuilderGenerator.render(writer)
         writer.implBlock(credentials, provider) {
-            builderGenerator.renderConvenienceMethod(this)
+            clientBuilderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(
             """
