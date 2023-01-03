@@ -190,7 +190,7 @@ open class ServerServiceGenerator(
             //! ## use std::net::SocketAddr;
             //! use $crateName::$serviceName;
             //!
-            //! ##[tokio::main]
+            //! ##[#{Tokio}::main]
             //! pub async fn main() {
             //!    let app = $serviceName::builder_without_plugins()
             ${builderFieldNames.values.joinToString("\n") { "//!        .$it($it)" }}
@@ -225,8 +225,9 @@ open class ServerServiceGenerator(
             "Handlers" to handlers,
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-            "Tower" to ServerCargoDependency.Tower.toType(),
             "Hyper" to ServerCargoDependency.HyperDev.toType(),
+            "Tokio" to ServerCargoDependency.TokioDev.toType(),
+            "Tower" to ServerCargoDependency.Tower.toType(),
         )
     }
 
