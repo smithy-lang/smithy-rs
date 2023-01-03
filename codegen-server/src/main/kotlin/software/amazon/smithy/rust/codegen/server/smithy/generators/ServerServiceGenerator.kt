@@ -56,8 +56,7 @@ open class ServerServiceGenerator(
                 )
         val crateName = codegenContext.moduleUseName()
         val builderName = "${serviceName}Builder"
-        val service = codegenContext.serviceShape
-        val hasErrors = service.operations.any { codegenContext.model.expectShape(it).asOperationShape().get().errors.isNotEmpty() }
+        val hasErrors = operations.any { it.errors.isNotEmpty() }
         val handlers: Writable = operations
             .map { operation ->
                 DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!")::render
@@ -208,9 +207,11 @@ open class ServerServiceGenerator(
             //!
             //!    // Run your service!
             //!    if let Err(err) = server.await {
-            //!      eprintln!("server error: {:?}", err);
+            //!        eprintln!("server error: {:?}", err);
             //!    }
             //! }
+            //!
+            #{HandlerImports:W}
             //!
             #{Handlers:W}
             //!
@@ -223,6 +224,7 @@ open class ServerServiceGenerator(
             //! [hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
             //! [Service]: https://docs.rs/tower-service/latest/tower_service/trait.Service.html
             """,
+            "HandlerImports" to handlerImports(crateName, operations, commentToken = "//!"),
             "Handlers" to handlers,
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),

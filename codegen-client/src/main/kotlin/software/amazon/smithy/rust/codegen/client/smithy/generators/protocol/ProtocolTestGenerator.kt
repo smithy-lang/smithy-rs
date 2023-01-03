@@ -180,7 +180,7 @@ class ProtocolTestGenerator(
         } ?: writable { }
         rustTemplate(
             """
-            let builder = #{Config}::Config::builder()$customToken;
+            let builder = #{Config}::Config::builder().endpoint_resolver("https://example.com")$customToken;
             #{customParams}
             let config = builder.build();
 
@@ -301,8 +301,7 @@ class ProtocolTestGenerator(
             "parse_http_response" to RuntimeType.parseHttpResponse(codegenContext.runtimeConfig),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol =
-                operationShape.errorSymbol(codegenContext.model, codegenContext.symbolProvider, codegenContext.target)
+            val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {

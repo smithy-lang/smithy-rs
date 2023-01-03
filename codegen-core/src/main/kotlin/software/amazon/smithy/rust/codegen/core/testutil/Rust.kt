@@ -16,6 +16,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -57,13 +58,13 @@ private fun tempDir(directory: File? = null): File {
  */
 object TestWorkspace {
     private val baseDir by lazy {
-        val homeDir = System.getProperty("APPDATA")
+        val appDataDir = System.getProperty("APPDATA")
             ?: System.getenv("XDG_DATA_HOME")
             ?: System.getProperty("user.home")
-                ?.let { Path.of(it, "Library/Application Support").absolutePathString() }
-                ?.takeIf { File(it).exists() }
-        if (homeDir != null) {
-            File(Path.of(homeDir, "smithy-test-workspace").absolutePathString())
+                ?.let { Path.of(it, ".local", "share").absolutePathString() }
+                ?.also { File(it).mkdirs() }
+        if (appDataDir != null) {
+            File(Path.of(appDataDir, "smithy-test-workspace").absolutePathString())
         } else {
             System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
         }
@@ -212,10 +213,19 @@ fun RustWriter.unitTest(
 fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
+    attribute: Attribute = Attribute.Custom("test"),
+    async: Boolean = false,
     block: Writable,
 ): RustWriter {
-    raw("#[test]")
+    attribute.render(this)
+    if (async) {
+        rust("async")
+    }
     return rustBlock("fn $name()", *args, block = block)
+}
+
+fun RustWriter.tokioTest(name: String, vararg args: Any, block: Writable) {
+    unitTest(name, attribute = TokioTest, async = true, block = block, args = args)
 }
 
 /**
