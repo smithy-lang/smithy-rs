@@ -28,6 +28,18 @@ impl Fs {
             Fs::Real => tokio_write_file(path.as_ref(), contents).await,
         }
     }
+
+    /// Recursively create a directory and all of its parent components if they are missing.
+    pub async fn create_dir_all(&self, path: impl AsRef<Path>) -> Result<()> {
+        match self {
+            Fs::Real => tokio_create_dir_all(path.as_ref()).await,
+        }
+    }
+}
+
+async fn tokio_create_dir_all(path: &Path) -> Result<()> {
+    tokio::fs::create_dir_all(path).await?;
+    Ok(())
 }
 
 async fn tokio_read_file(path: &Path) -> Result<Vec<u8>> {

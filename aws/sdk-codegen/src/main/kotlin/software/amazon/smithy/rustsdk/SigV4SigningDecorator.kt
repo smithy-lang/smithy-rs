@@ -27,10 +27,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * The SigV4SigningDecorator:
@@ -50,8 +50,8 @@ class SigV4SigningDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
-            customizations + SigV4SigningConfig(
+        return baseCustomizations.extendIf(applies(codegenContext)) {
+            SigV4SigningConfig(
                 codegenContext.runtimeConfig,
                 codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
                 codegenContext.serviceShape.expectTrait(),
@@ -64,8 +64,8 @@ class SigV4SigningDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations.letIf(applies(codegenContext)) {
-            it + SigV4SigningFeature(
+        return baseCustomizations.extendIf(applies(codegenContext)) {
+            SigV4SigningFeature(
                 codegenContext.model,
                 operation,
                 codegenContext.runtimeConfig,
@@ -203,6 +203,7 @@ class SigV4SigningFeature(
                     *codegenScope,
                 )
             }
+
             else -> emptySection
         }
     }

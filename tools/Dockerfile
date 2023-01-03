@@ -6,8 +6,11 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-FROM ${base_image} AS bare_base_image
+ARG rust_stable_version=1.62.1
+ARG rust_nightly_version=nightly-2022-11-16
 
+FROM ${base_image} AS bare_base_image
+RUN yum -y updateinfo
 #
 # Node Installation Stage
 #
@@ -15,8 +18,7 @@ FROM bare_base_image AS install_node
 ARG node_version=v16.14.0
 ENV DEST_PATH=/opt/nodejs \
     PATH=/opt/nodejs/bin:${PATH}
-RUN yum -y updateinfo && \
-    yum -y install \
+RUN yum -y install \
         ca-certificates \
         curl \
         tar \
@@ -45,22 +47,14 @@ RUN set -eux; \
 # Rust & Tools Installation Stage
 #
 FROM bare_base_image AS install_rust
-ARG rust_stable_version=1.62.1
-ARG rust_nightly_version=nightly-2022-11-16
-ARG cargo_deny_version=0.13.5
-ARG cargo_udeps_version=0.1.35
-ARG cargo_hack_version=0.5.23
-ARG cargo_minimal_versions_version=0.1.8
-ARG cargo_check_external_types_version=0.1.6
-# Maturin is needed for Python SSDK
-ARG maturin_version=0.14.1
+ARG rust_stable_version
+ARG rust_nightly_version
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0
 WORKDIR /root
-RUN yum -y updateinfo && \
-    yum -y install \
+RUN yum -y install \
         autoconf \
         automake \
         binutils \
@@ -90,6 +84,9 @@ RUN set -eux; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
+
+FROM install_rust AS local_tools
+ARG rust_nightly_version
 COPY . tools/
 # when `checkout_smithy_rs_tools` is set to true, this commit will be checked out
 ARG smithy_rs_commit_hash=main
@@ -97,33 +94,56 @@ ARG smithy_rs_commit_hash=main
 # source code by checking out awslabs/smithy-rs/main rather than copying them from the local directory.
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
-    cargo install cargo-deny --locked --version ${cargo_deny_version}; \
-    cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}; \
-    cargo install cargo-hack --locked --version ${cargo_hack_version}; \
-    cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}; \
-    cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}; \
-    cargo install maturin --locked --version ${maturin_version}; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
         git clone https://github.com/awslabs/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
-    cargo install --locked --path tools/publisher; \
-    cargo install --locked --path tools/changelogger; \
-    cargo install --locked --path tools/crate-hasher; \
-    cargo install --locked --path tools/sdk-lints; \
-    cargo install --locked --path tools/sdk-sync; \
-    cargo install --locked --path tools/sdk-versioner; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/publisher; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/changelogger; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/crate-hasher; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-lints; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-sync; \
+    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
+
+FROM install_rust AS cargo_deny
+ARG cargo_deny_version=0.13.5
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-deny --locked --version ${cargo_deny_version}
+
+FROM install_rust AS cargo_udeps
+ARG cargo_udeps_version=0.1.35
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-udeps --locked --version ${cargo_udeps_version}
+
+FROM install_rust AS cargo_hack
+ARG cargo_hack_version=0.5.23
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-hack --locked --version ${cargo_hack_version}
+
+FROM install_rust AS cargo_minimal_versions
+ARG cargo_minimal_versions_version=0.1.8
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
+
+FROM install_rust AS cargo_check_external_types
+ARG cargo_check_external_types_version=0.1.6
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
+
+FROM install_rust AS maturin
+ARG maturin_version=0.14.1
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install maturin --locked --version ${maturin_version}
 
 #
 # Final image
 #
 FROM bare_base_image AS final_image
-ARG rust_stable_version=1.62.1
-ARG rust_nightly_version=nightly-2022-11-16
+ARG rust_stable_version
+ARG rust_nightly_version
 RUN set -eux; \
-    yum -y updateinfo; \
     yum -y install \
         ca-certificates \
         gcc \
@@ -142,7 +162,13 @@ RUN set -eux; \
     useradd -m -g build build; \
     chmod 775 /home/build;
 COPY --chown=build:build --from=install_node /opt/nodejs /opt/nodejs
-COPY --chown=build:build --from=install_rust /opt/cargo /opt/cargo
+COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
+COPY --chown=build:build --from=cargo_deny /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
+COPY --chown=build:build --from=cargo_udeps /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
+COPY --chown=build:build --from=cargo_hack /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
+COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
+COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
+COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_HOME=/opt/cargo \
