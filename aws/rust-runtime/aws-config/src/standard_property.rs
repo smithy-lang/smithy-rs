@@ -52,6 +52,8 @@ impl<E: Error> Error for PropertyResolutionError<E> {
 ///
 /// `StandardProperty` will first look in the environment, then the AWS profile. They track the
 /// provenance of properties so that unified validation errors can be created.
+///
+/// For a usage example, see [`crate::default_provider::retry_config`]
 #[derive(Default)]
 pub(crate) struct StandardProperty {
     environment_variable: Option<Cow<'static, str>>,
@@ -63,16 +65,19 @@ impl StandardProperty {
         Self::default()
     }
 
+    /// Set the environment variable to read
     pub(crate) fn env(mut self, key: &'static str) -> Self {
         self.environment_variable = Some(Cow::Borrowed(key));
         self
     }
 
+    /// Set the profile key to read
     pub(crate) fn profile(mut self, key: &'static str) -> Self {
         self.profile_key = Some(Cow::Borrowed(key));
         self
     }
 
+    /// Load the value from `provider_config`, validating with `validator`
     pub(crate) async fn validate<T, E: Error + Send + Sync + 'static>(
         self,
         provider_config: &ProviderConfig,
@@ -89,6 +94,7 @@ impl StandardProperty {
             .transpose()
     }
 
+    /// Load the value from `provider_config`
     pub(crate) async fn load<'a>(
         &'a self,
         provider_config: &'a ProviderConfig,
