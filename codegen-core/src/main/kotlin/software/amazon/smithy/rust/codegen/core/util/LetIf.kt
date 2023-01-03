@@ -18,3 +18,9 @@ fun <T> List<T>.extendIf(condition: Boolean, f: () -> T) = if (condition) {
 } else {
     this
 }
+
+fun <T> Boolean.thenSingletonListOf(f: () -> T): List<T> = if (this) {
+    listOf(f())
+} else {
+    listOf()
+}
