@@ -353,9 +353,8 @@ mod loader {
         /// `~/.aws/config` and `~/.aws/credentials` respectively.
         ///
         /// Any number of config and credential files may be added to the `ProfileFiles` file set, with the
-        /// only requirement being that there is at least one of them. Custom file locations that are added
-        /// will produce errors if they don't exist, while the default config/credentials files paths are
-        /// allowed to not exist even if they're included.
+        /// only requirement being that there is at least one of each. Profile file locations will produce an
+        /// error if they don't exist, but the default config/credentials files paths are exempt from this validation.
         ///
         /// # Example: Using a custom profile file path
         ///

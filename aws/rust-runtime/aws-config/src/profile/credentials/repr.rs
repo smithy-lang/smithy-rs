@@ -119,7 +119,7 @@ pub(super) fn resolve_chain(
     // If:
     // - There is no explicit profile override
     // - We're looking for the default profile (no configuration)
-    // - There is not default profile
+    // - There is no default profile
     // Then:
     // - Treat this situation as if no profiles were defined
     if profile_set.selected_profile() == "default" && profile_set.get_profile("default").is_none() {
