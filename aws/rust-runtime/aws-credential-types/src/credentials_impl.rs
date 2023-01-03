@@ -141,10 +141,7 @@ impl Credentials {
     }
 
     /// Creates a test `Credentials`.
-    ///
-    /// Marked as `#[doc(hidden)]` due to the usage limited to testing.
-    /// TODO(https://github.com/rust-lang/cargo/issues/2911): Consider using an auto-activated feature for testing
-    #[doc(hidden)]
+    #[cfg(feature = "test-util")]
     pub fn for_tests() -> Self {
         Self::new(
             "ANOTREAL",
