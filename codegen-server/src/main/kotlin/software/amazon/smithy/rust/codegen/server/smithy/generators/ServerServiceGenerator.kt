@@ -82,7 +82,7 @@ open class ServerServiceGenerator(
             //! let server = app.into_make_service();
             //! let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!     .expect("unable to parse the server bind address and port");
-            //! hyper::Server::bind(&bind).serve(server).await.unwrap();
+            //! #{Hyper}::Server::bind(&bind).serve(server).await.unwrap();
             //! ## }
             //! ```
             //!
@@ -115,7 +115,7 @@ open class ServerServiceGenerator(
             //! ```rust
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
-            //! ## use hyper::Body;
+            //! ## use #{Hyper}::Body;
             //! use #{SmithyHttpServer}::plugin::PluginPipeline;
             //! use $crateName::{$serviceName, $builderName};
             //!
@@ -199,7 +199,7 @@ open class ServerServiceGenerator(
             //!
             //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!        .expect("unable to parse the server bind address and port");
-            //!    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+            //!    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
             //!    ## let server = async { Ok::<_, ()>(()) };
             //!
             //!    // Run your service!
@@ -226,6 +226,7 @@ open class ServerServiceGenerator(
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
+            "Hyper" to ServerCargoDependency.HyperDev.toType(),
         )
     }
 

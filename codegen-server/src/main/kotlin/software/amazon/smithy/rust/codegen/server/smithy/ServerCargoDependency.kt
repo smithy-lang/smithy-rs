@@ -25,6 +25,7 @@ object ServerCargoDependency {
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.8.4"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
+    val HyperDev: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), DependencyScope.Dev)
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
     fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
