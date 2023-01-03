@@ -150,8 +150,8 @@ def is_fn_like(obj: Any) -> bool:
     )
 
 
-def walk_field(writer: Writer, name: str, field: Any) -> str:
-    return f"{name}: {writer.fix_and_include(DocstringParser.parse_type(field))} = ..."
+def make_field(writer: Writer, name: str, field: Any) -> str:
+    return f"{name}: {writer.fix_and_include(DocstringParser.parse_type(field))}"
 
 
 def make_function(writer: Writer, name: str, obj: Any, indent_level: int = 0) -> str:
@@ -161,6 +161,13 @@ def make_function(writer: Writer, name: str, obj: Any, indent_level: int = 0) ->
         return f"{name}: {writer.include('typing.Any')}"
 
     params, rtype = res
+    # We're using signature for getting default values only, currently type hints are not supported
+    # in signatures. We can leverage signatures more if it supports type hints in future.
+    sig: Optional[inspect.Signature] = None
+    try:
+        sig = inspect.signature(obj)
+    except:
+        pass
 
     receivers: List[str] = []
     attrs: List[str] = []
@@ -169,9 +176,17 @@ def make_function(writer: Writer, name: str, obj: Any, indent_level: int = 0) ->
     else:
         attrs.append("@staticmethod")
 
-    params = ", ".join(
-        receivers + [f"{n}: {writer.fix_and_include(t)} = ..." for n, t in params]
-    )
+    def format_param(name: str, ty: str) -> str:
+        param = f"{name}: {writer.fix_and_include(ty)}"
+
+        if sig is not None:
+            sig_param = sig.parameters.get(name)
+            if sig_param and sig_param.default is not sig_param.empty:
+                param += f" = {sig_param.default}"
+
+        return param
+
+    params = ", ".join(receivers + [format_param(n, t) for n, t in params])
 
     fn_def = ""
     if len(attrs) > 0:
@@ -194,7 +209,7 @@ def make_class(
         if inspect.isdatadescriptor(member):
             is_empty = False
             definition += (
-                indent(walk_field(writer, name, member), indent_level + 4) + "\n"
+                indent(make_field(writer, name, member), indent_level + 4) + "\n"
             )
         elif is_fn_like(member):
             is_empty = False
@@ -202,7 +217,7 @@ def make_class(
         # Enum variant
         elif isinstance(member, klass):
             is_empty = False
-            definition += indent(f"{name}: {class_name} = ...\n", indent_level + 4)
+            definition += indent(f"{name}: {class_name}\n", indent_level + 4)
         else:
             print(f"Unknown member type={member}")
 

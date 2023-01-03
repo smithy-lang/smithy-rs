@@ -27,7 +27,7 @@ pub mod listener;
 /// :rtype None:
 #[pyclass(
     name = "TlsConfig",
-    text_signature = "(*, key_path, cert_path, reload)"
+    text_signature = "($self, *, key_path, cert_path, reload_secs=86400)"
 )]
 #[derive(Clone)]
 pub struct PyTlsConfig {

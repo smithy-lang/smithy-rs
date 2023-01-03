@@ -44,7 +44,7 @@ impl From<PyError> for PyErr {
 /// :param status_code typing.Optional[int]:
 /// :rtype None:
 #[pyclass(name = "MiddlewareException", extends = BasePyException)]
-#[pyo3(text_signature = "(message, status_code)")]
+#[pyo3(text_signature = "($self, message, status_code=None)")]
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareException {
     #[pyo3(get, set)]

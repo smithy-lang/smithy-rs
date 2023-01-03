@@ -288,7 +288,7 @@ class PythonApplicationGenerator(
                 /// :param workers ${PythonType.Optional(PythonType.Int).render()}: 
                 /// :param tls ${PythonType.Optional(tlsConfig).render()}:
                 /// :rtype ${PythonType.None.render()}:
-                ##[pyo3(text_signature = "(${'$'}self, address, port, backlog, workers, tls)")]
+                ##[pyo3(text_signature = "(${'$'}self, address=None, port=None, backlog=None, workers=None, tls=None)")]
                 pub fn run(
                     &mut self,
                     py: #{pyo3}::Python,
@@ -315,7 +315,7 @@ class PythonApplicationGenerator(
                 }
 
                 /// Build the service and start a single worker.
-                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls)")]
+                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls=None)")]
                 pub fn start_worker(
                     &mut self,
                     py: pyo3::Python,

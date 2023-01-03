@@ -17,7 +17,6 @@ use super::{PyHeaderMap, PyMiddlewareError};
 
 /// Python-compatible [Request] object.
 #[pyclass(name = "Request")]
-#[pyo3(text_signature = "(request)")]
 #[derive(Debug)]
 pub struct PyRequest {
     parts: Option<Parts>,

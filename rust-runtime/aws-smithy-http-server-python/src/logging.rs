@@ -91,6 +91,7 @@ fn setup_tracing_subscriber(
 /// :param logfile typing.Optional[pathlib.Path]:
 /// :rtype None:
 #[pyclass(name = "TracingHandler")]
+#[pyo3(text_signature = "($self, level=None, logfile=None)")]
 #[derive(Debug)]
 pub struct PyTracingHandler {
     _guard: Option<WorkerGuard>,
