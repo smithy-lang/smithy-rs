@@ -43,7 +43,7 @@ pub struct ProviderConfig {
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
     // An AWS profile created from `ProfileFiles` and a `profile_name`
-    profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
+    parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
     // A list of [std::path::Path]s to profile files
     profile_files: ProfileFiles,
     // An override to use when constructing a `ProfileSet`
