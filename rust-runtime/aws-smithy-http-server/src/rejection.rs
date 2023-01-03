@@ -41,34 +41,9 @@
 //! [`crate::runtime_error::RuntimeError`], thus allowing us to represent the full
 //! error chain.
 
-// For some reason `deprecated(deprecated)` warns of its own deprecation. Putting `allow(deprecated)` at the module
-// level remedies it.
-#![allow(deprecated)]
-
 use strum_macros::Display;
 
 use crate::response::IntoResponse;
-
-/// Rejection used for when failing to extract an [`crate::Extension`] from an incoming [request's
-/// extensions]. Contains one variant for each way the extractor can fail.
-///
-/// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
-#[deprecated(
-    since = "0.52.0",
-    note = "This was used for extraction under the older service builder. The `MissingExtension` struct returned by `FromParts::from_parts` is now used."
-)]
-#[derive(Debug, Display)]
-pub enum RequestExtensionNotFoundRejection {
-    /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
-    /// did not find it.
-    /// This most likely means the service implementer simply forgot to add a [`tower::Layer`] that
-    /// registers the particular extension in their service to incoming requests.
-    MissingExtension(String),
-    // Used when the request extensions have already been taken by another extractor.
-    ExtensionsAlreadyExtracted,
-}
-
-impl std::error::Error for RequestExtensionNotFoundRejection {}
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.

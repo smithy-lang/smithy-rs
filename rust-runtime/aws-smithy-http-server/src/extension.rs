@@ -23,9 +23,6 @@ use std::ops::Deref;
 
 use thiserror::Error;
 
-#[allow(deprecated)]
-use crate::request::RequestParts;
-
 pub use crate::request::extension::Extension;
 pub use crate::request::extension::MissingExtension;
 
@@ -123,37 +120,6 @@ impl Deref for RuntimeErrorExtension {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-/// Extract an [`Extension`] from a request.
-/// This is essentially the implementation of `FromRequest` for `Extension`, but with a
-/// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
-/// this function and converts the rejection type into a [`crate::runtime_error::RuntimeError`].
-#[deprecated(
-    since = "0.52.0",
-    note = "This was used for extraction under the older service builder. The `FromParts::from_parts` method is now used instead."
-)]
-#[allow(deprecated)]
-pub async fn extract_extension<T, B>(
-    req: &mut RequestParts<B>,
-) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
-where
-    T: Clone + Send + Sync + 'static,
-    B: Send,
-{
-    let value = req
-        .extensions()
-        .ok_or(crate::rejection::RequestExtensionNotFoundRejection::ExtensionsAlreadyExtracted)?
-        .get::<T>()
-        .ok_or_else(|| {
-            crate::rejection::RequestExtensionNotFoundRejection::MissingExtension(format!(
-                "Extension of type `{}` was not found. Perhaps you forgot to add it?",
-                std::any::type_name::<T>()
-            ))
-        })
-        .map(|x| x.clone())?;
-
-    Ok(Extension(value))
 }
 
 #[cfg(test)]

@@ -107,10 +107,7 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &'static str)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http::{
-        header::{HeaderValue, ACCEPT, CONTENT_TYPE},
-        Request,
-    };
+    use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 
     fn req_content_type(content_type: &'static str) -> HeaderMap {
         let mut headers = HeaderMap::new();
