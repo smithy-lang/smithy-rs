@@ -36,10 +36,6 @@ pub use crate::request::extension::MissingExtension;
 ///
 /// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
-#[deprecated(
-    since = "0.52.0",
-    note = "This is no longer inserted by the new service builder. Layers should be constructed per operation using the plugin system."
-)]
 pub struct OperationExtension {
     absolute: &'static str,
 
@@ -157,7 +153,6 @@ where
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
 
