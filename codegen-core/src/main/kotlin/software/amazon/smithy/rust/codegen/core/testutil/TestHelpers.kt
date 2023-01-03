@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -95,6 +94,11 @@ internal fun testCodegenContext(
     codegenTarget,
 )
 
+class BuilderGenerator(model: Model, symbolProvider: RustSymbolProvider, structureShape: StructureShape) {
+    fun render(writer: RustWriter) {}
+    fun renderConvenienceMethod(writer: RustWriter) {}
+}
+
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
@@ -105,7 +109,7 @@ fun StructureShape.renderWithModelBuilder(
     forWhom: CodegenTarget = CodegenTarget.CLIENT,
 ) {
     StructureGenerator(model, symbolProvider, writer, this).render(forWhom)
-    val modelBuilder = ClientBuilderGenerator(model, symbolProvider, this)
+    val modelBuilder = BuilderGenerator(model, symbolProvider, this)
     modelBuilder.render(writer)
     writer.implBlock(this, symbolProvider) {
         modelBuilder.renderConvenienceMethod(this)

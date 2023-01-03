@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
@@ -20,18 +19,13 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestVariety
 import software.amazon.smithy.rust.codegen.core.testutil.TestEventStreamProject
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 
 class ServerEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: TestCase) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Enable tests for `publicConstrainedTypes = false`
-        // by deleting this if/return
-        if (!testCase.publicConstrainedTypes) {
-            return
-        }
-
         EventStreamTestTools.runTestCase(
             testCase.eventStreamTestCase,
             object : ServerEventStreamBaseRequirements() {
@@ -52,13 +46,12 @@ class ServerEventStreamUnmarshallerGeneratorTest {
                     ).render()
                 }
 
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Delete this function override to use the correct builder from the parent class
                 override fun renderBuilderForShape(
                     writer: RustWriter,
                     codegenContext: ServerCodegenContext,
                     shape: StructureShape,
                 ) {
-                    ClientBuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape).apply {
+                    ServerBuilderGenerator(codegenContext, shape).apply {
                         render(writer)
                         writer.implBlock(shape, codegenContext.symbolProvider) {
                             renderConvenienceMethod(writer)

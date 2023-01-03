@@ -32,8 +32,11 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -46,12 +49,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
  * Instantiator generates code to instantiate a given Shape given a `Node` representing the value.
@@ -349,3 +355,23 @@ open class Instantiator(
         else -> throw CodegenException("Unrecognized shape `$shape`")
     }
 }
+fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
+    val structureSymbol = symbolProvider.toSymbol(this)
+    val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
+    val module = RustModule.new(builderNamespace, visibility = Visibility.PUBLIC, parent = structureSymbol.module(), inline = true)
+    val rustType = RustType.Opaque("Builder", module.fullyQualifiedPath())
+    return Symbol.builder()
+        .rustType(rustType)
+        .name(rustType.name)
+        .locatedIn(module)
+        .build()
+}
+
+fun builderSymbolFn(symbolProvider: RustSymbolProvider): (StructureShape) -> Symbol = { structureShape ->
+    structureShape.builderSymbol(symbolProvider)
+}
+
+// Setter names will never hit a reserved word and therefore never need escaping.
+fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
+
+fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
