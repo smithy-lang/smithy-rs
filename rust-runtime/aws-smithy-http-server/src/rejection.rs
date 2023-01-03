@@ -135,10 +135,6 @@ convert_to_response_rejection!(http::Error, Http);
 // The variants are _roughly_ sorted in the order in which the HTTP request is processed.
 #[derive(Debug, Display)]
 pub enum RequestRejection {
-    /// Used when attempting to take the request's body, and it has already been taken (presumably
-    /// by an outer `Service` that handled the request before us).
-    BodyAlreadyExtracted,
-
     /// Used when failing to convert non-streaming requests into a byte slab with
     /// `hyper::body::to_bytes`.
     HttpBody(crate::Error),
@@ -152,10 +148,6 @@ pub enum RequestRejection {
     /// Used when failing to deserialize the HTTP body's bytes into a XML conforming to the modeled
     /// input it should represent.
     XmlDeserialize(crate::Error),
-
-    /// Used when attempting to take the request's headers, and they have already been taken (presumably
-    /// by an outer `Service` that handled the request before us).
-    HeadersAlreadyExtracted,
 
     /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
     /// or the `httpPrefixHeaders` traits.
