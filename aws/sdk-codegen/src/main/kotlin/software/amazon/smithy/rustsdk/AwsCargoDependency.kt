@@ -13,6 +13,7 @@ fun RuntimeConfig.awsRuntimeCrate(name: String, features: Set<String> = setOf())
     CargoDependency(name, awsRoot().crateLocation(null), features = features)
 
 object AwsCargoDependency {
+    fun awsCredentialTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-credential-types")
     fun awsConfig(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-config")
     fun awsEndpoint(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-endpoint")
     fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-http")

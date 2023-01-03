@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
@@ -73,7 +74,8 @@ internal class EndpointTestGenerator(
                         )
                     }
                     testCase.expect.error.ifPresent { error ->
-                        val expectedError = escape("expected error: $error [${testCase.documentation.orNull() ?: "no docs"}]")
+                        val expectedError =
+                            escape("expected error: $error [${testCase.documentation.orNull() ?: "no docs"}]")
                         rustTemplate(
                             """
                             let error = endpoint.expect_err(${expectedError.dq()});
@@ -116,6 +118,7 @@ internal class EndpointTestGenerator(
                         }.join(","),
                     )
                 }
+                is Value.Integer -> rust(value.expectInteger().toString())
 
                 is Value.Record ->
                     rustBlock("") {
@@ -123,7 +126,12 @@ internal class EndpointTestGenerator(
                             "let mut out = #{HashMap}::<String, #{Document}>::new();",
                             *codegenScope,
                         )
-                        value.forEach { identifier, v ->
+                        // TODO(https://github.com/awslabs/smithy/pull/1555): remove sort by name when upgrading to
+                        //   Smithy version with this PR merged
+                        val keys = mutableListOf<Identifier>()
+                        value.forEach { id, _ -> keys.add(id) }
+                        keys.sortedBy { it.name.value }.forEach { identifier ->
+                            val v = value.get(identifier)
                             rust(
                                 "out.insert(${identifier.toString().dq()}.to_string(), #W.into());",
                                 // When writing into the hashmap, it always needs to be an owned type
@@ -132,6 +140,7 @@ internal class EndpointTestGenerator(
                         }
                         rustTemplate("out")
                     }
+                else -> PANIC("unexpected type: $value")
             }
         }
     }

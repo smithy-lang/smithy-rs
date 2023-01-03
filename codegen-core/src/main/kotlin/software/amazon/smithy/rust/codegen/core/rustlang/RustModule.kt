@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+
 /**
  * RustModule system.
  *
@@ -138,4 +140,7 @@ sealed class RustModule {
             else -> {}
         }
     }
+
+    /** Converts this [RustModule] into a [RuntimeType] */
+    fun toType(): RuntimeType = RuntimeType(fullyQualifiedPath())
 }
