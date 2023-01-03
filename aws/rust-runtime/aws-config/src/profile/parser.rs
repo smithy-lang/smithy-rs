@@ -65,6 +65,7 @@ pub async fn load(
     if let Some(profile) = selected_profile_override {
         source.profile = profile;
     }
+
     Ok(ProfileSet::parse(source)?)
 }
 

@@ -231,11 +231,16 @@ impl ProviderConfig {
         self
     }
 
+    /// Override profile-file (`~/.aws/config` et al) configuration
     pub(crate) fn with_profile_config(
         self,
         profile_files: Option<ProfileFiles>,
         profile_name_override: Option<String>,
     ) -> Self {
+        // if there is no override, then don't clear out `parsed_profile`.
+        if profile_files.is_none() && profile_name_override.is_none() {
+            return self;
+        }
         ProviderConfig {
             // clear out the profile since we need to reparse it
             parsed_profile: Default::default(),
