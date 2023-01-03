@@ -222,8 +222,16 @@ def make_class(
             print(f"Unknown member type={member}")
 
     if inspect.getdoc(klass) is not None:
-        is_empty = False
-        definition += make_function(writer, "__init__", klass, indent_level + 4) + "\n"
+        constructor_sig = DocstringParser.parse(klass)
+        if constructor_sig is not None and (
+            # Make sure to only generate `__init__` if the class has a constructor defined
+            len(constructor_sig.rtypes) > 0
+            or len(constructor_sig.params) > 0
+        ):
+            is_empty = False
+            definition += (
+                make_function(writer, "__init__", klass, indent_level + 4) + "\n"
+            )
 
     if is_empty:
         definition += indent(f"...\n", indent_level + 4)

@@ -105,6 +105,7 @@ class PythonApplicationGenerator(
             """
             ##[#{pyo3}::pyclass]
             ##[derive(Debug)]
+            /// :rtype None:
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
                 middlewares: Vec<#{SmithyPython}::PyMiddlewareHandler>,
