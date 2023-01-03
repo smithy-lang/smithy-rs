@@ -46,7 +46,9 @@ pub struct AuthApiKey {
 impl AuthApiKey {
     /// Constructs a new API key.
     pub fn new(api_key: impl Into<String>) -> Self {
-        Self { api_key: api_key.into() }
+        Self {
+            api_key: api_key.into(),
+        }
     }
 
     /// Returns the underlying api key.
@@ -68,6 +70,20 @@ impl PartialEq for AuthApiKey {
 }
 
 trait Eq: PartialEq<Self> {}
+
+impl From<&str> for AuthApiKey {
+    fn from(api_key: &str) -> Self {
+        Self {
+            api_key: api_key.to_owned(),
+        }
+    }
+}
+
+impl From<String> for AuthApiKey {
+    fn from(api_key: String) -> Self {
+        Self { api_key }
+    }
+}
 
 /// An HTTP-specific authentication scheme that sends an arbitrary
 /// auth value in a header or query string parameter.
