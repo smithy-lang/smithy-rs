@@ -141,6 +141,32 @@ def indent(code: str, level: int) -> str:
     return textwrap.indent(code, level * " ")
 
 
+def format_doc(obj: Any, indent_level: int) -> str:
+    doc = inspect.getdoc(obj)
+    if not doc:
+        return ""
+
+    # Remove type annotations
+    doc = "\n".join(
+        filter(
+            lambda l: not (
+                (
+                    l.startswith(":type")
+                    or l.startswith(":rtype")
+                    or l.startswith(":param")
+                )
+                and l.endswith(":")
+            ),
+            doc.splitlines(),
+        )
+    ).strip()
+
+    if not doc:
+        return ""
+
+    return indent('"""\n' + doc + '\n"""\n', indent_level)
+
+
 def is_fn_like(obj: Any) -> bool:
     return (
         inspect.isbuiltin(obj)
@@ -154,7 +180,13 @@ def make_field(writer: Writer, name: str, field: Any) -> str:
     return f"{name}: {writer.fix_and_include(DocstringParser.parse_type(field))}"
 
 
-def make_function(writer: Writer, name: str, obj: Any, indent_level: int = 0) -> str:
+def make_function(
+    writer: Writer,
+    name: str,
+    obj: Any,
+    indent_level: int = 0,
+    include_docs: bool = True,
+) -> str:
     res = DocstringParser.parse_function(obj)
     if not res:
         # Make it `Any` if we can't parse the docstring
@@ -182,7 +214,7 @@ def make_function(writer: Writer, name: str, obj: Any, indent_level: int = 0) ->
         if sig is not None:
             sig_param = sig.parameters.get(name)
             if sig_param and sig_param.default is not sig_param.empty:
-                param += f" = {sig_param.default}"
+                param += f" = ..."
 
         return param
 
@@ -191,9 +223,16 @@ def make_function(writer: Writer, name: str, obj: Any, indent_level: int = 0) ->
     fn_def = ""
     if len(attrs) > 0:
         for attr in attrs:
-            fn_def += f"{attr}\n"
-    fn_def += f"def {name}({params}) -> {writer.fix_and_include(rtype)}: ..."
-    return indent(fn_def, indent_level)
+            fn_def += indent(f"{attr}\n", indent_level)
+    fn_def += indent(
+        f"def {name}({params}) -> {writer.fix_and_include(rtype)}:\n", indent_level
+    )
+
+    if include_docs:
+        fn_def += format_doc(obj, indent_level + 4)
+
+    fn_def += indent("...", indent_level + 4)
+    return fn_def
 
 
 def make_class(
@@ -201,6 +240,12 @@ def make_class(
 ) -> str:
     bases = ", ".join(map(lambda b: b.__name__, klass.__bases__))
     definition = f"class {class_name}({bases}):\n"
+
+    def preserve_doc(obj: Any) -> str:
+        return format_doc(obj, indent_level + 4) + "\n"
+
+    definition += preserve_doc(klass)
+
     is_empty = True
     for (name, member) in inspect.getmembers(klass):
         if name.startswith("__"):
@@ -211,6 +256,7 @@ def make_class(
             definition += (
                 indent(make_field(writer, name, member), indent_level + 4) + "\n"
             )
+            definition += preserve_doc(member)
         elif is_fn_like(member):
             is_empty = False
             definition += make_function(writer, name, member, indent_level + 4) + "\n"
@@ -218,6 +264,7 @@ def make_class(
         elif isinstance(member, klass):
             is_empty = False
             definition += indent(f"{name}: {class_name}\n", indent_level + 4)
+            definition += preserve_doc(member)
         else:
             print(f"Unknown member type={member}")
 
@@ -230,7 +277,10 @@ def make_class(
         ):
             is_empty = False
             definition += (
-                make_function(writer, "__init__", klass, indent_level + 4) + "\n"
+                make_function(
+                    writer, "__init__", klass, indent_level + 4, include_docs=False
+                )
+                + "\n"
             )
 
     if is_empty:
