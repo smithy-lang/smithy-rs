@@ -105,6 +105,8 @@ class PythonApplicationGenerator(
             """
             ##[#{pyo3}::pyclass]
             ##[derive(Debug)]
+            /// :generic Ctx:
+            /// :extends typing.Generic[Ctx]: 
             /// :rtype None:
             pub struct App {
                 handlers: #{HashMap}<String, #{SmithyPython}::PyHandler>,
@@ -258,7 +260,7 @@ class PythonApplicationGenerator(
 
                 /// Register a context object that will be shared between handlers.
                 ///
-                /// :param context ${PythonType.Any.render()}:
+                /// :param context Ctx:
                 /// :rtype ${PythonType.None.render()}:
                 ##[pyo3(text_signature = "(${'$'}self, context)")]
                 pub fn context(&mut self, context: #{pyo3}::PyObject) {
@@ -338,7 +340,7 @@ class PythonApplicationGenerator(
 
                 val input = PythonType.Opaque("${operationName}Input", "crate::input")
                 val output = PythonType.Opaque("${operationName}Output", "crate::output")
-                val context = PythonType.Any // TODO: Make it a generic argument.
+                val context = PythonType.Opaque("Ctx")
                 val returnType = PythonType.Union(listOf(output, PythonType.Awaitable(output)))
                 val handler = PythonType.Union(listOf(
                     PythonType.Callable(

@@ -22,6 +22,7 @@ class Writer:
     subwriters: List[Writer]
     imports: Set[str]
     defs: List[str]
+    generics: Set[str]
 
     def __init__(self, path: Path, root_module_name: str) -> None:
         self.path = path
@@ -29,6 +30,7 @@ class Writer:
         self.subwriters = []
         self.imports = set([])
         self.defs = []
+        self.generics = set([])
 
     def fix_path(self, path: str) -> str:
         return path.replace(ROOT_MODULE_NAME_PLACEHOLDER, self.root_module_name)
@@ -57,13 +59,22 @@ class Writer:
     def define(self, code: str) -> None:
         self.defs.append(code)
 
+    def generic(self, name: str) -> None:
+        self.generics.add(name)
+
     def dump(self) -> None:
         for w in self.subwriters:
             w.dump()
 
+        generics = ""
+        for g in self.generics:
+            generics += f"{g} = {self.include('typing.TypeVar')}('{g}')\n"
+
         self.path.parent.mkdir(parents=True, exist_ok=True)
         contents = "\n".join(map(lambda p: f"import {p}", self.imports))
         contents += "\n\n"
+        if generics:
+            contents += generics + "\n"
         contents += "\n".join(self.defs)
         self.path.write_text(contents)
 
@@ -73,6 +84,8 @@ class DocstringParserResult:
     types: List[str]
     params: List[Tuple[str, str]]
     rtypes: List[str]
+    generics: List[str]
+    extends: List[str]
 
 
 class DocstringParser:
@@ -89,6 +102,8 @@ class DocstringParser:
         types: List[str] = []
         params: List[Tuple[str, str]] = []
         rtypes: List[str] = []
+        generics: List[str] = []
+        extends: List[str] = []
 
         for line in doc.splitlines():
             line = line.strip()
@@ -115,8 +130,28 @@ class DocstringParser:
                         f"Invalid `:rtype` directive: `{line}` must be in `:rtype T:` format"
                     )
                 rtypes.append(parts[1].rstrip(":"))
+            elif line.startswith(":generic ") and line.endswith(":"):
+                parts = line.split(" ", maxsplit=1)
+                if len(parts) != 2:
+                    raise ValueError(
+                        f"Invalid `:generic` directive: `{line}` must be in `:generic T:` format"
+                    )
+                generics.append(parts[1].rstrip(":"))
+            elif line.startswith(":extends ") and line.endswith(":"):
+                parts = line.split(" ", maxsplit=1)
+                if len(parts) != 2:
+                    raise ValueError(
+                        f"Invalid `:extends` directive: `{line}` must be in `:extends Base[...]:` format"
+                    )
+                extends.append(parts[1].rstrip(":"))
 
-        return DocstringParserResult(types=types, params=params, rtypes=rtypes)
+        return DocstringParserResult(
+            types=types,
+            params=params,
+            rtypes=rtypes,
+            generics=generics,
+            extends=extends,
+        )
 
     @staticmethod
     def parse_type(obj: Any) -> str:
@@ -136,6 +171,13 @@ class DocstringParser:
             "None" if len(result.rtypes) == 0 else result.rtypes[0],
         )
 
+    @staticmethod
+    def parse_class(obj: Any) -> Tuple[List[str], List[str]]:
+        result = DocstringParser.parse(obj)
+        if not result:
+            return ([], [])
+        return (result.generics, result.extends)
+
 
 def indent(code: str, level: int) -> str:
     return textwrap.indent(code, level * " ")
@@ -154,6 +196,8 @@ def format_doc(obj: Any, indent_level: int) -> str:
                     l.startswith(":type")
                     or l.startswith(":rtype")
                     or l.startswith(":param")
+                    or l.startswith(":generic")
+                    or l.startswith(":extends")
                 )
                 and l.endswith(":")
             ),
@@ -238,7 +282,16 @@ def make_function(
 def make_class(
     writer: Writer, class_name: str, klass: Any, indent_level: int = 0
 ) -> str:
-    bases = ", ".join(map(lambda b: b.__name__, klass.__bases__))
+    base_classes = list(map(lambda b: b.__name__, klass.__bases__))
+
+    class_sig = DocstringParser.parse_class(klass)
+    if class_sig:
+        (generics, extends) = class_sig
+        base_classes.extend(extends)
+        for g in generics:
+            writer.generic(g)
+
+    bases = ", ".join(base_classes)
     definition = f"class {class_name}({bases}):\n"
 
     def preserve_doc(obj: Any) -> str:
