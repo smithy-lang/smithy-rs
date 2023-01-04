@@ -98,8 +98,8 @@ fun Shape.shouldRedact(model: Model): Boolean =
 
 const val REDACTION = "\"*** Sensitive Data Redacted ***\""
 
-fun Shape.redactIfNecessary(model: Model, safeToPrint: String): String =
-    if (this.shouldRedact(model)) {
+fun Shape.redactIfNecessary(model: Model, safeToPrint: String, sensitiveMember: Boolean = false): String =
+    if (sensitiveMember || this.shouldRedact(model)) {
         REDACTION
     } else {
         safeToPrint

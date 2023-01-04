@@ -186,7 +186,7 @@ class StructureGeneratorTest {
             let secret_structure = SecretStructure {
                 secret_field: Some("secret".to_owned()),
             };
-            assert_eq!(format!("{:?}", secret_structure), "SecretStructure");
+            assert_eq!(format!("{:?}", secret_structure), "SecretStructure { secret_field: \"*** Sensitive Data Redacted ***\" }");
             """,
         )
         writer.compileAndTest()

@@ -91,15 +91,13 @@ open class StructureGenerator(
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
-                if (!shape.hasTrait<SensitiveTrait>()) {
-                    members.forEach { member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+                members.forEach { member ->
+                    val memberName = symbolProvider.toMemberName(member)
+                    val fieldValue = member.redactIfNecessary(model, "self.$memberName", shape.hasTrait<SensitiveTrait>())
 
-                        rust(
-                            "formatter.field(${memberName.dq()}, &$fieldValue);",
-                        )
-                    }
+                    rust(
+                        "formatter.field(${memberName.dq()}, &$fieldValue);",
+                    )
                 }
                 rust("formatter.finish()")
             }
