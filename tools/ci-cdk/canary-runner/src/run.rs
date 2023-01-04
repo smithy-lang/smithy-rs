@@ -345,6 +345,7 @@ async fn create_lambda_fn(
         .environment(
             Environment::builder()
                 .variables("RUST_BACKTRACE", "1")
+                .variables("RUST_LOG", "info")
                 .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
                 .variables(
                     "CANARY_EXPECTED_TRANSCRIBE_RESULT",
