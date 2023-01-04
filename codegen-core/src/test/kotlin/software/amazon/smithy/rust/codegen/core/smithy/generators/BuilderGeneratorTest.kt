@@ -136,7 +136,7 @@ internal class BuilderGeneratorTest {
             use super::*;
             let builder = SecretStructure::builder()
                 .secret_field("secret");
-                 assert_eq!(format!("{:?}", builder), "Builder");
+            assert_eq!(format!("{:?}", builder), "Builder");
             """,
         )
     }
