@@ -148,3 +148,17 @@ references = ["smithy-rs#2170", "aws-sdk-rust#706"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 message = "Remove the webpki-roots feature from `hyper-rustls`"
 author = "rcoh"
+
+[[aws-sdk-rust]]
+references = ["smithy-rs#2168"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+message = """Add support for resolving FIPS and dual-stack endpoints.
+
+FIPS and dual-stack endpoints can each be configured in multiple ways:
+1. Automatically from the environment and AWS profile
+2. Across all clients loaded from the same `SdkConfig` via `from_env().use_dual_stack(true).load().await`
+3. At a client level when constructing the configuration for an individual client.
+
+Note: Not all services support FIPS and dual-stack.
+"""
+author = "rcoh"
