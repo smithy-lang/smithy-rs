@@ -16,8 +16,8 @@ use std::str::FromStr;
 /// a builder struct is returned which has a similar API.
 ///
 /// This provider will check the following sources in order:
-/// 1. [Environment variables](EnvironmentVariableRetryConfigProvider)
-/// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
+/// 1. Environment variables: `AWS_MAX_ATTEMPTS` & `AWS_RETRY_MODE`
+/// 2. Profile file: `max_attempts` and `retry_mode`
 ///
 /// # Example
 ///
@@ -82,8 +82,8 @@ impl Builder {
     }
 
     /// Attempt to create a [RetryConfig](aws_smithy_types::retry::RetryConfig) from following sources in order:
-    /// 1. [Environment variables](crate::environment::retry_config::EnvironmentVariableRetryConfigProvider)
-    /// 2. [Profile file](crate::profile::retry_config::ProfileFileRetryConfigProvider)
+    /// 1. Environment variables: `AWS_MAX_ATTEMPTS` & `AWS_RETRY_MODE`
+    /// 2. Profile file: `max_attempts` and `retry_mode`
     /// 3. [RetryConfig::standard()](aws_smithy_types::retry::RetryConfig::standard)
     ///
     /// Precedence is considered on a per-field basis
