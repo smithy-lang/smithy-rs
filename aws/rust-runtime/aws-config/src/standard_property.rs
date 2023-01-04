@@ -9,19 +9,14 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
-enum PropertySource<'a> {
+pub(crate) enum PropertySource<'a> {
     Environment { name: &'a str },
     Profile { name: &'a str, key: &'a str },
 }
 
-#[derive(Debug)]
-pub(crate) struct Context<'a> {
-    source: PropertySource<'a>,
-}
-
-impl Display for Context<'_> {
+impl Display for PropertySource<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.source {
+        match self {
             PropertySource::Environment { name } => write!(f, "environment variable `{}`", name),
             PropertySource::Profile { name, key } => {
                 write!(f, "profile `{}`, key: `{}`", name, key)
@@ -98,14 +93,12 @@ impl StandardProperty {
     pub(crate) async fn load<'a>(
         &'a self,
         provider_config: &'a ProviderConfig,
-    ) -> Option<(Cow<'a, str>, Context<'a>)> {
+    ) -> Option<(Cow<'a, str>, PropertySource<'a>)> {
         if let Some(env_var) = self.environment_variable.as_ref() {
             if let Ok(value) = provider_config.env().get(env_var) {
                 return Some((
                     Cow::Owned(value),
-                    Context {
-                        source: PropertySource::Environment { name: env_var },
-                    },
+                    PropertySource::Environment { name: env_var },
                 ));
             }
         }
@@ -115,11 +108,9 @@ impl StandardProperty {
             if let Some(value) = profile.get(profile_key) {
                 return Some((
                     Cow::Borrowed(value),
-                    Context {
-                        source: PropertySource::Profile {
-                            name: profile.selected_profile(),
-                            key: profile_key,
-                        },
+                    PropertySource::Profile {
+                        name: profile.selected_profile(),
+                        key: profile_key,
                     },
                 ));
             }
