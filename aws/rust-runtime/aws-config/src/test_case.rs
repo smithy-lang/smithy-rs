@@ -5,10 +5,10 @@
 
 use crate::provider_config::ProviderConfig;
 
+use aws_credential_types::provider::{self, ProvideCredentials};
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use aws_smithy_client::erase::DynConnector;
-use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 
 use serde::Deserialize;
@@ -38,8 +38,8 @@ struct Credentials {
 ///
 /// Comparing equality on real credentials works, but it's a pain because the Debug implementation
 /// hides the actual keys
-impl From<&aws_types::Credentials> for Credentials {
-    fn from(credentials: &aws_types::Credentials) -> Self {
+impl From<&aws_credential_types::Credentials> for Credentials {
+    fn from(credentials: &aws_credential_types::Credentials) -> Self {
         Self {
             access_key_id: credentials.access_key_id().into(),
             secret_access_key: credentials.secret_access_key().into(),
@@ -51,8 +51,8 @@ impl From<&aws_types::Credentials> for Credentials {
     }
 }
 
-impl From<aws_types::Credentials> for Credentials {
-    fn from(credentials: aws_types::Credentials) -> Self {
+impl From<aws_credential_types::Credentials> for Credentials {
+    fn from(credentials: aws_credential_types::Credentials) -> Self {
         (&credentials).into()
     }
 }
@@ -78,7 +78,7 @@ pub(crate) fn no_traffic_connector() -> DynConnector {
 }
 
 #[derive(Debug)]
-struct InstantSleep;
+pub(crate) struct InstantSleep;
 impl AsyncSleep for InstantSleep {
     fn sleep(&self, _duration: Duration) -> Sleep {
         Sleep::new(std::future::ready(()))
@@ -95,6 +95,7 @@ impl<T> GenericTestResult<T>
 where
     T: PartialEq + Debug,
 {
+    #[track_caller]
     pub(crate) fn assert_matches(&self, result: Result<impl Into<T>, impl Error>) {
         match (result, &self) {
             (Ok(actual), GenericTestResult::Ok(expected)) => {
@@ -247,7 +248,8 @@ impl TestEnvironment {
         }
     }
 
-    fn check_results(&self, result: credentials::Result) {
+    #[track_caller]
+    fn check_results(&self, result: provider::Result) {
         self.metadata.result.assert_matches(result);
     }
 }

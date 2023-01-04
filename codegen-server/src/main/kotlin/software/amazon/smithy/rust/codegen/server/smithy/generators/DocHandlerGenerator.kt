@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
@@ -34,7 +33,7 @@ class DocHandlerGenerator(
 
     private val inputSymbol = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputSymbol = symbolProvider.toSymbol(operation.outputShape(model))
-    private val errorSymbol = operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
+    private val errorSymbol = operation.errorSymbol(symbolProvider)
 
     /**
      * Returns the function signature for an operation handler implementation. Used in the documentation.

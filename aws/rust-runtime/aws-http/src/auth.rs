@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_credential_types::provider::{
+    error::CredentialsError, ProvideCredentials, SharedCredentialsProvider,
+};
 use aws_smithy_http::middleware::AsyncMapRequest;
 use aws_smithy_http::operation::Request;
 use aws_smithy_http::property_bag::PropertyBag;
-use aws_types::credentials::{CredentialsError, ProvideCredentials, SharedCredentialsProvider};
 use std::future::Future;
 use std::pin::Pin;
 
@@ -15,7 +17,7 @@ pub fn set_provider(bag: &mut PropertyBag, provider: SharedCredentialsProvider) 
     bag.insert(provider);
 }
 
-/// Middleware stage that loads credentials from a [CredentialsProvider](aws_types::credentials::ProvideCredentials)
+/// Middleware stage that loads credentials from a [CredentialsProvider](aws_credential_types::provider::ProvideCredentials)
 /// and places them in the property bag of the request.
 ///
 /// [CredentialsStage] implements [`AsyncMapRequest`](aws_smithy_http::middleware::AsyncMapRequest), and:
@@ -61,7 +63,7 @@ impl CredentialsStage {
 }
 
 mod error {
-    use aws_types::credentials::CredentialsError;
+    use aws_credential_types::provider::error::CredentialsError;
     use std::error::Error as StdError;
     use std::fmt;
 
@@ -114,13 +116,15 @@ impl AsyncMapRequest for CredentialsStage {
 mod tests {
     use super::set_provider;
     use super::CredentialsStage;
+    use aws_credential_types::{
+        provider::{
+            error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
+        },
+        Credentials,
+    };
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::middleware::AsyncMapRequest;
     use aws_smithy_http::operation;
-    use aws_types::credentials::{
-        future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,
-    };
-    use aws_types::Credentials;
 
     #[derive(Debug)]
     struct Unhandled;
@@ -184,7 +188,7 @@ mod tests {
         let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
         set_provider(
             &mut req.properties_mut(),
-            SharedCredentialsProvider::new(Credentials::new("test", "test", None, None, "test")),
+            SharedCredentialsProvider::new(Credentials::for_tests()),
         );
         let req = CredentialsStage::new()
             .apply(req)

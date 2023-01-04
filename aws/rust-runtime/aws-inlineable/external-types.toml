@@ -1,4 +1,5 @@
 allowed_external_types = [
+    "aws_credential_types::provider::ProvideCredentials",
     "aws_endpoint::*",
     "aws_http::*",
     "aws_sig_auth::*",

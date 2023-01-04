@@ -48,7 +48,7 @@ class EventStreamErrorMarshallerGenerator(
     private val operationErrorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
     } else {
-        unionShape.eventStreamErrorSymbol(model, symbolProvider, target).toSymbol()
+        unionShape.eventStreamErrorSymbol(symbolProvider).toSymbol()
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
