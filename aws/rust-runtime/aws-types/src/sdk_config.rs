@@ -33,8 +33,6 @@ pub struct SdkConfig {
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
-    use_fips: Option<bool>,
-    use_dual_stack: Option<bool>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -53,8 +51,6 @@ pub struct Builder {
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
-    use_fips: Option<bool>,
-    use_dual_stack: Option<bool>,
 }
 
 impl Builder {
@@ -465,52 +461,6 @@ impl Builder {
         self
     }
 
-    /// When true, send this request to the FIPS-compliant regional endpoint.
-    ///
-    /// If the configured endpoint does not have a FIPS compliant endpoint, dispatching
-    /// the request will return an error.
-    ///
-    /// **Note**: Not all services and regions support FIPS. If a service does not support FIPS,
-    /// this setting will have no effect.
-    pub fn use_fips(mut self, use_fips: bool) -> Self {
-        self.set_use_fips(Some(use_fips));
-        self
-    }
-
-    /// When true, send this request to the FIPS-compliant regional endpoint.
-    ///
-    /// If the configured endpoint does not have a FIPS compliant endpoint, dispatching
-    /// the request will return an error.
-    ///
-    /// **Note**: Not all services and regions support FIPS. If a service does not support FIPS,
-    /// this setting will have no effect.
-    pub fn set_use_fips(&mut self, use_fips: Option<bool>) -> &mut Self {
-        self.use_fips = use_fips;
-        self
-    }
-
-    /// When true, send this request to the dual-stack endpoint.
-    ///
-    /// If the configured endpoint does not support dual-stack, the request MAY return an error.
-    ///
-    /// **Note**: Not all services and regions support dual-stack. If a service does not support
-    /// dual-stack, this setting will have no effect.
-    pub fn use_dual_stack(mut self, use_dual_stack: bool) -> Self {
-        self.set_use_dual_stack(Some(use_dual_stack));
-        self
-    }
-
-    /// When true, send this request to the dual-stack endpoint.
-    ///
-    /// If the configured endpoint does not support dual-stack, the request MAY return an error.
-    ///
-    /// **Note**: Not all services and regions support dual-stack. If a service does not support
-    /// dual-stack, this setting will have no effect.
-    pub fn set_use_dual_stack(&mut self, use_dual_stack: Option<bool>) -> &mut Self {
-        self.use_dual_stack = use_dual_stack;
-        self
-    }
-
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -523,8 +473,6 @@ impl Builder {
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
             http_connector: self.http_connector,
-            use_fips: self.use_fips,
-            use_dual_stack: self.use_dual_stack,
         }
     }
 }
