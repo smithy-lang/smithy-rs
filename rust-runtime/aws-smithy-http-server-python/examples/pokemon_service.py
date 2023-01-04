@@ -131,7 +131,7 @@ class Context:
 # Entrypoint
 ###########################################################
 # Get an App instance.
-app = App[Context]()
+app: "App[Context]" = App()
 # Register the context.
 app.context(Context())
 
