@@ -325,14 +325,6 @@ struct OutputV2 {
 ```
 # Discussions
 
-## Serialization and de-serialization support for an entire response/request
-The problem with serialization/de-serialization of an entire response/request is the lack of data type that can be mapped to `serde`'s data model field by field.
-
-Currently, SDK has no data type that represents an entire response or request that can be mapped to `serde`'s data model; Thus, you must introduce a schema and implement logics that allows users to serialize/de-serialize their data.
-
-Although this RFC does not solve this issue, we believe that this RFC will help future contributors who wish to implement serialization and de-serialization support for an entire response/request.
-
-
 ## Sensitive Information
 If serialized data contains sensitive information, it will not be masked.
 We mention that fields can compromise such information on every struct field to ensure that users know this.
