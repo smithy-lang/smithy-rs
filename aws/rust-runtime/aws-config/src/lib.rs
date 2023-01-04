@@ -160,6 +160,8 @@ mod loader {
     use aws_types::SdkConfig;
 
     use crate::connector::default_connector;
+    use crate::default_provider::use_dual_stack::use_dual_stack_provider;
+    use crate::default_provider::use_fips::use_fips_provider;
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::profile::profile_file::ProfileFiles;
@@ -185,6 +187,8 @@ mod loader {
         http_connector: Option<HttpConnector>,
         profile_name_override: Option<String>,
         profile_files_override: Option<ProfileFiles>,
+        use_fips: Option<bool>,
+        use_dual_stack: Option<bool>,
     }
 
     impl ConfigLoader {
@@ -441,6 +445,29 @@ mod loader {
             self
         }
 
+        /// When true, send this request to the FIPS-compliant regional endpoint.
+        ///
+        /// If the configured endpoint does not have a FIPS compliant endpoint, dispatching
+        /// the request will return an error.
+        ///
+        /// **Note**: Not all services and regions support FIPS. If a service does not support FIPS,
+        /// this setting will have no effect.
+        pub fn use_fips(mut self, use_fips: bool) -> Self {
+            self.use_fips = Some(use_fips);
+            self
+        }
+
+        /// When true, send this request to the dual-stack endpoint.
+        ///
+        /// If the configured endpoint does not support dual-stack, the request MAY return an error.
+        ///
+        /// **Note**: Not all services and regions support dual-stack. If a service does not support
+        /// dual-stack, this setting will have no effect.
+        pub fn use_dual_stack(mut self, use_dual_stack: bool) -> Self {
+            self.use_dual_stack = Some(use_dual_stack);
+            self
+        }
+
         /// Set configuration for all sub-loaders (credentials, region etc.)
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
@@ -540,6 +567,18 @@ mod loader {
                 ))
             };
 
+            let use_fips = if let Some(use_fips) = self.use_fips {
+                Some(use_fips)
+            } else {
+                use_fips_provider(&conf).await
+            };
+
+            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
+                Some(use_dual_stack)
+            } else {
+                use_dual_stack_provider(&conf).await
+            };
+
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
             } else {
@@ -561,6 +600,8 @@ mod loader {
             builder.set_app_name(app_name);
             builder.set_sleep_impl(sleep_impl);
             builder.set_endpoint_url(self.endpoint_url);
+            builder.set_use_fips(use_fips);
+            builder.set_use_dual_stack(use_dual_stack);
             builder.build()
         }
     }
@@ -634,6 +675,21 @@ mod loader {
                     )),
                 }
             });
+        }
+
+        #[tokio::test]
+        async fn load_fips() {
+            let conf = from_env().use_fips(true).load().await;
+            assert_eq!(conf.use_fips(), Some(true));
+        }
+
+        #[tokio::test]
+        async fn load_dual_stack() {
+            let conf = from_env().use_dual_stack(false).load().await;
+            assert_eq!(conf.use_dual_stack(), Some(false));
+
+            let conf = from_env().load().await;
+            assert_eq!(conf.use_dual_stack(), None);
         }
     }
 }

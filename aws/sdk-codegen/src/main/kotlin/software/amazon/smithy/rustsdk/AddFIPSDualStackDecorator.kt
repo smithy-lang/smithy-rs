@@ -19,6 +19,11 @@ import software.amazon.smithy.rulesengine.traits.ClientContextParamsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointRulesetIndex
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 fun EndpointRuleSet.getBuiltIn(builtIn: Parameter) = parameters.toList().find { it.builtIn == builtIn.builtIn }
@@ -35,14 +40,11 @@ fun ClientCodegenContext.getBuiltIn(builtIn: Parameter): Parameter? {
  */
 fun Model.promoteBuiltInToContextParam(serviceId: ShapeId, builtInSrc: Parameter): Model {
     val model = this
-    val idx = EndpointRulesetIndex.of(model)
-    val service = model.expectShape(serviceId, ServiceShape::class.java)
-    val rules = idx.endpointRulesForService(service) ?: return model
     // load the builtIn with a matching name from the ruleset allowing for any docs updates
-    val builtIn = rules.getBuiltIn(builtInSrc) ?: return model
+    val builtIn = this.loadBuiltIn(serviceId, builtInSrc) ?: return model
 
     return ModelTransformer.create().mapShapes(model) { shape ->
-        if (shape !is ServiceShape || shape.id != service.id) {
+        if (shape !is ServiceShape || shape.id != serviceId) {
             shape
         } else {
             val traitBuilder = shape.getTrait<ClientContextParamsTrait>()
@@ -64,6 +66,26 @@ fun Model.promoteBuiltInToContextParam(serviceId: ShapeId, builtInSrc: Parameter
     }
 }
 
+fun Model.loadBuiltIn(serviceId: ShapeId, builtInSrc: Parameter): Parameter? {
+    val model = this
+    val idx = EndpointRulesetIndex.of(model)
+    val service = model.expectShape(serviceId, ServiceShape::class.java)
+    val rules = idx.endpointRulesForService(service) ?: return null
+    // load the builtIn with a matching name from the ruleset allowing for any docs updates
+    return rules.getBuiltIn(builtInSrc)
+}
+
+fun Model.sdkConfigSetter(serviceId: ShapeId, builtInSrc: Parameter): Pair<AdHocSection<*>, (Section) -> Writable>? {
+    val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
+    val fieldName = builtIn.name.rustName()
+
+    return SdkConfigSection.create { section ->
+        {
+            rust("${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName());")
+        }
+    }
+}
+
 class AddFIPSDualStackDecorator : ClientCodegenDecorator {
     override val name: String = "AddFipsDualStack"
     override val order: Byte = 0
@@ -72,5 +94,12 @@ class AddFIPSDualStackDecorator : ClientCodegenDecorator {
         return model
             .promoteBuiltInToContextParam(service.id, Builtins.FIPS)
             .promoteBuiltInToContextParam(service.id, Builtins.DUALSTACK)
+    }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
+        return listOfNotNull(
+            codegenContext.model.sdkConfigSetter(codegenContext.serviceShape.id, Builtins.FIPS),
+            codegenContext.model.sdkConfigSetter(codegenContext.serviceShape.id, Builtins.DUALSTACK),
+        )
     }
 }
