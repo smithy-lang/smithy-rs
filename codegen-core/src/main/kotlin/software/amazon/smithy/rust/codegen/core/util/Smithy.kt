@@ -92,14 +92,14 @@ fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.an
 
 fun Shape.shouldRedact(model: Model): Boolean =
     when (this) {
-        is MemberShape -> model.expectShape(this.target).shouldRedact(model)
+        is MemberShape -> model.expectShape(this.target).shouldRedact(model) || model.expectShape(this.container).shouldRedact(model)
         else -> this.hasTrait<SensitiveTrait>()
     }
 
 const val REDACTION = "\"*** Sensitive Data Redacted ***\""
 
-fun Shape.redactIfNecessary(model: Model, safeToPrint: String, sensitiveMember: Boolean = false): String =
-    if (sensitiveMember || this.shouldRedact(model)) {
+fun Shape.redactIfNecessary(model: Model, safeToPrint: String): String =
+    if (this.shouldRedact(model)) {
         REDACTION
     } else {
         safeToPrint
