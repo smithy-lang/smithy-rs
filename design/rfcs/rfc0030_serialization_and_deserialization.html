@@ -1,0 +1,593 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0030: Serialization And Deserialization - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">6.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">6.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">6.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">6.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">6.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">6.5.</strong> Generating Common Service Code</a></li><li class="chapter-item expanded "><a href="../server/pokemon_service.html"><strong aria-hidden="true">6.6.</strong> Generating the Pokémon Service</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">7.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">7.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">7.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">7.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">7.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">7.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">7.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">7.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">7.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">7.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">7.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">7.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">7.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">7.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">7.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">7.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">7.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">7.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">7.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">7.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">7.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">7.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">7.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">7.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">7.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">7.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">7.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">7.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">7.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">7.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html" class="active"><strong aria-hidden="true">7.30.</strong> RFC-0030: Serialization And Deserialization</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">8.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-serialization-and-deserialization"><a class="header" href="#rfc-serialization-and-deserialization">RFC: Serialization and Deserialization</a></h1>
+<blockquote>
+<p>Status: RFC</p>
+<p>Applies to: Output, Input, and Builder types as well as <code>DateTime</code>, <code>Document</code>, <code>Blob</code>, and <code>Number</code> implemented in <code>aws_smithy_types</code> crate.</p>
+</blockquote>
+<h1 id="terminology"><a class="header" href="#terminology">Terminology</a></h1>
+<ul>
+<li>Builder
+Refers to data types prefixed with <code>Builder</code>, which converts itself into a corresponding data type upon being built. e.g. <code>aws_sdk_dynamodb::input::PutItemInput</code>.</li>
+<li>serde
+Refers to <code>serde</code> crate.</li>
+<li><code>Serialize</code>
+Refers to <code>Serialize</code> trait avaialble on <code>serde</code> crate.</li>
+<li><code>Deserialize</code>
+Refers to <code>Deserialize</code> trait available on <code>serde</code> crate.</li>
+</ul>
+<h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
+<p>We are going to implement Serialize and Deserialize traits from <code>serde</code> crate to some data types.
+Data types that are going to be affected are;</p>
+<ul>
+<li>builder data types</li>
+<li>operation <code>Input</code> types</li>
+<li>operation <code>Output</code> types</li>
+<li>data types that builder types may have on their field(s)</li>
+<li><code>aws_smithy_types::DateTime</code></li>
+<li><code>aws_smithy_types::Document</code></li>
+<li><code>aws_smithy_types::Blob</code></li>
+<li><code>aws_smithy_types::Number</code></li>
+</ul>
+<p><code>DateTime</code> and <code>Blob</code> implements different serialization/deserialization format for human-readable and non-human readable format; We must emphasize that these 2 formats are not compatible with each other. The reason for this is explained in the <a href="#blob">Blob</a> section and <a href="#datetime">Date Time</a>.</p>
+<p>Additionally, we add <code>fn set_fields</code> to fluent builders to allow users to set the data they deserialized to fluent builders.</p>
+<p>Lastly, we emphasize that this RFC does NOT aim to serialize the entire response or request or implement <code>serde</code> traits on data types for server-side code.</p>
+<h1 id="use-case"><a class="header" href="#use-case">Use Case</a></h1>
+<p>Users have requested <code>serde</code> traits to be implemented on data types implemented in rust SDK.
+We have created this RFC with the following use cases in mind.</p>
+<ol>
+<li><a href="https://github.com/awslabs/aws-sdk-rust/issues/269">[request]: Serialize/Deserialize of models for Lambda events #269</a></li>
+<li><a href="https://awslabs.github.io/smithy-rs/design/faq.html#why-dont-the-sdk-service-crates-implement-serdeserialize-or-serdedeserialize-for-any-types">Tests</a> as suggested in the design FAQ.</li>
+<li>Building tools</li>
+</ol>
+<h1 id="feature-gate"><a class="header" href="#feature-gate">Feature Gate</a></h1>
+<h2 id="enabling-feature"><a class="header" href="#enabling-feature">Enabling Feature</a></h2>
+<p>To enable any of the features from this RFC, user must pass <code>--cfg aws-sdk-unstable</code> to rustc.</p>
+<p>You can do this by specifying it on env-variable or by config.toml.</p>
+<ul>
+<li>specifying it on .cargo/config.toml</li>
+</ul>
+<pre><code class="language-toml">[build]
+rustflags = [&quot;--cfg&quot;, &quot;aws-sdk-unstable&quot;]
+</code></pre>
+<ul>
+<li>As an environment variable</li>
+</ul>
+<pre><code class="language-bash">export RUSTFLAGS=&quot;--cfg aws-sdk-unstable&quot;
+cargo build
+</code></pre>
+<p>We considered allowing users to enable this feature on a crate-level.</p>
+<p>e.g.</p>
+<pre><code class="language-toml">[dependencies]
+aws_sdk_dynamodb = { version = &quot;0.22.0&quot;, features = [&quot;unstable&quot;, &quot;serialize&quot;] }
+</code></pre>
+<p>Compared to the cfg approach, it is lot easier for the users to enable this feature.
+However, we believe that cfg approach ensure users won't enable this feature by surprise, and communicate to users that features behind this feature gate can be taken-away or exprience breaking changes any time in future.</p>
+<h2 id="feature-gate-for-serialization-and-de-serialization"><a class="header" href="#feature-gate-for-serialization-and-de-serialization">Feature Gate for Serialization and De-serialization</a></h2>
+<p><code>Serde</code> traits are implemented behind feature gates.
+<code>Serialize</code> is implemented behind <code>serialize</code>, while <code>Deserialize</code> is implemented behind <code>deserialize</code>.
+Users must enable the <code>unstable</code> feature to expose those features.</p>
+<p>We considered giving each feature a dedicated feature gate such as <code>unstable-serde-serialize</code>.
+In this case, we will need to change the name of feature gates entirely once it leaves the unstable status which will cause users to make changes to their code base.
+We conclude that this brings no benefit to the users.</p>
+<h2 id="keeping-both-features-behind-the-same-feature-gate"><a class="header" href="#keeping-both-features-behind-the-same-feature-gate">Keeping both features behind the same feature gate</a></h2>
+<p>We considered keeping both features behind the same feature gate.
+There is no significant difference in the complexity of implementation.
+We do not see any benefit in keeping them behind the same feature gate as this will only increase compile time when users do not need one of the features.</p>
+<h2 id="different-feature-gates-for-different-data-types"><a class="header" href="#different-feature-gates-for-different-data-types">Different feature gates for different data types</a></h2>
+<p>We considered implementing different feature gates for output, input, and their corresponding data types.
+For example, output and input types can have <code>output-serde-*</code> and <code>input-serde-*</code>.
+We are unable to do this as relevant metadata is not available during the code-gen.</p>
+<h1 id="implementation"><a class="header" href="#implementation">Implementation</a></h1>
+<h2 id="smithy-types"><a class="header" href="#smithy-types">Smithy Types</a></h2>
+<p><code>aws_smithy_types</code> is a crate that implements smithy's data types.
+These data types must implement serde traits as well since SDK uses the data types.</p>
+<h3 id="blob"><a class="header" href="#blob">Blob</a></h3>
+<p><code>Serialize</code> and <code>Deserialize</code> is not implemented with derive macro.</p>
+<p>In human-readable format, <code>Blob</code> is serialized as a base64 encoded string and any data to be deserialized as this data type must be encoded in base 64.
+Encoding must be carried out by <code>base64::encode</code> function available from <code>aws_smithy_types</code> crate.
+Non-human readable format serializes <code>Blob</code> with <code>fn serialize_bytes</code>.</p>
+<ul>
+<li>Reason behind the implementation of human-readable format</li>
+</ul>
+<p><code>aws_smithy_types</code> crate comes with functions for encoding/decoding base 64, which makes the implementation simpler.
+Additionally, AWS CLI and AWS SDK for other languages require data to be encoded in base 64 when it requires <code>Blob</code> type as input.</p>
+<p>We also considered serializing them with <code>serialize_bytes</code>, without encoding them with <code>serialize_bytes</code>.
+In this case, the implementation will depend on the implementation of the library author.</p>
+<p>There are many different crates, so we decided to survey how some of the most popular crates implement this feature.</p>
+<div class="table-wrapper"><table><thead><tr><th>library</th><th>version</th><th>implementation</th><th>all-time downloads on crate.io as of writing (Dec 2022)</th></tr></thead><tbody>
+<tr><td>serde_json</td><td>1.0</td><td>Array of number</td><td>109,491,713</td></tr>
+<tr><td>toml</td><td>0.5.9</td><td>Array of number</td><td>63,601,994</td></tr>
+<tr><td>serde_yaml</td><td>0.9.14</td><td>Unsupported</td><td>23,767,300</td></tr>
+</tbody></table>
+</div>
+<p>First of all, bytes could have hundreds of elements; reading an array of hundreds of numbers will never be a pleasing experience, and it is especially troubling when you are writing data for test cases.
+Additionally, it has come to our attention that some crates just doesn't support it, which would hinder users' ability to be productive and tie users' hand.</p>
+<p>For the reasons described above, we believe that it is crucial to encode them to string and base64 is favourable over other encoding schemes such as base 16, 32, or Ascii85.</p>
+<ul>
+<li>Reason behind the implementation of a non-human readable format
+We considered using the same logic for non-human readable format as well.
+However, readable-ness is not necessary for non-human readable format.
+Additionally, non-human readable format tends to emphasize resource efficiency over human-readable format; Base64 encoded string would take up more space, which is not what the users would want.</li>
+</ul>
+<p>Thus, we believe that implementing a tailored serialization logic would be beneficial to the users.</p>
+<h3 id="datetime"><a class="header" href="#datetime">DateTime</a></h3>
+<p><code>Serialize</code> and <code>Deserialize</code> is not implemented with derive macro.
+For human-readable format, <code>DateTime</code> is serialized in RFC-3339 format;
+It expects the value to be in RFC-3339 format when it is Deserialized.</p>
+<p>Non-human readable implements <code>DateTime</code> as a tuple of <code>u32</code> and <code>i64</code>; the latter corresponds to <code>seconds</code> field and the first is the <code>seubsecond_nanos</code>.</p>
+<ul>
+<li>Reason behind the implementation of a human-readable format</li>
+</ul>
+<p>For serialization, <code>DateTime</code> format already implements a function to encode itself into RFC-3339 format.
+For deserialization, it is possible to accept other formats, we can add this later if we find it reasonable.</p>
+<ul>
+<li>Reason behind the implementation of a non-human readable format</li>
+</ul>
+<p>Serializing them as tuples of two integers results in a smaller data size and requires less computing power than any string-based format.
+Tuple will be smaller in size as it does not require tagging like in maps.</p>
+<h3 id="document"><a class="header" href="#document">Document</a></h3>
+<p><code>Serialize</code> and <code>Deserialize</code> is implemented with derive macro.
+Additionally, it implements container attribute <code>#[serde(untagged)]</code>.
+Serde can distinguish each variant without tagging thanks to the difference in each variant's datatypes.</p>
+<h3 id="number"><a class="header" href="#number">Number</a></h3>
+<p><code>Serialize</code> and <code>Deserialize</code> is implemented with derive macro.
+Additionally, it implements container attribute <code>#[serde(untagged)]</code>.</p>
+<p>Serde can distinguish each variant without a tag as each variant's content is different.</p>
+<h2 id="builder-types-and-non-builder-types"><a class="header" href="#builder-types-and-non-builder-types">Builder Types and Non-Builder Types</a></h2>
+<p>Builder types and non Builder types implement <code>Serialize</code> and <code>Deserialize</code> with derive macro.</p>
+<p>Example:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg_attr(
+    all(aws-sdk-unstable, feature = &quot;serialize&quot;),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(aws-sdk-unstable, feature = &quot;deserialize&quot;),
+    derive(serde::Deserialize)
+)]
+#[non_exhaustive]
+#[derive(std::clone::Clone, std::cmp::PartialEq)]
+pub struct UploadPartCopyOutput {
+  ...
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="enum-representation"><a class="header" href="#enum-representation">Enum Representation</a></h2>
+<p><code>serde</code> allows programmers to use one of four different tagging (<a href="https://serde.rs/enum-representations.html">internal, external, adjacent, and untagged</a>) when serializing an enum.</p>
+<h3 id="untagged"><a class="header" href="#untagged">untagged</a></h3>
+<p>You cannot deserialize serialized data in some cases.
+For example, <a href="https://docs.rs/aws-sdk-dynamodb/latest/aws_sdk_dynamodb/model/enum.AttributeValue.html">aws_sdk_dynamodb::model::AttributeValue</a> has <code>Null(bool)</code> and <code>Bool(bool)</code>, which you cannot distinguish serialized values without a tag.</p>
+<h3 id="internal"><a class="header" href="#internal">internal</a></h3>
+<p>This results in compile time error.
+<a href="https://serde.rs/enum-representations.html"><em>Using a #[serde(tag = &quot;...&quot;)] attribute on an enum containing a tuple variant is an error at compile time</em></a>.</p>
+<h3 id="external-and-adjacent"><a class="header" href="#external-and-adjacent">external and adjacent</a></h3>
+<p>We are left with <code>external</code> and <code>adjacent</code> tagging.
+External tagging is the default way.
+This RFC can be achieved either way.</p>
+<p>The resulting size of the serialized data is smaller when tagged externally, as adjacent tagging will require a tag even when a variant has no content.</p>
+<p>For the reasons mentioned above, we implement an enum that is externally tagged.</p>
+<h2 id="data-types-to-skip"><a class="header" href="#data-types-to-skip">Data Types to Skip</a></h2>
+<p>We are going to skip serialization and deserialization of fields that have the datatype that corresponds to <code>@streaming blob</code> and <code>@streaming union</code> from smithy.
+Any fields with these data types are tagged with <code>#[serde(skip, default = &quot;..name of the function for tailored serialization/de-serialization&quot;)]</code>.</p>
+<p>As of writing, this decision affects following Rust data types.</p>
+<ul>
+<li><code>aws_smithy_http::byte_stream::ByteStream</code></li>
+<li><code>aws_smithy_http::event_stream::Receiver</code></li>
+<li><code>aws_smithy_http::event_stream::EventStreamSender</code></li>
+</ul>
+<p>Here are some examples of data types affected by this decision:</p>
+<ul>
+<li><code>aws_sdk_transcribestreaming::client::fluent_builders::StartMedicalStreamTranscription</code></li>
+<li><code>aws_sdk_s3::input::put_object_input::PutObjectInput</code></li>
+</ul>
+<p>We considered serializing them as bytes, however, it could take some time for a stream to reach the end, and the resulting serialized data may be too big for itself to fit into the ram.
+Additionally, those data types are sometimes used to represent bi-directional data transfer, which is not serializable.</p>
+<p>Here is an example of struct with a field that comes with custom serialization/de-serialization logic.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[allow(missing_docs)]
+#[cfg_attr(
+    all(aws-sdk-unstable, feature = &quot;serialize&quot;),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(aws-sdk-unstable, feature = &quot;deserialize&quot;),
+    derive(serde::Deserialize)
+)]
+#[non_exhaustive]
+#[derive(std::fmt::Debug)]
+pub struct ExampleStreamTranscriptionOutput {
+    #[cfg_attr(
+        any(
+            all(aws-sdk-unstable, feature = &quot;deserialize&quot;),
+            all(aws-sdk-unstable, feature = &quot;serialize&quot;)
+        ),
+        serde(
+            skip,
+            default = &quot;aws_smithy_http::event_stream::Receiver::deserialized_receiver&quot;
+        )
+    )]
+    pub transcript_result_stream: aws_smithy_http::event_stream::Receiver&lt;
+        crate::model::ExampleTranscriptResultStream,
+        crate::error::ExampleTranscriptResultStreamError,
+    &gt;
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="serde-traits-implemented-on-builder-of-output-types"><a class="header" href="#serde-traits-implemented-on-builder-of-output-types"><code>Serde</code> traits implemented on Builder of Output Types</a></h2>
+<p>Output data, such as <code>aws_sdk_dynamodb::output::UpdateTableOutput</code> has builder types.
+These builder types are available to users, however, no API requires users to build data types by themselves.</p>
+<p>We considered removing traits from these data types.</p>
+<p>Removing serde traits on these types will help reduce compile time, however, builder type can be useful, for example, for testing.
+We have prepared examples <a href="UseCaseExamples">here</a>.</p>
+<h2 id="fn-set_fields-to-allow-users-to-use-externally-created-input"><a class="header" href="#fn-set_fields-to-allow-users-to-use-externally-created-input"><code>fn set_fields</code> to allow users to use externally created <code>Input</code></a></h2>
+<p>Currently, to set the value to fluent builders, users must call setter methods for each field.
+SDK does not have a method that allows users to use deserialized <code>Input</code>.
+Thus, we add a new method <code>fn set_fields</code> to <code>Client</code> types.
+This method accepts inputs and replaces all parameters that <code>Client</code> has with the new one.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub fn set_fields(mut self, input_type: path::to::input_type) -&gt; path::to::input_type {
+    self.inner = input_type;
+    self
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Users can use <code>fn set_fields</code> to replace the parameters in fluent builders.
+You can find examples <a href="#UseCaseExamples">here</a>.</p>
+<h1 id="other-concerns"><a class="header" href="#other-concerns">Other Concerns</a></h1>
+<h2 id="model-evolution"><a class="header" href="#model-evolution">Model evolution</a></h2>
+<p>SDK will introduce new fields and we may see new data types in the future.</p>
+<p>We believe that this will not be a problem.</p>
+<h3 id="introduction-of-new-fields"><a class="header" href="#introduction-of-new-fields">Introduction of New Fields</a></h3>
+<p>Most fields are <code>Option&lt;T&gt;</code> type.
+When the user de-serializes data written for a format before the new fields were introduced, new fields will be assigned with <code>None</code> type.</p>
+<p>If a field isn't <code>Option</code>, <code>serde</code> uses <code>Default</code> trait unless a custom de-serialization/serialization is specified to generate data to fill the field.
+If the new field is not an <code>Option&lt;T&gt;</code> type and has no <code>Default</code> implementation, we must implement a custom de-serialization logic.</p>
+<p>In the case of serialization, the introduction of new fields will not be an issue unless the data format requires a schema. (e.g. parquet, avro) However, this is outside the scope of this RFC.</p>
+<h2 id="introduction-of-new-data-type"><a class="header" href="#introduction-of-new-data-type">Introduction of New Data Type</a></h2>
+<p>If a new field introduces a new data type, it will not require any additional work if the data type can derive <code>serde</code> traits.</p>
+<p>If the data cannot derive <code>serde</code> traits on its own, then we have two options.
+To clarify, this is the same approach we took on <code>Data Type to skip</code> section.</p>
+<ol>
+<li>skip
+We will simply skip serializing/de-serializing. However, we may need to implement custom serialization/de-serialization logic if a value is not wrapped with <code>Option</code>.</li>
+<li>custom serialization/de-serialization logic
+We can implement tailored serialization/de-serialization logic.</li>
+</ol>
+<p>Either way, we will mention this on the generated docs to avoid surprising users.</p>
+<p>e.g.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(serde::Serialize, serde::Deserialize)]
+struct OutputV1 {
+  string_field: Option&lt;String&gt;
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct OutputV2 {
+  string_field: Option&lt;String&gt;,
+  // this will always be treated as None value by serde
+  #[serde(skip)]
+  skip_not_serializable: Option&lt;SomeComplexDataType&gt;,
+  // We can implement a custom serialization logic
+  #[serde(serialize_with = &quot;custom_serilization_logic&quot;, deserialize_with = &quot;custom_deserilization_logic&quot;)]
+  not_derive_able: SomeComplexDataType,
+  // Serialization will be skipped, and de-serialization will be handled with the function provided on default tag
+  #[serde(skip, default = &quot;default_value&quot;)]
+  skip_with_custom: DataTypeWithoutDefaultTrait,
+}
+<span class="boring">}</span></code></pre></pre>
+<h1 id="discussions"><a class="header" href="#discussions">Discussions</a></h1>
+<h2 id="sensitive-information"><a class="header" href="#sensitive-information">Sensitive Information</a></h2>
+<p>If serialized data contains sensitive information, it will not be masked.
+We mention that fields can compromise such information on every struct field to ensure that users know this.</p>
+<h2 id="compile-time"><a class="header" href="#compile-time">Compile Time</a></h2>
+<p>We ran the following benchmark on C6a.2xlarge instance with 50gb of GP2 SSD.
+The commit hash of the code is a8e2e19129aead4fbc8cf0e3d34df0188a62de9f.</p>
+<p>It clearly shows an increase in compile time.
+Users are advised to consider the use of software such as <a href="https://github.com/mozilla/sccache">sccache</a> or <a href="https://github.com/rui314/mold">mold</a> to reduce the compile time.</p>
+<ul>
+<li>
+<p><code>aws-sdk-dynamodb</code></p>
+<ul>
+<li>
+<p>when compiled with debug profile</p>
+<div class="table-wrapper"><table><thead><tr><th>command</th><th>real time</th><th>user time</th><th>sys time</th></tr></thead><tbody>
+<tr><td>cargo build</td><td>0m35.728s</td><td>2m24.243s</td><td>0m11.868s</td></tr>
+<tr><td>cargo build --features unstable-serde-serialize</td><td>0m38.079s</td><td>2m26.082s</td><td>0m11.631s</td></tr>
+<tr><td>cargo build --features unstable-serde-deserialize</td><td>0m45.689s</td><td>2m34.000s</td><td>0m11.978s</td></tr>
+<tr><td>cargo build --all-features</td><td>0m48.959s</td><td>2m45.688s</td><td>0m13.359s</td></tr>
+</tbody></table>
+</div></li>
+<li>
+<p>when compiled with release profile</p>
+<div class="table-wrapper"><table><thead><tr><th>command</th><th>real time</th><th>user time</th><th>sys time</th></tr></thead><tbody>
+<tr><td>cargo build --release</td><td>0m52.040s</td><td>5m0.841s</td><td>0m11.313s</td></tr>
+<tr><td>cargo build --release --features unstable-serde-serialize</td><td>0m53.153s</td><td>5m4.069s</td><td>0m11.577s</td></tr>
+<tr><td>cargo build --release --features unstable-serde-deserialize</td><td>1m0.107s</td><td>5m10.231s</td><td>0m11.699s</td></tr>
+<tr><td>cargo build --release --all-features</td><td>1m3.198s</td><td>5m26.076s</td><td>0m12.311s</td></tr>
+</tbody></table>
+</div></li>
+</ul>
+</li>
+<li>
+<p><code>aws-sdk-ec2</code></p>
+<ul>
+<li>
+<p>when compiled with debug profile</p>
+<div class="table-wrapper"><table><thead><tr><th>command</th><th>real time</th><th>user time</th><th>sys time</th></tr></thead><tbody>
+<tr><td>cargo build</td><td>1m20.041s</td><td>2m14.592s</td><td>0m6.611s</td></tr>
+<tr><td>cargo build --features unstable-serde-serialize</td><td>2m0.555s</td><td>4m24.881s</td><td>0m16.131s</td></tr>
+<tr><td>cargo build --features unstable-serde-deserialize</td><td>3m10.857s</td><td>5m34.246s</td><td>0m18.844s</td></tr>
+<tr><td>cargo build --all-features</td><td>3m31.473s</td><td>6m1.052s</td><td>0m19.681s</td></tr>
+</tbody></table>
+</div></li>
+<li>
+<p>when compiled with release profile</p>
+<div class="table-wrapper"><table><thead><tr><th>command</th><th>real time</th><th>user time</th><th>sys time</th></tr></thead><tbody>
+<tr><td>cargo build --release</td><td>2m29.480s</td><td>9m19.530s</td><td>0m15.957s</td></tr>
+<tr><td>cargo build --release --features unstable-serde-serialize</td><td>2m45.002s</td><td>9m43.098s</td><td>0m16.886s</td></tr>
+<tr><td>cargo build --release --features unstable-serde-deserialize</td><td>3m47.531s</td><td>10m52.017s</td><td>0m18.404s</td></tr>
+<tr><td>cargo build --release --all-features</td><td>3m45.208s</td><td>8m46.168s</td><td>0m10.211s</td></tr>
+</tbody></table>
+</div></li>
+</ul>
+</li>
+</ul>
+<h2 id="misleading-results"><a class="header" href="#misleading-results">Misleading Results</a></h2>
+<p>SDK team previously expressed concern that serialized data may be misleading.
+We believe that features implemented as part of this RFC do not produce a misleading result as we focus on builder types and it's corresponding data types which are mapped to serde's data type model with the derive macro.</p>
+<h1 id="appendix"><a class="header" href="#appendix">Appendix</a></h1>
+<h2 id="use-case-examples"><a class="header" href="#use-case-examples"><a href="UseCaseExamples">Use Case Examples</a></a></h2>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_dynamodb::{Client, Error};
+
+async fn example(read_builder: bool) -&gt; Result&lt;(), Error&gt; {
+    // getting the client
+    let shared_config = aws_config::load_from_env().await;
+    let client = Client::new(&amp;shared_config);
+
+    // de-serializing input's builder types and input types from json
+    let deserialized_input = if read_builder {
+      let mut parameter: aws_sdk_dynamodb::input::list_tables_input::Builder = serde_json::from_str(include_str!(&quot;./builder.json&quot;));
+      parameter.set_exclusive_start_table_name(&quot;some_name&quot;).build()
+    } else {
+      let input: aws_sdk_dynamodb::input::ListTablesInput = serde_json::from_str(include_str!(&quot;./input.json&quot;));
+      input
+    };
+
+    // sending request using the deserialized input
+    let res = client.list_tables().set_fields(deserialized_input).send().await?;
+    println!(&quot;DynamoDB tables: {:?}&quot;, res.table_names);
+
+    let out: aws_sdk_dynamodb::output::ListTablesOutput = {
+      // say you want some of the field to have certain values
+      let mut out_builder: aws_sdk_dynamodb::output::list_tables_output::Builder = serde_json::from_str(r#&quot;
+        {
+          table_names: [ &quot;table1&quot;, &quot;table2&quot; ]
+        }
+      &quot;#);
+      // but you don't really care about some other values
+      out_builder.set_last_evaluated_table_name(res.last_evaluated_table_name()).build()
+    };
+    assert_eq!(res, out);
+
+    // serializing json output
+    let json_output = serde_json::to_string(res).unwrap();
+    // you can save the serialized input
+    println!(json_output);
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Implement human-redable serialization for <code>DateTime</code> and <code>Blob</code> in <code>aws_smithy_types</code></li>
+<li><input disabled="" type="checkbox"/>
+Implement non-human-redable serialization for <code>DateTime</code> and <code>Blob</code> in <code>aws_smithy_types</code></li>
+<li><input disabled="" type="checkbox"/>
+Implement <code>Serialize</code> and <code>Deserialize</code> for relevant data types in <code>aws_smithy_types</code></li>
+<li><input disabled="" type="checkbox"/>
+Modify Kotlin's codegen so that generated Builder and non-Builder types implement <code>Serialize</code> and <code>Deserialize</code></li>
+<li><input disabled="" type="checkbox"/>
+Add feature gate for <code>Serialize</code> and <code>Deserialize</code></li>
+<li><input disabled="" type="checkbox"/>
+Prepare examples</li>
+<li><input disabled="" type="checkbox"/>
+Prepare reproducible compile time benchmark</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0029_new_home_for_cred_types.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../contributing/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0029_new_home_for_cred_types.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../contributing/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
