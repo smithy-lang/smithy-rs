@@ -48,9 +48,9 @@ run: build
 	python3 $(CUR_DIR)/pokemon_service.py
 
 py-check: build
-	mypy pokemon_service.py
+	python3 -m mypy pokemon_service.py
 
-test: build
+test: build py-check
 	cargo test
 
 clippy: codegen
