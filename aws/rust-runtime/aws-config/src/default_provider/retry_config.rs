@@ -137,9 +137,7 @@ fn validate_max_attempts(max_attempts: &str) -> Result<u32, RetryConfigError> {
             Err(RetryConfigErrorKind::MaxAttemptsMustNotBeZero.into())
         }
         Ok(max_attempts) => Ok(max_attempts),
-        Err(source) => {
-            return Err(RetryConfigErrorKind::FailedToParseMaxAttempts { source }.into());
-        }
+        Err(source) => Err(RetryConfigErrorKind::FailedToParseMaxAttempts { source }.into()),
     }
 }
 

@@ -116,6 +116,6 @@ impl StandardProperty {
             }
         }
 
-        return None;
+        None
     }
 }
