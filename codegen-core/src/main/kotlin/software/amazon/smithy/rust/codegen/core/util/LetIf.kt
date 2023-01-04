@@ -12,3 +12,15 @@ fun <T> T.letIf(cond: Boolean, f: (T) -> T): T {
         f(this)
     } else this
 }
+
+fun <T> List<T>.extendIf(condition: Boolean, f: () -> T) = if (condition) {
+    this + listOf(f())
+} else {
+    this
+}
+
+fun <T> Boolean.thenSingletonListOf(f: () -> T): List<T> = if (this) {
+    listOf(f())
+} else {
+    listOf()
+}

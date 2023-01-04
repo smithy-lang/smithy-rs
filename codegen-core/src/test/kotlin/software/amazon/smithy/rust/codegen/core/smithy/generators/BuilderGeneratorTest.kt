@@ -25,6 +25,7 @@ internal class BuilderGeneratorTest {
     private val inner = StructureGeneratorTest.inner
     private val struct = StructureGeneratorTest.struct
     private val credentials = StructureGeneratorTest.credentials
+    private val secretStructure = StructureGeneratorTest.secretStructure
 
     @Test
     fun `generate builders`() {
@@ -115,6 +116,27 @@ internal class BuilderGeneratorTest {
                 .password("pswd")
                 .secret_key("12345");
                  assert_eq!(format!("{:?}", builder), "Builder { username: Some(\"admin\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+            """,
+        )
+    }
+
+    @Test
+    fun `builder for a sensitive struct should implement the debug trait as such`() {
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.forModule("model")
+        val structGenerator = StructureGenerator(model, provider, writer, secretStructure)
+        val builderGenerator = BuilderGenerator(model, provider, secretStructure)
+        structGenerator.render()
+        builderGenerator.render(writer)
+        writer.implBlock(secretStructure, provider) {
+            builderGenerator.renderConvenienceMethod(this)
+        }
+        writer.compileAndTest(
+            """
+            use super::*;
+            let builder = SecretStructure::builder()
+                .secret_field("secret");
+            assert_eq!(format!("{:?}", builder), "Builder { secret_field: \"*** Sensitive Data Redacted ***\" }");
             """,
         )
     }

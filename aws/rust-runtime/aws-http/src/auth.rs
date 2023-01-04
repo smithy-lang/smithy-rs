@@ -186,7 +186,7 @@ mod tests {
         let credentials_cache = CredentialsCache::lazy_builder()
             .into_credentials_cache()
             .create_cache(Arc::new(provide_credentials_fn(|| async {
-                Ok(Credentials::new("test", "test", None, None, "test"))
+                Ok(Credentials::for_tests())
             })));
         set_credentials_cache(
             &mut req.properties_mut(),

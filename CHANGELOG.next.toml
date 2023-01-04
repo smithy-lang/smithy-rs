@@ -76,6 +76,67 @@ references = ["smithy-rs#2108"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
+[[smithy-rs]]
+message = "Servers support the `@default` trait: models can specify default values. Default values will be automatically supplied when not manually set."
+references = ["smithy-rs#1879"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+author = "82marbag"
+
+[[smithy-rs]]
+message = "The constraint `@length` on non-streaming blob shapes is supported."
+references = ["smithy-rs#2131"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+author = "82marbag"
+
+[[aws-sdk-rust]]
+references = ["smithy-rs#2152"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+message = """Add support for overriding profile name and profile file location across all providers. Prior to this change, each provider needed to be updated individually.
+
+### Before
+```rust
+use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
+use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+
+let profile_files = ProfileFiles::builder()
+    .with_file(ProfileFileKind::Credentials, "some/path/to/credentials-file")
+    .build();
+let credentials_provider = ProfileFileCredentialsProvider::builder()
+    .profile_files(profile_files.clone())
+    .build();
+let region_provider = ProfileFileRegionProvider::builder()
+    .profile_files(profile_files)
+    .build();
+
+let sdk_config = aws_config::from_env()
+    .credentials_provider(credentials_provider)
+    .region(region_provider)
+    .load()
+    .await;
+```
+
+### After
+```rust
+use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
+use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+
+let profile_files = ProfileFiles::builder()
+    .with_file(ProfileFileKind::Credentials, "some/path/to/credentials-file")
+    .build();
+let sdk_config = aws_config::from_env()
+    .profile_files(profile_files)
+    .load()
+    .await;
+/// ```
+"""
+
+[[smithy-rs]]
+message = "Fix bug where string default values were not supported for endpoint parameters"
+references = ["smithy-rs#2150"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "rcoh"
+
 [[aws-sdk-rust]]
 message = """
 Improve SDK credentials caching through type safety. `LazyCachingCredentialsProvider` has been renamed to `LazyCredentialsCache` and is no longer treated as a credentials provider. Furthermore, you do not create a `LazyCredentialsCache` directly, and instead you interact with `CredentialsCache`. This introduces the following breaking changes.

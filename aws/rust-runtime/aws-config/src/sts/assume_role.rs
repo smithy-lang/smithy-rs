@@ -316,13 +316,7 @@ mod test {
             .region(Region::new("us-east-1"))
             .session_length(Duration::from_secs(1234567))
             .build(provide_credentials_fn(|| async {
-                Ok(Credentials::new(
-                    "base",
-                    "basesecret",
-                    Some("token".to_string()),
-                    None,
-                    "inner",
-                ))
+                Ok(Credentials::for_tests())
             }));
         let _ = provider.provide_credentials().await;
         let req = request.expect_request();
@@ -352,13 +346,7 @@ mod test {
             .configure(&provider_conf)
             .region(Region::new("us-east-1"))
             .build(provide_credentials_fn(|| async {
-                Ok(Credentials::new(
-                    "base",
-                    "basesecret",
-                    Some("token".to_string()),
-                    None,
-                    "inner",
-                ))
+                Ok(Credentials::for_tests())
             }));
         let creds_first = provider
             .provide_credentials()

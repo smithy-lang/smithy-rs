@@ -12,13 +12,7 @@ use std::sync::Arc;
 async fn user_agent_app_name() {
     let (conn, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(Arc::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(Arc::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .app_name(AppName::new("test-app-name").expect("valid app name")) // set app name in config

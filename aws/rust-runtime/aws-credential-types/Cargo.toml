@@ -9,6 +9,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 hardcoded-credentials = []
+test-util = []
 
 [dependencies]
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }

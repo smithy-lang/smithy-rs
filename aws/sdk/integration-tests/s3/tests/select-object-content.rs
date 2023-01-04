@@ -21,9 +21,7 @@ async fn test_success() {
     let replayer = ReplayingConnection::new(events);
     let sdk_config = SdkConfig::builder()
         .region(Region::from_static("us-east-2"))
-        .credentials_provider(Arc::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
+        .credentials_provider(Arc::new(Credentials::for_tests()))
         .http_connector(replayer.clone())
         .build();
     let client = Client::new(&sdk_config);
