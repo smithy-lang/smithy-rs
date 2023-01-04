@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.neighbor.RelationshipDirection
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -50,7 +51,7 @@ object ShapesReachableFromOperationInputTagger {
         }
         val walker = Walker(model)
         val shapesReachableFromOperationInputs = inputShapes
-            .flatMap { walker.walkShapes(it) }
+            .flatMap { walker.walkShapes(it, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED }) }
             .toSet()
 
         return ModelTransformer.create().mapShapes(model) { shape ->

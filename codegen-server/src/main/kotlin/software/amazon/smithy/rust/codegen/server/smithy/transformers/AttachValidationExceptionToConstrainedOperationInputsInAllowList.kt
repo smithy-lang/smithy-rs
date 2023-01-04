@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.neighbor.RelationshipDirection
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -58,7 +59,7 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
             .map { model.expectShape(it, OperationShape::class.java) }
             .filter { operationShape ->
                 // Walk the shapes reachable via this operation input.
-                walker.walkShapes(operationShape.inputShape(model))
+                walker.walkShapes(operationShape.inputShape(model), { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
                     .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
             }
             .filter { !it.errors.contains(ShapeId.from("smithy.framework#ValidationException")) }

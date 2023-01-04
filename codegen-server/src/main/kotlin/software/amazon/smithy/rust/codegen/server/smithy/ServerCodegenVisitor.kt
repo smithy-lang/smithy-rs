@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.neighbor.RelationshipDirection
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -211,7 +212,7 @@ open class ServerCodegenVisitor(
             }
         }
 
-        val serviceShapes = Walker(model).walkShapes(service)
+        val serviceShapes = Walker(model).walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
         rustCrate.finalize(

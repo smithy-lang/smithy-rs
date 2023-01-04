@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.neighbor.RelationshipDirection
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -144,12 +145,12 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401): This check will go away once we add support for
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
     val walker = Walker(model)
-    val operationsWithConstrainedInputWithoutValidationExceptionSet = walker.walkShapes(service)
+    val operationsWithConstrainedInputWithoutValidationExceptionSet = walker.walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         .filterIsInstance<OperationShape>()
         .asSequence()
         .filter { operationShape ->
             // Walk the shapes reachable via this operation input.
-            walker.walkShapes(operationShape.inputShape(model))
+            walker.walkShapes(operationShape.inputShape(model), { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
                 .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
         }
         .filter { !it.errors.contains(ShapeId.from("smithy.framework#ValidationException")) }
@@ -194,7 +195,7 @@ fun validateUnsupportedConstraints(
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     // [Constraint trait precedence]: https://awslabs.github.io/smithy/2.0/spec/model.html#applying-traits
     val unsupportedConstraintOnMemberShapeSet = walker
-        .walkShapes(service)
+        .walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         .asSequence()
         .filterIsInstance<MemberShape>()
         .filterMapShapesToTraits(unsupportedConstraintsOnMemberShapes)
@@ -204,7 +205,7 @@ fun validateUnsupportedConstraints(
     // 2. Constraint traits on streaming blob shapes are used. Their semantics are unclear.
     // TODO(https://github.com/awslabs/smithy/issues/1389)
     val unsupportedLengthTraitOnStreamingBlobShapeSet = walker
-        .walkShapes(service)
+        .walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         .asSequence()
         .filterIsInstance<BlobShape>()
         .filter { it.hasTrait<LengthTrait>() && it.hasTrait<StreamingTrait>() }
@@ -214,18 +215,18 @@ fun validateUnsupportedConstraints(
     // 3. Constraint traits in event streams are used. Their semantics are unclear.
     // TODO(https://github.com/awslabs/smithy/issues/1388)
     val eventStreamShapes = walker
-        .walkShapes(service)
+        .walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         .asSequence()
         .filter { it.hasTrait<SyntheticEventStreamUnionTrait>() }
     val unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet = eventStreamShapes
-        .flatMap { walker.walkShapes(it) }
+        .flatMap { walker.walkShapes(it, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED }) }
         .filterMapShapesToTraits(allConstraintTraits)
         .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
         .toSet()
     val eventStreamErrors = eventStreamShapes.map { it.expectTrait<SyntheticEventStreamUnionTrait>() }.map { it.errorMembers }
     val unsupportedConstraintErrorShapeReachableViaAnEventStreamSet = eventStreamErrors
         .flatMap { it }
-        .flatMap { walker.walkShapes(it) }
+        .flatMap { walker.walkShapes(it, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED }) }
         .filterMapShapesToTraits(allConstraintTraits)
         .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
         .toSet()
@@ -235,7 +236,7 @@ fun validateUnsupportedConstraints(
     // 4. Range trait used on unsupported shapes.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedRangeTraitOnShapeSet = walker
-        .walkShapes(service)
+        .walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         .asSequence()
         .filterNot { it is IntegerShape || it is ShortShape || it is LongShape || it is ByteShape }
         .filterMapShapesToTraits(setOf(RangeTrait::class.java))
@@ -245,7 +246,7 @@ fun validateUnsupportedConstraints(
     // 5. UniqueItems trait on any shape is used. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedUniqueItemsTraitOnShapeSet = walker
-        .walkShapes(service)
+        .walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         .asSequence()
         .filterMapShapesToTraits(setOf(UniqueItemsTrait::class.java))
         .map { (shape, uniqueItemsTrait) ->

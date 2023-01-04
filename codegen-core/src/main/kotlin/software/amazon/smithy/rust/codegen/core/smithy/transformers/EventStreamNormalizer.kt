@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.transformers
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.neighbor.RelationshipDirection
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -74,7 +75,7 @@ fun OperationShape.operationErrors(model: Model): List<Shape> {
 }
 
 fun eventStreamErrors(model: Model, shape: Shape): Map<UnionShape, List<StructureShape>> {
-    return Walker(model).walkShapes(shape)
+    return Walker(model).walkShapes(shape, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         .filter { it is UnionShape && it.isEventStream() }
         .map { it.asUnionShape().get() }
         .associateWith { unionShape ->

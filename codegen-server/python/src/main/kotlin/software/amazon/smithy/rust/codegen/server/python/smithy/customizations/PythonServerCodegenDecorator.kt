@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
 import com.moandjiezana.toml.TomlWriter
+import software.amazon.smithy.model.neighbor.RelationshipDirection
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -73,7 +74,7 @@ class PythonExportModuleDecorator : ServerCodegenDecorator {
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         val service = codegenContext.settings.getService(codegenContext.model)
-        val serviceShapes = Walker(codegenContext.model).walkShapes(service)
+        val serviceShapes = Walker(codegenContext.model).walkShapes(service, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED })
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
 }
