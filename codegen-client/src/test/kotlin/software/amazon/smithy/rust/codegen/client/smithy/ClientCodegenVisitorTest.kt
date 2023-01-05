@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 
-class CodegenVisitorTest {
+class ClientCodegenVisitorTest {
     @Test
     fun `baseline transform verify mixins removed`() {
         val model = """

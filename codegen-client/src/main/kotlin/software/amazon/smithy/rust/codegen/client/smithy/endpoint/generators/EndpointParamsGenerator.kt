@@ -252,10 +252,11 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
                 "ParamsError" to paramsError(),
             ) {
                 val params = writable {
+                    Attribute.Custom("allow(clippy::unnecessary_lazy_evaluations)").render(this)
                     rustBlockTemplate("#{Params}", "Params" to paramsStruct()) {
                         parameters.toList().forEach { parameter ->
                             rust("${parameter.memberName()}: self.${parameter.memberName()}")
-                            parameter.default.orNull()?.also { default -> rust(".or(Some(${value(default)}))") }
+                            parameter.default.orNull()?.also { default -> rust(".or_else(||Some(${value(default)}))") }
                             if (parameter.isRequired) {
                                 rustTemplate(
                                     ".ok_or_else(||#{Error}::missing(${parameter.memberName().dq()}))?",

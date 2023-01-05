@@ -13,22 +13,21 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationErrorGenerator
 
 /**
- * Generates a unified error enum for [operation]. It depends on [ServerCombinedErrorGenerator]
+ * Generates a unified error enum for [operation]. It depends on [ServerOperationErrorGenerator]
  * to generate the errors from the model and adds the Rust implementation `From<pyo3::PyErr>`.
  */
-class PythonServerCombinedErrorGenerator(
+class PythonServerOperationErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape,
-) : ServerCombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(operation), listOf()) {
+) : ServerOperationErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(operation), listOf()) {
 
     private val operationIndex = OperationIndex.of(model)
     private val errors = operationIndex.getErrors(operation)
@@ -53,7 +52,7 @@ class PythonServerCombinedErrorGenerator(
 
             """,
             "pyo3" to PythonServerCargoDependency.PyO3.toType(),
-            "Error" to operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER),
+            "Error" to operation.errorSymbol(symbolProvider),
             "From" to RuntimeType.From,
             "CastPyErrToRustError" to castPyErrToRustError(),
         )

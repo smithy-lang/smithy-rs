@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
@@ -380,7 +379,7 @@ ${operationImplementationStubs(operations)}
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
+        val errorSymbol = errorSymbol(symbolProvider)
 
         // using module names here to avoid generating `crate::...` since we've already added the import
         val inputT = "${InputsModule.name}::${inputSymbol.name}"

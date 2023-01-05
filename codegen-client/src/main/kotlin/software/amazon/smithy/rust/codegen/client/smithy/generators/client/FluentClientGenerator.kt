@@ -38,7 +38,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -169,7 +168,7 @@ class FluentClientGenerator(
 
                 val output = operation.outputShape(model)
                 val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT).toSymbol()
+                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
 
                 val inputFieldsBody =
                     generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
@@ -264,7 +263,7 @@ class FluentClientGenerator(
                     "bounds" to generics.bounds,
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-                    val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
+                    val errorType = operation.errorSymbol(symbolProvider)
 
                     // Have to use fully-qualified result here or else it could conflict with an op named Result
                     rustTemplate(
@@ -334,7 +333,7 @@ class FluentClientGenerator(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
                             operation,
-                            operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT),
+                            operation.errorSymbol(symbolProvider),
                         ),
                     )
                     input.members().forEach { member ->

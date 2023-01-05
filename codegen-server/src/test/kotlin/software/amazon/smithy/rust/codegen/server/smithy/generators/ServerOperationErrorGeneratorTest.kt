@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.core.smithy.generators.error
+package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
@@ -12,12 +12,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNor
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
-class CombinedErrorGeneratorTest {
+class ServerOperationErrorGeneratorTest {
     private val baseModel = """
         namespace error
 
@@ -28,6 +28,7 @@ class CombinedErrorGeneratorTest {
         @error("client")
         @retryable
         structure InvalidGreeting {
+            @required
             message: String,
         }
 
@@ -45,48 +46,54 @@ class CombinedErrorGeneratorTest {
         structure Deprecated { }
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
-    private val symbolProvider = testSymbolProvider(model)
+    private val symbolProvider = serverTestSymbolProvider(model)
 
     @Test
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(ErrorsModule) {
             listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
-                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, this)
+                model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, this)
             }
             val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
-            val generator = CombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(model.lookup("error#Greeting")), errors)
-            generator.render(this)
+            ServerOperationErrorGenerator(
+                model,
+                symbolProvider,
+                symbolProvider.toSymbol(model.lookup("error#Greeting")),
+                errors,
+            ).render(this)
 
             unitTest(
                 name = "generates_combined_error_enums",
                 test = """
-                    let kind = GreetingErrorKind::InvalidGreeting(InvalidGreeting::builder().message("an error").build());
-                    let error = GreetingError::new(kind, aws_smithy_types::Error::builder().code("InvalidGreeting").message("an error").build());
-                    assert_eq!(format!("{}", error), "InvalidGreeting: an error");
-                    assert_eq!(error.message(), Some("an error"));
-                    assert_eq!(error.code(), Some("InvalidGreeting"));
-                    use aws_smithy_types::retry::ProvideErrorKind;
-                    assert_eq!(error.retryable_error_kind(), Some(aws_smithy_types::retry::ErrorKind::ClientError));
+                    let variant = InvalidGreeting { message: String::from("an error") };
+                    assert_eq!(format!("{}", variant), "InvalidGreeting: an error");
+                    assert_eq!(variant.message(), "an error");
+                    assert_eq!(
+                        variant.retryable_error_kind(),
+                        aws_smithy_types::retry::ErrorKind::ClientError
+                    );
+
+                    let error = GreetingError::InvalidGreeting(variant);
 
                     // Generate is_xyz methods for errors.
                     assert_eq!(error.is_invalid_greeting(), true);
                     assert_eq!(error.is_complex_error(), false);
 
-                    // Unhandled variants properly delegate message.
-                    let error = GreetingError::generic(aws_smithy_types::Error::builder().message("hello").build());
-                    assert_eq!(error.message(), Some("hello"));
-
-                    let error = GreetingError::unhandled("some other error");
-                    assert_eq!(error.message(), None);
-                    assert_eq!(error.code(), None);
-
                     // Indicate the original name in the display output.
-                    let error = FooError::builder().build();
-                    assert_eq!(format!("{}", error), "FooError [FooException]");
+                    let error = FooException::builder().build();
+                    assert_eq!(format!("{}", error), "FooException");
 
                     let error = Deprecated::builder().build();
                     assert_eq!(error.to_string(), "Deprecated");
+                """,
+            )
+
+            unitTest(
+                name = "generates_converters_into_combined_error_enums",
+                test = """
+                    let variant = InvalidGreeting { message: String::from("an error") };
+                    let error: GreetingError = variant.into();
                 """,
             )
 

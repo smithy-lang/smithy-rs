@@ -16,6 +16,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -212,10 +213,19 @@ fun RustWriter.unitTest(
 fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
+    attribute: Attribute = Attribute.Custom("test"),
+    async: Boolean = false,
     block: Writable,
 ): RustWriter {
-    raw("#[test]")
+    attribute.render(this)
+    if (async) {
+        rust("async")
+    }
     return rustBlock("fn $name()", *args, block = block)
+}
+
+fun RustWriter.tokioTest(name: String, vararg args: Any, block: Writable) {
+    unitTest(name, attribute = TokioTest, async = true, block = block, args = args)
 }
 
 /**

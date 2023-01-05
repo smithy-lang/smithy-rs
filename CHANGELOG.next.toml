@@ -46,25 +46,25 @@ author = "rcoh"
 [[smithy-rs]]
 message = "In 0.52, `@length`-constrained collection shapes whose members are not constrained made the server code generator crash. This has been fixed."
 references = ["smithy-rs#2103"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server"}
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
 
 [[smithy-rs]]
 message = "The Rust client codegen plugin is now called `rust-client-codegen` instead of `rust-codegen`. Be sure to update your `smithy-build.json` files to refer to the correct plugin name."
 references = ["smithy-rs#2099"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
 message = "Client codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`)."
 references = ["smithy-rs#2099"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
 message = "Server codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`)."
 references = ["smithy-rs#2099"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -75,3 +75,76 @@ A new AWS runtime crate called `aws-credential-types` has been introduced. Types
 references = ["smithy-rs#2108"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Servers support the `@default` trait: models can specify default values. Default values will be automatically supplied when not manually set."
+references = ["smithy-rs#1879"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
+author = "82marbag"
+
+[[smithy-rs]]
+message = "The constraint `@length` on non-streaming blob shapes is supported."
+references = ["smithy-rs#2131"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
+author = "82marbag"
+
+[[aws-sdk-rust]]
+references = ["smithy-rs#2152"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+message = """Add support for overriding profile name and profile file location across all providers. Prior to this change, each provider needed to be updated individually.
+
+### Before
+```rust
+use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
+use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+
+let profile_files = ProfileFiles::builder()
+    .with_file(ProfileFileKind::Credentials, "some/path/to/credentials-file")
+    .build();
+let credentials_provider = ProfileFileCredentialsProvider::builder()
+    .profile_files(profile_files.clone())
+    .build();
+let region_provider = ProfileFileRegionProvider::builder()
+    .profile_files(profile_files)
+    .build();
+
+let sdk_config = aws_config::from_env()
+    .credentials_provider(credentials_provider)
+    .region(region_provider)
+    .load()
+    .await;
+```
+
+### After
+```rust
+use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
+use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
+
+let profile_files = ProfileFiles::builder()
+    .with_file(ProfileFileKind::Credentials, "some/path/to/credentials-file")
+    .build();
+let sdk_config = aws_config::from_env()
+    .profile_files(profile_files)
+    .load()
+    .await;
+/// ```
+"""
+
+[[smithy-rs]]
+message = "Fix bug where string default values were not supported for endpoint parameters"
+references = ["smithy-rs#2150"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+references = ["smithy-rs#2162"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+message = "`aws_config::profile::retry_config` && `aws_config::environment::retry_config` have been removed. Use `aws_config::default_provider::retry_config` instead."
+author = "rcoh"
+
+[[smithy-rs]]
+references = ["smithy-rs#2170", "aws-sdk-rust#706"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+message = "Remove the webpki-roots feature from `hyper-rustls`"
+author = "rcoh"

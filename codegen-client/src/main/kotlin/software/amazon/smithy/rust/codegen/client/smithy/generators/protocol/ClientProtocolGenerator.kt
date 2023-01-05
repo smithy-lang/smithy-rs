@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSectio
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -29,9 +28,13 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 open class ClientProtocolGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
+    /**
+     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
+     * This is the serializer side of request dispatch
+     */
     private val makeOperationGenerator: MakeOperationGenerator,
     private val traitGenerator: ProtocolTraitImplGenerator,
-) : ProtocolGenerator(codegenContext, protocol, makeOperationGenerator, traitGenerator) {
+) : ProtocolGenerator(codegenContext, protocol, traitGenerator) {
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
      *
