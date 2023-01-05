@@ -249,17 +249,14 @@ class ServerServiceGeneratorV2(
      */
     @Suppress("DEPRECATION")
     private fun patternInitializations(): Writable =
-        Walker(model).walkShapes(service).mapNotNull { shape ->
-            if (shape is StringShape && shape.hasTrait<PatternTrait>() && !shape.hasTrait<software.amazon.smithy.model.traits.EnumTrait>()) {
-                codegenContext.constrainedShapeSymbolProvider.toSymbol(shape)
-            } else {
-                null
-            }
-        }.map { symbol ->
-            writable {
-                rustTemplate("#{Type}::compile_regex();", "Type" to symbol)
-            }
-        }.join("")
+        Walker(model).walkShapes(service)
+            .filter { shape -> shape is StringShape && shape.hasTrait<PatternTrait>() && !shape.hasTrait<software.amazon.smithy.model.traits.EnumTrait>() }
+            .map { shape -> codegenContext.constrainedShapeSymbolProvider.toSymbol(shape) }
+            .map { symbol ->
+                writable {
+                    rustTemplate("#{Type}::compile_regex();", "Type" to symbol)
+                }
+            }.join("")
 
     private fun buildUncheckedMethod(): Writable = writable {
         val pairs = writable {
