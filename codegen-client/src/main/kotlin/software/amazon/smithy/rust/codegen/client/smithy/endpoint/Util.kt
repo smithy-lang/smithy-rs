@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.smithy.toRustName
+import software.amazon.smithy.rust.codegen.core.smithy.unsafeToRustName
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 data class Context(val functionRegistry: FunctionRegistry, val runtimeConfig: RuntimeConfig)
@@ -29,7 +29,7 @@ data class Context(val functionRegistry: FunctionRegistry, val runtimeConfig: Ru
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)
  */
 fun Identifier.rustName(): String {
-    return this.toString().toRustName()
+    return this.toString().unsafeToRustName()
 }
 
 /**
@@ -59,7 +59,7 @@ fun Parameter.memberName(): String {
     return name.rustName()
 }
 
-fun ContextParamTrait.memberName(): String = this.name.toRustName()
+fun ContextParamTrait.memberName(): String = this.name.unsafeToRustName()
 
 /**
  * Returns the symbol for a given parameter. This enables [RustWriter] to generate the correct [RustType].

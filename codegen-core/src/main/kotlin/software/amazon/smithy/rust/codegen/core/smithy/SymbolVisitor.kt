@@ -407,7 +407,7 @@ fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY
  */
 fun SymbolProvider.testModuleForShape(shape: Shape): RustModule.LeafModule {
     val symbol = toSymbol(shape)
-    val rustName = symbol.name.toRustName()
+    val rustName = symbol.name.unsafeToRustName()
 
     return RustModule.new(
         name = "test_$rustName",
@@ -461,4 +461,8 @@ fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is 
 fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
 
-fun String.toRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
+/**
+ *  You should rarely need this function, rust names in general should be symbol-aware,
+ *  this is "automatic" if you use things like [software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate].
+ */
+fun String.unsafeToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
