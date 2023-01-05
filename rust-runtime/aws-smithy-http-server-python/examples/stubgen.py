@@ -234,6 +234,7 @@ def make_function(
     obj: Any,
     indent_level: int = 0,
     include_docs: bool = True,
+    free_standing: bool = False,
 ) -> str:
     res = DocstringParser.parse_function(obj)
     if not res:
@@ -251,10 +252,11 @@ def make_function(
 
     receivers: List[str] = []
     attrs: List[str] = []
-    if inspect.ismethoddescriptor(obj) or name == "__init__":
-        receivers.append("self")
-    else:
-        attrs.append("@staticmethod")
+    if not free_standing:
+        if inspect.ismethoddescriptor(obj) or name == "__init__":
+            receivers.append("self")
+        else:
+            attrs.append("@staticmethod")
 
     def format_param(name: str, ty: str) -> str:
         param = f"{name}: {writer.fix_and_include(ty)}"
@@ -360,7 +362,7 @@ def walk_module(writer: Writer, mod: Any):
         elif inspect.isclass(member):
             writer.define(make_class(writer, name, member))
         elif is_fn_like(member):
-            writer.define(make_function(writer, name, member))
+            writer.define(make_function(writer, name, member, free_standing=True))
         else:
             print(f"Unknown type: {member}")
 
