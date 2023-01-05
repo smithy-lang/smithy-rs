@@ -9,11 +9,11 @@ use crate::standard_property::StandardProperty;
 use aws_smithy_types::error::display::DisplayErrorContext;
 
 mod env {
-    pub(super) const USE_DUAL_STACK: &'static str = "AWS_USE_DUALSTACK_ENDPOINT";
+    pub(super) const USE_DUAL_STACK: &str = "AWS_USE_DUALSTACK_ENDPOINT";
 }
 
 mod profile_key {
-    pub(super) const USE_DUAL_STACK: &'static str = "use_dualstack_endpoint";
+    pub(super) const USE_DUAL_STACK: &str = "use_dualstack_endpoint";
 }
 
 pub(crate) async fn use_dual_stack_provider(provider_config: &ProviderConfig) -> Option<bool> {

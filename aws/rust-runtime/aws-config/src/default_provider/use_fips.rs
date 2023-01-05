@@ -9,11 +9,11 @@ use crate::standard_property::StandardProperty;
 use aws_smithy_types::error::display::DisplayErrorContext;
 
 mod env {
-    pub(super) const USE_FIPS: &'static str = "AWS_USE_FIPS_ENDPOINT";
+    pub(super) const USE_FIPS: &str = "AWS_USE_FIPS_ENDPOINT";
 }
 
 mod profile_key {
-    pub(super) const USE_FIPS: &'static str = "use_fips_endpoint";
+    pub(super) const USE_FIPS: &str = "use_fips_endpoint";
 }
 
 /// Load the value for "use FIPS"
