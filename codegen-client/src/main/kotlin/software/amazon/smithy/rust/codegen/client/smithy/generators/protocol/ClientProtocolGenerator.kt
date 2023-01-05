@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -77,7 +78,7 @@ open class ClientProtocolGenerator(
             /// See [`crate::client::fluent_builders::$operationName`] for more details about the operation.
             """,
         )
-        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
+        Attribute(derive(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
             write("_private: ()")
         }
