@@ -225,7 +225,6 @@ class ServerServiceGeneratorV2(
                     }
                     let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
 
-                    // Eagerly initialize regexes for `@pattern` strings.
                     #{PatternInitializations:W}
 
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
@@ -248,15 +247,22 @@ class ServerServiceGeneratorV2(
      * `@pattern`-constrained string shape in the service closure.
      */
     @Suppress("DEPRECATION")
-    private fun patternInitializations(): Writable =
-        Walker(model).walkShapes(service)
+    private fun patternInitializations(): Writable {
+        val patterns = Walker(model).walkShapes(service)
             .filter { shape -> shape is StringShape && shape.hasTrait<PatternTrait>() && !shape.hasTrait<software.amazon.smithy.model.traits.EnumTrait>() }
             .map { shape -> codegenContext.constrainedShapeSymbolProvider.toSymbol(shape) }
             .map { symbol ->
                 writable {
                     rustTemplate("#{Type}::compile_regex();", "Type" to symbol)
                 }
-            }.join("")
+            }.toMutableList()
+
+        if (patterns.isNotEmpty()) {
+            patterns += writable { rust("// Eagerly initialize regexes for `@pattern` strings.") }
+        }
+
+        return patterns.join("")
+    }
 
     private fun buildUncheckedMethod(): Writable = writable {
         val pairs = writable {
