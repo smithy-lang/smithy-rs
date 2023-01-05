@@ -288,7 +288,9 @@ def make_function(
 def make_class(
     writer: Writer, class_name: str, klass: Any, indent_level: int = 0
 ) -> str:
-    base_classes = list(map(lambda b: b.__name__, klass.__bases__))
+    base_classes = list(
+        filter(lambda n: n != "object", map(lambda b: b.__name__, klass.__bases__))
+    )
 
     class_sig = DocstringParser.parse_class(klass)
     if class_sig:
