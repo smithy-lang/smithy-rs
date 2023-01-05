@@ -7,7 +7,7 @@ import inspect
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Set, List, Tuple, Optional
+from typing import Any, Set, Dict, List, Tuple, Optional
 
 ROOT_MODULE_NAME_PLACEHOLDER = "__root_module_name__"
 
@@ -308,7 +308,8 @@ def make_class(
     definition += preserve_doc(klass)
 
     is_empty = True
-    for (name, member) in inspect.getmembers(klass):
+    klass_vars: Dict[str, Any] = vars(klass)
+    for name, member in sorted(klass_vars.items(), key=lambda k: k[0]):
         if name.startswith("__"):
             continue
 
