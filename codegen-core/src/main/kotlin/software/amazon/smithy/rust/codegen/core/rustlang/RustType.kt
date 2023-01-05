@@ -453,6 +453,7 @@ class Attribute(val inner: Writable) {
         val AllowClippyNewWithoutDefault = Attribute(allow("clippy::new_without_default"))
         val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
         val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
+        val AllowClippyUnnecessaryLazyEvaluations = Attribute(allow("clippy::unnecessary_lazy_evaluations"))
         val AllowDeadCode = Attribute(allow("dead_code"))
         val AllowDeprecated = Attribute(allow("deprecated"))
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
