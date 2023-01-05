@@ -37,10 +37,10 @@ internal class PythonTypeInformationGenerationTest {
 
         // Constructor signature
         result.shouldContain("/// :param bar str:")
-        result.shouldContain("/// :param baz typing.Optional[int]:")
+        result.shouldContain("/// :param baz typing.Optional\\[int\\]:")
 
         // Field types
         result.shouldContain("/// :type str:")
-        result.shouldContain("/// :type typing.Optional[int]:")
+        result.shouldContain("/// :type typing.Optional\\[int\\]:")
     }
 }

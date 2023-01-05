@@ -113,9 +113,9 @@ class PyProjectTomlDecorator : ServerCodegenDecorator {
                 ).toMap(),
                 "tool" to listOfNotNull(
                     "maturin" to listOfNotNull(
-                        "python-source" to "python"
+                        "python-source" to "python",
                     ).toMap(),
-                ).toMap()
+                ).toMap(),
             )
             writeWithNoFormatting(TomlWriter().write(config))
         }
@@ -168,7 +168,7 @@ from .$libName import *
 __doc__ = $libName.__doc__
 if hasattr($libName, "__all__"):
     __all__ = $libName.__all__
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
     }

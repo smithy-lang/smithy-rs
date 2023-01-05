@@ -174,7 +174,7 @@ impl DateTime {
 
     /// Read 1 date of `format` from `s`, expecting either `delim` or EOF.
     ///
-    /// TODO: How do we represent `char` in Python?
+    /// TODO(PythonTyping): How do we represent `char` in Python?
     ///
     /// :param format Format:
     /// :param delim str:

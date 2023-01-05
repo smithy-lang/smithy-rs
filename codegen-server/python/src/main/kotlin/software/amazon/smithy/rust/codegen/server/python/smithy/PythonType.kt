@@ -126,7 +126,9 @@ fun RustType.pythonType(): PythonType =
         is RustType.Box -> this.member.pythonType()
         is RustType.Dyn -> this.member.pythonType()
         is RustType.Opaque -> PythonType.Opaque(this.name, this.namespace)
-        is RustType.MaybeConstrained -> this.member.pythonType() // TODO: How to handle this?
+        // TODO(Constraints): How to handle this?
+        // Revisit as part of https://github.com/awslabs/smithy-rs/issues/2114
+        is RustType.MaybeConstrained -> this.member.pythonType()
     }
 
 /**
@@ -167,6 +169,6 @@ fun PythonType.render(fullyQualified: Boolean = true): String {
  * Renders [PythonType] with proper escaping for Docstrings.
  */
 fun PythonType.renderAsDocstring(): String =
-    this.render().
-        replace("[", "\\[").
-        replace("]", "\\]")
+    this.render()
+        .replace("[", "\\[")
+        .replace("]", "\\]")

@@ -342,16 +342,18 @@ class PythonApplicationGenerator(
                 val output = PythonType.Opaque("${operationName}Output", "crate::output")
                 val context = PythonType.Opaque("Ctx")
                 val returnType = PythonType.Union(listOf(output, PythonType.Awaitable(output)))
-                val handler = PythonType.Union(listOf(
-                    PythonType.Callable(
-                        listOf(input, context),
-                        returnType
+                val handler = PythonType.Union(
+                    listOf(
+                        PythonType.Callable(
+                            listOf(input, context),
+                            returnType,
+                        ),
+                        PythonType.Callable(
+                            listOf(input),
+                            returnType,
+                        ),
                     ),
-                    PythonType.Callable(
-                        listOf(input),
-                        returnType
-                    )
-                ))
+                )
 
                 rustTemplate(
                     """
