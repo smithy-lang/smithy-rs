@@ -146,14 +146,14 @@ pub struct PyLambdaContext {
 
     /// The X-Ray trace ID for the current invocation.
     ///
-    /// :type typing.Optional[str]:
+    /// :type typing.Optional\[str\]:
     #[pyo3(get)]
     xray_trace_id: Option<String>,
 
     /// The client context object sent by the AWS mobile SDK. This field is
     /// empty unless the function is invoked using an AWS mobile SDK.
     ///
-    /// :type typing.Optional[ClientContext]:
+    /// :type typing.Optional\[ClientContext\]:
     #[pyo3(get)]
     client_context: Option<PyClientContext>,
 
@@ -161,7 +161,7 @@ pub struct PyLambdaContext {
     /// unless the invocation request to the Lambda APIs was made using AWS
     /// credentials issues by Amazon Cognito Identity Pools.
     ///
-    /// :type typing.Optional[CognitoIdentity]:
+    /// :type typing.Optional\[CognitoIdentity\]:
     #[pyo3(get)]
     identity: Option<PyCognitoIdentity>,
 

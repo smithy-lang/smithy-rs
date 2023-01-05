@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonType
 import software.amazon.smithy.rust.codegen.server.python.smithy.pythonType
-import software.amazon.smithy.rust.codegen.server.python.smithy.render
+import software.amazon.smithy.rust.codegen.server.python.smithy.renderAsDocstring
 
 /**
  * To share structures defined in Rust with Python, `pyo3` provides the `PyClass` trait.
@@ -117,15 +117,15 @@ class PythonServerStructureGenerator(
         writable {
             forEachMember(members) { _, memberName, memberSymbol ->
                 val memberType = memberSymbol.rustType().pythonType()
-                rust("/// :param $memberName ${memberType.render()}:")
+                rust("/// :param $memberName ${memberType.renderAsDocstring()}:")
             }
 
-            rust("/// :rtype ${PythonType.None.render()}:")
+            rust("/// :rtype ${PythonType.None.renderAsDocstring()}:")
         }
 
     private fun renderSymbolSignature(symbol: Symbol): Writable =
         writable {
             val pythonType = symbol.rustType().pythonType()
-            rust("/// :type ${pythonType.render()}:")
+            rust("/// :type ${pythonType.renderAsDocstring()}:")
         }
 }

@@ -162,3 +162,11 @@ fun PythonType.render(fullyQualified: Boolean = true): String {
     }
     return "$namespace$base"
 }
+
+/**
+ * Renders [PythonType] with proper escaping for Docstrings.
+ */
+fun PythonType.renderAsDocstring(): String =
+    this.render().
+        replace("[", "\\[").
+        replace("]", "\\]")

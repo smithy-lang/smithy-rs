@@ -87,8 +87,8 @@ fn setup_tracing_subscriber(
 ///   is not exported in `logging.__all__`, as it is not intended to be called directly.
 /// - A new class `logging.TracingHandler` provides a `logging.Handler` that delivers all records to `python_tracing`.
 ///
-/// :param level typing.Optional[int]:
-/// :param logfile typing.Optional[pathlib.Path]:
+/// :param level typing.Optional\[int\]:
+/// :param logfile typing.Optional\[pathlib.Path\]:
 /// :rtype None:
 #[pyclass(name = "TracingHandler")]
 #[pyo3(text_signature = "($self, level=None, logfile=None)")]

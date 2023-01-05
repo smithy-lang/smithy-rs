@@ -41,7 +41,7 @@ impl From<PyError> for PyErr {
 /// to build a [aws_smithy_http_server::response::Response] from it.
 ///
 /// :param message str:
-/// :param status_code typing.Optional[int]:
+/// :param status_code typing.Optional\[int\]:
 /// :rtype None:
 #[pyclass(name = "MiddlewareException", extends = BasePyException)]
 #[pyo3(text_signature = "($self, message, status_code=None)")]

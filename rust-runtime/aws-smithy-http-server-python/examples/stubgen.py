@@ -33,7 +33,11 @@ class Writer:
         self.generics = set([])
 
     def fix_path(self, path: str) -> str:
-        return path.replace(ROOT_MODULE_NAME_PLACEHOLDER, self.root_module_name)
+        return (
+            path.replace(ROOT_MODULE_NAME_PLACEHOLDER, self.root_module_name)
+            .replace("\\[", "[")
+            .replace("\\]", "]")
+        )
 
     def submodule(self, path: Path) -> Writer:
         w = Writer(path, self.root_module_name)
@@ -287,7 +291,7 @@ def make_class(
     class_sig = DocstringParser.parse_class(klass)
     if class_sig:
         (generics, extends) = class_sig
-        base_classes.extend(extends)
+        base_classes.extend(map(writer.fix_and_include, extends))
         for g in generics:
             writer.generic(g)
 
