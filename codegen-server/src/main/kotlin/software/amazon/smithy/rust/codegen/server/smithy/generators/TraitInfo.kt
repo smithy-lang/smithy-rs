@@ -9,9 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
@@ -26,20 +24,7 @@ data class TraitInfo(
 ) {
     companion object {
         fun testCases(constraintsInfo: List<TraitInfo>): List<Writable> {
-            val annotatedTestCases = constraintsInfo.flatMap { it.testCases }
-                .map { testCase ->
-                    writable {
-                        rustTemplate(
-                            """
-                            ##[test]
-                            #{TestCase:W}
-                            """,
-                            "TestCase" to testCase,
-                        )
-                    }
-                }
-
-            return annotatedTestCases
+            return constraintsInfo.flatMap { it.testCases }
         }
     }
 }

@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
@@ -187,9 +188,9 @@ class ConstrainedStringGenerator(
             writer.withInlineModule(testModule) {
                 rustTemplate(
                     """
-                    #{AnnotatedTestCases:W}
+                    #{TestCases:W}
                     """,
-                    "AnnotatedTestCases" to testCases.join("\n"),
+                    "TestCases" to testCases.join("\n"),
                 )
             }
         }
@@ -260,14 +261,14 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) :
             },
             this::renderValidationFunction,
             testCases = listOf {
-                rustTemplate(
-                    """
-                    fn regex_compiles() {
+                unitTest("regex_compiles") {
+                    rustTemplate(
+                        """
                         #{T}::compile_regex();
-                    }
-                    """,
-                    "T" to symbol,
-                )
+                        """,
+                        "T" to symbol,
+                    )
+                }
             },
         )
     }
