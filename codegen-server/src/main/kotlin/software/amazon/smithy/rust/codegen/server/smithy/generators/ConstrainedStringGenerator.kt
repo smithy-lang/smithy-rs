@@ -186,8 +186,6 @@ class ConstrainedStringGenerator(
             writer.withInlineModule(symbol.testModule()) {
                 rustTemplate(
                     """
-                    use super::$name;
-
                     #{AnnotatedTestCases:W}
                     """,
                     "AnnotatedTestCases" to testCases.join("\n"),
@@ -261,12 +259,13 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) :
             },
             this::renderValidationFunction,
             testCases = listOf {
-                rust(
+                rustTemplate(
                     """
                     fn regex_compiles() {
-                        ${symbol.name}::compile_regex();
+                        #{T}::compile_regex();
                     }
                     """,
+                    "T" to symbol,
                 )
             },
         )
