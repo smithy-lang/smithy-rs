@@ -9,13 +9,11 @@
 //! handle requests and responses that return `Result<T, E>` throughout the framework. These
 //! include functions to deserialize incoming requests and serialize outgoing responses.
 //!
-//! All types end with `Rejection`. There are three types:
+//! All types end with `Rejection`. There are two types:
 //!
 //! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
 //!    corresponding operation input.
-//! 1. [`RequestExtensionNotFoundRejection`]s are used when the framework fails to deserialize from
-//!    the request's extensions a particular [`crate::Extension`] that was expected to be found.
-//! 1. [`ResponseRejection`]s are used when the framework fails to serialize the operation
+//! 2. [`ResponseRejection`]s are used when the framework fails to serialize the operation
 //!    output into a response.
 //!
 //! They are called _rejection_ types and not _error_ types to signal that the input was _rejected_
@@ -83,8 +81,7 @@ convert_to_response_rejection!(aws_smithy_http::operation::error::SerializationE
 convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
-/// that is passed as the first argument to operation handlers. To deserialize into the service's
-/// registered state, a different rejection type is used, [`RequestExtensionNotFoundRejection`].
+/// that is passed as the first argument to operation handlers.
 ///
 /// This type allows us to easily keep track of all the possible errors that can occur in the
 /// lifecycle of an incoming HTTP request.
