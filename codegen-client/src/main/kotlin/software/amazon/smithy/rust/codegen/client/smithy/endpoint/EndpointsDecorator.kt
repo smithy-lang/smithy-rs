@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
@@ -167,6 +168,17 @@ class EndpointsDecorator : ClientCodegenDecorator {
             }
         }
 
+        private fun Node.toWritable(): Writable {
+            val node = this
+            return writable {
+                when (node) {
+                    is StringNode -> rust("Some(${node.value.dq()}.to_string())")
+                    is BooleanNode -> rust("Some(${node.value})")
+                    else -> PANIC("unsupported default value: $node")
+                }
+            }
+        }
+
         private fun builderFields(params: Parameters, section: OperationSection.MutateInput) = writable {
             val memberParams = idx.getContextParams(operationShape)
             val builtInParams = params.toList().filter { it.isBuiltIn }
@@ -189,13 +201,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
 
             idx.getStaticContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
                 val setterName = EndpointParamsGenerator.setterName(name)
-                val value = writable {
-                    when (val v = param.value) {
-                        is BooleanNode -> rust("Some(${v.value})")
-                        is StringNode -> rust("Some(${v.value.dq()}.to_string())")
-                        else -> TODO("Unexpected static value type: $v")
-                    }
-                }
+                val value = param.value.toWritable()
                 rust(".$setterName(#W)", value)
             }
 
