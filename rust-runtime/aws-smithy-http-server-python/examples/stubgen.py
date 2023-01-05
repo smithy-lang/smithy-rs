@@ -75,7 +75,7 @@ class Writer:
             generics += f"{g} = {self.include('typing.TypeVar')}('{g}')\n"
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        contents = "\n".join(map(lambda p: f"import {p}", self.imports))
+        contents = "\n".join(map(lambda p: f"import {p}", sorted(self.imports)))
         contents += "\n\n"
         if generics:
             contents += generics + "\n"
