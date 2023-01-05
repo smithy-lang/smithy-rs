@@ -425,7 +425,7 @@ class ServerServiceGeneratorV2(
             {
                 type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
                 type Error = S::Error;
-                type Future = #{SmithyHttpServer}::routers::RoutingFuture<S, B>;
+                type Future = #{SmithyHttpServer}::routing::RoutingFuture<S, B>;
 
                 fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
                     self.router.poll_ready(cx)
