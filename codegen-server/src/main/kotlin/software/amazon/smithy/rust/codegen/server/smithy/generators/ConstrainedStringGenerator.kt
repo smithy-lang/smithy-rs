@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
@@ -25,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
-import software.amazon.smithy.rust.codegen.core.smithy.testModule
+import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
@@ -147,7 +148,7 @@ class ConstrainedStringGenerator(
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }
 
-        renderTests(symbol)
+        renderTests(shape)
     }
 
     private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
@@ -178,12 +179,12 @@ class ConstrainedStringGenerator(
         }
     }
 
-    private fun renderTests(symbol: Symbol) {
-        val name = symbol.name
+    private fun renderTests(shape: Shape) {
         val testCases = TraitInfo.testCases(constraintsInfo)
 
         if (testCases.isNotEmpty()) {
-            writer.withInlineModule(symbol.testModule()) {
+            val testModule = constrainedShapeSymbolProvider.testModuleForShape(shape)
+            writer.withInlineModule(testModule) {
                 rustTemplate(
                     """
                     #{AnnotatedTestCases:W}
@@ -308,7 +309,7 @@ private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) :
     }
 }
 
-private sealed class StringTraitInfo() {
+private sealed class StringTraitInfo {
     companion object {
         fun fromTrait(symbol: Symbol, trait: Trait) =
             when (trait) {

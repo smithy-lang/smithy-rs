@@ -405,14 +405,15 @@ fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY
  *  mod test_my_struct { ... }
  * ```
  */
-fun Symbol.testModule(): RustModule.LeafModule {
-    val module = module()
+fun SymbolProvider.testModuleForShape(shape: Shape): RustModule.LeafModule {
+    val symbol = toSymbol(shape)
+    val rustName = symbol.name.toRustName()
 
     return RustModule.new(
-        name = "test_${name.toRustName()}",
+        name = "test_$rustName",
         visibility = Visibility.PRIVATE,
         inline = true,
-        parent = module.parent,
+        parent = symbol.module(),
         additionalAttributes = listOf(Attribute.Cfg("test")),
     )
 }
