@@ -61,7 +61,7 @@ class ConstrainedBlobGenerator(
             Visibility.PUBCRATE
         }
         val constrainedTypeMetadata = RustMetadata(
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq)),
+            setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq),
             visibility = constrainedTypeVisibility,
         )
 

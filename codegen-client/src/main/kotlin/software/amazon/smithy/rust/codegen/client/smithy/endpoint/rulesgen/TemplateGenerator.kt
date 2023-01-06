@@ -56,7 +56,7 @@ class TemplateGenerator(
 
     override fun visitDynamicElement(expr: Expression) = writable {
         // we don't need to own the argument to push_str
-        Attribute.Custom("allow(clippy::needless_borrow)").render(this)
+        Attribute.AllowClippyNeedlessBorrow.render(this)
         rust("out.push_str(&#W);", exprGenerator(expr, Ownership.Borrowed))
     }
 

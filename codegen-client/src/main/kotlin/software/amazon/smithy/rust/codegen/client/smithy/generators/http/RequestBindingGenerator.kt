@@ -88,7 +88,7 @@ class RequestBindingGenerator(
         uriBase(implBlockWriter)
         val addHeadersFn = httpBindingGenerator.generateAddHeadersFn(operationShape)
         val hasQuery = uriQuery(implBlockWriter)
-        Attribute.Custom("allow(clippy::unnecessary_wraps)").render(implBlockWriter)
+        Attribute.AllowClippyUnnecessaryWraps.render(implBlockWriter)
         implBlockWriter.rustBlockTemplate(
             """
             fn update_http_builder(

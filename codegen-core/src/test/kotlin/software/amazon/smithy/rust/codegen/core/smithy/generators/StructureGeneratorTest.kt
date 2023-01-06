@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
@@ -115,7 +114,7 @@ class StructureGeneratorTest {
         val project = TestWorkspace.testProject()
         val provider = testSymbolProvider(model)
 
-        project.lib { rust("##![allow(deprecated)]") }
+        project.lib { Attribute.AllowDeprecated.render(this) }
         project.withModule(ModelsModule) {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
             innerGenerator.render()
@@ -127,7 +126,7 @@ class StructureGeneratorTest {
         // By putting the test in another module, it can't access the struct
         // fields if they are private
         project.unitTest {
-            raw("#[test]")
+            Attribute.Test.render(this)
             rustBlock("fn test_public_fields()") {
                 write(
                     """
@@ -238,7 +237,7 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.lib {
-            Attribute.Custom("deny(missing_docs)").render(this)
+            Attribute.DenyMissingDocs.render(this)
         }
         project.withModule(ModelsModule) {
             StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()

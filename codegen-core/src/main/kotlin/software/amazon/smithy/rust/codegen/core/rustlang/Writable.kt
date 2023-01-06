@@ -25,6 +25,8 @@ fun Writable.isEmpty(): Boolean {
     return writer.toString() == RustWriter.root().toString()
 }
 
+fun Writable.isNotEmpty(): Boolean = !this.isEmpty()
+
 operator fun Writable.plus(other: Writable): Writable {
     val first = this
     return writable {

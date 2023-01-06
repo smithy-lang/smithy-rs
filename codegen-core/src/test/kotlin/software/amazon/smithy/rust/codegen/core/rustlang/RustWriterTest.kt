@@ -14,6 +14,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndRun
@@ -107,44 +108,44 @@ class RustWriterTest {
     @Test
     fun `attributes with comments when using rust`() {
         val sut = RustWriter.forModule("lib")
-        Attribute.Custom("foo").render(sut)
-        sut.rust("// heres an attribute")
-        sut.toString().shouldContain("#[foo]// heres an attribute")
+        Attribute("foo").render(sut)
+        sut.rust(" // here's an attribute")
+        sut.toString().shouldContain("#[foo]\n// here's an attribute")
     }
 
     @Test
     fun `attributes with comments when using docs`() {
         val sut = RustWriter.forModule("lib")
-        Attribute.Custom("foo").render(sut)
-        sut.docs("heres an attribute")
-        sut.toString().shouldContain("#[foo]\n/// heres an attribute")
+        Attribute("foo").render(sut)
+        sut.docs("here's an attribute")
+        sut.toString().shouldContain("#[foo]\n/// here's an attribute")
     }
 
     @Test
     fun `deprecated attribute without any field`() {
         val sut = RustWriter.forModule("lib")
-        Attribute.Custom.deprecated().render(sut)
+        Attribute.Deprecated.render(sut)
         sut.toString() shouldContain "#[deprecated]"
     }
 
     @Test
     fun `deprecated attribute with a note`() {
         val sut = RustWriter.forModule("lib")
-        Attribute.Custom.deprecated("custom").render(sut)
+        Attribute(deprecated(note = "custom")).render(sut)
         sut.toString() shouldContain "#[deprecated(note = \"custom\")]"
     }
 
     @Test
     fun `deprecated attribute with a since`() {
         val sut = RustWriter.forModule("lib")
-        Attribute.Custom.deprecated(since = "1.2.3").render(sut)
+        Attribute(deprecated(since = "1.2.3")).render(sut)
         sut.toString() shouldContain "#[deprecated(since = \"1.2.3\")]"
     }
 
     @Test
     fun `deprecated attribute with a note and a since`() {
         val sut = RustWriter.forModule("lib")
-        Attribute.Custom.deprecated("custom", "1.2.3").render(sut)
+        Attribute(deprecated("1.2.3", "custom")).render(sut)
         sut.toString() shouldContain "#[deprecated(note = \"custom\", since = \"1.2.3\")]"
     }
 

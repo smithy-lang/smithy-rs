@@ -8,6 +8,15 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.all
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.any
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.cfg
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deny
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.doc
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.not
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 internal class RustTypesTest {
     private fun forInputExpectOutput(t: Writable, expectedOutput: String) {
@@ -139,5 +148,61 @@ internal class RustTypesTest {
         val type = RustType.Box(RustType.Option(RustType.Reference("a", RustType.Vec(RustType.String))))
         type.render(false) shouldBe "Box<Option<&'a Vec<String>>>"
         type.render(true) shouldBe "std::boxed::Box<std::option::Option<&'a std::vec::Vec<std::string::String>>>"
+    }
+
+    @Test
+    fun `attribute macros from strings render properly`() {
+        val attributeMacro = Attribute(
+            Attribute.cfg(
+                Attribute.all(
+                    Attribute.pair("feature" to "unstable".dq()),
+                    Attribute.any(
+                        Attribute.pair("feature" to "serialize".dq()),
+                        Attribute.pair("feature" to "deserialize".dq()),
+                    ),
+                ),
+            ),
+        )
+        forInputExpectOutput(writable { attributeMacro.render(this) }, "#[cfg(all(feature = \"unstable\", any(feature = \"serialize\", feature = \"deserialize\")))]\n")
+    }
+
+    @Test
+    fun `attribute macros render writers properly`() {
+        val attributeMacro = Attribute(
+            cfg(
+                all(
+                    // Normally we'd use the `pair` fn to define these but this is a test
+                    writable { rustInline("""feature = "unstable"""") },
+                    writable { rustInline("""feature = "serialize"""") },
+                    writable { rustInline("""feature = "deserialize"""") },
+                ),
+            ),
+        )
+        forInputExpectOutput(writable { attributeMacro.render(this) }, "#[cfg(all(feature = \"unstable\", feature = \"serialize\", feature = \"deserialize\"))]\n")
+    }
+
+    @Test
+    fun `attribute macros render nothing when empty`() {
+        // All of these attributes require arguments. If none are supplied, then they shouldn't render at all
+        val attributeMacro = Attribute(cfg(all(any(doc(not(deny()))))))
+        forInputExpectOutput(writable { attributeMacro.render(this) }, "")
+    }
+
+    @Test
+    fun `derive attribute macros render properly`() {
+        val attributeMacro = Attribute(
+            derive(
+                RuntimeType.Clone,
+                RuntimeType.Debug,
+                RuntimeType.StdError,
+            ),
+        )
+        forInputExpectOutput(writable { attributeMacro.render(this) }, "#[derive(std::clone::Clone, std::error::Error, std::fmt::Debug)]\n")
+    }
+
+    @Test
+    fun `derive attribute macros don't render when empty`() {
+        val attributeMacro = Attribute(derive())
+        forInputExpectOutput(writable { attributeMacro.render(this) }, "")
     }
 }

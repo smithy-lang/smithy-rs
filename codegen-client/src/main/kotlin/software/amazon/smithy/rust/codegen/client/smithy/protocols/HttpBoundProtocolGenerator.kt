@@ -169,7 +169,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
@@ -243,7 +243,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
@@ -251,7 +251,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 "E" to errorSymbol,
             ) {
                 // Not all implementations will use the property bag, but some will
-                Attribute.Custom("allow(unused_variables)").render(this)
+                Attribute.AllowUnusedVariables.render(this)
                 rust("let (response, properties) = op_response.parts_mut();")
                 withBlock("Ok({", "})") {
                     renderShapeParser(
@@ -272,7 +272,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
