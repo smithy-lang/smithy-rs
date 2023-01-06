@@ -118,14 +118,14 @@ ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-udeps --locked --version ${cargo_udeps_version}
 
 FROM install_rust AS cargo_hack
-ARG cargo_hack_version=0.5.23
+ARG cargo_hack_version=0.5.25
 ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-hack --locked --version ${cargo_hack_version}
+RUN cargo +${rust_stable_version} -Z sparse-registry install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
-ARG cargo_minimal_versions_version=0.1.8
+ARG cargo_minimal_versions_version=0.1.9
 ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
+RUN cargo +${rust_stable_version} -Z sparse-registry install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
 ARG cargo_check_external_types_version=0.1.6
