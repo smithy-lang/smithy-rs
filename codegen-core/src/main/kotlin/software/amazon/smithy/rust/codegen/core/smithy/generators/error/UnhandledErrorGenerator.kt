@@ -29,6 +29,7 @@ internal fun unhandledError(): RuntimeType = RuntimeType.forInlineFun("Unhandled
             source: Box<dyn #{StdError} + Send + Sync + 'static>,
         }
         impl Unhandled {
+            ##[allow(unused)]
             pub(crate) fn new(source: Box<dyn #{StdError} + Send + Sync + 'static>) -> Self {
                 Self { source }
             }

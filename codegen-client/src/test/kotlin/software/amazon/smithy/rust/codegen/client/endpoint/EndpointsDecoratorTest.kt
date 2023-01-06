@@ -9,8 +9,8 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
@@ -42,12 +42,22 @@ class EndpointsDecoratorTest {
                 ],
                 "type": "endpoint",
                 "endpoint": {
-                    "url": "https://www.{Region}.example.com"
+                    "url": "https://www.{Region}.example.com",
+                    "properties": {
+                        "first-properties": {
+                            "z-first": "zazz",
+                            "y-second": "bar",
+                            "x-third": "baz"
+                        },
+                        "second-properties": [1,2,3]
+                    }
                 }
             }],
             "parameters": {
                 "Bucket": { "required": false, "type": "String" },
                 "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+                "BuiltInWithDefault": { "required": true, "type": "String", "builtIn": "AWS::DefaultBuiltIn", "default": "some-default" },
+                "BoolBuiltInWithDefault": { "required": true, "type": "Boolean", "builtIn": "AWS::FooBar", "default": true },
                 "AStringParam": { "required": false, "type": "String" },
                 "ABoolParam": { "required": false, "type": "Boolean" }
             }
@@ -73,6 +83,14 @@ class EndpointsDecoratorTest {
               "expect": {
                 "endpoint": {
                     "url": "https://failingtest.com"
+                    "properties": {
+                        "first-properties": {
+                            "a-first": "zazz",
+                            "b-second": "bar",
+                            "c-third": "baz"
+                        },
+                        "second-properties": [1,2,3]
+                    }
                 }
               }
             }
@@ -102,7 +120,7 @@ class EndpointsDecoratorTest {
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()
-                TokioTest.render(this)
+                Attribute.TokioTest.render(this)
                 rust(
                     """
                     async fn endpoint_params_are_set() {
@@ -113,13 +131,15 @@ class EndpointsDecoratorTest {
                             use $moduleName::endpoint::{Params};
                             use aws_smithy_http::endpoint::Result;
                             let props = operation.properties();
+                            let endpoint_result = dbg!(props.get::<Result>().expect("endpoint result in the bag"));
                             let endpoint_params = props.get::<Params>().expect("endpoint params in the bag");
-                            let endpoint_result = props.get::<Result>().expect("endpoint result in the bag");
                             let endpoint = endpoint_result.as_ref().expect("endpoint resolved properly");
                             assert_eq!(
                                 endpoint_params,
                                 &Params::builder()
                                     .bucket("bucket-name".to_string())
+                                    .built_in_with_default("some-default")
+                                    .bool_built_in_with_default(true)
                                     .a_bool_param(false)
                                     .a_string_param("hello".to_string())
                                     .region("us-east-2".to_string())

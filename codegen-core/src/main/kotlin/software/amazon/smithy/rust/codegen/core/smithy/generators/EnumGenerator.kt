@@ -57,7 +57,7 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
 
     private fun renderDeprecated(writer: RustWriter) {
         if (definition.isDeprecated) {
-            Attribute.Custom.deprecated().render(writer)
+            Attribute.Deprecated.render(writer)
         }
     }
 

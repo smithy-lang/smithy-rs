@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -27,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -99,15 +99,33 @@ class ServerBuilderGenerator(
             model: Model,
             symbolProvider: SymbolProvider,
             takeInUnconstrainedTypes: Boolean,
-        ): Boolean =
-            if (takeInUnconstrainedTypes) {
-                structureShape.canReachConstrainedShape(model, symbolProvider)
-            } else {
-                structureShape
-                    .members()
-                    .map { symbolProvider.toSymbol(it) }
-                    .any { !it.isOptional() }
+        ): Boolean {
+            val members = structureShape.members()
+            fun isOptional(member: MemberShape) = symbolProvider.toSymbol(member).isOptional()
+            fun hasDefault(member: MemberShape) = member.hasNonNullDefault()
+            fun isNotConstrained(member: MemberShape) = !member.canReachConstrainedShape(model, symbolProvider)
+
+            val notFallible = members.all {
+                if (structureShape.isReachableFromOperationInput()) {
+                    // When deserializing an input structure, constraints might not be satisfied by the data in the
+                    // incoming request.
+                    // For this builder not to be fallible, no members must be constrained (constraints in input must
+                    // always be checked) and all members must _either_ be optional (no need to set it; not required)
+                    // or have a default value.
+                    isNotConstrained(it) && (isOptional(it) || hasDefault(it))
+                } else {
+                    // This structure will be constructed manually by the user.
+                    // Constraints will have to be dealt with before members are set in the builder.
+                    isOptional(it) || hasDefault(it)
+                }
             }
+
+            return if (takeInUnconstrainedTypes) {
+                !notFallible && structureShape.canReachConstrainedShape(model, symbolProvider)
+            } else {
+                !notFallible
+            }
+        }
     }
 
     private val takeInUnconstrainedTypes = shape.isReachableFromOperationInput()
@@ -168,9 +186,10 @@ class ServerBuilderGenerator(
         // Matching derives to the main structure, - `PartialEq` (see class documentation for why), + `Default`
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val builderDerives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = builderDerives).render(writer)
-        writer.rustBlock("pub${ if (visibility == Visibility.PUBCRATE) " (crate)" else "" } struct Builder") {
+        // Filter out any derive that isn't Debug or Clone. Then add a Default derive
+        val builderDerives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        Attribute(derive(builderDerives)).render(writer)
+        writer.rustBlock("${visibility.toRustQualifier()} struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }
 
@@ -187,7 +206,7 @@ class ServerBuilderGenerator(
             renderBuildFn(this)
         }
 
-        if (!builderDerives.contains(RuntimeType.Debug)) {
+        if (!structureSymbol.expectRustMetadata().hasDebugDerive()) {
             renderImplDebugForBuilder(writer)
         }
     }
@@ -308,7 +327,7 @@ class ServerBuilderGenerator(
             // to the heap. However, that will make the builder take in a value whose type does not exactly match the
             // shape member's type.
             // We don't want to introduce API asymmetry just for this particular case, so we disable the lint.
-            Attribute.Custom("allow(clippy::boxed_local)").render(writer)
+            Attribute.AllowClippyBoxedLocal.render(writer)
         }
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             withBlock("self.$memberName = ", "; self") {
@@ -497,67 +516,84 @@ class ServerBuilderGenerator(
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
-                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)?.also { constraintViolation ->
-                        val hasBox = builderMemberSymbol(member)
-                            .mapRustType { it.stripOuter<RustType.Option>() }
-                            .isRustBoxed()
-                        if (hasBox) {
-                            rustTemplate(
-                                """
-                                .map(|v| match *v {
-                                    #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
-                                    #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
-                                })
-                                .map(|res|
-                                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
-                                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
-                                )
-                                .transpose()?
-                                """,
-                                *codegenScope,
-                            )
-                        } else {
-                            rustTemplate(
-                                """
-                                .map(|v| match v {
-                                    #{MaybeConstrained}::Constrained(x) => Ok(x),
-                                    #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
-                                })
-                                .map(|res|
-                                    res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
-                                       .map_err(ConstraintViolation::${constraintViolation.name()})
-                                )
-                                .transpose()?
-                                """,
-                                *codegenScope,
-                            )
 
-                            // Constrained types are not public and this is a member shape that would have generated a
-                            // public constrained type, were the setting to be enabled.
-                            // We've just checked the constraints hold by going through the non-public
-                            // constrained type, but the user wants to work with the unconstrained type, so we have to
-                            // unwrap it.
-                            if (!publicConstrainedTypes && member.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)) {
-                                rust(
-                                    ".map(|v: #T| v.into())",
-                                    constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
-                                )
-                            }
-                        }
+                    // 1. Enforce constraint traits of data from incoming requests.
+                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)?.also { constraintViolation ->
+                        enforceConstraints(this, member, constraintViolation)
                     }
-                    serverBuilderConstraintViolations.forMember(member)?.also {
-                        rust(".ok_or(ConstraintViolation::${it.name()})?")
+
+                    if (member.hasNonNullDefault()) {
+                        // 2a. If a `@default` value is modeled and the user did not set a value, fall back to using the
+                        // default value.
+                        generateFallbackCodeToDefaultValue(
+                            this,
+                            member,
+                            model,
+                            runtimeConfig,
+                            symbolProvider,
+                            publicConstrainedTypes,
+                        )
+                    } else {
+                        // 2b. If the member is `@required` and has no `@default` value, the user must set a value;
+                        // otherwise, we fail with a `ConstraintViolation::Missing*` variant.
+                        serverBuilderConstraintViolations.forMember(member)?.also {
+                            rust(".ok_or(ConstraintViolation::${it.name()})?")
+                        }
                     }
                 }
             }
         }
     }
-}
 
-fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol) = writable {
-    if (isBuilderFallible) {
-        rust("Result<#T, ConstraintViolation>", structureSymbol)
-    } else {
-        rust("#T", structureSymbol)
+    private fun enforceConstraints(writer: RustWriter, member: MemberShape, constraintViolation: ConstraintViolation) {
+        // This member is constrained. Enforce the constraint traits on the value set in the builder.
+        // The code is slightly different in case the member is recursive, since it will be wrapped in
+        // `std::boxed::Box`.
+        val hasBox = builderMemberSymbol(member)
+            .mapRustType { it.stripOuter<RustType.Option>() }
+            .isRustBoxed()
+        if (hasBox) {
+            writer.rustTemplate(
+                """
+                .map(|v| match *v {
+                    #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
+                    #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
+                })
+                .map(|res|
+                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
+                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
+                )
+                .transpose()?
+                """,
+                *codegenScope,
+            )
+        } else {
+            writer.rustTemplate(
+                """
+                .map(|v| match v {
+                    #{MaybeConstrained}::Constrained(x) => Ok(x),
+                    #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
+                })
+                .map(|res|
+                    res${if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())"}
+                       .map_err(ConstraintViolation::${constraintViolation.name()})
+                )
+                .transpose()?
+                """,
+                *codegenScope,
+            )
+        }
+
+        // Constrained types are not public and this is a member shape that would have generated a
+        // public constrained type, were the setting to be enabled.
+        // We've just checked the constraints hold by going through the non-public
+        // constrained type, but the user wants to work with the unconstrained type, so we have to
+        // unwrap it.
+        if (!publicConstrainedTypes && member.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)) {
+            writer.rust(
+                ".map(|v: #T| v.into())",
+                constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
+            )
+        }
     }
 }

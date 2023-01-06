@@ -90,23 +90,28 @@ impl Package {
 
     /// Returns the expected owners of the crate.
     pub fn expected_owners(&self) -> HashSet<String> {
-        let mut ret = HashSet::new();
-
-        // Crate ownership for SDK crates. Crates.io requires that at least one owner
-        // is an individual rather than a team, so we use the automation user for that.
-        ret.insert(String::from(RUST_SDK_CI_OWNER));
-
-        if self.category.is_sdk() {
-            ret.insert(String::from(RUST_SDK_OWNER));
-        } else if self.handle.name.starts_with("aws-smithy-http-server") {
-            ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
-        } else {
-            ret.insert(String::from(RUST_SDK_OWNER));
-            ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
-        }
-
-        ret
+        expected_package_owners(&self.category, &self.handle.name)
     }
+}
+
+/// Returns the expected owners of the crate.
+pub fn expected_package_owners(category: &PackageCategory, package_name: &str) -> HashSet<String> {
+    let mut ret = HashSet::new();
+
+    // Crate ownership for SDK crates. Crates.io requires that at least one owner
+    // is an individual rather than a team, so we use the automation user for that.
+    ret.insert(String::from(RUST_SDK_CI_OWNER));
+
+    if category.is_sdk() {
+        ret.insert(String::from(RUST_SDK_OWNER));
+    } else if package_name.starts_with("aws-smithy-http-server") {
+        ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
+    } else {
+        ret.insert(String::from(RUST_SDK_OWNER));
+        ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
+    }
+
+    ret
 }
 
 /// Batch of packages.
@@ -159,7 +164,6 @@ pub async fn discover_and_validate_package_batches(
         .filter(|package| package.publish == Publish::Allowed)
         .collect::<Vec<Package>>();
     validate_packages(&packages)?;
-
     let batches = batch_packages(packages)?;
     let stats = PackageStats::calculate(&batches);
     Ok((batches, stats))

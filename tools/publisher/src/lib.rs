@@ -19,6 +19,7 @@ pub const RUST_SDK_CI_OWNER: &str = "aws-sdk-rust-ci";
 pub mod cargo;
 pub mod fs;
 pub mod package;
+pub mod publish;
 pub mod retry;
 pub mod sort;
 pub mod subcommand;

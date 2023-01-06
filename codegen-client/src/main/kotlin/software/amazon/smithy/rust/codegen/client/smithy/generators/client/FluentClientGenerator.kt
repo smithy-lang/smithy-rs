@@ -15,6 +15,8 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -36,7 +38,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -167,7 +168,7 @@ class FluentClientGenerator(
 
                 val output = operation.outputShape(model)
                 val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT).toSymbol()
+                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
 
                 val inputFieldsBody =
                     generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
@@ -232,7 +233,8 @@ class FluentClientGenerator(
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
-                val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
+                // Filter out any derive that isn't Clone. Then add a Debug derive
+                val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
                 rust(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
@@ -242,7 +244,7 @@ class FluentClientGenerator(
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 deprecatedShape(operation)
-                baseDerives.copy(derives = derives).render(this)
+                Attribute(derive(derives.toSet())).render(this)
                 rustTemplate(
                     """
                     pub struct ${operationSymbol.name}#{generics:W} {
@@ -262,7 +264,7 @@ class FluentClientGenerator(
                     "bounds" to generics.bounds,
                 ) {
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-                    val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
+                    val errorType = operation.errorSymbol(symbolProvider)
 
                     // NOTE: if you want to add a method to the fluent_builder which is created via method implemented on a client,
                     // make some changes to this string
@@ -345,7 +347,7 @@ class FluentClientGenerator(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
                             operation,
-                            operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT),
+                            operation.errorSymbol(symbolProvider),
                         ),
                     )
                     input.members().forEach { member ->

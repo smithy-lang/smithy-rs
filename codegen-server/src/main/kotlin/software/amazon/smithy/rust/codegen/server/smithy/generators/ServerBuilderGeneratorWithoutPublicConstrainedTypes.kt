@@ -9,6 +9,8 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -42,7 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
  * when `publicConstrainedTypes` is false.
  */
 class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
 ) {
     companion object {
@@ -55,20 +57,26 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         fun hasFallibleBuilder(
             structureShape: StructureShape,
             symbolProvider: SymbolProvider,
-        ): Boolean =
-            structureShape
-                .members()
-                .map { symbolProvider.toSymbol(it) }
-                .any { !it.isOptional() }
+        ): Boolean {
+            val members = structureShape.members()
+            fun isOptional(member: MemberShape) = symbolProvider.toSymbol(member).isOptional()
+            fun hasDefault(member: MemberShape) = member.hasNonNullDefault()
+
+            val notFallible = members.all {
+                isOptional(it) || hasDefault(it)
+            }
+
+            return !notFallible
+        }
     }
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val members: List<MemberShape> = shape.allMembers.values.toList()
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val structureSymbol = symbolProvider.toSymbol(shape)
 
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
-    private val moduleName = builderSymbol.namespace.split("::").last()
     private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false)
@@ -82,6 +90,9 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     )
 
     fun render(writer: RustWriter) {
+        check(!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+            "ServerBuilderGeneratorWithoutPublicConstrainedTypes should only be used when `publicConstrainedTypes` is false"
+        }
         writer.docs("See #D.", structureSymbol)
         writer.withInlineModule(builderSymbol.module()) {
             renderBuilder(this)
@@ -106,8 +117,9 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         // Matching derives to the main structure, - `PartialEq` (to be consistent with [ServerBuilderGenerator]), + `Default`
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
-        baseDerives.copy(derives = derives).render(writer)
+        // Filter out any derive that isn't Debug or Clone. Then add a Default derive
+        val derives = baseDerives.filter { it == RuntimeType.Debug || it == RuntimeType.Clone } + RuntimeType.Default
+        Attribute(derive(derives)).render(writer)
         writer.rustBlock("pub struct Builder") {
             members.forEach { renderBuilderMember(this, it) }
         }
@@ -158,8 +170,23 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 val memberName = symbolProvider.toMemberName(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
-                    serverBuilderConstraintViolations.forMember(member)?.also {
-                        rust(".ok_or(ConstraintViolation::${it.name()})?")
+                    if (member.hasNonNullDefault()) {
+                        // 1a. If a `@default` value is modeled and the user did not set a value, fall back to using the
+                        // default value.
+                        generateFallbackCodeToDefaultValue(
+                            this,
+                            member,
+                            model,
+                            runtimeConfig,
+                            symbolProvider,
+                            codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                        )
+                    } else {
+                        // 1b. If the member is `@required` and has no `@default` value, the user must set a value;
+                        // otherwise, we fail with a `ConstraintViolation::Missing*` variant.
+                        serverBuilderConstraintViolations.forMember(member)?.also {
+                            rust(".ok_or(ConstraintViolation::${it.name()})?")
+                        }
                     }
                 }
             }

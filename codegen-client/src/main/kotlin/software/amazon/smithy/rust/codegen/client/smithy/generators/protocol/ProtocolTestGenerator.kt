@@ -22,6 +22,7 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -36,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.core.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -96,8 +96,8 @@ class ProtocolTestGenerator(
             val moduleMeta = RustMetadata(
                 visibility = Visibility.PRIVATE,
                 additionalAttributes = listOf(
-                    Attribute.Cfg("test"),
-                    Attribute.Custom("allow(unreachable_code, unused_variables)"),
+                    Attribute.CfgTest,
+                    Attribute(allow("unreachable_code", "unused_variables")),
                 ),
             )
             writer.withInlineModule(RustModule.LeafModule(testModuleName, moduleMeta, inline = true)) {
@@ -142,7 +142,7 @@ class ProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
-        TokioTest.render(testModuleWriter)
+        Attribute.TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
@@ -301,8 +301,7 @@ class ProtocolTestGenerator(
             "parse_http_response" to RuntimeType.parseHttpResponse(codegenContext.runtimeConfig),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol =
-                operationShape.errorSymbol(codegenContext.model, codegenContext.symbolProvider, codegenContext.target)
+            val errorSymbol = operationShape.errorSymbol(codegenContext.symbolProvider)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {

@@ -4,6 +4,7 @@
  */
 
 use aws_config::SdkConfig;
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::model::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization,
@@ -14,7 +15,6 @@ use aws_smithy_async::rt::sleep::{default_async_sleep, TokioSleep};
 use aws_smithy_client::never::NeverConnector;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::credentials::SharedCredentialsProvider;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -26,9 +26,7 @@ use tokio::time::timeout;
 async fn test_timeout_service_ends_request_that_never_completes() {
     let sdk_config = SdkConfig::builder()
         .region(Region::from_static("us-east-2"))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .http_connector(NeverConnector::new())
         .timeout_config(
             TimeoutConfig::builder()
@@ -105,9 +103,7 @@ async fn test_read_timeout() {
         )
         .endpoint_url(format!("http://{server_addr}"))
         .region(Some(Region::from_static("us-east-1")))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .build();
     let client = Client::new(&config);
 
@@ -150,9 +146,7 @@ async fn test_connect_timeout() {
             "http://172.255.255.0:18104",
         )
         .region(Some(Region::from_static("us-east-1")))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .build();
     let client = Client::new(&config);
 

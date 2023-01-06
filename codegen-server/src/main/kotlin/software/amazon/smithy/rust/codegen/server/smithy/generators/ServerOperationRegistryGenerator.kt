@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -21,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ErrorsModule
 import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
@@ -203,7 +203,7 @@ ${operationImplementationStubs(operations)}
      * This is an enum deriving `Debug` and implementing `Display` and `std::error::Error`.
      */
     private fun renderOperationRegistryBuilderError(writer: RustWriter) {
-        Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
+        Attribute(derive(RuntimeType.Debug)).render(writer)
         writer.rustTemplate(
             """
             pub enum $operationRegistryErrorName {
@@ -379,7 +379,7 @@ ${operationImplementationStubs(operations)}
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
+        val errorSymbol = errorSymbol(symbolProvider)
 
         // using module names here to avoid generating `crate::...` since we've already added the import
         val inputT = "${InputsModule.name}::${inputSymbol.name}"

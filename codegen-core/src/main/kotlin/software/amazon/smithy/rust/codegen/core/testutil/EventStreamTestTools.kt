@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.testutil
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -23,8 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.CombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
@@ -34,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.EventStreamUnmarshallTe
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import kotlin.streams.toList
 
 data class TestEventStreamProject(
     val model: Model,
@@ -71,6 +69,15 @@ interface EventStreamTestRequirements<C : CodegenContext> {
         writer: RustWriter,
         codegenContext: C,
         shape: StructureShape,
+    )
+
+    /** Render an operation error for the given operation and error shapes */
+    fun renderOperationError(
+        writer: RustWriter,
+        model: Model,
+        symbolProvider: RustSymbolProvider,
+        operationSymbol: Symbol,
+        errors: List<StructureShape>,
     )
 }
 
@@ -115,16 +122,11 @@ object EventStreamTestTools {
         val project = TestWorkspace.testProject(symbolProvider)
         val operationSymbol = symbolProvider.toSymbol(operationShape)
         project.withModule(ErrorsModule) {
-            val errors = model.shapes()
-                .filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }
-                .map { it.asStructureShape().get() }
-                .toList()
-            when (codegenTarget) {
-                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
-                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(this)
-            }
-            for (shape in model.shapes().filter { shape -> shape is StructureShape && shape.hasTrait<ErrorTrait>() }) {
-                StructureGenerator(model, symbolProvider, this, shape as StructureShape).render(codegenTarget)
+            val errors = model.structureShapes.filter { shape -> shape.hasTrait<ErrorTrait>() }
+            requirements.renderOperationError(this, model, symbolProvider, operationSymbol, errors)
+            requirements.renderOperationError(this, model, symbolProvider, symbolProvider.toSymbol(unionShape), errors)
+            for (shape in errors) {
+                StructureGenerator(model, symbolProvider, this, shape).render(codegenTarget)
                 requirements.renderBuilderForShape(this, codegenContext, shape)
             }
         }

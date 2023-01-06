@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -263,7 +264,7 @@ open class ServerServiceGenerator(
                 RustMetadata(
                     visibility = Visibility.PUBLIC,
                     additionalAttributes = listOf(
-                        Attribute.Deprecated("0.52.0", "This module exports the deprecated `OperationRegistry`. Use the service builder exported from your root crate."),
+                        Attribute(deprecated("0.52.0", "This module exports the deprecated `OperationRegistry`. Use the service builder exported from your root crate.")),
                     ),
                 ),
                 """

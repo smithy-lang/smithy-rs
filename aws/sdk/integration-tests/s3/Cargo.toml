@@ -9,6 +9,7 @@ edition = "2021"
 
 [dev-dependencies]
 async-std = "1.12.0"
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
