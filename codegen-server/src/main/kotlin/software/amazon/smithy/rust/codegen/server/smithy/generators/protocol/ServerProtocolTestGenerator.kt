@@ -55,7 +55,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
 
@@ -342,8 +341,6 @@ class ServerProtocolTestGenerator(
         operationShape: OperationShape,
         operationSymbol: Symbol,
     ) {
-        val operationImplementationName =
-            "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
         if (!protocolSupport.responseSerialization || (
@@ -356,19 +353,13 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, shape, testCase.params)
         rust(";")
-        val operationImpl = if (operationShape.allErrors(model).isNotEmpty()) {
-            if (shape.hasTrait<ErrorTrait>()) {
-                val variant = symbolProvider.toSymbol(shape).name
-                "$operationImplementationName::Error($operationErrorName::$variant(output))"
-            } else {
-                "$operationImplementationName::Output(output)"
-            }
-        } else {
-            "$operationImplementationName(output)"
+        if (operationShape.allErrors(model).isNotEmpty() && shape.hasTrait<ErrorTrait>()) {
+            val variant = symbolProvider.toSymbol(shape).name
+            rust("let output = $operationErrorName::$variant(output);")
         }
         rustTemplate(
             """
-            let output = super::$operationImpl;
+            use #{SmithyHttpServer}::response::IntoResponse;
             let http_response = output.into_response();
             """,
             *codegenScope,
