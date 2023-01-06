@@ -33,10 +33,6 @@ class PythonServerServiceGenerator(
         PythonServerOperationErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
     }
 
-    override fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
-        PythonServerOperationHandlerGenerator(context, protocol, operations).render(writer)
-    }
-
     override fun renderExtras(operations: List<OperationShape>) {
         rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) {
             PythonApplicationGenerator(context, protocol, operations)
