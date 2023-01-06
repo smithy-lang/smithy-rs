@@ -414,7 +414,7 @@ fun SymbolProvider.testModuleForShape(shape: Shape): RustModule.LeafModule {
         visibility = Visibility.PRIVATE,
         inline = true,
         parent = symbol.module(),
-        additionalAttributes = listOf(Attribute.Cfg("test")),
+        additionalAttributes = listOf(Attribute.CfgTest),
     )
 }
 
