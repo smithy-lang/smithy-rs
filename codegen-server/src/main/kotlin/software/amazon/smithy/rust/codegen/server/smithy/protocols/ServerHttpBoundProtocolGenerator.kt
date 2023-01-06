@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustom
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -90,13 +89,6 @@ class ServerHttpBoundProtocolGenerator(
 ) : ServerProtocolGenerator(
     codegenContext,
     protocol,
-    MakeOperationGenerator(
-        codegenContext,
-        protocol,
-        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
-        public = true,
-        includeDefaultPayloadHeaders = true,
-    ),
     ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
@@ -286,7 +278,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val inputSymbol = symbolProvider.toSymbol(inputShape)
 
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             // The last conversion trait bound is needed by the `hyper::body::to_bytes(body).await?` call.
             rustBlockTemplate(
                 """
@@ -321,7 +313,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
 
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
 
             // Note we only need to take ownership of the output in the case that it contains streaming members.
             // However, we currently always take ownership here, but worth noting in case in the future we want
@@ -352,7 +344,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_error"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
@@ -868,17 +860,17 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                 }
             }
-            val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
+            val (queryBindingsTargetingCollection, queryBindingsTargetingSimple) =
                 queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
-            queryBindingsTargettingSimple.forEach {
+            queryBindingsTargetingSimple.forEach {
                 rust("let mut seen_${symbolProvider.toMemberName(it.member)} = false;")
             }
-            queryBindingsTargettingCollection.forEach {
+            queryBindingsTargetingCollection.forEach {
                 rust("let mut ${symbolProvider.toMemberName(it.member)} = Vec::new();")
             }
 
             rustBlock("for (k, v) in pairs") {
-                queryBindingsTargettingSimple.forEach {
+                queryBindingsTargetingSimple.forEach {
                     val deserializer = generateParseStrFn(it, false)
                     val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
@@ -893,7 +885,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         "deserializer" to deserializer,
                     )
                 }
-                queryBindingsTargettingCollection.forEachIndexed { idx, it ->
+                queryBindingsTargetingCollection.forEachIndexed { idx, it ->
                     rustBlock("${if (idx > 0) "else " else ""}if k == ${it.locationName.dq()}") {
                         val targetCollectionShape = model.expectShape(it.member.target, CollectionShape::class.java)
                         val memberShape = model.expectShape(targetCollectionShape.member.target)
@@ -981,7 +973,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                 }
             }
-            queryBindingsTargettingCollection.forEach { binding ->
+            queryBindingsTargetingCollection.forEach { binding ->
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
                 val hasConstrainedTarget =
