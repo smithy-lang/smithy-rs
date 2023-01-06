@@ -30,7 +30,7 @@ pub async fn use_fips_provider(provider_config: &ProviderConfig) -> Option<bool>
         .validate(provider_config, parse_bool)
         .await
         .map_err(
-            |err| tracing::warn!(err = %DisplayErrorContext(err), "invalid value for FIPS setting"),
+            |err| tracing::warn!(err = %DisplayErrorContext(&err), "invalid value for FIPS setting"),
         )
         .unwrap_or(None)
 }

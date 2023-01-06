@@ -23,7 +23,7 @@ pub(crate) async fn use_dual_stack_provider(provider_config: &ProviderConfig) ->
         .validate(provider_config, parse_bool)
         .await
         .map_err(
-            |err| tracing::warn!(err = %DisplayErrorContext(err), "invalid value for dual-stack setting"),
+            |err| tracing::warn!(err = %DisplayErrorContext(&err), "invalid value for dual-stack setting"),
         )
         .unwrap_or(None)
 }
