@@ -17,43 +17,15 @@ use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
 use std::collections::HashMap;
 
 pub mod base64;
+pub mod blob;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
-
 pub use crate::date_time::DateTime;
 pub use error::Error;
-
-/// Binary Blob Type
-///
-/// Blobs represent protocol-agnostic binary content.
-#[derive(Debug, PartialEq, Clone)]
-pub struct Blob {
-    inner: Vec<u8>,
-}
-
-impl Blob {
-    /// Creates a new blob from the given `input`.
-    pub fn new<T: Into<Vec<u8>>>(input: T) -> Self {
-        Blob {
-            inner: input.into(),
-        }
-    }
-
-    /// Consumes the `Blob` and returns a `Vec<u8>` with its contents.
-    pub fn into_inner(self) -> Vec<u8> {
-        self.inner
-    }
-}
-
-impl AsRef<[u8]> for Blob {
-    fn as_ref(&self) -> &[u8] {
-        &self.inner
-    }
-}
 
 /* ANCHOR: document */
 
