@@ -606,9 +606,10 @@ mod loader {
         use aws_types::os_shim_internal::{Env, Fs};
         use tracing_test::traced_test;
 
-        use crate::from_env;
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::provider_config::ProviderConfig;
+        use crate::test_case::{no_traffic_connector, InstantSleep};
+        use crate::{from_env, ConfigLoader};
 
         #[tokio::test]
         #[traced_test]
@@ -667,18 +668,26 @@ mod loader {
             });
         }
 
+        fn base_conf() -> ConfigLoader {
+            from_env().configure(
+                ProviderConfig::empty()
+                    .with_sleep(InstantSleep)
+                    .with_http_connector(no_traffic_connector()),
+            )
+        }
+
         #[tokio::test]
         async fn load_fips() {
-            let conf = from_env().use_fips(true).load().await;
+            let conf = base_conf().use_fips(true).load().await;
             assert_eq!(conf.use_fips(), Some(true));
         }
 
         #[tokio::test]
         async fn load_dual_stack() {
-            let conf = from_env().use_dual_stack(false).load().await;
+            let conf = base_conf().use_dual_stack(false).load().await;
             assert_eq!(conf.use_dual_stack(), Some(false));
 
-            let conf = from_env().load().await;
+            let conf = base_conf().load().await;
             assert_eq!(conf.use_dual_stack(), None);
         }
     }

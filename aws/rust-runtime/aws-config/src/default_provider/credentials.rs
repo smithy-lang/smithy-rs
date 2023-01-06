@@ -269,7 +269,6 @@ mod test {
 
     use crate::default_provider::credentials::DefaultCredentialsChain;
 
-    use crate::provider_config::ProviderConfig;
     use crate::test_case::TestEnvironment;
 
     /// Test generation macro
@@ -371,6 +370,7 @@ mod test {
     #[traced_test]
     #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
+        use crate::provider_config::ProviderConfig;
         use aws_credential_types::provider::error::CredentialsError;
         use aws_credential_types::time_source::TimeSource;
         use aws_smithy_async::rt::sleep::TokioSleep;
