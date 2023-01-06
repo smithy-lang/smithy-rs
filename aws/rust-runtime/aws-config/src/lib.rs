@@ -156,6 +156,7 @@ mod loader {
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
+    use aws_types::docs_for;
     use aws_types::endpoint::ResolveAwsEndpoint;
     use aws_types::SdkConfig;
 
@@ -445,24 +446,13 @@ mod loader {
             self
         }
 
-        /// When true, send this request to the FIPS-compliant regional endpoint.
-        ///
-        /// If the configured endpoint does not have a FIPS compliant endpoint, dispatching
-        /// the request will return an error.
-        ///
-        /// **Note**: Not all services and regions support FIPS. If a service does not support FIPS,
-        /// this setting will have no effect.
+        #[doc = docs_for!(use_fips)]
         pub fn use_fips(mut self, use_fips: bool) -> Self {
             self.use_fips = Some(use_fips);
             self
         }
 
-        /// When true, send this request to the dual-stack endpoint.
-        ///
-        /// If the configured endpoint does not support dual-stack, the request MAY return an error.
-        ///
-        /// **Note**: Not all services and regions support dual-stack. If a service does not support
-        /// dual-stack, this setting will have no effect.
+        #[doc = docs_for!(use_dual_stack)]
         pub fn use_dual_stack(mut self, use_dual_stack: bool) -> Self {
             self.use_dual_stack = Some(use_dual_stack);
             self
