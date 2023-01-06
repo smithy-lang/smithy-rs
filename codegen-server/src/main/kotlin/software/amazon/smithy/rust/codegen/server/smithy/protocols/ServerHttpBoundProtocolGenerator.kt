@@ -842,7 +842,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         with(writer) {
             rustTemplate(
                 """
-                let query_string = request.uri().query().unwrap_or("");
+                let query_string = parts.uri.query().unwrap_or("");
                 let pairs = #{FormUrlEncoded}::parse(query_string.as_bytes());
                 """.trimIndent(),
                 *codegenScope,
