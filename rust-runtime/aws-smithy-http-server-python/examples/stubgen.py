@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import inspect
 import textwrap
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Set, Dict, List, Tuple, Optional
 
@@ -33,6 +32,10 @@ class Writer:
         self.generics = set([])
 
     def fix_path(self, path: str) -> str:
+        """
+        Returns fixed version of given type path.
+        It unescapes `\\[` and `\\]` and also populates placeholder for root module name.
+        """
         return (
             path.replace(ROOT_MODULE_NAME_PLACEHOLDER, self.root_module_name)
             .replace("\\[", "[")
@@ -71,25 +74,81 @@ class Writer:
             w.dump()
 
         generics = ""
-        for g in self.generics:
+        for g in sorted(self.generics):
             generics += f"{g} = {self.include('typing.TypeVar')}('{g}')\n"
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        contents = "\n".join(map(lambda p: f"import {p}", sorted(self.imports)))
+        contents = join([f"import {p}" for p in sorted(self.imports)])
         contents += "\n\n"
         if generics:
             contents += generics + "\n"
-        contents += "\n".join(self.defs)
+        contents += join(self.defs)
         self.path.write_text(contents)
 
 
-@dataclass
 class DocstringParserResult:
-    types: List[str]
-    params: List[Tuple[str, str]]
-    rtypes: List[str]
-    generics: List[str]
-    extends: List[str]
+    def __init__(self) -> None:
+        self.types: List[str] = []
+        self.params: List[Tuple[str, str]] = []
+        self.rtypes: List[str] = []
+        self.generics: List[str] = []
+        self.extends: List[str] = []
+
+
+def parse_type_directive(line: str, res: DocstringParserResult):
+    parts = line.split(" ", maxsplit=1)
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid `:type` directive: `{line}` must be in `:type T:` format"
+        )
+    res.types.append(parts[1].rstrip(":"))
+
+
+def parse_rtype_directive(line: str, res: DocstringParserResult):
+    parts = line.split(" ", maxsplit=1)
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid `:rtype` directive: `{line}` must be in `:rtype T:` format"
+        )
+    res.rtypes.append(parts[1].rstrip(":"))
+
+
+def parse_param_directive(line: str, res: DocstringParserResult):
+    parts = line.split(" ", maxsplit=2)
+    if len(parts) != 3:
+        raise ValueError(
+            f"Invalid `:param` directive: `{line}` must be in `:param name T:` format"
+        )
+    name = parts[1]
+    ty = parts[2].rstrip(":")
+    res.params.append((name, ty))
+
+
+def parse_generic_directive(line: str, res: DocstringParserResult):
+    parts = line.split(" ", maxsplit=1)
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid `:generic` directive: `{line}` must be in `:generic T:` format"
+        )
+    res.generics.append(parts[1].rstrip(":"))
+
+
+def parse_extends_directive(line: str, res: DocstringParserResult):
+    parts = line.split(" ", maxsplit=1)
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid `:extends` directive: `{line}` must be in `:extends Base[...]:` format"
+        )
+    res.extends.append(parts[1].rstrip(":"))
+
+
+DocstringParserDirectives = {
+    "type": parse_type_directive,
+    "param": parse_param_directive,
+    "rtype": parse_rtype_directive,
+    "generic": parse_generic_directive,
+    "extends": parse_extends_directive,
+}
 
 
 class DocstringParser:
@@ -103,59 +162,13 @@ class DocstringParser:
         if not doc:
             return None
 
-        types: List[str] = []
-        params: List[Tuple[str, str]] = []
-        rtypes: List[str] = []
-        generics: List[str] = []
-        extends: List[str] = []
-
+        res = DocstringParserResult()
         for line in doc.splitlines():
             line = line.strip()
-            if line.startswith(":type ") and line.endswith(":"):
-                parts = line.split(" ", maxsplit=1)
-                if len(parts) != 2:
-                    raise ValueError(
-                        f"Invalid `:type` directive: `{line}` must be in `:type T:` format"
-                    )
-                types.append(parts[1].rstrip(":"))
-            elif line.startswith(":param ") and line.endswith(":"):
-                parts = line.split(" ", maxsplit=2)
-                if len(parts) != 3:
-                    raise ValueError(
-                        f"Invalid `:param` directive: `{line}` must be in `:param name T:` format"
-                    )
-                name = parts[1]
-                ty = parts[2].rstrip(":")
-                params.append((name, ty))
-            elif line.startswith(":rtype ") and line.endswith(":"):
-                parts = line.split(" ", maxsplit=1)
-                if len(parts) != 2:
-                    raise ValueError(
-                        f"Invalid `:rtype` directive: `{line}` must be in `:rtype T:` format"
-                    )
-                rtypes.append(parts[1].rstrip(":"))
-            elif line.startswith(":generic ") and line.endswith(":"):
-                parts = line.split(" ", maxsplit=1)
-                if len(parts) != 2:
-                    raise ValueError(
-                        f"Invalid `:generic` directive: `{line}` must be in `:generic T:` format"
-                    )
-                generics.append(parts[1].rstrip(":"))
-            elif line.startswith(":extends ") and line.endswith(":"):
-                parts = line.split(" ", maxsplit=1)
-                if len(parts) != 2:
-                    raise ValueError(
-                        f"Invalid `:extends` directive: `{line}` must be in `:extends Base[...]:` format"
-                    )
-                extends.append(parts[1].rstrip(":"))
-
-        return DocstringParserResult(
-            types=types,
-            params=params,
-            rtypes=rtypes,
-            generics=generics,
-            extends=extends,
-        )
+            for d, p in DocstringParserDirectives.items():
+                if line.startswith(f":{d} ") and line.endswith(":"):
+                    p(line, res)
+        return res
 
     @staticmethod
     def parse_type(obj: Any) -> str:
@@ -182,37 +195,23 @@ class DocstringParser:
             return ([], [])
         return (result.generics, result.extends)
 
+    @staticmethod
+    def clean_doc(obj: Any) -> str:
+        doc = inspect.getdoc(obj)
+        if not doc:
+            return ""
 
-def indent(code: str, level: int) -> str:
+        def predicate(l: str) -> bool:
+            for k in DocstringParserDirectives.keys():
+                if l.startswith(f":{k} ") and l.endswith(":"):
+                    return False
+            return True
+
+        return "\n".join([l for l in doc.splitlines() if predicate(l)]).strip()
+
+
+def indent(code: str, level: int = 4) -> str:
     return textwrap.indent(code, level * " ")
-
-
-def format_doc(obj: Any, indent_level: int) -> str:
-    doc = inspect.getdoc(obj)
-    if not doc:
-        return ""
-
-    # Remove type annotations
-    doc = "\n".join(
-        filter(
-            lambda l: not (
-                (
-                    l.startswith(":type")
-                    or l.startswith(":rtype")
-                    or l.startswith(":param")
-                    or l.startswith(":generic")
-                    or l.startswith(":extends")
-                )
-                and l.endswith(":")
-            ),
-            doc.splitlines(),
-        )
-    ).strip()
-
-    if not doc:
-        return ""
-
-    return indent('"""\n' + doc + '\n"""\n', indent_level)
 
 
 def is_fn_like(obj: Any) -> bool:
@@ -224,6 +223,19 @@ def is_fn_like(obj: Any) -> bool:
     )
 
 
+def join(args: List[str], delim: str = "\n") -> str:
+    return delim.join(filter(lambda x: x, args))
+
+
+def make_doc(obj: Any) -> str:
+    doc = DocstringParser.clean_doc(obj)
+    doc = textwrap.dedent(doc)
+    if not doc:
+        return ""
+
+    return join(['"""', doc, '"""'])
+
+
 def make_field(writer: Writer, name: str, field: Any) -> str:
     return f"{name}: {writer.fix_and_include(DocstringParser.parse_type(field))}"
 
@@ -232,10 +244,15 @@ def make_function(
     writer: Writer,
     name: str,
     obj: Any,
-    indent_level: int = 0,
     include_docs: bool = True,
-    free_standing: bool = False,
+    parent: Optional[Any] = None,
 ) -> str:
+    is_static_method = False
+    if parent and isinstance(obj, staticmethod):
+        # Get real method instance from `parent` if `obj` is a `staticmethod`
+        is_static_method = True
+        obj = getattr(parent, name)
+
     res = DocstringParser.parse_function(obj)
     if not res:
         # Make it `Any` if we can't parse the docstring
@@ -250,85 +267,84 @@ def make_function(
     except:
         pass
 
+    def has_default(param: str) -> bool:
+        if sig is None:
+            return False
+
+        sig_param = sig.parameters.get(param)
+        return sig_param is not None and sig_param.default is not sig_param.empty
+
     receivers: List[str] = []
     attrs: List[str] = []
-    if not free_standing:
-        if inspect.ismethoddescriptor(obj) or name == "__init__":
-            receivers.append("self")
-        else:
+    if parent:
+        if is_static_method:
             attrs.append("@staticmethod")
+        else:
+            receivers.append("self")
 
-    def format_param(name: str, ty: str) -> str:
+    def make_param(name: str, ty: str) -> str:
         param = f"{name}: {writer.fix_and_include(ty)}"
-
-        if sig is not None:
-            sig_param = sig.parameters.get(name)
-            if sig_param and sig_param.default is not sig_param.empty:
-                param += f" = ..."
-
+        if has_default(name):
+            param += " = ..."
         return param
 
-    params = ", ".join(receivers + [format_param(n, t) for n, t in params])
-
-    fn_def = ""
-    if len(attrs) > 0:
-        for attr in attrs:
-            fn_def += indent(f"{attr}\n", indent_level)
-    fn_def += indent(
-        f"def {name}({params}) -> {writer.fix_and_include(rtype)}:\n", indent_level
-    )
-
+    params = join(receivers + [make_param(n, t) for n, t in params], delim=", ")
+    attrs_str = join(attrs)
+    rtype = writer.fix_and_include(rtype)
+    body = "..."
     if include_docs:
-        fn_def += format_doc(obj, indent_level + 4)
+        body = join([make_doc(obj), body])
 
-    fn_def += indent("...", indent_level + 4)
-    return fn_def
+    return f"""
+{attrs_str}
+def {name}({params}) -> {rtype}:
+{indent(body)}
+""".lstrip()
 
 
-def make_class(
-    writer: Writer, class_name: str, klass: Any, indent_level: int = 0
-) -> str:
-    base_classes = list(
+def make_class(writer: Writer, name: str, klass: Any) -> str:
+    bases = list(
         filter(lambda n: n != "object", map(lambda b: b.__name__, klass.__bases__))
     )
-
     class_sig = DocstringParser.parse_class(klass)
     if class_sig:
         (generics, extends) = class_sig
-        base_classes.extend(map(writer.fix_and_include, extends))
+        bases.extend(map(writer.fix_and_include, extends))
         for g in generics:
             writer.generic(g)
 
-    bases = ", ".join(base_classes)
-    definition = f"class {class_name}({bases}):\n"
+    members: List[str] = []
 
-    def preserve_doc(obj: Any) -> str:
-        return format_doc(obj, indent_level + 4) + "\n"
-
-    definition += preserve_doc(klass)
-
-    is_empty = True
-    klass_vars: Dict[str, Any] = vars(klass)
-    for name, member in sorted(klass_vars.items(), key=lambda k: k[0]):
-        if name.startswith("__"):
+    class_vars: Dict[str, Any] = vars(klass)
+    for member_name, member in sorted(class_vars.items(), key=lambda k: k[0]):
+        if member_name.startswith("__"):
             continue
 
         if inspect.isdatadescriptor(member):
-            is_empty = False
-            definition += (
-                indent(make_field(writer, name, member), indent_level + 4) + "\n"
+            members.append(
+                join(
+                    [
+                        make_field(writer, member_name, member),
+                        make_doc(member),
+                    ]
+                )
             )
-            definition += preserve_doc(member)
         elif is_fn_like(member):
-            is_empty = False
-            definition += make_function(writer, name, member, indent_level + 4) + "\n"
-        # Enum variant
+            members.append(
+                make_function(writer, member_name, member, parent=klass),
+            )
         elif isinstance(member, klass):
-            is_empty = False
-            definition += indent(f"{name}: {class_name}\n", indent_level + 4)
-            definition += preserve_doc(member)
+            # Enum variant
+            members.append(
+                join(
+                    [
+                        f"{member_name}: {name}",
+                        make_doc(member),
+                    ]
+                )
+            )
         else:
-            print(f"Unknown member type={member}")
+            print(f"Unknown member type: {member}")
 
     if inspect.getdoc(klass) is not None:
         constructor_sig = DocstringParser.parse(klass)
@@ -337,18 +353,25 @@ def make_class(
             len(constructor_sig.rtypes) > 0
             or len(constructor_sig.params) > 0
         ):
-            is_empty = False
-            definition += (
+            members.append(
                 make_function(
-                    writer, "__init__", klass, indent_level + 4, include_docs=False
+                    writer,
+                    "__init__",
+                    klass,
+                    include_docs=False,
+                    parent=klass,
                 )
-                + "\n"
             )
 
-    if is_empty:
-        definition += indent(f"...\n", indent_level + 4)
-
-    return definition
+    bases_str = "" if len(bases) == 0 else f"({join(bases, delim=', ')})"
+    doc = make_doc(klass)
+    if doc:
+        doc += "\n"
+    body = join([doc, join(members, delim="\n\n") or "..."])
+    return f"""\
+class {name}{bases_str}:
+{indent(body)}
+"""
 
 
 def walk_module(writer: Writer, mod: Any):
@@ -359,13 +382,12 @@ def walk_module(writer: Writer, mod: Any):
             continue
 
         if inspect.ismodule(member):
-            walk_module(
-                writer.submodule(writer.path.parent / name / "__init__.pyi"), member
-            )
+            subpath = writer.path.parent / name / "__init__.pyi"
+            walk_module(writer.submodule(subpath), member)
         elif inspect.isclass(member):
             writer.define(make_class(writer, name, member))
         elif is_fn_like(member):
-            writer.define(make_function(writer, name, member, free_standing=True))
+            writer.define(make_function(writer, name, member))
         else:
             print(f"Unknown type: {member}")
 

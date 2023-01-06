@@ -50,7 +50,10 @@ run: build
 py-check: build
 	python3 -m mypy pokemon_service.py
 
-test: build py-check
+py-test:
+	python3 stubgen_test.py
+
+test: build py-check py-test
 	cargo test
 
 clippy: codegen
