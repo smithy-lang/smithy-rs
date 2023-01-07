@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#[cfg(all(test, aws_sdk_unstable, feature = "serialize", feature = "deserialize"))]
+mod test;
+
 #[cfg(all(aws_sdk_unstable, feature = "serialize"))]
 use serde::Serialize;
 #[cfg(all(aws_sdk_unstable, feature = "deserialize"))]
