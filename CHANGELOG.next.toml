@@ -44,6 +44,15 @@ meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "rcoh"
 
 [[smithy-rs]]
+message = """Add serde crate to aws-smithy-types`.
+
+It's behind feature gate `aws_sdk_unstable` which can only enabled via --cfg flag.
+"""
+references = ["smithy-rs#1944"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "thomas-k-cameron"
+
+[[smithy-rs]]
 message = "In 0.52, `@length`-constrained collection shapes whose members are not constrained made the server code generator crash. This has been fixed."
 references = ["smithy-rs#2103"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
