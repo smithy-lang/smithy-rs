@@ -162,3 +162,9 @@ FIPS and dual-stack endpoints can each be configured in multiple ways:
 Note: Not all services support FIPS and dual-stack.
 """
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Add serde support for datetime."
+references = ["smithy-rs#2184"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "thomas-k-cameron"
