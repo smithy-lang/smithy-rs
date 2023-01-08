@@ -16,6 +16,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 mod format;
+
 pub use self::format::DateTimeFormatError;
 pub use self::format::DateTimeParseError;
 
@@ -322,6 +323,120 @@ pub enum Format {
     EpochSeconds,
 }
 
+#[cfg(all(test, aws_sdk_unstable, feature = "serialize"))]
+mod ser {
+    use super::*;
+    use serde::ser::SerializeTuple;
+
+    impl serde::Serialize for DateTime {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            if serializer.is_human_readable() {
+                match self.fmt(Format::DateTime) {
+                    Ok(val) => serializer.serialize_str(&val),
+                    Err(e) => Err(serde::ser::Error::custom(e)),
+                }
+            } else {
+                let mut tup_ser = serializer.serialize_tuple(2)?;
+                tup_ser.serialize_element(&self.seconds)?;
+                tup_ser.serialize_element(&self.subsecond_nanos)?;
+                tup_ser.end()
+            }
+        }
+    }
+}
+
+#[cfg(all(test, aws_sdk_unstable, feature = "deserialize"))]
+mod der {
+    use super::*;
+    use serde::de::Visitor;
+    use serde::Deserialize;
+    struct DateTimeVisitor;
+
+    enum VisitorState {
+        First,
+        NotFirst,
+    }
+
+    struct NonHumanReadableDateTimeVisitor {
+        state: VisitorState,
+        seconds: i64,
+        subsecond_nanos: u32,
+    }
+
+    impl<'de> Visitor<'de> for DateTimeVisitor {
+        type Value = DateTime;
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("expected RFC-3339 Date Time")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match DateTime::from_str(v, Format::DateTime) {
+                Ok(e) => Ok(e),
+                Err(e) => Err(serde::de::Error::custom(e)),
+            }
+        }
+    }
+
+    impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
+        type Value = Self;
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("expected (i64, u32)")
+        }
+
+        fn visit_i64<E>(mut self, v: i64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match self.state {
+                VisitorState::First => {
+                    self.seconds = v;
+                    self.state = VisitorState::NotFirst;
+                }
+                _ => return Err(serde::de::Error::custom("First value must be i64")),
+            };
+            Ok(self)
+        }
+        fn visit_u32<E>(mut self, v: u32) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match self.state {
+                VisitorState::NotFirst => self.subsecond_nanos = v,
+                _ => return Err(serde::de::Error::custom("First value must be u32")),
+            };
+            Ok(self)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for DateTime {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            if deserializer.is_human_readable() {
+                deserializer.deserialize_str(DateTimeVisitor)
+            } else {
+                let visitor = NonHumanReadableDateTimeVisitor {
+                    state: VisitorState::First,
+                    seconds: 0,
+                    subsecond_nanos: 0,
+                };
+                let visitor = deserializer.deserialize_tuple(2, visitor)?;
+                Ok(DateTime {
+                    seconds: visitor.seconds,
+                    subsecond_nanos: visitor.subsecond_nanos,
+                })
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::date_time::Format;
@@ -543,5 +658,39 @@ mod test {
             SystemTime::from(off_date_time),
             SystemTime::try_from(date_time).unwrap()
         );
+    }
+
+    #[cfg(all(test, aws_sdk_unstable, feature = "deserialize", feature = "serialize"))]
+    #[test]
+    fn human_readable_datetime() {
+        let datetime = DateTime::from_secs(1576540098);
+        #[derive(Serialize, Deserialize, PartialEq)]
+        struct Test {
+            datetime: DateTime,
+        }
+        let datetime_json = r#"{"datetime":"2019-12-16T23:48:18Z"}"#;
+        assert!(serde_json::to_string(&Test { datetime }).ok() == Some(datetime_json.to_string()));
+
+        let test = serde_json::from_str::<Test>(&datetime_json).ok();
+        assert!(test.is_some());
+        assert!(test.unwrap().datetime == datetime);
+    }
+
+    /// checks that they are serialized into tuples
+    #[cfg(all(test, aws_sdk_unstable, feature = "deserialize", feature = "serialize"))]
+    #[test]
+    fn not_human_readable_datetime() {
+        let cbor = ciborium::value::Value::Array(vec![
+            ciborium::value::Value::Integer(1576540098i64.into()),
+            ciborium::value::Value::Integer(0u32.into()),
+        ]);
+        let datetime = DateTime::from_secs(1576540098);
+
+        let mut buf1 = vec![];
+        let mut buf2 = vec![];
+        let res1 = ciborium::ser::into_writer(&datetime, &mut buf1);
+        let res2 = ciborium::ser::into_writer(&cbor, &mut buf2);
+        assert!(res1.is_ok() && res2.is_ok());
+        assert!(buf1 == buf2, "{:#?}", (buf1, buf2));
     }
 }
