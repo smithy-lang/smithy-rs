@@ -54,6 +54,9 @@ class CargoTomlGenerator(
         if (features.isNotEmpty()) {
             cargoFeatures.add("default" to features.filter { it.default }.map { it.name })
         }
+        // add serde related features
+        cargoFeatures.add("serialize" to listOf("aws-smithy-types/serialize"))
+        cargoFeatures.add("deserialize" to listOf("aws-smithy-types/deserialize"))
 
         val cargoToml = mapOf(
             "package" to listOfNotNull(
@@ -74,7 +77,7 @@ class CargoTomlGenerator(
                 .associate { it.name to it.toMap() },
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
-            "target.'cfg(aws_sdk_unstable)'.dependencies" to dependencies.filter { it.scope == DependencyScope.CfgUnstable }
+            "target.'cfg(aws_sdk_unstable)'" to dependencies.filter { it.scope == DependencyScope.CfgUnstable }
                 .associate { it.name to it.toMap() },
             "features" to cargoFeatures.toMap(),
         ).deepMergeWith(manifestCustomizations)
