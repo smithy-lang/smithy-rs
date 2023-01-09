@@ -14,11 +14,20 @@ use crate::imds::client::LazyClient;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::time_source::TimeSource;
 use aws_credential_types::Credentials;
+use aws_smithy_async::future::timeout::Timeout;
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_types::os_shim_internal::Env;
+use fastrand;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use tokio::sync::RwLock;
+
+const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug)]
 struct ImdsCommunicationError {
@@ -45,6 +54,8 @@ pub struct ImdsCredentialsProvider {
     client: LazyClient,
     env: Env,
     profile: Option<String>,
+    time_source: TimeSource,
+    last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
 }
 
 /// Builder for [`ImdsCredentialsProvider`]
@@ -53,6 +64,7 @@ pub struct Builder {
     provider_config: Option<ProviderConfig>,
     profile_override: Option<String>,
     imds_override: Option<imds::Client>,
+    last_retrieved_credentials: Option<Credentials>,
 }
 
 impl Builder {
@@ -86,6 +98,12 @@ impl Builder {
         self
     }
 
+    #[cfg(test)]
+    fn last_retrieved_credentials(mut self, credentials: Credentials) -> Self {
+        self.last_retrieved_credentials = Some(credentials);
+        self
+    }
+
     /// Create an [`ImdsCredentialsProvider`] from this builder.
     pub fn build(self) -> ImdsCredentialsProvider {
         let provider_config = self.provider_config.unwrap_or_default();
@@ -102,6 +120,8 @@ impl Builder {
             client,
             env,
             profile: self.profile_override,
+            time_source: provider_config.time_source(),
+            last_retrieved_credentials: Arc::new(RwLock::new(self.last_retrieved_credentials)),
         }
     }
 }
@@ -116,6 +136,17 @@ impl ProvideCredentials for ImdsCredentialsProvider {
         Self: 'a,
     {
         future::ProvideCredentials::new(self.credentials())
+    }
+
+    fn provide_credentials_with_timeout<'a>(
+        &'a self,
+        sleeper: Arc<dyn AsyncSleep>,
+        timeout: Duration,
+    ) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        future::ProvideCredentials::new(self.credentials_with_timeout(sleeper, timeout))
     }
 }
 
@@ -167,7 +198,7 @@ impl ImdsCredentialsProvider {
         }
     }
 
-    async fn credentials(&self) -> provider::Result {
+    async fn retrieve_credentials(&self) -> provider::Result {
         if self.imds_disabled() {
             tracing::debug!("IMDS disabled because $AWS_EC2_METADATA_DISABLED was set to `true`");
             return Err(CredentialsError::not_loaded(
@@ -196,13 +227,18 @@ impl ImdsCredentialsProvider {
                 session_token,
                 expiration,
                 ..
-            })) => Ok(Credentials::new(
-                access_key_id,
-                secret_access_key,
-                Some(session_token.to_string()),
-                expiration.into(),
-                "IMDSv2",
-            )),
+            })) => {
+                let expiration = self.extend_expiration(expiration);
+                let creds = Credentials::new(
+                    access_key_id,
+                    secret_access_key,
+                    Some(session_token.to_string()),
+                    expiration.into(),
+                    "IMDSv2",
+                );
+                *self.last_retrieved_credentials.write().await = Some(creds.clone());
+                Ok(creds)
+            }
             Ok(JsonCredentials::Error { code, message })
                 if code == codes::ASSUME_ROLE_UNAUTHORIZED_ACCESS =>
             {
@@ -222,16 +258,79 @@ impl ImdsCredentialsProvider {
             Err(invalid) => Err(CredentialsError::unhandled(invalid)),
         }
     }
+
+    async fn credentials(&self) -> provider::Result {
+        match self.retrieve_credentials().await {
+            creds @ Ok(_) => creds,
+            err => match &*self.last_retrieved_credentials.read().await {
+                Some(creds) => Ok(creds.clone()),
+                _ => err,
+            },
+        }
+    }
+
+    async fn credentials_with_timeout(
+        &self,
+        sleeper: Arc<dyn AsyncSleep>,
+        timeout: Duration,
+    ) -> provider::Result {
+        let sleep_future = sleeper.sleep(timeout);
+        let timeout_future = Timeout::new(self.provide_credentials(), sleep_future);
+        match timeout_future.await {
+            Ok(creds) => creds,
+            _ => match &*self.last_retrieved_credentials.read().await {
+                Some(creds) => Ok(creds.clone()),
+                _ => Err(CredentialsError::provider_timed_out(timeout)),
+            },
+        }
+    }
+
+    // Extend the cached expiration time if necessary
+    //
+    // This allows continued use of the credentials even when IMDS returns expired ones.
+    fn extend_expiration(&self, expiration: SystemTime) -> SystemTime {
+        let rng = fastrand::Rng::with_seed(
+            self.time_source
+                .now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("now should be after UNIX EPOCH")
+                .as_secs(),
+        );
+        // calculate credentials' refresh offset with jitter
+        let refresh_offset =
+            CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(120..=600));
+        let new_expiry = self.time_source.now() + refresh_offset;
+
+        if new_expiry < expiration {
+            return expiration;
+        }
+
+        tracing::warn!(
+            "Attempting credential expiration extension due to a credential service availability issue. \
+            A refresh of these credentials will be attempted again within the next {:.2} minutes.",
+            refresh_offset.as_secs_f64() / 60.0,
+        );
+
+        new_expiry
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use crate::imds::client::test::{
         imds_request, imds_response, make_client, token_request, token_response,
     };
     use crate::imds::credentials::ImdsCredentialsProvider;
+    use crate::imds::Client;
+    use aws_credential_types::provider::error::CredentialsError;
     use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::Credentials;
+    use aws_smithy_async::rt::sleep::default_async_sleep;
     use aws_smithy_client::test_connection::TestConnection;
+    use http::Uri;
+    use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
 
@@ -259,13 +358,84 @@ mod test {
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST2\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
             ]);
-        let client = ImdsCredentialsProvider::builder()
+        let provider = ImdsCredentialsProvider::builder()
             .imds_client(make_client(&connection).await)
             .build();
-        let creds1 = client.provide_credentials().await.expect("valid creds");
-        let creds2 = client.provide_credentials().await.expect("valid creds");
+        let creds1 = provider.provide_credentials().await.expect("valid creds");
+        let creds2 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
         assert_eq!(creds2.access_key_id(), "ASIARTEST2");
         connection.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn log_message_informing_expired_credentials_are_used() {
+        let connection = TestConnection::new(vec![
+                (
+                    token_request("http://169.254.169.254", 21600),
+                    token_response(21600, TOKEN_A),
+                ),
+                (
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    imds_response(r#"profile-name"#),
+                ),
+                (
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                    imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+                ),
+            ]);
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(make_client(&connection).await)
+            .build();
+        let _ = provider.provide_credentials().await.expect("valid creds");
+        connection.assert_requests_match(&[]);
+        assert!(logs_contain("Attempting credential expiration extension"));
+    }
+
+    #[tokio::test]
+    async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
+        let client = Client::builder()
+            // 240.* can never be resolved
+            .endpoint(Uri::from_static("http://240.0.0.0"))
+            .build()
+            .await
+            .expect("valid client");
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            .last_retrieved_credentials(Credentials::for_tests())
+            .build();
+        let actual = provider
+            .provide_credentials_with_timeout(
+                default_async_sleep().unwrap(),
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap();
+        assert_eq!(actual, Credentials::for_tests());
+    }
+
+    #[tokio::test]
+    async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
+    ) {
+        let client = Client::builder()
+            // 240.* can never be resolved
+            .endpoint(Uri::from_static("http://240.0.0.0"))
+            .build()
+            .await
+            .expect("valid client");
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            .build();
+        let actual = provider
+            .provide_credentials_with_timeout(
+                default_async_sleep().unwrap(),
+                Duration::from_secs(5),
+            )
+            .await;
+        assert!(matches!(
+            actual,
+            Err(CredentialsError::CredentialsNotLoaded(_))
+        ));
     }
 }

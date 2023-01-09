@@ -4,8 +4,11 @@
  */
 
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
+use std::sync::Arc;
+use std::time::Duration;
 use tracing::Instrument;
 
 /// Credentials provider that checks a series of inner providers
@@ -95,6 +98,35 @@ impl CredentialsProviderChain {
             "no providers in chain provided credentials",
         ))
     }
+
+    async fn credentials_with_timeout(
+        &self,
+        sleeper: Arc<dyn AsyncSleep>,
+        timeout: Duration,
+    ) -> provider::Result {
+        for (name, provider) in &self.providers {
+            let timeout_per_provider = timeout.div_f64(self.providers.len() as f64);
+            let span = tracing::debug_span!("load_credentials", provider = %name);
+            match provider
+                .provide_credentials_with_timeout(Arc::clone(&sleeper), timeout_per_provider)
+                .instrument(span)
+                .await
+            {
+                Ok(credentials) => {
+                    tracing::debug!(provider = %name, "loaded credentials");
+                    return Ok(credentials);
+                }
+                Err(err @ CredentialsError::ProviderTimedOut(_)) => {
+                    tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide credentials");
+                }
+                Err(err) => {
+                    tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide credentials");
+                    return Err(err);
+                }
+            }
+        }
+        Err(CredentialsError::provider_timed_out(timeout))
+    }
 }
 
 impl ProvideCredentials for CredentialsProviderChain {
@@ -103,5 +135,16 @@ impl ProvideCredentials for CredentialsProviderChain {
         Self: 'a,
     {
         future::ProvideCredentials::new(self.credentials())
+    }
+
+    fn provide_credentials_with_timeout<'a>(
+        &'a self,
+        sleeper: Arc<dyn AsyncSleep>,
+        timeout: Duration,
+    ) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        future::ProvideCredentials::new(self.credentials_with_timeout(sleeper, timeout))
     }
 }
