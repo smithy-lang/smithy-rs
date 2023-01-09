@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.InputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.OutputsModule
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -255,10 +256,12 @@ class ServerServiceGeneratorV2(
                 writable {
                     rustTemplate("#{Type}::compile_regex();", "Type" to symbol)
                 }
-            }.toMutableList()
+            }
 
-        if (patterns.isNotEmpty()) {
-            patterns += writable { rust("// Eagerly initialize regexes for `@pattern` strings.") }
+        patterns.letIf(patterns.isNotEmpty()) {
+            val docs = listOf(writable { rust("// Eagerly initialize regexes for `@pattern` strings.") })
+
+            docs + patterns
         }
 
         return patterns.join("")
