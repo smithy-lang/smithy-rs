@@ -54,15 +54,13 @@ class TestStubgen(unittest.TestCase):
     def test_function_with_default_value(self):
         self.single_mod(
             """
-            def foo(bar):
+            def foo(bar, qux=None):
                 '''
                 :param bar int:
                 :param qux typing.Optional[str]:
                 :rtype None:
                 '''
                 pass
-
-            foo.__text_signature__ = '(bar, qux=None)'
             """,
             """
             import typing
