@@ -24,12 +24,32 @@ class ServerRuntimeTypesReExportsGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
-            pub use #{SmithyHttpServer}::Extension;
-            pub use #{Router};
-            pub use #{SmithyHttpServer}::operation::OperationShape;
-            pub use #{SmithyHttpServer}::operation::Operation;
+            pub mod operation {
+                pub use #{SmithyHttpServer}::operation::OperationShape;
+                pub use #{SmithyHttpServer}::operation::Operation;
+            }
+            pub mod plugin {
+                pub use #{SmithyHttpServer}::plugin::Plugin;
+                pub use #{SmithyHttpServer}::plugin::PluginPipeline;
+                pub use #{SmithyHttpServer}::plugin::PluginStack;
+            }
+            pub mod request {
+                pub use #{SmithyHttpServer}::request::FromParts;
+            }
+            pub mod response {
+                pub use #{SmithyHttpServer}::response::IntoResponse;
+            }
+            pub mod routing {
+                pub use #{SmithyHttpServer}::routing::IntoMakeService;
+                pub use #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo;
+                pub use #{SmithyHttpServer}::routing::LambdaHandler;
+                pub use #{SmithyHttpServer}::routing::Router;
+            }
+
             pub use #{SmithyHttpServer}::instrumentation;
             pub use #{SmithyHttpServer}::proto;
+
+            pub use #{SmithyHttpServer}::Extension;
             """,
             *codegenScope,
         )
