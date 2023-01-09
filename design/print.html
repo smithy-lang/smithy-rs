@@ -11052,11 +11052,14 @@ aws_sdk_dynamodb = { version = &quot;0.22.0&quot;, features = [&quot;unstable&qu
 However, we believe that cfg approach ensure users won't enable this feature by surprise, and communicate to users that features behind this feature gate can be taken-away or exprience breaking changes any time in future.</p>
 <h2 id="feature-gate-for-serialization-and-de-serialization"><a class="header" href="#feature-gate-for-serialization-and-de-serialization">Feature Gate for Serialization and De-serialization</a></h2>
 <p><code>Serde</code> traits are implemented behind feature gates.
-<code>Serialize</code> is implemented behind <code>serialize</code>, while <code>Deserialize</code> is implemented behind <code>deserialize</code>.
+<code>Serialize</code> is implemented behind <code>serde-serialize</code>, while <code>Deserialize</code> is implemented behind <code>serde-deserialize</code>.
 Users must enable the <code>unstable</code> feature to expose those features.</p>
 <p>We considered giving each feature a dedicated feature gate such as <code>unstable-serde-serialize</code>.
 In this case, we will need to change the name of feature gates entirely once it leaves the unstable status which will cause users to make changes to their code base.
 We conclude that this brings no benefit to the users.</p>
+<p>Furthermore, we considered naming the fature-gate <code>serialize</code>/<code>deserialize</code>.
+However, this way it would be confusing for the users when we add support for different serialization/deserialization framework such as <code>deser</code>.
+Thus, to emphasize that the traits is from <code>serde</code> crate, we decided to name it <code>serde-serialize</code>/<code>serde-deserialize</code></p>
 <h2 id="keeping-both-features-behind-the-same-feature-gate"><a class="header" href="#keeping-both-features-behind-the-same-feature-gate">Keeping both features behind the same feature gate</a></h2>
 <p>We considered keeping both features behind the same feature gate.
 There is no significant difference in the complexity of implementation.
