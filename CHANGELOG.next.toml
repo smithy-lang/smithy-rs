@@ -44,9 +44,9 @@ meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "rcoh"
 
 [[smithy-rs]]
-message = """Add serde crate to aws-smithy-types`.
+message = """Add serde crate to `aws-smithy-types`.
 
-It's behind feature gate `aws_sdk_unstable` which can only enabled via --cfg flag.
+It's behind the feature gate `aws_sdk_unstable` which can only be enabled via a `--cfg` flag.
 """
 references = ["smithy-rs#1944"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
