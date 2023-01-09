@@ -62,7 +62,7 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                         .map { param ->
                             param.letIf(param.builtIn == Builtins.REGION.builtIn) { parameter ->
                                 val builder = parameter.toBuilder().required(true)
-                                // workaround a smithy bug
+                                // TODO(https://github.com/awslabs/smithy-rs/issues/2187): undo this workaround
                                 parameter.defaultValue.ifPresent { default -> builder.defaultValue(default) }
 
                                 builder.build()
