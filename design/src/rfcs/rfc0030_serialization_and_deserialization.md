@@ -82,7 +82,7 @@ We considered giving each feature a dedicated feature gate such as `unstable-ser
 In this case, we will need to change the name of feature gates entirely once it leaves the unstable status which will cause users to make changes to their code base.
 We conclude that this brings no benefit to the users.
 
-Furthermore, we considered naming the fature-gatre `serialize`/`deserialize`.
+Furthermore, we considered naming the fature-gate `serialize`/`deserialize`.
 However, this way it would be confusing for the users when we add support for different serialization/deserialization framework such as `deser`.
 Thus, to emphasize that the traits is from `serde` crate, we decided to name it `serde-serialize`/`serde-deserialize`
 
