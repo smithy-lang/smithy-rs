@@ -1,0 +1,373 @@
+[
+    {
+        "connection_id": 0,
+        "action": {
+            "Request": {
+                "request": {
+                    "uri": "http://169.254.169.254/latest/api/token",
+                    "headers": {
+                        "x-aws-ec2-metadata-token-ttl-seconds": [
+                            "21600"
+                        ],
+                        "x-amz-user-agent": [
+                            "aws-sdk-rust/0.52.0 api/imds/0.0.0-smithy-rs-head os/linux lang/rust/1.62.1"
+                        ],
+                        "user-agent": [
+                            "aws-sdk-rust/0.52.0 os/linux lang/rust/1.62.1"
+                        ]
+                    },
+                    "method": "PUT"
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 0,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Request"
+            }
+        }
+    },
+    {
+        "connection_id": 0,
+        "action": {
+            "Response": {
+                "response": {
+                    "Ok": {
+                        "status": 200,
+                        "version": "HTTP/1.1",
+                        "headers": {
+                            "server": [
+                                "EC2ws"
+                            ],
+                            "x-aws-ec2-metadata-token-ttl-seconds": [
+                                "21600"
+                            ],
+                            "connection": [
+                                "close"
+                            ],
+                            "content-length": [
+                                "56"
+                            ],
+                            "content-type": [
+                                "text/plain"
+                            ],
+                            "date": [
+                                "Tue, 21 Sep 2021 17:41:25 GMT"
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 0,
+        "action": {
+            "Data": {
+                "data": {
+                    "Utf8": "imdssesiontoken=="
+                },
+                "direction": "Response"
+            }
+        }
+    },
+    {
+        "connection_id": 0,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Response"
+            }
+        }
+    },
+    {
+        "connection_id": 1,
+        "action": {
+            "Request": {
+                "request": {
+                    "uri": "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+                    "headers": {
+                        "x-aws-ec2-metadata-token": [
+                            "imdssesiontoken=="
+                        ],
+                        "x-amz-user-agent": [
+                            "aws-sdk-rust/0.52.0 api/imds/0.0.0-smithy-rs-head os/linux lang/rust/1.62.1"
+                        ],
+                        "user-agent": [
+                            "aws-sdk-rust/0.52.0 os/linux lang/rust/1.62.1"
+                        ]
+                    },
+                    "method": "GET"
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 1,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Request"
+            }
+        }
+    },
+    {
+        "connection_id": 1,
+        "action": {
+            "Response": {
+                "response": {
+                    "Ok": {
+                        "status": 200,
+                        "version": "HTTP/1.1",
+                        "headers": {
+                            "content-type": [
+                                "text/plain"
+                            ],
+                            "last-modified": [
+                                "Tue, 21 Sep 2021 17:30:41 GMT"
+                            ],
+                            "connection": [
+                                "close"
+                            ],
+                            "date": [
+                                "Tue, 21 Sep 2021 17:41:25 GMT"
+                            ],
+                            "content-length": [
+                                "21"
+                            ],
+                            "x-aws-ec2-metadata-token-ttl-seconds": [
+                                "21600"
+                            ],
+                            "accept-ranges": [
+                                "none"
+                            ],
+                            "server": [
+                                "EC2ws"
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 1,
+        "action": {
+            "Data": {
+                "data": {
+                    "Utf8": "imds-assume-role-test"
+                },
+                "direction": "Response"
+            }
+        }
+    },
+    {
+        "connection_id": 1,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Response"
+            }
+        }
+    },
+    {
+        "connection_id": 2,
+        "action": {
+            "Request": {
+                "request": {
+                    "uri": "http://169.254.169.254/latest/meta-data/iam/security-credentials/imds-assume-role-test",
+                    "headers": {
+                        "user-agent": [
+                            "aws-sdk-rust/0.52.0 os/linux lang/rust/1.62.1"
+                        ],
+                        "x-aws-ec2-metadata-token": [
+                            "imdssesiontoken=="
+                        ],
+                        "x-amz-user-agent": [
+                            "aws-sdk-rust/0.52.0 api/imds/0.0.0-smithy-rs-head os/linux lang/rust/1.62.1"
+                        ]
+                    },
+                    "method": "GET"
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 2,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Request"
+            }
+        }
+    },
+    {
+        "connection_id": 2,
+        "action": {
+            "Response": {
+                "response": {
+                    "Ok": {
+                        "status": 200,
+                        "version": "HTTP/1.1",
+                        "headers": {
+                            "connection": [
+                                "close"
+                            ],
+                            "server": [
+                                "EC2ws"
+                            ],
+                            "date": [
+                                "Tue, 21 Sep 2021 17:41:25 GMT"
+                            ],
+                            "accept-ranges": [
+                                "none"
+                            ],
+                            "x-aws-ec2-metadata-token-ttl-seconds": [
+                                "21600"
+                            ],
+                            "last-modified": [
+                                "Tue, 21 Sep 2021 17:30:41 GMT"
+                            ],
+                            "content-type": [
+                                "text/plain"
+                            ],
+                            "content-length": [
+                                "1322"
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 2,
+        "action": {
+            "Data": {
+                "data": {
+                    "Utf8": "{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-21T17:31:21Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARSTSBASE\",\n  \"SecretAccessKey\" : \"secretbase\",\n  \"Token\" : \"tokenbase\",\n  \"Expiration\" : \"2021-09-21T11:29:29Z\"\n}"
+                },
+                "direction": "Response"
+            }
+        }
+    },
+    {
+        "connection_id": 2,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Response"
+            }
+        }
+    },
+    {
+        "connection_id": 3,
+        "action": {
+            "Request": {
+                "request": {
+                    "uri": "https://test-bucket-s2dhlj57-3mg8-54949-bn28-fj37tnw91is0.s3.us-east-1.amazonaws.com",
+                    "headers": {
+                        "x-amz-date": [
+                            "20210921T174125Z"
+                        ],
+                        "x-amz-content-sha256": [
+                            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                        ],
+                        "content-type": [
+                            "application/xml"
+                        ],
+                        "user-agent": [
+                            "aws-sdk-rust/0.51.0 os/linux lang/rust/1.62.1"
+                        ],
+                        "x-amz-user-agent": [
+                            "aws-sdk-rust/0.51.0 api/s3/0.0.0-smithy-rs-head os/linux lang/rust/1.62.1"
+                        ],
+                        "authorization": [
+                            "AWS4-HMAC-SHA256 Credential=ASIARSTSBASE/20210921/us-east-1/s3/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=021dadec3fb3769ff21165f1abf9516887d1f93c504a98e399ccc5df8adef01f"
+                        ],
+                        "content-length": [
+                            "0"
+                        ]
+                    },
+                    "method": "PUT"
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 3,
+        "action": {
+            "Data": {
+                "data": {
+                    "Utf8": ""
+                },
+                "direction": "Request"
+            }
+        }
+    },
+    {
+        "connection_id": 3,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Request"
+            }
+        }
+    },
+    {
+        "connection_id": 3,
+        "action": {
+            "Response": {
+                "response": {
+                    "Ok": {
+                        "status": 200,
+                        "version": "HTTP/1.1",
+                        "headers": {
+                            "server": [
+                                "AmazonS3"
+                            ],
+                            "content-length": [
+                                "0"
+                            ],
+                            "location": [
+                                "/test-bucket-s2dhlj57-3mg8-54949-bn28-fj37tnw91is0"
+                            ],
+                            "x-amz-id-2": [
+                                "hndxcVIq5ILod5JoH+4ULZAi4lo6BXJvJm78Oxro48vNw5s4MFsZqKCHM0GIhYlDf/RWsnmmHpg="
+                            ],
+                            "x-amz-request-id": [
+                                "YYP6QSB3XZ50PZ07"
+                            ],
+                            "date": [
+                                "Tue, 21 Sep 2021 17:41:25 GMT"
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        "connection_id": 3,
+        "action": {
+            "Data": {
+                "data": {
+                    "Utf8": ""
+                },
+                "direction": "Response"
+            }
+        }
+    },
+    {
+        "connection_id": 3,
+        "action": {
+            "Eof": {
+                "ok": true,
+                "direction": "Response"
+            }
+        }
+    }
+]
