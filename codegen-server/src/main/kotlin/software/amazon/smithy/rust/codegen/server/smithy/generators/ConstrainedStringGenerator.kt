@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
@@ -25,6 +26,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.module
+import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
@@ -56,14 +59,14 @@ class ConstrainedStringGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
+    private val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
     private val constraintsInfo: List<TraitInfo> =
         supportedStringConstraintTraits
             .mapNotNull { shape.getTrait(it).orNull() }
-            .map(StringTraitInfo::fromTrait)
+            .map { StringTraitInfo.fromTrait(symbol, it) }
             .map(StringTraitInfo::toTraitInfo)
 
     fun render() {
-        val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
@@ -145,6 +148,8 @@ class ConstrainedStringGenerator(
         writer.withInlineModule(constraintViolation.module()) {
             renderConstraintViolationEnum(this, shape, constraintViolation)
         }
+
+        renderTests(shape)
     }
 
     private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
@@ -172,6 +177,22 @@ class ConstrainedStringGenerator(
                 "String" to RuntimeType.String,
                 "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
             )
+        }
+    }
+
+    private fun renderTests(shape: Shape) {
+        val testCases = TraitInfo.testCases(constraintsInfo)
+
+        if (testCases.isNotEmpty()) {
+            val testModule = constrainedShapeSymbolProvider.testModuleForShape(shape)
+            writer.withInlineModule(testModule) {
+                rustTemplate(
+                    """
+                    #{TestCases:W}
+                    """,
+                    "TestCases" to testCases.join("\n"),
+                )
+            }
         }
     }
 }
@@ -217,7 +238,7 @@ private data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     }
 }
 
-private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
+private data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo {
         val pattern = patternTrait.pattern
 
@@ -239,6 +260,16 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                 )
             },
             this::renderValidationFunction,
+            testCases = listOf {
+                unitTest("regex_compiles") {
+                    rustTemplate(
+                        """
+                        #{T}::compile_regex();
+                        """,
+                        "T" to symbol,
+                    )
+                }
+            },
         )
     }
 
@@ -264,6 +295,8 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
                     }
                 }
 
+                /// Attempts to compile the regex for this constrained type's `@pattern`.
+                /// This can fail if the specified regex is not supported by the `#{Regex}` crate.
                 pub fn compile_regex() -> &'static #{Regex}::Regex {
                     static REGEX: #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##));
 
@@ -279,10 +312,10 @@ private data class Pattern(val patternTrait: PatternTrait) : StringTraitInfo() {
 
 private sealed class StringTraitInfo {
     companion object {
-        fun fromTrait(trait: Trait): StringTraitInfo =
+        fun fromTrait(symbol: Symbol, trait: Trait) =
             when (trait) {
                 is PatternTrait -> {
-                    Pattern(trait)
+                    Pattern(symbol, trait)
                 }
                 is LengthTrait -> {
                     Length(trait)

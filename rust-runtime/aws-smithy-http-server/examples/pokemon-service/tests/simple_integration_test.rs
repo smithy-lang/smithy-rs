@@ -14,7 +14,7 @@ use aws_smithy_types::error::display::DisplayErrorContext;
 use pokemon_service_client::{
     error::{
         AttemptCapturingPokemonEventError, AttemptCapturingPokemonEventErrorKind, GetStorageError, GetStorageErrorKind,
-        MasterBallUnsuccessful, NotAuthorized,
+        MasterBallUnsuccessful, StorageAccessNotAuthorized,
     },
     model::{AttemptCapturingPokemonEvent, CapturingEvent, CapturingPayload},
     types::SdkError,
@@ -78,7 +78,7 @@ async fn simple_integration_test() {
         matches!(
             context.err(),
             GetStorageError {
-                kind: GetStorageErrorKind::NotAuthorized(NotAuthorized { .. }),
+                kind: GetStorageErrorKind::StorageAccessNotAuthorized(StorageAccessNotAuthorized { .. }),
                 ..
             }
         )
