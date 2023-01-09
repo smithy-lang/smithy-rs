@@ -287,6 +287,29 @@ class TestStubgen(unittest.TestCase):
             ''',
         )
 
+    def test_adds_default_to_optional_types(self):
+        # Since PyO3 provides `impl FromPyObject for Option<T>` and maps Python `None` to Rust `None`,
+        # you don't have to pass `None` explicitly. Type-stubs also shoudln't require `None`s
+        # to be passed explicitly (meaning they should have a default value).
+
+        self.single_mod(
+            """
+            def foo(bar, qux):
+                '''
+                :param bar typing.Optional[int]:
+                :param qux typing.List[typing.Optional[int]]:
+                :rtype int:
+                '''
+                pass
+            """,
+            """
+            import typing
+
+            def foo(bar: typing.Optional[int] = ..., qux: typing.List[typing.Optional[int]]) -> int:
+                ...
+            """,
+        )
+
     def test_multiple_mods(self):
         create_module(
             "foo.bar",
@@ -351,7 +374,7 @@ class TestStubgen(unittest.TestCase):
 
                     b: typing.Optional[foo.bar.Bar]
 
-                    def __init__(self, a: foo.bar.Bar, b: typing.Optional[foo.bar.Bar]) -> None:
+                    def __init__(self, a: foo.bar.Bar, b: typing.Optional[foo.bar.Bar] = ...) -> None:
                         ...
                 """,
             )

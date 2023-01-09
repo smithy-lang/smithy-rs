@@ -267,7 +267,13 @@ def make_function(
     except:
         pass
 
-    def has_default(param: str) -> bool:
+    def has_default(param: str, ty: str) -> bool:
+        # PyO3 allows omitting `Option<T>` params while calling a Rust function from Python,
+        # we should always mark `typing.Optional[T]` values as they have default values to allow same
+        # flexibiliy as runtime dynamics in type-stubs.
+        if ty.startswith("typing.Optional["):
+            return True
+
         if sig is None:
             return False
 
@@ -283,8 +289,9 @@ def make_function(
             receivers.append("self")
 
     def make_param(name: str, ty: str) -> str:
-        param = f"{name}: {writer.fix_and_include(ty)}"
-        if has_default(name):
+        fixed_ty = writer.fix_and_include(ty)
+        param = f"{name}: {fixed_ty}"
+        if has_default(name, fixed_ty):
             param += " = ..."
         return param
 
