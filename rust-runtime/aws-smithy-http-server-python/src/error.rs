@@ -47,8 +47,11 @@ impl From<PyError> for PyErr {
 #[pyo3(text_signature = "($self, message, status_code=None)")]
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareException {
+    /// :type str:
     #[pyo3(get, set)]
     message: String,
+
+    /// :type int:
     #[pyo3(get, set)]
     status_code: u16,
 }
