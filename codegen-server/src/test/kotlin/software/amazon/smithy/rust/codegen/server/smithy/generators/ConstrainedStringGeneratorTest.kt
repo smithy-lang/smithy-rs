@@ -188,7 +188,7 @@ class ConstrainedStringGeneratorTest {
     }
 
     @Test
-    fun `A regex that is accepted by Smithy but not by the regex crate cause tests to fail`() {
+    fun `A regex that is accepted by Smithy but not by the regex crate causes tests to fail`() {
         val model = """
             namespace test
 
