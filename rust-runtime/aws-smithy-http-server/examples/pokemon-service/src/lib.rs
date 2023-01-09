@@ -185,7 +185,9 @@ pub async fn get_storage(
     // We currently only support Ash and he has nothing stored
     if !(input.user == "ash" && input.passcode == "pikachu123") {
         tracing::debug!("authentication failed");
-        return Err(error::GetStorageError::NotAuthorized(error::NotAuthorized {}));
+        return Err(error::GetStorageError::StorageAccessNotAuthorized(
+            error::StorageAccessNotAuthorized {},
+        ));
     }
     Ok(output::GetStorageOutput { collection: vec![] })
 }

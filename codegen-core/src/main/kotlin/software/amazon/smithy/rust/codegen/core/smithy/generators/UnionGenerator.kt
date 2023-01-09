@@ -67,7 +67,7 @@ class UnionGenerator(
 
         renderUnion(unionSymbol)
         renderImplBlock(unionSymbol)
-        if (!unionSymbol.expectRustMetadata().derives.derives.contains(RuntimeType.Debug)) {
+        if (!containerMeta.hasDebugDerive()) {
             if (shape.hasTrait<SensitiveTrait>()) {
                 renderFullyRedactedDebugImpl()
             } else {
@@ -110,7 +110,7 @@ class UnionGenerator(
                 val variantName = symbolProvider.toMemberName(member)
 
                 if (sortedMembers.size == 1) {
-                    Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
+                    Attribute.AllowIrrefutableLetPatterns.render(this)
                 }
                 writer.renderAsVariant(member, variantName, funcNamePart, unionSymbol, memberSymbol)
                 rust("/// Returns true if this is a [`$variantName`](#T::$variantName).", unionSymbol)

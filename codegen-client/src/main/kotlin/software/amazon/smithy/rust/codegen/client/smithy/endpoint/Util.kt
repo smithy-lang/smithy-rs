@@ -15,14 +15,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.Fun
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.unsafeToRustName
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 data class Context(val functionRegistry: FunctionRegistry, val runtimeConfig: RuntimeConfig)
 
@@ -30,7 +29,7 @@ data class Context(val functionRegistry: FunctionRegistry, val runtimeConfig: Ru
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)
  */
 fun Identifier.rustName(): String {
-    return this.toString().stringToRustName()
+    return this.toString().unsafeToRustName()
 }
 
 /**
@@ -53,8 +52,6 @@ class Types(runtimeConfig: RuntimeConfig) {
     val resolveEndpointError = smithyHttpEndpointModule.resolve("ResolveEndpointError")
 }
 
-private fun String.stringToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
-
 /**
  * Returns the memberName() for a given [Parameter]
  */
@@ -62,7 +59,7 @@ fun Parameter.memberName(): String {
     return name.rustName()
 }
 
-fun ContextParamTrait.memberName(): String = this.name.stringToRustName()
+fun ContextParamTrait.memberName(): String = this.name.unsafeToRustName()
 
 /**
  * Returns the symbol for a given parameter. This enables [RustWriter] to generate the correct [RustType].

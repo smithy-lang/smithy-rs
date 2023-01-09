@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -27,10 +28,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.Clone
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.Debug
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.Default
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.PartialEq
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -175,7 +172,7 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
         // Ensure that fields can be added in the future
         Attribute.NonExhaustive.render(writer)
         // Automatically implement standard Rust functionality
-        Attribute.Derives(setOf(Debug, PartialEq, Clone)).render(writer)
+        Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)).render(writer)
         // Generate the struct block:
         /*
             pub struct Params {
@@ -238,7 +235,7 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
 
     private fun generateEndpointParamsBuilder(rustWriter: RustWriter) {
         rustWriter.docs("Builder for [`Params`]")
-        Attribute.Derives(setOf(Debug, Default, PartialEq, Clone)).render(rustWriter)
+        Attribute(derive(RuntimeType.Debug, RuntimeType.Default, RuntimeType.PartialEq, RuntimeType.Clone)).render(rustWriter)
         rustWriter.rustBlock("pub struct ParamsBuilder") {
             parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
@@ -255,10 +252,11 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
                 "ParamsError" to paramsError(),
             ) {
                 val params = writable {
+                    Attribute.AllowClippyUnnecessaryLazyEvaluations.render(this)
                     rustBlockTemplate("#{Params}", "Params" to paramsStruct()) {
                         parameters.toList().forEach { parameter ->
                             rust("${parameter.memberName()}: self.${parameter.memberName()}")
-                            parameter.default.orNull()?.also { default -> rust(".or(Some(${value(default)}))") }
+                            parameter.default.orNull()?.also { default -> rust(".or_else(||Some(${value(default)}))") }
                             if (parameter.isRequired) {
                                 rustTemplate(
                                     ".ok_or_else(||#{Error}::missing(${parameter.memberName().dq()}))?",

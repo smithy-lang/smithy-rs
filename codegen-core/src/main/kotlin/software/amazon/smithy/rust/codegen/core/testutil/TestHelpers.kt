@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
@@ -111,5 +110,3 @@ fun StructureShape.renderWithModelBuilder(
         modelBuilder.renderConvenienceMethod(this)
     }
 }
-
-val TokioTest = Attribute.Custom("tokio::test", listOf(CargoDependency.Tokio.toType()))
