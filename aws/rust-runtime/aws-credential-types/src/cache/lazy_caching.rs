@@ -8,7 +8,6 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use tracing::{debug, info, info_span, Instrument};
 
@@ -57,7 +56,7 @@ impl ProvideCachedCredentials for LazyCredentialsCache {
     {
         let now = self.time.now();
         let provider = self.provider.clone();
-        let timeout_future = self.sleeper.sleep(self.load_timeout);
+        let sleeper = Arc::clone(&self.sleeper);
         let load_timeout = self.load_timeout;
         let cache = self.cache.clone();
         let default_credential_expiration = self.default_credential_expiration;
@@ -72,15 +71,14 @@ impl ProvideCachedCredentials for LazyCredentialsCache {
                 // There may be other threads also loading simultaneously, but this is OK
                 // since the futures are not eagerly executed, and the cache will only run one
                 // of them.
-                let future = Timeout::new(provider.provide_credentials(), timeout_future);
                 let start_time = Instant::now();
                 let result = cache
                     .get_or_load(|| {
                         let span = info_span!("lazy_load_credentials");
                         async move {
-                            let credentials = future.await.map_err(|_err| {
-                                CredentialsError::provider_timed_out(load_timeout)
-                            })??;
+                            let credentials = provider
+                                .provide_credentials_with_timeout(sleeper, load_timeout)
+                                .await?;
                             // If the credentials don't have an expiration time, then create a default one
                             let expiry = credentials
                                 .expiry()
@@ -166,13 +164,21 @@ mod builder {
             self
         }
 
-        #[doc(hidden)] // because they only exist for tests
+        /// Time source of `LazyCredentialsCache`.
+        ///
+        /// This is available for tests that need advance time programmatically, in which
+        /// case [`TestingTimeSource`](crate::time_source::TestingTimeSource) is specified.
+        #[cfg(feature = "test-util")]
         pub fn time_source(mut self, time_source: TimeSource) -> Self {
             self.set_time_source(Some(time_source));
             self
         }
 
-        #[doc(hidden)] // because they only exist for tests
+        /// Time source of `LazyCredentialsCache`.
+        ///
+        /// This is available for tests that need advance time programmatically, in which
+        /// case [`TestingTimeSource`](crate::time_source::TestingTimeSource) is specified.
+        #[cfg(feature = "test-util")]
         pub fn set_time_source(&mut self, time_source: Option<TimeSource>) -> &mut Self {
             self.time_source = time_source;
             self

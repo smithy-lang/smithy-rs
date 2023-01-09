@@ -71,8 +71,12 @@ construct credentials from hardcoded values.
 //! }
 //! ```
 
+use aws_smithy_async::{future::timeout::Timeout, rt::sleep::AsyncSleep};
+
 use crate::Credentials;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+
+use self::error::CredentialsError;
 
 /// Credentials provider errors
 pub mod error {
@@ -280,6 +284,28 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a;
+
+    /// Returns a future that provides credentials within the given `timeout`.
+    ///
+    /// The default implementation races [`provide_credentials`](ProvideCredentials::provide_credentials) against
+    /// a timeout future created from `timeout`.
+    fn provide_credentials_with_timeout<'a>(
+        &'a self,
+        sleeper: Arc<dyn AsyncSleep>,
+        timeout: Duration,
+    ) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        let timeout_future = sleeper.sleep(timeout);
+        let future = Timeout::new(self.provide_credentials(), timeout_future);
+        future::ProvideCredentials::new(async move {
+            let credentials = future
+                .await
+                .map_err(|_err| CredentialsError::provider_timed_out(timeout))?;
+            credentials
+        })
+    }
 }
 
 impl ProvideCredentials for Credentials {
