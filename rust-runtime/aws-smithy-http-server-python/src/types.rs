@@ -493,12 +493,6 @@ impl FromPyObject<'_> for Document {
     }
 }
 
-#[derive(FromPyObject)]
-enum X {
-    Foo(String),
-    Bar(bool),
-}
-
 #[cfg(test)]
 mod tests {
     use pyo3::py_run;
