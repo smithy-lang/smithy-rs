@@ -166,9 +166,9 @@ mod builder {
 
         /// Time source of `LazyCredentialsCache`.
         ///
-        /// This is available for tests that need advance time programmatically, in which
+        /// This is available for tests that need to advance time programmatically, in which
         /// case [`TestingTimeSource`](crate::time_source::TestingTimeSource) is specified.
-        #[cfg(feature = "test-util")]
+        #[doc(hidden)]
         pub fn time_source(mut self, time_source: TimeSource) -> Self {
             self.set_time_source(Some(time_source));
             self
@@ -176,9 +176,9 @@ mod builder {
 
         /// Time source of `LazyCredentialsCache`.
         ///
-        /// This is available for tests that need advance time programmatically, in which
+        /// This is available for tests that need to advance time programmatically, in which
         /// case [`TestingTimeSource`](crate::time_source::TestingTimeSource) is specified.
-        #[cfg(feature = "test-util")]
+        #[doc(hidden)]
         pub fn set_time_source(&mut self, time_source: Option<TimeSource>) -> &mut Self {
             self.time_source = time_source;
             self
