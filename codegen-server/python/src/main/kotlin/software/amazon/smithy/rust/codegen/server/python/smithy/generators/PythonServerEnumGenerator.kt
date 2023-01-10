@@ -29,7 +29,7 @@ class PythonServerEnumGenerator(
     shape: StringShape,
 ) : ServerEnumGenerator(codegenContext, writer, shape) {
 
-    private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.toType())
+    private val pyO3 = PythonServerCargoDependency.PyO3.toType()
 
     override fun render() {
         renderPyClass()
@@ -38,11 +38,11 @@ class PythonServerEnumGenerator(
     }
 
     private fun renderPyClass() {
-        Attribute.Custom("pyo3::pyclass", symbols = pyo3Symbols).render(writer)
+        Attribute(pyO3.resolve("pyclass")).render(writer)
     }
 
     private fun renderPyO3Methods() {
-        Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
+        Attribute(pyO3.resolve("pymethods")).render(writer)
         writer.rustTemplate(
             """
             impl $enumName {
