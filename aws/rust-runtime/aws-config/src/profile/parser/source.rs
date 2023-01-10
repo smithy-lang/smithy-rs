@@ -4,12 +4,16 @@
  */
 
 use crate::fs_util::{home_dir, Os};
-use crate::profile::credentials::{CouldNotReadProfileFile, ProfileFileError};
+
+use crate::profile::parser::{CouldNotReadProfileFile, ProfileFileLoadError};
 use crate::profile::profile_file::{ProfileFile, ProfileFileKind, ProfileFiles};
+
+use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal;
 use std::borrow::Cow;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 use tracing::{warn, Instrument};
 
 const HOME_EXPANSION_FAILURE_WARNING: &str =
@@ -39,7 +43,7 @@ pub(super) async fn load(
     proc_env: &os_shim_internal::Env,
     fs: &os_shim_internal::Fs,
     profile_files: &ProfileFiles,
-) -> Result<Source, ProfileFileError> {
+) -> Result<Source, ProfileFileLoadError> {
     let home = home_dir(proc_env, Os::real());
 
     let mut files = Vec::new();
@@ -64,7 +68,7 @@ fn file_contents_to_string(path: &Path, contents: Vec<u8>) -> String {
     match String::from_utf8(contents) {
         Ok(contents) => contents,
         Err(e) => {
-            tracing::warn!(path = ?path, error = %e, "config file did not contain utf-8 encoded data");
+            tracing::warn!(path = ?path, error = %DisplayErrorContext(&e), "config file did not contain utf-8 encoded data");
             Default::default()
         }
     }
@@ -85,7 +89,7 @@ async fn load_config_file(
     home_directory: &Option<String>,
     fs: &os_shim_internal::Fs,
     environment: &os_shim_internal::Env,
-) -> Result<File, ProfileFileError> {
+) -> Result<File, ProfileFileLoadError> {
     let (path, kind, contents) = match source {
         ProfileFile::Default(kind) => {
             let (path_is_default, path) = environment
@@ -113,7 +117,7 @@ async fn load_config_file(
                             tracing::warn!(path = %path, env = %kind.override_environment_variable(), "config file overridden via environment variable not found")
                         }
                         _other => {
-                            tracing::warn!(path = %path, error = %e, "failed to read config file")
+                            tracing::warn!(path = %path, error = %DisplayErrorContext(&e), "failed to read config file")
                         }
                     };
                     Default::default()
@@ -126,10 +130,10 @@ async fn load_config_file(
             let data = match fs.read_to_end(&path).await {
                 Ok(data) => data,
                 Err(e) => {
-                    return Err(ProfileFileError::CouldNotReadProfileFile(
+                    return Err(ProfileFileLoadError::CouldNotReadFile(
                         CouldNotReadProfileFile {
                             path: path.clone(),
-                            cause: e,
+                            cause: Arc::new(e),
                         },
                     ))
                 }
@@ -194,10 +198,10 @@ fn expand_home(
 
 #[cfg(test)]
 mod tests {
-    use crate::profile::credentials::ProfileFileError;
     use crate::profile::parser::source::{
         expand_home, load, load_config_file, HOME_EXPANSION_FAILURE_WARNING,
     };
+    use crate::profile::parser::ProfileFileLoadError;
     use crate::profile::profile_file::{ProfileFile, ProfileFileKind, ProfileFiles};
     use aws_types::os_shim_internal::{Env, Fs};
     use futures_util::FutureExt;
@@ -476,7 +480,7 @@ mod tests {
             .build();
         assert!(matches!(
             load(&env, &fs, &profile_files).await,
-            Err(ProfileFileError::CouldNotReadProfileFile(_))
+            Err(ProfileFileLoadError::CouldNotReadFile(_))
         ));
     }
 }

@@ -3,6 +3,7 @@ $version: "1.0"
 namespace com.aws.example.rust
 
 use aws.protocols#restJson1
+use smithy.framework#ValidationException
 use com.aws.example#PokemonSpecies
 use com.aws.example#GetServerStatistics
 use com.aws.example#DoNothing
@@ -31,19 +32,19 @@ resource Storage {
     read: GetStorage,
 }
 
-/// Retrieve information about your Pokedex.
+/// Retrieve information about your Pokédex.
 @readonly
 @http(uri: "/pokedex/{user}", method: "GET")
 operation GetStorage {
     input: GetStorageInput,
     output: GetStorageOutput,
-    errors: [ResourceNotFoundException, NotAuthorized],
+    errors: [ResourceNotFoundException, StorageAccessNotAuthorized, ValidationException],
 }
 
 /// Not authorized to access Pokémon storage.
 @error("client")
 @httpError(401)
-structure NotAuthorized {}
+structure StorageAccessNotAuthorized {}
 
 /// A request to access Pokémon storage.
 @input
@@ -74,7 +75,7 @@ structure GetStorageOutput {
 operation CapturePokemon {
     input: CapturePokemonEventsInput,
     output: CapturePokemonEventsOutput,
-    errors: [UnsupportedRegionError, ThrottlingError]
+    errors: [UnsupportedRegionError, ThrottlingError, ValidationException]
 }
 
 @input
@@ -140,7 +141,6 @@ structure InvalidPokeballError {
 }
 @error("server")
 structure MasterBallUnsuccessful {
-    @required
     message: String,
 }
 

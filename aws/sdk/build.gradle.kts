@@ -15,8 +15,7 @@ extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
 tasks["jar"].enabled = false
 
 plugins {
-    val smithyGradlePluginVersion: String by project
-    id("software.amazon.smithy").version(smithyGradlePluginVersion)
+    id("software.amazon.smithy")
 }
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
@@ -89,7 +88,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                 "imports": [${files.joinToString()}],
 
                 "plugins": {
-                    "rust-codegen": {
+                    "rust-client-codegen": {
                         "runtimeConfig": {
                             "relativePath": "../",
                             "version": "DEFAULT"
@@ -159,7 +158,7 @@ tasks.register("relocateServices") {
         awsServices.services.forEach {
             logger.info("Relocating ${it.module}...")
             copy {
-                from("$buildDir/smithyprojections/sdk/${it.module}/rust-codegen")
+                from("$buildDir/smithyprojections/sdk/${it.module}/rust-client-codegen")
                 into(sdkOutputDir.resolve(it.module))
             }
 
@@ -397,7 +396,7 @@ tasks["assemble"].apply {
 project.registerCargoCommandsTasks(outputDir, defaultRustDocFlags)
 project.registerGenerateCargoConfigTomlTask(outputDir)
 
-tasks["test"].finalizedBy(Cargo.CLIPPY, Cargo.TEST, Cargo.DOCS)
+tasks["test"].finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 
 tasks.register<Delete>("deleteSdk") {
     delete = setOf(outputDir)

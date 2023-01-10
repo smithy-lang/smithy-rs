@@ -42,6 +42,7 @@ class Ec2QuerySerializerGeneratorTest {
             number: Double,
             s: String,
             top: Top,
+            unit: Unit,
         }
 
         @enum([{name: "FOO", value: "FOO"}])
@@ -86,8 +87,9 @@ class Ec2QuerySerializerGeneratorTest {
     @Test
     fun `generates valid serializers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val symbolProvider = testSymbolProvider(model)
-        val parserGenerator = Ec2QuerySerializerGenerator(testCodegenContext(model))
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserGenerator = Ec2QuerySerializerGenerator(codegenContext)
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))

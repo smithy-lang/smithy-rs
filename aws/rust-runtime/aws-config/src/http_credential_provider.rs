@@ -8,6 +8,8 @@
 //!
 //! Future work will stabilize this interface and enable it to be used directly.
 
+use aws_credential_types::provider::{self, error::CredentialsError};
+use aws_credential_types::Credentials;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_http::body::SdkBody;
@@ -16,8 +18,6 @@ use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_types::credentials::CredentialsError;
-use aws_types::{credentials, Credentials};
 
 use crate::connector::expect_connector;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
@@ -44,11 +44,11 @@ impl HttpCredentialProvider {
         Builder::default()
     }
 
-    pub(crate) async fn credentials(&self, auth: Option<HeaderValue>) -> credentials::Result {
+    pub(crate) async fn credentials(&self, auth: Option<HeaderValue>) -> provider::Result {
         let credentials = self.client.call(self.operation(auth)).await;
         match credentials {
             Ok(creds) => Ok(creds),
-            Err(SdkError::ServiceError { err, .. }) => Err(err),
+            Err(SdkError::ServiceError(context)) => Err(context.into_err()),
             Err(other) => Err(CredentialsError::unhandled(other)),
         }
     }
@@ -119,7 +119,7 @@ struct CredentialsResponseParser {
     provider_name: &'static str,
 }
 impl ParseStrictResponse for CredentialsResponseParser {
-    type Output = credentials::Result;
+    type Output = provider::Result;
 
     fn parse(&self, response: &Response<Bytes>) -> Self::Output {
         if !response.status().is_success() {
@@ -159,7 +159,7 @@ impl ClassifyRetry<SdkSuccess<Credentials>, SdkError<CredentialsError>>
 {
     fn classify_retry(
         &self,
-        response: Result<&SdkSuccess<credentials::Credentials>, &SdkError<CredentialsError>>,
+        response: Result<&SdkSuccess<Credentials>, &SdkError<CredentialsError>>,
     ) -> RetryKind {
         /* The following errors are retryable:
          *   - Socket errors
@@ -176,13 +176,20 @@ impl ClassifyRetry<SdkSuccess<Credentials>, SdkError<CredentialsError>>
                 RetryKind::Error(ErrorKind::TransientError)
             }
             // non-parseable 200s
-            Err(SdkError::ServiceError {
-                err: CredentialsError::Unhandled { .. },
-                raw,
-            }) if raw.http().status().is_success() => RetryKind::Error(ErrorKind::ServerError),
+            Err(SdkError::ServiceError(context))
+                if matches!(context.err(), CredentialsError::Unhandled { .. })
+                    && context.raw().http().status().is_success() =>
+            {
+                RetryKind::Error(ErrorKind::ServerError)
+            }
             // 5xx errors
-            Err(SdkError::ServiceError { raw, .. } | SdkError::ResponseError { raw, .. })
-                if raw.http().status().is_server_error() =>
+            Err(SdkError::ResponseError(context))
+                if context.raw().http().status().is_server_error() =>
+            {
+                RetryKind::Error(ErrorKind::ServerError)
+            }
+            Err(SdkError::ServiceError(context))
+                if context.raw().http().status().is_server_error() =>
             {
                 RetryKind::Error(ErrorKind::ServerError)
             }
@@ -196,14 +203,14 @@ mod test {
     use crate::http_credential_provider::{
         CredentialsResponseParser, HttpCredentialRetryClassifier,
     };
+    use aws_credential_types::provider::error::CredentialsError;
+    use aws_credential_types::Credentials;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation;
     use aws_smithy_http::response::ParseStrictResponse;
     use aws_smithy_http::result::{SdkError, SdkSuccess};
     use aws_smithy_http::retry::ClassifyRetry;
     use aws_smithy_types::retry::{ErrorKind, RetryKind};
-    use aws_types::credentials::CredentialsError;
-    use aws_types::Credentials;
     use bytes::Bytes;
 
     fn sdk_resp(
@@ -219,10 +226,10 @@ mod test {
                 raw: operation::Response::new(resp.map(SdkBody::from)),
                 parsed: creds,
             }),
-            Err(err) => Err(SdkError::ServiceError {
+            Err(err) => Err(SdkError::service_error(
                 err,
-                raw: operation::Response::new(resp.map(SdkBody::from)),
-            }),
+                operation::Response::new(resp.map(SdkBody::from)),
+            )),
         }
     }
 
@@ -278,10 +285,7 @@ mod test {
         assert!(
             matches!(
                 sdk_error,
-                SdkError::ServiceError {
-                    err: CredentialsError::ProviderError { .. },
-                    ..
-                }
+                SdkError::ServiceError(ref context) if matches!(context.err(), CredentialsError::ProviderError { .. })
             ),
             "should be provider error: {}",
             sdk_error

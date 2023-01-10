@@ -15,13 +15,7 @@ use std::time::{Duration, SystemTime};
 /// Assumes that that input has a `presigned` method on it.
 macro_rules! presign_input {
     ($input:expr) => {{
-        let creds = s3::Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        );
+        let creds = s3::Credentials::for_tests();
         let config = s3::Config::builder()
             .credentials_provider(creds)
             .region(s3::Region::new("us-east-1"))
@@ -54,8 +48,12 @@ async fn test_presigning() -> Result<(), Box<dyn Error>> {
     let mut query_params: Vec<&str> = query.split('&').collect();
     query_params.sort();
 
+    assert_eq!(
+        "test-bucket.s3.us-east-1.amazonaws.com",
+        presigned.uri().authority().unwrap()
+    );
     assert_eq!("GET", presigned.method().as_str());
-    assert_eq!("/test-bucket/test-key", path);
+    assert_eq!("/test-key", path);
     assert_eq!(
         &[
             "X-Amz-Algorithm=AWS4-HMAC-SHA256",
@@ -63,7 +61,7 @@ async fn test_presigning() -> Result<(), Box<dyn Error>> {
             "X-Amz-Date=20090213T233131Z",
             "X-Amz-Expires=30",
             "X-Amz-Security-Token=notarealsessiontoken",
-            "X-Amz-Signature=b5a3e99da3c8b5ba152d828105afe8efb6ecb2732b5b5175a693fc3902d709c5",
+            "X-Amz-Signature=758353318739033a850182c7b3435076eebbbd095f8dcf311383a6a1e124c4cb",
             "X-Amz-SignedHeaders=host",
             "x-id=GetObject"
         ][..],
@@ -89,8 +87,12 @@ async fn test_presigning_with_payload_headers() -> Result<(), Box<dyn Error>> {
     let mut query_params: Vec<&str> = query.split('&').collect();
     query_params.sort();
 
+    assert_eq!(
+        "test-bucket.s3.us-east-1.amazonaws.com",
+        presigned.uri().authority().unwrap()
+    );
     assert_eq!("PUT", presigned.method().as_str());
-    assert_eq!("/test-bucket/test-key", path);
+    assert_eq!("/test-key", path);
     assert_eq!(
         &[
             "X-Amz-Algorithm=AWS4-HMAC-SHA256",
@@ -98,7 +100,7 @@ async fn test_presigning_with_payload_headers() -> Result<(), Box<dyn Error>> {
             "X-Amz-Date=20090213T233131Z",
             "X-Amz-Expires=30",
             "X-Amz-Security-Token=notarealsessiontoken",
-            "X-Amz-Signature=6a22b8bf422d17fe25e7d9fcbd26df31397ca5e3ad07d1cec95326ffdbe4a0a2",
+            "X-Amz-Signature=be1d41dc392f7019750e4f5e577234fb9059dd20d15f6a99734196becce55e52",
             "X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost",
             "x-id=PutObject"
         ][..],
@@ -124,7 +126,7 @@ async fn test_presigned_upload_part() -> Result<(), Box<dyn Error>> {
         .build()?);
     assert_eq!(
         presigned.uri().to_string(),
-        "https://s3.us-east-1.amazonaws.com/bucket/key?x-id=UploadPart&uploadId=upload-id&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ANOTREAL%2F20090213%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20090213T233131Z&X-Amz-Expires=30&X-Amz-SignedHeaders=content-length%3Bhost&X-Amz-Signature=e50e1a4d1dae7465bb7731863a565bdf4137393e3ab4119b5764fb49f5f60b14&X-Amz-Security-Token=notarealsessiontoken"
+        "https://bucket.s3.us-east-1.amazonaws.com/key?x-id=UploadPart&partNumber=0&uploadId=upload-id&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ANOTREAL%2F20090213%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20090213T233131Z&X-Amz-Expires=30&X-Amz-SignedHeaders=content-length%3Bhost&X-Amz-Signature=a702867244f0bd1fb4d161e2a062520dcbefae3b9992d2e5366bcd61a60c6ddd&X-Amz-Security-Token=notarealsessiontoken",
     );
     Ok(())
 }

@@ -60,19 +60,29 @@ Some components, such as `codegen-client-test` and `codegen-server-test`, are pu
 To test the `rust-runtime` crates:
 
 ```bash
-# Run all Rust tests for `rust-runtime/`
-./gradlew rust-runtime:cargoTest
-# Run clippy for `rust-runtime/`
-./gradlew rust-runtime:cargoClippy
+# Run all Rust tests for `rust-runtime/` (from repo root):
+cargo test --manifest-path=rust-runtime/Cargo.toml
+# Run clippy for `rust-runtime/` (from repo root):
+cargo clippy --manifest-path=rust-runtime/Cargo.toml
+
+# Or
+cd rust-runtime
+cargo test
+cargo clippy
 ```
 
-For `aws/rust-runtime`, just prefix with `aws:`:
+To test the `aws/rust-runtime` crates:
 
 ```bash
-# Run all Rust tests for `rust-runtime/`
-./gradlew aws:rust-runtime:cargoTest
-# Run clippy for `rust-runtime/`
-./gradlew aws:rust-runtime:cargoClippy
+# Run all Rust tests for `aws/rust-runtime/` (from repo root):
+cargo test --manifest-path=aws/rust-runtime/Cargo.toml
+# Run clippy for `aws/rust-runtime/` (from repo root):
+cargo clippy --manifest-path=aws/rust-runtime/Cargo.toml
+
+# Or
+cd aws/rust-runtime
+cargo test
+cargo clippy
 ```
 
 Some runtime crates have a `additional-ci` script that can also be run. These scripts often require

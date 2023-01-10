@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
@@ -57,6 +58,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
             is StringShape -> if (shape.hasTrait<EnumTrait>()) {
                 enumMeta(shape)
             } else null
+
             else -> null
         }
         return baseSymbol.toBuilder().meta(meta).build()
@@ -70,19 +72,33 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
 
 /**
  * The base metadata supports a list of attributes that are used by generators to decorate code.
- * By default we apply #[non_exhaustive] only to client structures since model changes should
+ * By default, we apply ```#[non_exhaustive]``` only to client structures since model changes should
  * be considered as breaking only when generating server code.
  */
 class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
     private val model: Model,
-    additionalAttributes: List<Attribute>,
+    private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
-    private val containerDefault = RustMetadata(
-        Attribute.Derives(defaultDerives.toSet()),
-        additionalAttributes = additionalAttributes,
-        visibility = Visibility.PUBLIC,
-    )
+    private fun containerDefault(shape: Shape): RustMetadata {
+        val isSensitive = shape.hasTrait<SensitiveTrait>() ||
+            // Checking the shape's direct members for the sensitive trait should suffice.
+            // Whether their descendants, i.e. a member's member, is sensitive does not
+            // affect the inclusion/exclusion of the derived Debug trait of _this_ container
+            // shape; any sensitive descendant should still be printed as redacted.
+            shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+
+        val derives = if (isSensitive) {
+            defaultDerives - RuntimeType.Debug
+        } else {
+            defaultDerives
+        }
+        return RustMetadata(
+            derives,
+            additionalAttributes,
+            Visibility.PUBLIC,
+        )
+    }
 
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
         val container = model.expectShape(memberShape.container)
@@ -100,49 +116,49 @@ class BaseSymbolMetadataProvider(
                     )
                 }
             }
+
             container.isUnionShape ||
                 container.isListShape ||
                 container.isSetShape ||
                 container.isMapShape
             -> RustMetadata(visibility = Visibility.PUBLIC)
+
             else -> TODO("Unrecognized container type: $container")
         }
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
-        return containerDefault
+        return containerDefault(structureShape)
     }
 
     override fun unionMeta(unionShape: UnionShape): RustMetadata {
-        return containerDefault
+        return containerDefault(unionShape)
     }
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
-        return containerDefault.withDerives(
-            RuntimeType.std.member("hash::Hash"),
-        ).withDerives( // enums can be eq because they can only contain strings
-            RuntimeType.std.member("cmp::Eq"),
-            // enums can be Ord because they can only contain strings
-            RuntimeType.std.member("cmp::PartialOrd"),
-            RuntimeType.std.member("cmp::Ord"),
+        return containerDefault(stringShape).withDerives(
+            RuntimeType.Hash,
+            // enums can be Eq because they can only contain ints and strings
+            RuntimeType.Eq,
+            // enums can be PartialOrd/Ord because they can only contain ints and strings
+            RuntimeType.PartialOrd,
+            RuntimeType.Ord,
         )
     }
 
     companion object {
         private val defaultDerives by lazy {
-            with(RuntimeType) {
-                listOf(Debug, PartialEq, Clone)
-            }
+            setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
         }
     }
 }
 
-private const val MetaKey = "meta"
+private const val META_KEY = "meta"
 fun Symbol.Builder.meta(rustMetadata: RustMetadata?): Symbol.Builder {
-    return this.putProperty(MetaKey, rustMetadata)
+    return this.putProperty(META_KEY, rustMetadata)
 }
 
-fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(MetaKey, RustMetadata::class.java).orElseThrow {
+fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(META_KEY, RustMetadata::class.java).orElseThrow {
     CodegenException(
         "Expected $this to have metadata attached but it did not. ",
     )

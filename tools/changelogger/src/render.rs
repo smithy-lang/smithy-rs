@@ -404,7 +404,7 @@ mod test {
 
     fn render_full(entries: &[ChangelogEntry], release_header: &str) -> String {
         let (header, body) = render(entries, release_header);
-        return format!("{}{}", header, body);
+        format!("{header}{body}")
     }
 
     #[test]

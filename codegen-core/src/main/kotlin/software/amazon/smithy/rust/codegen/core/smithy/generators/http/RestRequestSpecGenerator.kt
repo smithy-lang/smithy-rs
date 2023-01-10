@@ -6,9 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators.http
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -18,7 +16,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingReso
 /**
  * [RestRequestSpecGenerator] generates a restJson1 or restXml specific `RequestSpec`. Both protocols are routed the same.
  *
- * This class has to live in the `codegen` subproject instead of in the `codegen-server` subproject because it is used
+ * This class has to live in the `codegen-core` subproject instead of in the `codegen-server` subproject because it is used
  * by the implementations of the `serverRouterRequestSpec` of the [Protocol] interface, which is used by both subprojects
  * (even though only the `codegen-server` subproject calls `serverRouterRequestSpec`).
  */
@@ -38,7 +36,7 @@ class RestRequestSpecGenerator(
                 "PathSegment",
                 "QuerySegment",
             ).map {
-                it to requestSpecModule.member(it)
+                it to requestSpecModule.resolve(it)
             }.toTypedArray()
 
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
@@ -87,7 +85,7 @@ class RestRequestSpecGenerator(
                 *extraCodegenScope,
                 "PathSegmentsVec" to pathSegmentsVec,
                 "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to CargoDependency.Http.asType().member("Method"),
+                "Method" to RuntimeType.Http.resolve("Method"),
             )
         }
     }

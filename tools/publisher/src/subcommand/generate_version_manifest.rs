@@ -233,9 +233,9 @@ struct SmithyBuildProjection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fs_err as fs;
     use smithy_rs_tool_common::package::PackageCategory;
     use smithy_rs_tool_common::versions_manifest::ManualInterventions;
-    use std::fs;
     use tempfile::TempDir;
 
     fn fake_manifest(

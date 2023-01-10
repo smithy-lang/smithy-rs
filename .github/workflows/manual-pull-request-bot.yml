@@ -16,7 +16,7 @@ jobs:
     steps:
     - name: Get PR info
       id: get-pr-info
-      uses: actions/github-script@v5
+      uses: actions/github-script@v6
       with:
         script: |
           const response = await github.rest.pulls.get({

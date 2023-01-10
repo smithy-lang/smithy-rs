@@ -25,13 +25,6 @@ type Client<C> = CoreClient<C, DefaultMiddleware>;
 /// Validate that for CN regions we set the URI correctly
 #[tokio::test]
 async fn generate_random_cn() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
     let conn = TestConnection::new(vec![(
         http::Request::builder()
             .uri(Uri::from_static("https://kms.cn-north-1.amazonaws.com.cn/"))
@@ -42,9 +35,10 @@ async fn generate_random_cn() {
     ]);
     let conf = Config::builder()
         .region(Region::new("cn-north-1"))
-        .credentials_provider(creds)
+        .credentials_provider(Credentials::for_tests())
+        .http_connector(conn.clone())
         .build();
-    let client = kms::Client::from_conf_conn(conf, conn.clone());
+    let client = kms::Client::from_conf(conf);
     let _ = client
         .generate_random()
         .number_of_bytes(64)
@@ -58,13 +52,6 @@ async fn generate_random_cn() {
 
 #[tokio::test]
 async fn generate_random() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
     let conn = TestConnection::new(vec![(
         http::Request::builder()
             .header("content-type", "application/x-amz-json-1.1")
@@ -84,7 +71,7 @@ async fn generate_random() {
     let client = Client::new(conn.clone());
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
-        .credentials_provider(creds)
+        .credentials_provider(Credentials::for_tests())
         .build();
     let mut op = GenerateRandom::builder()
         .number_of_bytes(64)
@@ -112,13 +99,6 @@ async fn generate_random() {
 
 #[tokio::test]
 async fn generate_random_malformed_response() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
     let conn = TestConnection::new(vec![(
         http::Request::builder().body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(),
         http::Response::builder()
@@ -129,7 +109,7 @@ async fn generate_random_malformed_response() {
     let client = Client::new(conn.clone());
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
-        .credentials_provider(creds)
+        .credentials_provider(Credentials::for_tests())
         .build();
     let op = GenerateRandom::builder()
         .number_of_bytes(64)
@@ -143,16 +123,9 @@ async fn generate_random_malformed_response() {
 
 #[tokio::test]
 async fn generate_random_keystore_not_found() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
-        .credentials_provider(creds)
+        .credentials_provider(Credentials::for_tests())
         .build();
     let conn = TestConnection::new(vec![(
         http::Request::builder()
@@ -193,7 +166,7 @@ async fn generate_random_keystore_not_found() {
     let client = Client::new(conn.clone());
     let err = client.call(op).await.expect_err("key store doesn't exist");
     let inner = match err {
-        SdkError::ServiceError { err, .. } => err,
+        SdkError::ServiceError(context) => context.into_err(),
         other => panic!("Incorrect error received: {:}", other),
     };
     assert!(inner.is_custom_key_store_not_found_exception());

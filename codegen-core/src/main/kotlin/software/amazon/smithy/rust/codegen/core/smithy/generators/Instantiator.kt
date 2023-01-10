@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -51,6 +50,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
@@ -62,12 +62,14 @@ open class Instantiator(
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
     private val runtimeConfig: RuntimeConfig,
+    /** Behavior of the builder type used for structure shapes. */
+    private val builderKindBehavior: BuilderKindBehavior,
     /**
      * A function that given a symbol for an enum shape and a string, returns a writable to instantiate the enum with
      * the string value.
      **/
     private val enumFromStringFn: (Symbol, String) -> Writable,
-    /** Fill out required fields with a default value **/
+    /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
 ) {
     data class Ctx(
@@ -75,6 +77,20 @@ open class Instantiator(
         // contain headers with uppercase keys.
         val lowercaseMapKeys: Boolean = false,
     )
+
+    /**
+     * Client and server structures have different builder types. `Instantiator` needs to know how the builder
+     * type behaves to generate code for it.
+     */
+    interface BuilderKindBehavior {
+        fun hasFallibleBuilder(shape: StructureShape): Boolean
+
+        // Client structure builders have two kinds of setters: one that always takes in `Option<T>`, and one that takes
+        // in the structure field's type. The latter's method name is the field's name, whereas the former is prefixed
+        // with `set_`. Client instantiators call the `set_*` builder setters.
+        fun setterName(memberShape: MemberShape): String
+        fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
+    }
 
     fun render(writer: RustWriter, shape: Shape, data: Node, ctx: Ctx = Ctx()) {
         when (shape) {
@@ -93,7 +109,7 @@ open class Instantiator(
             // Wrapped Shapes
             is TimestampShape -> writer.rust(
                 "#T::from_secs(${(data as NumberNode).value})",
-                RuntimeType.DateTime(runtimeConfig),
+                RuntimeType.dateTime(runtimeConfig),
             )
 
             /**
@@ -104,12 +120,12 @@ open class Instantiator(
             is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
                 writer.rust(
                     "#T::from_static(b${(data as StringNode).value.dq()})",
-                    RuntimeType.ByteStream(runtimeConfig),
+                    RuntimeType.byteStream(runtimeConfig),
                 )
             } else {
                 writer.rust(
                     "#T::new(${(data as StringNode).value.dq()})",
-                    RuntimeType.Blob(runtimeConfig),
+                    RuntimeType.blob(runtimeConfig),
                 )
             }
 
@@ -122,7 +138,7 @@ open class Instantiator(
                     writer.rust(
                         """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
-                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
+                        RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
                     )
                 }
 
@@ -131,15 +147,15 @@ open class Instantiator(
 
             is BooleanShape -> writer.rust(data.asBooleanNode().get().toString())
             is DocumentShape -> writer.rustBlock("") {
-                val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
+                val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
                 rustTemplate(
                     """
                     let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
                     let mut tokens = #{json_token_iter}(json_bytes).peekable();
                     #{expect_document}(&mut tokens).expect("well formed json")
                     """,
-                    "expect_document" to smithyJson.member("deserialize::token::expect_document"),
-                    "json_token_iter" to smithyJson.member("deserialize::json_token_iter"),
+                    "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
                 )
             }
 
@@ -165,7 +181,9 @@ open class Instantiator(
             writer.conditionalBlock(
                 "Some(",
                 ")",
-                conditional = model.expectShape(memberShape.container) is StructureShape || symbol.isOptional(),
+                // The conditions are not commutative: note client builders always take in `Option<T>`.
+                conditional = symbol.isOptional() ||
+                    (model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(memberShape)),
             ) {
                 writer.conditionalBlock(
                     "Box::new(",
@@ -200,10 +218,10 @@ open class Instantiator(
      */
     private fun renderMap(writer: RustWriter, shape: MapShape, data: ObjectNode, ctx: Ctx) {
         if (data.members.isEmpty()) {
-            writer.rust("#T::new()", RustType.HashMap.RuntimeType)
+            writer.rust("#T::new()", RuntimeType.HashMap)
         } else {
             writer.rustBlock("") {
-                rust("let mut ret = #T::new();", RustType.HashMap.RuntimeType)
+                rust("let mut ret = #T::new();", RuntimeType.HashMap)
                 for ((key, value) in data.members) {
                     withBlock("ret.insert(", ");") {
                         renderMember(this, shape.key, key, ctx)
@@ -241,8 +259,10 @@ open class Instantiator(
         val member = shape.expectMember(memberName)
         writer.rust("#T::${symbolProvider.toMemberName(member)}", unionSymbol)
         // Unions should specify exactly one member.
-        writer.withBlock("(", ")") {
-            renderMember(this, member, variant.second, ctx)
+        if (!member.isTargetUnit()) {
+            writer.withBlock("(", ")") {
+                renderMember(this, member, variant.second, ctx)
+            }
         }
     }
 
@@ -277,7 +297,8 @@ open class Instantiator(
      */
     private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, ctx: Ctx) {
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
-            writer.withBlock(".${memberShape.setterName()}(", ")") {
+            val setterName = builderKindBehavior.setterName(memberShape)
+            writer.withBlock(".$setterName(", ")") {
                 renderMember(this, memberShape, value, ctx)
             }
         }
@@ -297,8 +318,9 @@ open class Instantiator(
             val memberShape = shape.expectMember(key.value)
             renderMemberHelper(memberShape, value)
         }
+
         writer.rust(".build()")
-        if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+        if (builderKindBehavior.hasFallibleBuilder(shape)) {
             writer.rust(".unwrap()")
         }
     }

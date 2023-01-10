@@ -8,9 +8,9 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
@@ -26,11 +26,11 @@ class PythonServerServiceGenerator(
     protocolGenerator: ServerProtocolGenerator,
     protocolSupport: ProtocolSupport,
     protocol: ServerProtocol,
-    private val context: CodegenContext,
+    private val context: ServerCodegenContext,
 ) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, protocol, context) {
 
     override fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
-        PythonServerCombinedErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
+        PythonServerOperationErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
     }
 
     override fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {

@@ -3,18 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
-
-use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use tracing::Instrument;
 
 /// Credentials provider that checks a series of inner providers
 ///
 /// Each provider will be evaluated in order:
-/// * If a provider returns valid [`Credentials`](aws_types::Credentials) they will be returned immediately.
+/// * If a provider returns valid [`Credentials`](aws_credential_types::Credentials) they will be returned immediately.
 ///   No other credential providers will be used.
 /// * Otherwise, if a provider returns
-///   [`CredentialsError::CredentialsNotLoaded`](aws_types::credentials::CredentialsError::CredentialsNotLoaded),
+///   [`CredentialsError::CredentialsNotLoaded`](aws_credential_types::provider::error::CredentialsError::CredentialsNotLoaded),
 ///   the next provider will be checked.
 /// * Finally, if a provider returns any other error condition, an error will be returned immediately.
 ///
@@ -74,7 +74,7 @@ impl CredentialsProviderChain {
         )
     }
 
-    async fn credentials(&self) -> credentials::Result {
+    async fn credentials(&self) -> provider::Result {
         for (name, provider) in &self.providers {
             let span = tracing::debug_span!("load_credentials", provider = %name);
             match provider.provide_credentials().instrument(span).await {
@@ -82,12 +82,12 @@ impl CredentialsProviderChain {
                     tracing::debug!(provider = %name, "loaded credentials");
                     return Ok(credentials);
                 }
-                Err(CredentialsError::CredentialsNotLoaded { context, .. }) => {
-                    tracing::debug!(provider = %name, context = %context, "provider in chain did not provide credentials");
+                Err(err @ CredentialsError::CredentialsNotLoaded(_)) => {
+                    tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide credentials");
                 }
-                Err(e) => {
-                    tracing::warn!(provider = %name, error = %e, "provider failed to provide credentials");
-                    return Err(e);
+                Err(err) => {
+                    tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide credentials");
+                    return Err(err);
                 }
             }
         }

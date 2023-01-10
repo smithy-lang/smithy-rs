@@ -11,15 +11,37 @@
 
 use std::sync::Arc;
 
+use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
 use crate::app_name::AppName;
-use crate::credentials::SharedCredentialsProvider;
+use crate::docs_for;
 use crate::endpoint::ResolveAwsEndpoint;
 use crate::region::Region;
+
+#[doc(hidden)]
+/// Unified docstrings to keep crates in sync. Not intended for public use
+pub mod unified_docs {
+    #[macro_export]
+    macro_rules! docs_for {
+        (use_fips) => {
+"When true, send this request to the FIPS-compliant regional endpoint.
+
+If no FIPS-compliant endpoint can be determined, dispatching the request will return an error."
+        };
+        (use_dual_stack) => {
+"When true, send this request to the dual-stack endpoint.
+
+If no dual-stack endpoint is available the request MAY return an error.
+
+**Note**: Some services do not offer dual-stack as a configurable parameter (e.g. Code Catalyst). For
+these services, this setting has no effect"
+        };
+    }
+}
 
 /// AWS Shared Configuration
 #[derive(Debug, Clone)]
@@ -28,10 +50,13 @@ pub struct SdkConfig {
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
+    use_fips: Option<bool>,
+    use_dual_stack: Option<bool>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -45,10 +70,13 @@ pub struct Builder {
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
+    use_fips: Option<bool>,
+    use_dual_stack: Option<bool>,
 }
 
 impl Builder {
@@ -88,21 +116,43 @@ impl Builder {
 
     /// Set the endpoint resolver to use when making requests
     ///
+    /// This method is deprecated. Use [`Self::endpoint_url`] instead.
+    ///
     /// # Examples
     /// ```
+    /// # fn wrapper() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
     /// use std::sync::Arc;
     /// use aws_types::SdkConfig;
     /// use aws_smithy_http::endpoint::Endpoint;
-    /// use http::Uri;
     /// let config = SdkConfig::builder().endpoint_resolver(
-    ///     Endpoint::immutable(Uri::from_static("http://localhost:8080"))
+    ///     Endpoint::immutable("http://localhost:8080")?
     /// ).build();
+    /// # Ok(())
+    /// # }
     /// ```
+    #[deprecated(note = "use `endpoint_url` instead")]
     pub fn endpoint_resolver(
         mut self,
         endpoint_resolver: impl ResolveAwsEndpoint + 'static,
     ) -> Self {
         self.set_endpoint_resolver(Some(Arc::new(endpoint_resolver)));
+        self
+    }
+
+    /// Set the endpoint url to use when making requests.
+    /// # Examples
+    /// ```
+    /// use aws_types::SdkConfig;
+    /// let config = SdkConfig::builder().endpoint_url("http://localhost:8080").build();
+    /// ```
+    pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
+        self.set_endpoint_url(Some(endpoint_url.into()));
+        self
+    }
+
+    /// Set the endpoint url to use when making requests.
+    pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
+        self.endpoint_url = endpoint_url;
         self
     }
 
@@ -164,7 +214,6 @@ impl Builder {
     ///
     /// let mut builder = SdkConfig::builder();
     /// disable_retries(&mut builder);
-    /// let config = builder.build();
     /// ```
     pub fn set_retry_config(&mut self, retry_config: Option<RetryConfig>) -> &mut Self {
         self.retry_config = retry_config;
@@ -293,11 +342,11 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
-    ///   # use aws_types::Credentials;
+    ///   # use aws_credential_types::Credentials;
     ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
@@ -314,11 +363,11 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
-    ///   # use aws_types::Credentials;
+    ///   # use aws_credential_types::Credentials;
     ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
@@ -359,15 +408,105 @@ impl Builder {
         self
     }
 
-    /// Sets the HTTP connector that clients will use to make HTTP requests.
-    pub fn http_connector(mut self, http_connector: HttpConnector) -> Self {
+    /// Sets the HTTP connector to use when making requests.
+    ///
+    /// ## Examples
+    /// ```no_run
+    /// # #[cfg(feature = "examples")]
+    /// # fn example() {
+    /// use std::time::Duration;
+    /// use aws_smithy_client::{Client, hyper_ext};
+    /// use aws_smithy_client::erase::DynConnector;
+    /// use aws_smithy_client::http_connector::ConnectorSettings;
+    /// use aws_types::SdkConfig;
+    ///
+    /// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+    ///     .with_webpki_roots()
+    ///     .https_only()
+    ///     .enable_http1()
+    ///     .enable_http2()
+    ///     .build();
+    /// let smithy_connector = hyper_ext::Adapter::builder()
+    ///     // Optionally set things like timeouts as well
+    ///     .connector_settings(
+    ///         ConnectorSettings::builder()
+    ///             .connect_timeout(Duration::from_secs(5))
+    ///             .build()
+    ///     )
+    ///     .build(https_connector);
+    /// let sdk_config = SdkConfig::builder()
+    ///     .http_connector(smithy_connector)
+    ///     .build();
+    /// # }
+    /// ```
+    pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
         self.set_http_connector(Some(http_connector));
         self
     }
 
-    /// Sets the HTTP connector that clients will use to make HTTP requests.
-    pub fn set_http_connector(&mut self, http_connector: Option<HttpConnector>) -> &mut Self {
-        self.http_connector = http_connector;
+    /// Sets the HTTP connector to use when making requests.
+    ///
+    /// ## Examples
+    /// ```no_run
+    /// # #[cfg(feature = "examples")]
+    /// # fn example() {
+    /// use std::time::Duration;
+    /// use aws_smithy_client::hyper_ext;
+    /// use aws_smithy_client::http_connector::ConnectorSettings;
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    ///
+    /// fn override_http_connector(builder: &mut Builder) {
+    ///     let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+    ///         .with_webpki_roots()
+    ///         .https_only()
+    ///         .enable_http1()
+    ///         .enable_http2()
+    ///         .build();
+    ///     let smithy_connector = hyper_ext::Adapter::builder()
+    ///         // Optionally set things like timeouts as well
+    ///         .connector_settings(
+    ///             ConnectorSettings::builder()
+    ///                 .connect_timeout(Duration::from_secs(5))
+    ///                 .build()
+    ///         )
+    ///         .build(https_connector);
+    ///     builder.set_http_connector(Some(smithy_connector));
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// override_http_connector(&mut builder);
+    /// let config = builder.build();
+    /// # }
+    /// ```
+    pub fn set_http_connector(
+        &mut self,
+        http_connector: Option<impl Into<HttpConnector>>,
+    ) -> &mut Self {
+        self.http_connector = http_connector.map(|inner| inner.into());
+        self
+    }
+
+    #[doc = docs_for!(use_fips)]
+    pub fn use_fips(mut self, use_fips: bool) -> Self {
+        self.set_use_fips(Some(use_fips));
+        self
+    }
+
+    #[doc = docs_for!(use_fips)]
+    pub fn set_use_fips(&mut self, use_fips: Option<bool>) -> &mut Self {
+        self.use_fips = use_fips;
+        self
+    }
+
+    #[doc = docs_for!(use_dual_stack)]
+    pub fn use_dual_stack(mut self, use_dual_stack: bool) -> Self {
+        self.set_use_dual_stack(Some(use_dual_stack));
+        self
+    }
+
+    #[doc = docs_for!(use_dual_stack)]
+    pub fn set_use_dual_stack(&mut self, use_dual_stack: Option<bool>) -> &mut Self {
+        self.use_dual_stack = use_dual_stack;
         self
     }
 
@@ -378,10 +517,13 @@ impl Builder {
             credentials_provider: self.credentials_provider,
             region: self.region,
             endpoint_resolver: self.endpoint_resolver,
+            endpoint_url: self.endpoint_url,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
             http_connector: self.http_connector,
+            use_fips: self.use_fips,
+            use_dual_stack: self.use_dual_stack,
         }
     }
 }
@@ -395,6 +537,11 @@ impl SdkConfig {
     /// Configured endpoint resolver
     pub fn endpoint_resolver(&self) -> Option<Arc<dyn ResolveAwsEndpoint>> {
         self.endpoint_resolver.clone()
+    }
+
+    /// Configured endpoint URL
+    pub fn endpoint_url(&self) -> Option<&str> {
+        self.endpoint_url.as_deref()
     }
 
     /// Configured retry config
@@ -426,6 +573,16 @@ impl SdkConfig {
     /// Configured HTTP Connector
     pub fn http_connector(&self) -> Option<&HttpConnector> {
         self.http_connector.as_ref()
+    }
+
+    /// Use FIPS endpoints
+    pub fn use_fips(&self) -> Option<bool> {
+        self.use_fips
+    }
+
+    /// Use dual-stack endpoint
+    pub fn use_dual_stack(&self) -> Option<bool> {
+        self.use_dual_stack
     }
 
     /// Config builder

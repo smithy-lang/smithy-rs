@@ -16,7 +16,7 @@ interface StructuredDataParserGenerator {
      * Entry point for payload-based parsing.
      * Roughly:
      * ```rust
-     * fn parse_my_struct(input: &[u8]) -> Result<MyStruct, XmlError> {
+     * fn parse_my_struct(input: &[u8]) -> Result<MyStruct, XmlDecodeError> {
      *      ...
      * }
      * ```
@@ -29,7 +29,7 @@ interface StructuredDataParserGenerator {
      * through:
      *
      * ```rust
-     * fn parse_some_operation(inp: &[u8], builder: my_operation::Builder) -> Result<my_operation::Builder, XmlError> {
+     * fn parse_some_operation(inp: &[u8], builder: my_operation::Builder) -> Result<my_operation::Builder, XmlDecodeError> {
      *   ...
      * }
      * ```
@@ -41,7 +41,7 @@ interface StructuredDataParserGenerator {
      * through:
      *
      * ```rust
-     * fn parse_some_error(inp: &[u8], builder: my_operation::Builder) -> Result<my_operation::Builder, XmlError> {
+     * fn parse_some_error(inp: &[u8], builder: my_operation::Builder) -> Result<my_operation::Builder, XmlDecodeError> {
      *   ...
      * }
      */

@@ -148,7 +148,6 @@ pub fn py_tracing_event(
         filename = filename,
         lineno = lineno
     );
-    println!("message2: {message}");
     let _guard = span.enter();
     match level {
         40 => tracing::error!("{message}"),

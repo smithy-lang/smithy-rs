@@ -74,20 +74,35 @@ data class ServerRustSettings(
     }
 }
 
+/**
+ * [publicConstrainedTypes]: Generate constrained wrapper newtypes for constrained shapes
+ * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
+ */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
+    val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
+    val ignoreUnsupportedConstraints: Boolean = defaultIgnoreUnsupportedConstraints,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
     companion object {
-        // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as
-        // `CodegenConfig`. In the future, the server will have server-specific codegen options just like the client
-        // does.
+        private const val defaultPublicConstrainedTypes = true
+        private const val defaultIgnoreUnsupportedConstraints = false
+
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
-            ServerCodegenConfig(
-                formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                debugMode = coreCodegenConfig.debugMode,
-            )
+            if (node.isPresent) {
+                ServerCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                    publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
+                    ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", defaultIgnoreUnsupportedConstraints),
+                )
+            } else {
+                ServerCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                )
+            }
     }
 }

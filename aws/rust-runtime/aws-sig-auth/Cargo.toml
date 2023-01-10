@@ -11,6 +11,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 sign-eventstream = ["aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
 
 [dependencies]
+aws-credential-types = { path = "../aws-credential-types" }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
@@ -19,7 +20,9 @@ http = "0.2.2"
 tracing = "0.1"
 
 [dev-dependencies]
+aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-endpoint = { path = "../aws-endpoint" }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types"}
 tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
