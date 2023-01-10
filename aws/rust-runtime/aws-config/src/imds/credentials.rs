@@ -394,6 +394,7 @@ mod test {
     }
 
     #[tokio::test]
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         let client = Client::builder()
             // 240.* can never be resolved
@@ -416,6 +417,7 @@ mod test {
     }
 
     #[tokio::test]
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
     ) {
         let client = Client::builder()
