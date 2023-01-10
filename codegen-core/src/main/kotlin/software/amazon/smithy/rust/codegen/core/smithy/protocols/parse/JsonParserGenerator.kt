@@ -298,8 +298,7 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeBlob(target: BlobShape) {
         rustTemplate(
-            "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
-            "ConvertFrom" to writable { RuntimeType.blob(runtimeConfig).toSymbol().rustType().render() },
+            "#{expect_blob_or_null}(tokens.next())?",
             *codegenScope,
         )
     }
