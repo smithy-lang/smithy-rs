@@ -98,6 +98,7 @@ impl Builder {
         self
     }
 
+    #[allow(dead_code)]
     #[cfg(test)]
     fn last_retrieved_credentials(mut self, credentials: Credentials) -> Self {
         self.last_retrieved_credentials = Some(credentials);
@@ -317,19 +318,12 @@ impl ImdsCredentialsProvider {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use crate::imds::client::test::{
         imds_request, imds_response, make_client, token_request, token_response,
     };
     use crate::imds::credentials::ImdsCredentialsProvider;
-    use crate::imds::Client;
-    use aws_credential_types::provider::error::CredentialsError;
     use aws_credential_types::provider::ProvideCredentials;
-    use aws_credential_types::Credentials;
-    use aws_smithy_async::rt::sleep::default_async_sleep;
     use aws_smithy_client::test_connection::TestConnection;
-    use http::Uri;
     use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
@@ -396,33 +390,33 @@ mod test {
     #[tokio::test]
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
-        let client = Client::builder()
+        let client = crate::imds::Client::builder()
             // 240.* can never be resolved
-            .endpoint(Uri::from_static("http://240.0.0.0"))
+            .endpoint(http::Uri::from_static("http://240.0.0.0"))
             .build()
             .await
             .expect("valid client");
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(client)
-            .last_retrieved_credentials(Credentials::for_tests())
+            .last_retrieved_credentials(aws_credential_types::Credentials::for_tests())
             .build();
         let actual = provider
             .provide_credentials_with_timeout(
-                default_async_sleep().unwrap(),
-                Duration::from_secs(5),
+                aws_smithy_async::rt::sleep::default_async_sleep().unwrap(),
+                std::time::Duration::from_secs(5),
             )
             .await
             .unwrap();
-        assert_eq!(actual, Credentials::for_tests());
+        assert_eq!(actual, aws_credential_types::Credentials::for_tests());
     }
 
     #[tokio::test]
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
     ) {
-        let client = Client::builder()
+        let client = crate::imds::Client::builder()
             // 240.* can never be resolved
-            .endpoint(Uri::from_static("http://240.0.0.0"))
+            .endpoint(http::Uri::from_static("http://240.0.0.0"))
             .build()
             .await
             .expect("valid client");
@@ -431,13 +425,13 @@ mod test {
             .build();
         let actual = provider
             .provide_credentials_with_timeout(
-                default_async_sleep().unwrap(),
-                Duration::from_secs(5),
+                aws_smithy_async::rt::sleep::default_async_sleep().unwrap(),
+                std::time::Duration::from_secs(5),
             )
             .await;
         assert!(matches!(
             actual,
-            Err(CredentialsError::CredentialsNotLoaded(_))
+            Err(aws_credential_types::provider::error::CredentialsError::CredentialsNotLoaded(_))
         ));
     }
 }
