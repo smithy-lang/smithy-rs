@@ -22,9 +22,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * This exposes [RuntimeType]s for the individual components of endpoints 2.0
  */
 class EndpointTypesGenerator(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val rules: EndpointRuleSet?,
-    private val tests: List<EndpointTestCase>,
+    val tests: List<EndpointTestCase>,
 ) {
     val params: Parameters = rules?.parameters ?: Parameters.builder().build()
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -45,7 +45,16 @@ class EndpointTypesGenerator(
         rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
 
     fun testGenerator(): Writable =
-        defaultResolver()?.let { EndpointTestGenerator(tests, paramsStruct(), it, params, runtimeConfig).generate() }
+        defaultResolver()?.let {
+            EndpointTestGenerator(
+                tests,
+                paramsStruct(),
+                it,
+                params,
+                codegenContext = codegenContext,
+                endpointCustomizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext),
+            ).generate()
+        }
             ?: {}
 
     /**

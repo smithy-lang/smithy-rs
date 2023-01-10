@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -91,6 +92,8 @@ open class Instantiator(
         fun setterName(memberShape: MemberShape): String
         fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
     }
+
+    fun generate(shape: Shape, data: Node, ctx: Ctx = Ctx()) = writable { render(this, shape, data, ctx) }
 
     fun render(writer: RustWriter, shape: Shape, data: Node, ctx: Ctx = Ctx()) {
         when (shape) {

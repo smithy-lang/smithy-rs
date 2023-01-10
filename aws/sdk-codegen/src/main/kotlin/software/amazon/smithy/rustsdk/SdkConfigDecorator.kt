@@ -35,6 +35,16 @@ object SdkConfigSection : AdHocSection<SdkConfigSection.CopySdkConfigToClientCon
      */
     data class CopySdkConfigToClientConfig(val sdkConfig: String, val serviceConfigBuilder: String) :
         Section("CopyConfig")
+
+    fun copyField(fieldName: String, map: Writable?) = SdkConfigSection.create { section ->
+        {
+            val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
+            rustTemplate(
+                "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
+                "map" to mapBlock,
+            )
+        }
+    }
 }
 
 /**

@@ -67,6 +67,8 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
     private val codegenScope = arrayOf(
         "provider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider"),
         "DefaultProvider" to defaultProvider,
+        "Credentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials"),
+        "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
     )
 
     override fun section(section: ServiceConfig) = writable {
@@ -110,6 +112,11 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
 
             ServiceConfig.BuilderBuild -> rustTemplate(
                 "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{provider}::SharedCredentialsProvider::new(#{DefaultProvider})),",
+                *codegenScope,
+            )
+
+            is ServiceConfig.DefaultForTests -> rustTemplate(
+                "${section.configBuilderRef}.set_credentials_provider(Some(#{provider}::SharedCredentialsProvider::new(#{TestCredentials}::for_tests())));",
                 *codegenScope,
             )
 

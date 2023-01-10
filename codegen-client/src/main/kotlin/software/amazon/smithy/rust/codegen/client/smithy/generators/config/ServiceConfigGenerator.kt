@@ -5,19 +5,26 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
@@ -81,12 +88,64 @@ sealed class ServiceConfig(name: String) : Section(name) {
      * A section for extra functionality that needs to be defined with the config module
      */
     object Extras : ServiceConfig("Extras")
+
+    /**
+     * The set default value of a field for use in tests, e.g `${configBuilderRef}.set_credentials(Credentials::for_tests())`
+     */
+    data class DefaultForTests(val configBuilderRef: String) : ServiceConfig("DefaultForTests")
+}
+
+data class ConfigParam(val name: String, val type: Symbol, val docs: String?)
+
+fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : ConfigCustomization() {
+    override fun section(section: ServiceConfig): Writable {
+        return when (section) {
+            is ServiceConfig.ConfigStruct -> writable {
+                rust("pub (crate) ${param.name}: #T,", param.type.makeOptional())
+            }
+
+            ServiceConfig.ConfigImpl -> emptySection
+            ServiceConfig.BuilderStruct -> writable {
+                rust("${param.name}: #T,", param.type.makeOptional())
+            }
+
+            ServiceConfig.BuilderImpl -> writable {
+                docsOrFallback(param.docs)
+                rust(
+                    """
+                    pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
+                        self.${param.name} = Some(${param.name}.into());
+                        self
+                        }""",
+                    param.type,
+                )
+
+                docsOrFallback(param.docs)
+                rust(
+                    """
+                    pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
+                        self.${param.name} = ${param.name};
+                        self
+                    }
+                    """,
+                    param.type,
+                )
+            }
+
+            ServiceConfig.BuilderBuild -> writable {
+                rust("${param.name}: self.${param.name},")
+            }
+
+            else -> emptySection
+        }
+    }
 }
 
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
     val operationIndex = OperationIndex.of(model)
     val topDownIndex = TopDownIndex.of(model)
-    return topDownIndex.getContainedOperations(this.id).flatMap { operationIndex.getInputMembers(it).values }.any { it.hasTrait<IdempotencyTokenTrait>() }
+    return topDownIndex.getContainedOperations(this.id).flatMap { operationIndex.getInputMembers(it).values }
+        .any { it.hasTrait<IdempotencyTokenTrait>() }
 }
 
 typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
@@ -111,7 +170,10 @@ typealias ConfigCustomization = NamedSectionGenerator<ServiceConfig>
 class ServiceConfigGenerator(private val customizations: List<ConfigCustomization> = listOf()) {
 
     companion object {
-        fun withBaseBehavior(codegenContext: CodegenContext, extraCustomizations: List<ConfigCustomization>): ServiceConfigGenerator {
+        fun withBaseBehavior(
+            codegenContext: CodegenContext,
+            extraCustomizations: List<ConfigCustomization>,
+        ): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
             if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
                 baseFeatures.add(IdempotencyTokenProviderCustomization())
@@ -168,6 +230,21 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
+
+            Attribute.allow("unused_mut")
+            docs("Apply test defaults to the builder")
+            rustBlock("pub fn set_test_defaults(&mut self) -> &mut Self") {
+                customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
+                rust("self")
+            }
+
+            // Attribute.CfgTest.render(this)
+            Attribute.allow("unused_mut")
+            docs("Apply test defaults to the builder")
+            rustBlock("pub fn with_test_defaults(mut self) -> Self") {
+                rust("self.set_test_defaults(); self")
+            }
+
             docs("Builds a [`Config`].")
             rustBlock("pub fn build(self) -> Config") {
                 rustBlock("Config") {

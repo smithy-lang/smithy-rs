@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
+import software.amazon.smithy.rustsdk.endpoints.stripEndpointTrait
 import java.util.logging.Logger
 
 /**
@@ -68,7 +69,7 @@ class S3Decorator : ClientCodegenDecorator {
                     logger.info("Adding AllowInvalidXmlRoot trait to $it")
                     (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
                 }
-            }.let(StripBucketFromHttpPath()::transform)
+            }.let(StripBucketFromHttpPath()::transform).let(stripEndpointTrait("RequestRoute"))
         }
     }
 
