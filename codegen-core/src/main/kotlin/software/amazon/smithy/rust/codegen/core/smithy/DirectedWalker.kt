@@ -13,12 +13,10 @@ import software.amazon.smithy.model.shapes.Shape
 import java.util.function.Predicate
 
 /**
- * A walker which can traverse in only one direction. This is in contrast to `Walker` which can traverse up the shape
+ * A walker which traverses down the Shape graph. This is in contrast to `Walker` which can traverse up the shape
  * graph.
- *
- * Defaults to `RelationshipDirection.DIRECTED`.
  */
-class DirectedWalker(model: Model, private val direction: RelationshipDirection = RelationshipDirection.DIRECTED) {
+class DirectedWalker(model: Model) {
     private val inner = Walker(model)
 
     fun walkShapes(shape: Shape): Set<Shape> {
@@ -26,6 +24,6 @@ class DirectedWalker(model: Model, private val direction: RelationshipDirection 
     }
 
     fun walkShapes(shape: Shape, predicate: Predicate<Relationship>): Set<Shape> {
-        return inner.walkShapes(shape) { rel -> predicate.test(rel) && rel.direction == direction }
+        return inner.walkShapes(shape) { rel -> predicate.test(rel) && rel.direction == RelationshipDirection.DIRECTED }
     }
 }
