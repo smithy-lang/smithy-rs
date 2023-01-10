@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.RelationshipDirection
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -19,6 +17,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFromOperationInputTagTrait
 
@@ -49,9 +48,9 @@ object ShapesReachableFromOperationInputTagger {
         val inputShapes = model.operationShapes.map {
             model.expectShape(it.inputShape, StructureShape::class.java)
         }
-        val walker = Walker(model)
+        val walker = DirectedWalker(model)
         val shapesReachableFromOperationInputs = inputShapes
-            .flatMap { walker.walkShapes(it, { rel -> rel.getDirection() == RelationshipDirection.DIRECTED }) }
+            .flatMap { walker.walkShapes(it) }
             .toSet()
 
         return ModelTransformer.create().mapShapes(model) { shape ->
