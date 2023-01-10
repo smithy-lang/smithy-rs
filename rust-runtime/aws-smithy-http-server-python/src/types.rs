@@ -434,7 +434,7 @@ impl ByteStream {
 
 /// Python Wrapper for [aws_smithy_types::Document].
 #[derive(Debug, Clone, PartialEq)]
-struct Document(aws_smithy_types::Document);
+pub struct Document(aws_smithy_types::Document);
 
 impl IntoPy<PyObject> for Document {
     fn into_py(self, py: Python<'_>) -> PyObject {

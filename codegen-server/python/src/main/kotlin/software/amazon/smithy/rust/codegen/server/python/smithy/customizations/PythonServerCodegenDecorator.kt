@@ -57,6 +57,7 @@ class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibR
                 rustBlock("pub mod python_types") {
                     rust("pub use #T;", PythonServerRuntimeType.blob(codegenContext.runtimeConfig).toSymbol())
                     rust("pub use #T;", PythonServerRuntimeType.dateTime(codegenContext.runtimeConfig).toSymbol())
+                    rust("pub use #T;", PythonServerRuntimeType.document(codegenContext.runtimeConfig).toSymbol())
                 }
             }
             else -> emptySection
