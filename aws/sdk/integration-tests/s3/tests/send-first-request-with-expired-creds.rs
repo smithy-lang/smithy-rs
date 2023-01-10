@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod fixture;
+mod imds_fixture;
 
 use std::{
     convert::Infallible,
@@ -17,7 +17,7 @@ async fn test_request_should_be_sent_when_first_call_to_imds_returns_expired_cre
     // This represents the time of a request being made, 21 Sep 2021 17:41:25 GMT.
     let time_of_request = UNIX_EPOCH + Duration::from_secs(1632246085);
 
-    let test_fixture = fixture::TestFixture::new(
+    let test_fixture = imds_fixture::TestFixture::new(
         include_str!("test-data/send-first-request-with-expired-creds.json"),
         time_of_request,
     );

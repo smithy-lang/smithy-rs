@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod fixture;
+mod imds_fixture;
 
 use std::{
     convert::Infallible,
@@ -13,13 +13,13 @@ use std::{
 use aws_sdk_s3::Client;
 
 #[tokio::test]
-async fn test_successive_requests_should_be_sent_with_expired_credentials_and_imds_being_called_only_once(
+async fn test_request_should_be_sent_with_expired_credentials_after_imds_returns_500_during_credentials_refresh(
 ) {
     // This represents the time of a request being made, 21 Sep 2021 17:41:25 GMT.
     let time_of_request = UNIX_EPOCH + Duration::from_secs(1632246085);
 
-    let test_fixture = fixture::TestFixture::new(
-        include_str!("test-data/send-successive-requests-with-expired-creds.json"),
+    let mut test_fixture = imds_fixture::TestFixture::new(
+        include_str!("test-data/send-request-after-500-response-from-imds.json"),
         time_of_request,
     );
 
@@ -28,14 +28,17 @@ async fn test_successive_requests_should_be_sent_with_expired_credentials_and_im
 
     tokio::time::pause();
 
-    // The JSON file above specifies the credentials expiry is 21 Sep 2021 11:29:29 GMT,
-    // which is already invalid at the time of the request but will be made valid as the
-    // code execution will go through the expiration extension.
-    for i in 1..=3 {
-        // If IMDS were called more than once, the last `unwrap` would fail with an error looking like:
-        // panicked at 'called `Result::unwrap()` on an `Err` value: ConstructionFailure(ConstructionFailure { source: CredentialsStageError { ... } })'
-        // This is because the accompanying JSON file assumes that connection_id 4 (and 5) represents a request to S3,
-        // not to IMDS, so its response cannot be serialized into `Credentials`.
+    // Requests are made at 21 Sep 2021 17:41:25 GMT and 21 Sep 2021 23:41:25 GMT.
+    let time_of_first_request = time_of_request;
+    let time_of_second_request = UNIX_EPOCH + Duration::from_secs(1632267685);
+
+    // The JSON file above specifies credentials will expire at between the two requests, 21 Sep 2021 23:33:13 GMT.
+    // The second request will receive response 500 from IMDS but `s3_client` will eventually
+    // be able to send it thanks to expired credentials held by `ImdsCredentialsProvider`.
+    for (i, time_of_request_to_s3) in [time_of_first_request, time_of_second_request]
+        .into_iter()
+        .enumerate()
+    {
         s3_client
             .create_bucket()
             .bucket(format!(
@@ -46,13 +49,19 @@ async fn test_successive_requests_should_be_sent_with_expired_credentials_and_im
             .await
             .unwrap()
             .map_operation(|mut op| {
-                op.properties_mut().insert(time_of_request);
+                op.properties_mut().insert(time_of_request_to_s3);
                 Result::Ok::<_, Infallible>(op)
             })
             .unwrap()
             .send()
             .await
             .unwrap();
+
+        test_fixture.advance_time(
+            time_of_second_request
+                .duration_since(time_of_first_request)
+                .unwrap(),
+        );
     }
 
     // The fact that the authorization of each request exists implies that the requests have

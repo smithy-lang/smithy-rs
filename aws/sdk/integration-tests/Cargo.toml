@@ -6,7 +6,6 @@ members = [
     "ec2",
     "glacier",
     "iam",
-    "imds",
     "kms",
     "lambda",
     "no-default-features",
