@@ -24,6 +24,9 @@ class ServerRuntimeTypesReExportsGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
+            pub mod body {
+                pub use #{SmithyHttpServer}::body::BoxBody;
+            }
             pub mod operation {
                 pub use #{SmithyHttpServer}::operation::OperationShape;
                 pub use #{SmithyHttpServer}::operation::Operation;
