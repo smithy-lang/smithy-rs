@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Expre
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.comment
@@ -202,7 +203,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
         return RuntimeType.forInlineFun("resolve_endpoint", EndpointsImpl) {
-            allowLintsForResolver.map { Attribute.Custom("allow($it)") }.map { it.render(this) }
+            Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
                 pub(super) fn resolve_endpoint($ParamsName: &#{Params}, $DiagnosticCollector: &mut #{DiagnosticCollector}, #{additional_args}) -> #{endpoint}::Result {
@@ -233,7 +234,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         }
         if (!isExhaustive(rules.last())) {
             // it's hard to figure out if these are always needed or not
-            Attribute.Custom("allow(unreachable_code)").render(this)
+            Attribute.AllowUnreachableCode.render(this)
             rustTemplate(
                 """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)));""",
                 *codegenScope,

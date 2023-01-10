@@ -72,7 +72,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
 
 /**
  * The base metadata supports a list of attributes that are used by generators to decorate code.
- * By default we apply #[non_exhaustive] only to client structures since model changes should
+ * By default, we apply ```#[non_exhaustive]``` only to client structures since model changes should
  * be considered as breaking only when generating server code.
  */
 class BaseSymbolMetadataProvider(
@@ -88,15 +88,15 @@ class BaseSymbolMetadataProvider(
             // shape; any sensitive descendant should still be printed as redacted.
             shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
 
-        val setOfDerives = if (isSensitive) {
-            defaultDerives.toSet() - RuntimeType.Debug
+        val derives = if (isSensitive) {
+            defaultDerives - RuntimeType.Debug
         } else {
-            defaultDerives.toSet()
+            defaultDerives
         }
         return RustMetadata(
-            Attribute.Derives(setOfDerives),
-            additionalAttributes = additionalAttributes,
-            visibility = Visibility.PUBLIC,
+            derives,
+            additionalAttributes,
+            Visibility.PUBLIC,
         )
     }
 
@@ -137,31 +137,28 @@ class BaseSymbolMetadataProvider(
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
         return containerDefault(stringShape).withDerives(
-            RuntimeType.std.resolve("hash::Hash"),
-        ).withDerives(
-            // enums can be eq because they can only contain ints and strings
-            RuntimeType.std.resolve("cmp::Eq"),
-            // enums can be Ord because they can only contain ints and strings
-            RuntimeType.std.resolve("cmp::PartialOrd"),
-            RuntimeType.std.resolve("cmp::Ord"),
+            RuntimeType.Hash,
+            // enums can be Eq because they can only contain ints and strings
+            RuntimeType.Eq,
+            // enums can be PartialOrd/Ord because they can only contain ints and strings
+            RuntimeType.PartialOrd,
+            RuntimeType.Ord,
         )
     }
 
     companion object {
         private val defaultDerives by lazy {
-            with(RuntimeType) {
-                listOf(Debug, PartialEq, Clone)
-            }
+            setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
         }
     }
 }
 
-private const val MetaKey = "meta"
+private const val META_KEY = "meta"
 fun Symbol.Builder.meta(rustMetadata: RustMetadata?): Symbol.Builder {
-    return this.putProperty(MetaKey, rustMetadata)
+    return this.putProperty(META_KEY, rustMetadata)
 }
 
-fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(MetaKey, RustMetadata::class.java).orElseThrow {
+fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(META_KEY, RustMetadata::class.java).orElseThrow {
     CodegenException(
         "Expected $this to have metadata attached but it did not. ",
     )

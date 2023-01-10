@@ -22,6 +22,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
@@ -145,6 +146,16 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     vararg args: Any,
 ) {
     this.write(contents.trim(), *args)
+}
+
+/**
+ * Convenience wrapper that tells Intellij that the contents of this block are Rust
+ */
+fun RustWriter.rustInline(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
+    vararg args: Any,
+) {
+    this.writeInline(contents, *args)
 }
 
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
@@ -324,7 +335,7 @@ fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
     val note = deprecatedTrait.message.orNull()
     val since = deprecatedTrait.since.orNull()
 
-    Attribute.Custom.deprecated(note, since).render(this)
+    Attribute(deprecated(since, note)).render(this)
 
     return this
 }

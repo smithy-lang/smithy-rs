@@ -71,7 +71,7 @@ internal class PaginatorGeneratorTest {
     fun `generate paginators that compile`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("paginators_generated") {
-                Attribute.Custom("allow(unused_imports)").render(this)
+                Attribute.AllowUnusedImports.render(this)
                 rust("use ${clientCodegenContext.moduleUseName()}::paginator::PaginatedListPaginator;")
             }
         }

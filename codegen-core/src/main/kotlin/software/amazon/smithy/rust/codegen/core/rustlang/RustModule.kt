@@ -56,10 +56,11 @@ sealed class RustModule {
             documentation: String? = null,
             inline: Boolean = false,
             parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = listOf(),
         ): LeafModule {
             return LeafModule(
                 RustReservedWords.escapeIfNeeded(name),
-                RustMetadata(visibility = visibility),
+                RustMetadata(visibility = visibility, additionalAttributes = additionalAttributes),
                 documentation,
                 inline = inline,
                 parent = parent,
