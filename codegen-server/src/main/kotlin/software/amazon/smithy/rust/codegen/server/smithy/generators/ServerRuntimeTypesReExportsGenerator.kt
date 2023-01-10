@@ -44,8 +44,10 @@ class ServerRuntimeTypesReExportsGenerator(
             pub mod routing {
                 pub use #{SmithyHttpServer}::routing::IntoMakeService;
                 pub use #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo;
-                pub use #{SmithyHttpServer}::routing::LambdaHandler;
                 pub use #{SmithyHttpServer}::routing::Router;
+
+                ##[cfg(feature = "aws-lambda")]
+                pub use #{SmithyHttpServer}::routing::LambdaHandler;
             }
 
             pub use #{SmithyHttpServer}::instrumentation;
