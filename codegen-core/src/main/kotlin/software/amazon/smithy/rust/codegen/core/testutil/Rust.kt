@@ -213,7 +213,7 @@ fun RustWriter.unitTest(
 fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
-    attribute: Attribute = Attribute.Custom("test"),
+    attribute: Attribute = Attribute.Test,
     async: Boolean = false,
     block: Writable,
 ): RustWriter {
@@ -225,7 +225,7 @@ fun RustWriter.unitTest(
 }
 
 fun RustWriter.tokioTest(name: String, vararg args: Any, block: Writable) {
-    unitTest(name, attribute = TokioTest, async = true, block = block, args = args)
+    unitTest(name, attribute = Attribute.TokioTest, async = true, block = block, args = args)
 }
 
 /**
