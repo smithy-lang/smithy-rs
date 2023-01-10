@@ -8,6 +8,7 @@
 use std::{
     collections::HashMap,
     future::Future,
+    ops::Deref,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -490,6 +491,24 @@ impl FromPyObject<'_> for Document {
                 "'{obj}' cannot be converted to 'Document'",
             )))
         }
+    }
+}
+
+// TODO(PythonSerialization): Get rid of this hack.
+// `JsonValueWriter::document` expects `&aws_smithy_types::Document`
+// and this impl allows `&Document` to get coerced to `&aws_smithy_types::Document`.
+// We should ideally handle this in `JsonSerializerGenerator.kt` but I'm not sure how hard it is.
+impl Deref for Document {
+    type Target = aws_smithy_types::Document;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<aws_smithy_types::Document> for Document {
+    fn from(other: aws_smithy_types::Document) -> Document {
+        Document(other)
     }
 }
 
