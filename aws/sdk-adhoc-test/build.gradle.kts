@@ -54,6 +54,22 @@ val allCodegenTests = listOf(
             }
         """,
     ),
+    CodegenTest(
+        "com.amazonaws.testservice#TestService",
+        "endpoint-test-service",
+        imports = listOf("models/single-static-endpoint.smithy"),
+        extraConfig = """
+            ,
+            "codegen": {
+                "includeFluentClient": false
+            },
+            "customizationConfig": {
+                "awsSdk": {
+                    "generateReadme": false
+                }
+            }
+        """,
+    ),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)

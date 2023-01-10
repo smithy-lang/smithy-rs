@@ -75,12 +75,16 @@ However, we believe that cfg approach ensure users won't enable this feature by 
 
 ## Feature Gate for Serialization and De-serialization
 `Serde` traits are implemented behind feature gates.
-`Serialize` is implemented behind `serialize`, while `Deserialize` is implemented behind `deserialize`.
+`Serialize` is implemented behind `serde-serialize`, while `Deserialize` is implemented behind `serde-deserialize`.
 Users must enable the `unstable` feature to expose those features.
 
 We considered giving each feature a dedicated feature gate such as `unstable-serde-serialize`.
 In this case, we will need to change the name of feature gates entirely once it leaves the unstable status which will cause users to make changes to their code base.
 We conclude that this brings no benefit to the users.
+
+Furthermore, we considered naming the fature-gate `serialize`/`deserialize`.
+However, this way it would be confusing for the users when we add support for different serialization/deserialization framework such as `deser`.
+Thus, to emphasize that the traits is from `serde` crate, we decided to name it `serde-serialize`/`serde-deserialize`
 
 ## Keeping both features behind the same feature gate
 We considered keeping both features behind the same feature gate.

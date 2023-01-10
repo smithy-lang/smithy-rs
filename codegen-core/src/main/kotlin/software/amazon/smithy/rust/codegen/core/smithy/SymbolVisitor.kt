@@ -38,8 +38,11 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -393,6 +396,28 @@ fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProper
 fun Symbol.Builder.module(module: RustModule.LeafModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
 fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)
 
+/**
+ * Creates a test module for this symbol.
+ * For example if the symbol represents the name for the struct `struct MyStruct { ... }`,
+ * this function will create the following inline module:
+ * ```rust
+ *  #[cfg(test)]
+ *  mod test_my_struct { ... }
+ * ```
+ */
+fun SymbolProvider.testModuleForShape(shape: Shape): RustModule.LeafModule {
+    val symbol = toSymbol(shape)
+    val rustName = symbol.name.unsafeToRustName()
+
+    return RustModule.new(
+        name = "test_$rustName",
+        visibility = Visibility.PRIVATE,
+        inline = true,
+        parent = symbol.module(),
+        additionalAttributes = listOf(Attribute.CfgTest),
+    )
+}
+
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
     return this.putProperty(RENAMED_FROM_KEY, name)
 }
@@ -435,3 +460,9 @@ fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is 
 // Symbols should _always_ be created with a Rust type & shape attached
 fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
+
+/**
+ *  You should rarely need this function, rust names in general should be symbol-aware,
+ *  this is "automatic" if you use things like [software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate].
+ */
+fun String.unsafeToRustName(): String = RustReservedWords.escapeIfNeeded(this.toSnakeCase())
