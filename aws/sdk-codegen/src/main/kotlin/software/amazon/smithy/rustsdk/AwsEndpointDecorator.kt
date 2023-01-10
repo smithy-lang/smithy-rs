@@ -60,8 +60,12 @@ class AwsEndpointDecorator : ClientCodegenDecorator {
                     val newParameters = Parameters.builder()
                     epRules.parameters.toList()
                         .map { param ->
-                            param.letIf(param.builtIn == Builtins.REGION.builtIn) {
-                                it.toBuilder().required(true).build()
+                            param.letIf(param.builtIn == Builtins.REGION.builtIn) { parameter ->
+                                val builder = parameter.toBuilder().required(true)
+                                // TODO(https://github.com/awslabs/smithy-rs/issues/2187): undo this workaround
+                                parameter.defaultValue.ifPresent { default -> builder.defaultValue(default) }
+
+                                builder.build()
                             }
                         }
                         .forEach(newParameters::addParameter)
