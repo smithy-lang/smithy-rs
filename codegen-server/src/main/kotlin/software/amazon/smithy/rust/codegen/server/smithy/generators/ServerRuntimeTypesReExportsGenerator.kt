@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -17,8 +16,8 @@ class ServerRuntimeTypesReExportsGenerator(
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "Router" to ServerRuntimeType.Router(runtimeConfig),
-        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "Router" to ServerRuntimeType.router(runtimeConfig),
+        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
     )
 
     fun render(writer: RustWriter) {
