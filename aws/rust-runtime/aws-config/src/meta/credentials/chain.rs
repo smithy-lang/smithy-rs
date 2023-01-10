@@ -4,6 +4,7 @@
  */
 
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
@@ -105,10 +106,9 @@ impl CredentialsProviderChain {
         timeout: Duration,
     ) -> provider::Result {
         for (name, provider) in &self.providers {
-            let timeout_per_provider = timeout.div_f64(self.providers.len() as f64);
             let span = tracing::debug_span!("load_credentials", provider = %name);
             match provider
-                .provide_credentials_with_timeout(Arc::clone(&sleeper), timeout_per_provider)
+                .provide_credentials_with_timeout(Arc::clone(&sleeper), timeout)
                 .instrument(span)
                 .await
             {
@@ -145,6 +145,21 @@ impl ProvideCredentials for CredentialsProviderChain {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::new(self.credentials_with_timeout(sleeper, timeout))
+        // We need to give `timeout` to the whole chain as well as to each credentials provider in the chain.
+        // One could argue that if the whole chain has `timeout` anyway, there is no point in having it
+        // in individual providers. This is due to the fact that the other method `provide_credentials`
+        // does not respect provider-specific read timeout behavior, e.g. the IMDS credentials provider
+        // wants to provide expired credentials, if any, in the case of read timeout.
+        let sleep_future = sleeper.sleep(timeout);
+        let timeout_future = Timeout::new(
+            self.credentials_with_timeout(sleeper, timeout),
+            sleep_future,
+        );
+        future::ProvideCredentials::new(async move {
+            match timeout_future.await {
+                Ok(creds) => creds,
+                Err(_) => Err(CredentialsError::provider_timed_out(timeout)),
+            }
+        })
     }
 }
