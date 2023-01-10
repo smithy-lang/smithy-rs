@@ -162,3 +162,9 @@ FIPS and dual-stack endpoints can each be configured in multiple ways:
 Note: Not all services support FIPS and dual-stack.
 """
 author = "rcoh"
+
+[[smithy-rs]]
+references = ["smithy-rs#2054"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "server" }
+message = "Servers can generate a unique request ID and use it in their handlers."
+author = "82marbag"
