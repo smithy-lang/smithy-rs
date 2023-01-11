@@ -67,8 +67,6 @@ pub enum Number {
     Float(f64),
 }
 
-/* ANCHOR_END: document */
-
 impl Number {
     /// Converts to an `f64` lossily.
     /// Use `Number::try_from` to make the conversion only if it is not lossy.
