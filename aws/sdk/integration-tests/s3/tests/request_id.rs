@@ -117,3 +117,32 @@ fn get_request_id_from_successful_streaming_response() {
         output.extended_request_id()
     );
 }
+
+// Verify that the conversion from operation error to the top-level service error maintains the request ID
+#[test]
+fn conversion_to_service_error_maintains_request_id() {
+    let resp = http::Response::builder()
+        .header("x-amz-request-id", "correct-request-id")
+        .header("x-amz-id-2", "correct-extended-request-id")
+        .status(404)
+        .body(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+            <Error>
+              <Code>NoSuchKey</Code>
+              <Message>The resource you requested does not exist</Message>
+              <Resource>/mybucket/myfoto.jpg</Resource>
+              <RequestId>incorrect-request-id</RequestId>
+            </Error>"#,
+        )
+        .unwrap();
+    let err = GetObject::new()
+        .parse_loaded(&resp.map(Bytes::from))
+        .expect_err("status was 404, this is an error");
+
+    let service_error: aws_sdk_s3::Error = err.into();
+    assert_eq!(Some("correct-request-id"), service_error.request_id());
+    assert_eq!(
+        Some("correct-extended-request-id"),
+        service_error.extended_request_id()
+    );
+}
