@@ -23,6 +23,7 @@ aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = tr
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
 fastrand = "1.4.0"
+futures-util = "0.3.25"
 http = "0.2.3"
 http-body = "0.4.4"
 hyper = { version = "0.14.12", features = ["client", "http2", "http1", "tcp"], optional = true }

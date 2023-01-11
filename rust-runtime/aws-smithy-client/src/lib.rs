@@ -23,7 +23,9 @@
 
 pub mod bounds;
 pub mod erase;
+pub mod quota;
 pub mod retry;
+pub mod token_bucket;
 
 // https://github.com/rust-lang/rust/issues/72081
 #[allow(rustdoc::private_doc_tests)]
@@ -97,10 +99,14 @@ pub use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
+use aws_smithy_http_tower::SendOperationError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ProvideErrorKind;
 use aws_smithy_types::timeout::OperationTimeoutConfig;
+use quota::QuotaLayer;
 use std::error::Error;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use timeout::ClientTimeoutParams;
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
@@ -215,18 +221,24 @@ where
             ClientTimeoutParams::new(&self.operation_timeout_config, self.sleep_impl.clone());
 
         let svc = ServiceBuilder::new()
-            .layer(TimeoutLayer::new(timeout_params.operation_timeout))
-            .retry(
-                self.retry_policy
-                    .new_request_policy(self.sleep_impl.clone()),
-            )
-            .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
+            // .layer(TimeoutLayer::new(timeout_params.operation_timeout))
+            .layer(QuotaLayer::new(|| {
+                token_bucket::standard::TokenBucket::builder().build()
+            }))
+            // .retry(
+            //     self.retry_policy
+            //         .new_request_policy(self.sleep_impl.clone()),
+            // )
+            // .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
             .layer(&self.middleware)
             .layer(DispatchLayer::new())
             .service(connector);
+
+        // let c: Box<dyn tower::Service<_, Response = _, Error = _, Future = _>> =
+        //     Box::new(svc.clone());
 
         // send_operation records the full request-response lifecycle.
         // NOTE: For operations that stream output, only the setup is captured in this span.
