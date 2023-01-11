@@ -135,6 +135,11 @@ open class StructureGenerator(
 
     open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
+        
+        // todo! check if it is sensitive
+        // if {
+            //writer.writeInline("This data may contain sensitive information; You must be careful when you serialize this.")
+        // }
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
         writer.write("$memberName: #T,", memberSymbol)
