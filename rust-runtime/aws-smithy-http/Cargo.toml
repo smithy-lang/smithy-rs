@@ -13,6 +13,8 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 rt-tokio = ["tokio/rt", "tokio/fs", "tokio/io-util", "tokio-util/io"]
 event-stream = ["aws-smithy-eventstream"]
+serialize = ["aws-smithy-eventstream/serialize"]
+deserialize = ["aws-smithy-eventstream/deserialize"]
 
 [dependencies]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
