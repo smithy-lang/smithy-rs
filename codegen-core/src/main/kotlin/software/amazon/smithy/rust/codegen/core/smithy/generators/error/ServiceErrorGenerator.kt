@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 
@@ -77,6 +78,7 @@ class ServiceErrorGenerator(
                     )
                 }
             rust("impl #T for Error {}", RuntimeType.StdError)
+            writeCustomizations(customizations, ErrorSection.ServiceErrorAdditionalTraitImpls(allErrors))
         }
         crate.lib { rust("pub use error_meta::Error;") }
     }

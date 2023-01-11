@@ -126,6 +126,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         }
                     }
                 }
+
                 else -> {}
             }
         }
