@@ -320,3 +320,47 @@ let client = aws_sdk_s3::Client::new(&sdk_config);
 references = ["smithy-rs#2122"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = """
+The introduction of `CredentialsCache` comes with an accompanying type `SharedCredentialsCache`. This replaces `SharedCredentialsProvider` and as a result, `aws_http::auth:set_provider` has been updated to `aws_http::auth::set_credentials_cache`.
+
+Before:
+```rust
+use aws_credential_types::Credentials;
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_http::auth::set_provider;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation;
+
+let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
+let credentials = Credentials::new("example", "example", None, None, "my_provider_name");
+set_provider(
+    &mut req.properties_mut(),
+    SharedCredentialsProvider::new(credentials),
+);
+```
+
+After:
+```rust
+use aws_credential_types::Credentials;
+use aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};
+use aws_http::auth::set_credentials_cache;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation;
+use std::sync::Arc;
+
+let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
+let credentials = Credentials::new("example", "example", None, None, "my_provider_name");
+let credentials_cache = CredentialsCache::lazy_builder()
+    .into_credentials_cache()
+    .create_cache(Arc::new(credentials));
+set_credentials_cache(
+    &mut req.properties_mut(),
+    SharedCredentialsCache::new(credentials_cache),
+);
+```
+"""
+references = ["smithy-rs#2122"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
