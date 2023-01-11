@@ -79,6 +79,7 @@ pub struct AssumeRoleProviderBuilder {
     session_length: Option<Duration>,
     policy: Option<String>,
     policy_arns: Option<Vec<PolicyDescriptorType>>,
+    credentials_cache: Option<CredentialsCache>,
 }
 
 impl AssumeRoleProviderBuilder {
@@ -99,6 +100,7 @@ impl AssumeRoleProviderBuilder {
             conf: None,
             policy: None,
             policy_arns: None,
+            credentials_cache: None,
         }
     }
 
@@ -179,6 +181,12 @@ impl AssumeRoleProviderBuilder {
         self
     }
 
+    /// Set the [`CredentialsCache`] for credentials retrieved from STS.
+    pub fn credentials_cache(mut self, cache: CredentialsCache) -> Self {
+        self.credentials_cache = Some(cache);
+        self
+    }
+
     /// Override the configuration used for this provider
     ///
     /// This enables overriding the connection used to communicate with STS in addition to other internal
@@ -192,9 +200,11 @@ impl AssumeRoleProviderBuilder {
     pub fn build(self, provider: impl ProvideCredentials + 'static) -> AssumeRoleProvider {
         let conf = self.conf.unwrap_or_default();
 
-        let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
-        builder.set_sleep(conf.sleep());
-        let credentials_cache = builder.into_credentials_cache();
+        let credentials_cache = self.credentials_cache.unwrap_or_else(|| {
+            let mut builder = CredentialsCache::lazy_builder().time_source(conf.time_source());
+            builder.set_sleep(conf.sleep());
+            builder.into_credentials_cache()
+        });
 
         let config = aws_sdk_sts::Config::builder()
             .credentials_cache(credentials_cache)
