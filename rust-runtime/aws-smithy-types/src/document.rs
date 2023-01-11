@@ -76,6 +76,8 @@ impl From<i32> for Document {
     }
 }
 
+/* ANCHOR END: document */
+
 #[cfg(test)]
 mod test {
     /// checks if a) serialization of json suceeds and b) it is compatible with serde_json
