@@ -98,11 +98,6 @@ private sealed class UnsupportedConstraintMessageKind {
                 ),
             )
 
-            is UnsupportedLengthTraitOnBlobShape -> LogMessage(
-                level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, lengthTrait, constraintTraitsUberIssue),
-            )
-
             is UnsupportedRangeTraitOnShape -> LogMessage(
                 level,
                 buildMessageShapeHasUnsupportedConstraintTrait(shape, rangeTrait, constraintTraitsUberIssue),
@@ -128,9 +123,6 @@ private data class UnsupportedLengthTraitOnStreamingBlobShape(
     val lengthTrait: LengthTrait,
     val streamingTrait: StreamingTrait,
 ) : UnsupportedConstraintMessageKind()
-
-private data class UnsupportedLengthTraitOnBlobShape(val shape: Shape, val lengthTrait: LengthTrait) :
-    UnsupportedConstraintMessageKind()
 
 private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) :
     UnsupportedConstraintMessageKind()
@@ -240,18 +232,7 @@ fun validateUnsupportedConstraints(
     val unsupportedConstraintShapeReachableViaAnEventStreamSet =
         unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet + unsupportedConstraintErrorShapeReachableViaAnEventStreamSet
 
-    // 4. Length trait on blob shapes is used. It has not been implemented yet.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
-    val unsupportedLengthTraitOnBlobShapeSet = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterIsInstance<BlobShape>()
-        .mapNotNull {
-            it.getTrait<LengthTrait>()?.let { trait -> UnsupportedLengthTraitOnBlobShape(it, trait) }
-        }
-        .toSet()
-
-    // 5. Range trait used on unsupported shapes.
+    // 4. Range trait used on unsupported shapes.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
@@ -261,7 +242,7 @@ fun validateUnsupportedConstraints(
         .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
         .toSet()
 
-    // 6. UniqueItems trait on any shape is used. It has not been implemented yet.
+    // 5. UniqueItems trait on any shape is used. It has not been implemented yet.
     // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
     val unsupportedUniqueItemsTraitOnShapeSet = walker
         .walkShapes(service)
@@ -279,7 +260,6 @@ fun validateUnsupportedConstraints(
         unsupportedConstraintOnMemberShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedLengthTraitOnStreamingBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedConstraintShapeReachableViaAnEventStreamSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            unsupportedLengthTraitOnBlobShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
             unsupportedUniqueItemsTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) }
 

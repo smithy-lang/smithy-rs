@@ -41,6 +41,8 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         AwsReadmeDecorator(),
         HttpConnectorDecorator(),
         AwsEndpointsStdLib(),
+        AddFIPSDualStackDecorator(),
+        GenericSmithySdkConfigSettings(),
         AwsRequestIdDecorator(),
         DisabledAuthDecorator(),
     ),

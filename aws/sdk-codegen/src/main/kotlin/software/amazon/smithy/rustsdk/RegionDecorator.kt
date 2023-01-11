@@ -21,11 +21,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.extendIf
+import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
 /* Example Generated Code */
 /*
@@ -79,11 +83,15 @@ class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
+    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.getBuiltIn(Builtins.REGION) != null
+
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + RegionProviderConfig(codegenContext)
+        return baseCustomizations.extendIf(usesRegion(codegenContext)) {
+            RegionProviderConfig(codegenContext)
+        }
     }
 
     override fun operationCustomizations(
@@ -91,17 +99,35 @@ class RegionDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + RegionConfigPlugin()
+        return baseCustomizations.extendIf(usesRegion(codegenContext)) { RegionConfigPlugin() }
     }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
+        return baseCustomizations.extendIf(usesRegion(codegenContext)) { PubUseRegion(codegenContext.runtimeConfig) }
+    }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
+        return usesRegion(codegenContext).thenSingletonListOf {
+            SdkConfigSection.create { section ->
+                {
+                    rust(
+                        """
+                        ${section.serviceConfigBuilder} =
+                             ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
+                        """,
+                    )
+                }
+            }
+        }
     }
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
+        if (!usesRegion(codegenContext)) {
+            return listOf()
+        }
         return listOf(
             object : EndpointCustomization {
                 override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {

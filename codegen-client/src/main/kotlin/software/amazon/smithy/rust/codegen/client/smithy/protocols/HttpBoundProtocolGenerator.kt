@@ -9,7 +9,9 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -29,8 +31,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.http.ResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
@@ -169,7 +169,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
@@ -249,7 +249,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
@@ -257,7 +257,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 "E" to errorSymbol,
             ) {
                 // Not all implementations will use the property bag, but some will
-                Attribute.Custom("allow(unused_variables)").render(this)
+                Attribute.AllowUnusedVariables.render(this)
                 rust("let (response, properties) = op_response.parts_mut();")
                 withBlock("Ok({", "})") {
                     renderShapeParser(
@@ -278,7 +278,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
-            Attribute.Custom("allow(clippy::unnecessary_wraps)").render(this)
+            Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,

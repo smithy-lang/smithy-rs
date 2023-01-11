@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.customize
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
@@ -89,6 +90,11 @@ interface CoreCodegenDecorator<CodegenContext> {
         codegenContext: CodegenContext,
         baseCustomizations: List<BuilderCustomization>,
     ): List<BuilderCustomization> = baseCustomizations
+
+    /**
+     * Extra sections allow one decorator to influence another. This is intended to be used by querying the `rootDecorator`
+     */
+    fun extraSections(codegenContext: CodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> = listOf()
 }
 
 /**
@@ -110,7 +116,7 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
 
     final override fun transformModel(service: ServiceShape, model: Model): Model =
         combineCustomizations(model) { decorator, otherModel ->
-            decorator.transformModel(service, otherModel)
+            decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel)
         }
 
     final override fun libRsCustomizations(
@@ -141,6 +147,9 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
     ): List<BuilderCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
         decorator.builderCustomizations(codegenContext, customizations)
     }
+
+    final override fun extraSections(codegenContext: CodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> =
+        addCustomizations { decorator -> decorator.extraSections(codegenContext) }
 
     /**
      * Combines customizations from multiple ordered codegen decorators.
