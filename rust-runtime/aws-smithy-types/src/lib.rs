@@ -14,17 +14,17 @@
 )]
 
 use crate::error::{TryFromNumberError, TryFromNumberErrorKind};
-mod document;
 pub mod base64;
 pub mod date_time;
+mod document;
 pub mod endpoint;
 pub mod error;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
 
-pub use crate::document::Document;
 pub use crate::date_time::DateTime;
+pub use crate::document::Document;
 pub use error::Error;
 
 /// Binary Blob Type
