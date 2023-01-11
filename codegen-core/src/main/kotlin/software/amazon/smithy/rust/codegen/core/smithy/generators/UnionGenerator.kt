@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import UnstableDerive
 
 fun CodegenTarget.renderUnknownVariant() = when (this) {
     CodegenTarget.SERVER -> false
@@ -63,6 +64,7 @@ class UnionGenerator(
         writer.deprecatedShape(shape)
 
         val containerMeta = unionSymbol.expectRustMetadata()
+        writer.writeInline(UnstableDerive.UnstableDerive)
         containerMeta.render(writer)
 
         renderUnion(unionSymbol)
