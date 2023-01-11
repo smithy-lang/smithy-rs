@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
+import UnstableDerive
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: Writable) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -144,6 +145,7 @@ open class StructureGenerator(
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
+        writer.writeInline(UnstableDerive.UnstableDerive)
         containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
