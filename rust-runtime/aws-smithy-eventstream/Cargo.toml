@@ -9,6 +9,8 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 derive-arbitrary = ["arbitrary", "derive_arbitrary"]
+serialize = []
+deserialize = []
 
 [dependencies]
 derive_arbitrary = { version = "=1.1.6", optional = true } # 1.2.0 requires Rust 1.63 to compile
