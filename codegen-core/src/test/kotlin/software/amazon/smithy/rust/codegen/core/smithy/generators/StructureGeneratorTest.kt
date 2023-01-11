@@ -177,7 +177,7 @@ class StructureGeneratorTest {
     fun `generate a custom debug implementation when the sensitive trait is applied to the struct`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("lib")
-        val generator = StructureGenerator(model, provider, writer, secretStructure)
+        val generator = StructureGenerator(model, provider, writer, secretStructure, emptyList())
         generator.render()
         writer.unitTest(
             "sensitive_structure_redacted",
@@ -196,8 +196,8 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.useShapeWriter(inner) {
-            val secretGenerator = StructureGenerator(model, provider, this, secretStructure)
-            val generator = StructureGenerator(model, provider, this, structWithInnerSecretStructure)
+            val secretGenerator = StructureGenerator(model, provider, this, secretStructure, emptyList())
+            val generator = StructureGenerator(model, provider, this, structWithInnerSecretStructure, emptyList())
             secretGenerator.render()
             generator.render()
             unitTest(

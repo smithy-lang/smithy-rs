@@ -131,11 +131,11 @@ internal class BuilderGeneratorTest {
     fun `builder for a sensitive struct should implement the debug trait as such`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
-        val structGenerator = StructureGenerator(model, provider, writer, secretStructure)
-        val builderGenerator = BuilderGenerator(model, provider, secretStructure)
+        val structGenerator = StructureGenerator(model, provider, writer, secretStructure, emptyList())
+        val builderGenerator = BuilderGenerator(model, provider, secretStructure, emptyList())
         structGenerator.render()
         builderGenerator.render(writer)
-        writer.implBlock(secretStructure, provider) {
+        writer.implBlock(provider.toSymbol(secretStructure)) {
             builderGenerator.renderConvenienceMethod(this)
         }
         writer.compileAndTest(
