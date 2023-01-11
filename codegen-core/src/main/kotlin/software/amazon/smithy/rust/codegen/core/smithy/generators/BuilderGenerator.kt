@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import UnstableDerive
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`.
@@ -208,7 +209,11 @@ class BuilderGenerator(
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("A builder for #D.", structureSymbol)
         Attribute(derive(builderDerives)).render(writer)
+        writer.writeInline("/// This is the datatype that Builder of this module build itself into.\n")
+        writer.writeInline("pub type OutputShape = #D", structureSymbol)
+        writer.writeInline(UnstableDerive.UnstableDerive)
         writer.rustBlock("pub struct $builderName") {
+            // add serde
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
