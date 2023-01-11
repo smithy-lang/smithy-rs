@@ -9,6 +9,10 @@ enum VisitorState {
     Unexpected,
 }
 
+impl VisitorState { 
+    const UNEXPECTED_VISITOR_STATE: &'static str = "Unexpected state. This happens when visitor tries to parse something after finished parsing the `subsec_nanos`.";
+}
+
 struct NonHumanReadableDateTimeVisitor {
     state: VisitorState,
     seconds: i64,
@@ -42,31 +46,31 @@ impl<'de> Visitor<'de> for NonHumanReadableDateTimeVisitor {
     where
         E: serde::de::Error,
     {
-        match self.state {
+        let msg = match self.state {
+            VisitorState::Unexpected => VisitorState::UNEXPECTED_VISITOR_STATE,
             VisitorState::Second => {
                 self.seconds = v;
                 self.state = VisitorState::SubsecondNanos;
+                return Ok(self)
             }
-            _ => return Err(serde::de::Error::custom("`seconds` value must be i64")),
+            _ => "`seconds` value must be i64",
         };
-        Ok(self)
+        Err(serde::de::Error::custom(msg))
     }
     fn visit_u32<E>(mut self, v: u32) -> Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
-        match self.state {
+        let msg = match self.state {
+            VisitorState::Unexpected => VisitorState::UNEXPECTED_VISITOR_STATE,
             VisitorState::SubsecondNanos => {
                 self.subsecond_nanos = v;
                 self.state = VisitorState::Unexpected;
+                return Ok(self)
             }
-            _ => {
-                return Err(serde::de::Error::custom(
-                    "`subsecond_nanos` value must be u32",
-                ))
-            }
+            _ => "`subsecond_nanos` value must be u32",
         };
-        Ok(self)
+        Err(serde::de::Error::custom(msg))
     }
 }
 
