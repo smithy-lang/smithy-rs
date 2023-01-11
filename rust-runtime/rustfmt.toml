@@ -1,0 +1,10 @@
+tab_spaces = 4
+imports_layout = "Vertical"
+reorder_imports = true
+imports_granularity = "Module"
+space_after_colon = true
+force_multiline_blocks = true
+remove_nested_parens = true
+reorder_impl_items = true
+group_imports = "StdExternalCrate"
+reorder_modules = true
