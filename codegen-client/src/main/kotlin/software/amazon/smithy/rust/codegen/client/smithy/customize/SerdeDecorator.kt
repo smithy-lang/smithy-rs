@@ -39,8 +39,5 @@ class SerdeDecorator : ClientCodegenDecorator {
         }
         rustCrate.mergeFeature(_feature("serde-serialize", "aws-sdk-types"))
         rustCrate.mergeFeature(_feature("serde-deserialize", "aws-sdk-types"))
-        rustCrate.mergeFeature(_feature("serde-serialize", "aws-sdk-http"))
-        rustCrate.mergeFeature(_feature("serde-deserialize", "aws-sdk-http"))
     }
-
 }
