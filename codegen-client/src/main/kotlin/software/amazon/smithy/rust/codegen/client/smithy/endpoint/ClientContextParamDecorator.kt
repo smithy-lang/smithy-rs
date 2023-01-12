@@ -17,7 +17,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Servi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.standardConfigParam
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.join
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -30,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  * This handles injecting parameters like `s3::Accelerate` or `s3::ForcePathStyle`. The resulting parameters become
  * setters on the config builder object.
  */
-class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization() {
+class ClientContextConfigCustomization(ctx: CodegenContext) : ConfigCustomization() {
     private val configParams = ctx.serviceShape.getTrait<ClientContextParamsTrait>()?.parameters.orEmpty().toList()
         .map { (key, value) -> fromClientParam(key, value, ctx.symbolProvider) }
     private val decorators = configParams.map { standardConfigParam(it) }
@@ -53,7 +55,7 @@ class ClientContextDecorator(ctx: CodegenContext) : ConfigCustomization() {
             return ConfigParam(
                 RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
                 toSymbol(definition.type, symbolProvider),
-                definition.documentation.orNull(),
+                definition.documentation.orNull()?.let { writable { docs(it) } },
             )
         }
     }

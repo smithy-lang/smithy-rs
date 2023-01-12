@@ -466,6 +466,7 @@ class Attribute(val inner: Writable) {
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
+        val ShouldPanic = Attribute("should_panic")
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
 

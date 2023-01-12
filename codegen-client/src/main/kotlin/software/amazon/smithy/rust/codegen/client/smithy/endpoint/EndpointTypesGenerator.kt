@@ -65,7 +65,7 @@ class EndpointTypesGenerator(
      */
     fun builtInFor(parameter: Parameter, config: String): Writable? {
         val defaultProviders = customizations
-            .mapNotNull { it.builtInDefaultValue(parameter, config) }
+            .mapNotNull { it.loadBuiltInFromServiceConfig(parameter, config) }
         if (defaultProviders.size > 1) {
             error("Multiple providers provided a value for the builtin $parameter")
         }

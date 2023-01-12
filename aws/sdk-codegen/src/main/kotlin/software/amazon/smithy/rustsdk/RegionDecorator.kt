@@ -129,14 +129,14 @@ class RegionDecorator : ClientCodegenDecorator {
         }
         return listOf(
             object : EndpointCustomization {
-                override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
+                override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
                         Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
                         else -> null
                     }
                 }
 
-                override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
                     if (name != Builtins.REGION.builtIn.get()) {
                         return null
                     }

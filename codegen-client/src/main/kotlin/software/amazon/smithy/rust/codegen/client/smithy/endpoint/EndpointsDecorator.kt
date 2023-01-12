@@ -43,18 +43,28 @@ interface EndpointCustomization {
      * Provide the default value for [parameter] given a reference to the service config struct ([configRef])
      *
      * If this parameter is not recognized, return null.
+     *
+     * Example:
+     * ```kotlin
+     * override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
+     *     return when (parameter.builtIn) {
+     *         Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
+     *         else -> null
+     *     }
+     * }
+     * ```
      */
-    fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? = null
+    fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? = null
+
+    /**
+     * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
+     */
+    fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
 
     /**
      * Provide a list of additional endpoints standard library functions that rules can use
      */
     fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> = listOf()
-
-    /**
-     * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
-     */
-    fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
 }
 
 /**
@@ -101,7 +111,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + ClientContextDecorator(codegenContext) +
+        return baseCustomizations + ClientContextConfigCustomization(codegenContext) +
             EndpointConfigCustomization(codegenContext, EndpointTypesGenerator.fromContext(codegenContext))
     }
 

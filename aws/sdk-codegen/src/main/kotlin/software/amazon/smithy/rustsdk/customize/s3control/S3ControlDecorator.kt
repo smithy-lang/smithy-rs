@@ -21,6 +21,6 @@ class S3ControlDecorator : ClientCodegenDecorator {
         if (!applies(service)) {
             return model
         }
-        return stripEndpointTrait(model, "AccountId")
+        return stripEndpointTrait("AccountId")(model)
     }
 }

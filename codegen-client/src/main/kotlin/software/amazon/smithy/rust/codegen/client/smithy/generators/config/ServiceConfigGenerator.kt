@@ -95,12 +95,20 @@ sealed class ServiceConfig(name: String) : Section(name) {
     data class DefaultForTests(val configBuilderRef: String) : ServiceConfig("DefaultForTests")
 }
 
-data class ConfigParam(val name: String, val type: Symbol, val docs: String?)
+data class ConfigParam(val name: String, val type: Symbol, val setterDocs: Writable?, val getterDocs: Writable? = null)
 
+/**
+ * Config customization for a standard config param:
+ * 1. `pub(crate)` field
+ * 2. pub(crate) accessor
+ * 3. convenience setter (non-optional)
+ * 4. standard setter (&mut self)
+ */
 fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : ConfigCustomization() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
+                docsOrFallback(param.getterDocs)
                 rust("pub (crate) ${param.name}: #T,", param.type.makeOptional())
             }
 
@@ -110,7 +118,7 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : Conf
             }
 
             ServiceConfig.BuilderImpl -> writable {
-                docsOrFallback(param.docs)
+                docsOrFallback(param.setterDocs)
                 rust(
                     """
                     pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
@@ -120,7 +128,7 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : Conf
                     param.type,
                 )
 
-                docsOrFallback(param.docs)
+                docsOrFallback(param.setterDocs)
                 rust(
                     """
                     pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {

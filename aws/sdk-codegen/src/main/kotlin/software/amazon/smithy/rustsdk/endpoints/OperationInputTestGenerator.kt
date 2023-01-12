@@ -79,11 +79,16 @@ class OperationInputTestGenerator(private val ctx: ClientCodegenContext, private
 
     fun generateInput(testOperationInput: EndpointTestOperationInput) = writable {
         val operationName = testOperationInput.operationName.toSnakeCase()
+        if (test.expect.endpoint.orNull()?.properties?.get("authSchemes")?.asArrayNode()?.orNull()
+            ?.map { it.expectObjectNode().expectStringMember("name").value }?.contains("sigv4a") == true
+        ) {
+            Attribute.ShouldPanic.render(this)
+        }
         tokioTest(safeName("operation_input_test_$operationName")) {
             rustTemplate(
                 """
-                /* builtIns: ${Node.prettyPrintJson(testOperationInput.builtInParams)} */
-                /* clientParams: ${Node.prettyPrintJson(testOperationInput.clientParams)} */
+                /* builtIns: ${escape(Node.prettyPrintJson(testOperationInput.builtInParams))} */
+                /* clientParams: ${escape(Node.prettyPrintJson(testOperationInput.clientParams))} */
                 let (conn, rcvr) = #{capture_request}(None);
                 let conf = #{conf};
                 let client = $moduleName::Client::from_conf(conf);
@@ -110,6 +115,7 @@ class OperationInputTestGenerator(private val ctx: ClientCodegenContext, private
                             escape("expected error: $error [${test.documentation.orNull() ?: "no docs"}]")
                         rustTemplate(
                             """
+                            rcvr.expect_no_request();
                             let error = _result.expect_err(${expectedError.dq()});
                             assert!(format!("{:?}", error).contains(${escape(error).dq()}), "expected error to contain `${
                             escape(
@@ -145,7 +151,7 @@ class OperationInputTestGenerator(private val ctx: ClientCodegenContext, private
             rust("let mut builder = $moduleName::Config::builder().with_test_defaults().http_connector(conn);")
             operationInput.builtInParams.members.forEach { (builtIn, value) ->
                 val setter = endpointCustomizations.firstNotNullOfOrNull {
-                    it.setBuiltInOnConfig(
+                    it.setBuiltInOnServiceConfig(
                         builtIn.value,
                         value,
                         "builder",

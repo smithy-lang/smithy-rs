@@ -11,14 +11,10 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.ShapeType
-import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
-import software.amazon.smithy.rulesengine.traits.ClientContextParamDefinition
-import software.amazon.smithy.rulesengine.traits.ClientContextParamsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
@@ -28,6 +24,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigParam
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.standardConfigParam
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -37,35 +34,19 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import java.util.Optional
 
-fun EndpointRuleSet.getBuiltIn(builtIn: Parameter) = parameters.toList().find { it.builtIn == builtIn.builtIn }
-fun ClientCodegenContext.getBuiltIn(builtIn: Parameter): Parameter? {
+/** load a builtIn parameter from a ruleset by name */
+fun EndpointRuleSet.getBuiltIn(builtIn: String) = parameters.toList().find { it.builtIn == Optional.of(builtIn) }
+
+/** load a builtIn parameter from a ruleset. The returned builtIn is the one defined in the ruleset (including latest docs, etc.) */
+fun EndpointRuleSet.getBuiltIn(builtIn: Parameter) = getBuiltIn(builtIn.builtIn.orNull()!!)
+fun ClientCodegenContext.getBuiltIn(builtIn: Parameter): Parameter? = getBuiltIn(builtIn.builtIn.orNull()!!)
+fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
     val idx = EndpointRulesetIndex.of(model)
     val rules = idx.endpointRulesForService(serviceShape) ?: return null
     return rules.getBuiltIn(builtIn)
-}
-
-/**
- * For legacy SDKs, there are builtIn parameters that cannot be automatically used as context parameters.
- *
- * However, for the Rust SDK, these parameters can be used directly.
- */
-fun Model.promoteBuiltInToContextParam(serviceId: ShapeId, builtInSrc: Parameter): Model {
-    val model = this
-    // load the builtIn with a matching name from the ruleset allowing for any docs updates
-    val builtIn = this.loadBuiltIn(serviceId, builtInSrc) ?: return model
-
-    return model.addContextParam(
-        serviceId, builtIn.name.asString(),
-        ClientContextParamDefinition.builder().documentation(builtIn.documentation.get()).type(
-            when (builtIn.type!!) {
-                ParameterType.STRING -> ShapeType.STRING
-                ParameterType.BOOLEAN -> ShapeType.BOOLEAN
-            },
-        ).build(),
-    )
 }
 
 private fun toConfigParam(parameter: Parameter): ConfigParam = ConfigParam(
@@ -74,31 +55,8 @@ private fun toConfigParam(parameter: Parameter): ConfigParam = ConfigParam(
         ParameterType.STRING -> RuntimeType.String.toSymbol()
         ParameterType.BOOLEAN -> RuntimeType.Bool.toSymbol()
     },
-    parameter.documentation.orNull(),
+    parameter.documentation.orNull()?.let { writable { docs(it) } },
 )
-
-fun Model.addContextParam(
-    serviceId: ShapeId,
-    name: String,
-    contextParamDefinition: ClientContextParamDefinition,
-): Model {
-    return ModelTransformer.create().mapShapes(this) { shape ->
-        if (shape !is ServiceShape || shape.id != serviceId) {
-            shape
-        } else {
-            val traitBuilder = shape.getTrait<ClientContextParamsTrait>()
-                // there is a bug in the return type of the toBuilder method
-                ?.let { ClientContextParamsTrait.builder().parameters(it.parameters) }
-                ?: ClientContextParamsTrait.builder()
-            val contextParamsTrait =
-                traitBuilder.putParameter(
-                    name,
-                    contextParamDefinition,
-                ).build()
-            shape.toBuilder().removeTrait(ClientContextParamsTrait.ID).addTrait(contextParamsTrait).build()
-        }
-    }
-}
 
 fun Model.loadBuiltIn(serviceId: ShapeId, builtInSrc: Parameter): Parameter? {
     val model = this
@@ -112,10 +70,10 @@ fun Model.loadBuiltIn(serviceId: ShapeId, builtInSrc: Parameter): Parameter? {
 fun Model.sdkConfigSetter(
     serviceId: ShapeId,
     builtInSrc: Parameter,
-    name: String?,
+    configParameterNameOverride: String?,
 ): Pair<AdHocSection<*>, (Section) -> Writable>? {
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
-    val fieldName = name ?: builtIn.name.rustName()
+    val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
     val map = when (builtIn.type!!) {
         ParameterType.STRING -> writable { rust("|s|s.to_string()") }
@@ -124,6 +82,10 @@ fun Model.sdkConfigSetter(
     return SdkConfigSection.copyField(fieldName, map)
 }
 
+/**
+ * Create a client codegen decorator that creates bindings for a builtIn parameter. Optionally, you can provide [clientParam]
+ * which allows control over the config parameter that will be generated.
+ */
 fun decoratorForBuiltIn(
     builtIn: Parameter,
     clientParam: ConfigParam? = null,
@@ -134,8 +96,8 @@ fun decoratorForBuiltIn(
         override val name: String = "Auto${builtIn.builtIn.get()}"
         override val order: Byte = 0
 
-        private fun enabled(codegenContext: ClientCodegenContext) =
-            codegenContext.model.loadBuiltIn(codegenContext.serviceShape.id, builtIn) != null
+        private fun rulesetContainsBuiltIn(codegenContext: ClientCodegenContext) =
+            codegenContext.getBuiltIn(builtIn) != null
 
         override fun extraSections(codegenContext: ClientCodegenContext): List<Pair<AdHocSection<*>, (Section) -> Writable>> {
             return listOfNotNull(
@@ -147,7 +109,7 @@ fun decoratorForBuiltIn(
             codegenContext: ClientCodegenContext,
             baseCustomizations: List<ConfigCustomization>,
         ): List<ConfigCustomization> {
-            return baseCustomizations.extendIf(enabled(codegenContext)) {
+            return baseCustomizations.extendIf(rulesetContainsBuiltIn(codegenContext)) {
                 standardConfigParam(
                     clientParam ?: toConfigParam(builtIn),
                 )
@@ -156,20 +118,18 @@ fun decoratorForBuiltIn(
 
         override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> = listOf(
             object : EndpointCustomization {
-                override fun builtInDefaultValue(parameter: Parameter, configRef: String): Writable? {
-                    return if (parameter.builtIn == builtIn.builtIn) {
-                        writable {
+                override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? =
+                    when (parameter.builtIn) {
+                        builtIn.builtIn -> writable {
                             rust("$configRef.$name")
                             if (parameter.type == ParameterType.STRING) {
                                 rust(".clone()")
                             }
                         }
-                    } else {
-                        null
+                        else -> null
                     }
-                }
 
-                override fun setBuiltInOnConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
                     if (name != builtIn.builtIn.get()) {
                         return null
                     }
@@ -185,21 +145,25 @@ fun decoratorForBuiltIn(
     }
 }
 
-private val endpointUrlDocs = """
-    Sets the endpoint url used to communicate with this service
+private val endpointUrlDocs = writable {
+    rust(
+        """
+        /// Sets the endpoint url used to communicate with this service
 
-    Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
-    will be prefixed onto this URL. To fully override the endpoint resolver, use
-    [`Builder::endpoint_resolver`].
-""".trimIndent()
+        /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
+        /// will be prefixed onto this URL. To fully override the endpoint resolver, use
+        /// [`Builder::endpoint_resolver`].
+        """.trimIndent(),
+    )
+}
 
-private fun Node.toWritable(): Writable {
+fun Node.toWritable(): Writable {
     val node = this
     return writable {
         when (node) {
             is StringNode -> rust(node.value.dq())
             is BooleanNode -> rust("${node.value}")
-            else -> PANIC("unsupported default value: $node")
+            else -> PANIC("unsupported value for a default: $node")
         }
     }
 }
