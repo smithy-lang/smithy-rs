@@ -6,12 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.customizations
 
 import com.moandjiezana.toml.TomlWriter
-import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -73,7 +73,7 @@ class PythonExportModuleDecorator : ServerCodegenDecorator {
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         val service = codegenContext.settings.getService(codegenContext.model)
-        val serviceShapes = Walker(codegenContext.model).walkShapes(service)
+        val serviceShapes = DirectedWalker(codegenContext.model).walkShapes(service)
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
 }
