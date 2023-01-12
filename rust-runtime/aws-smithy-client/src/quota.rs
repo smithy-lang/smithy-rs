@@ -37,7 +37,6 @@ where
     S::Future: 'static,
     E: 'static,
     Tb: TokenBucket,
-    // Tb::Token: Send + 'static,
 {
     type Response = S::Response;
     type Error = SdkError<E>;
@@ -46,7 +45,7 @@ where
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         // Check the inner service to see if it's ready yet. If no tokens are available, requests
         // should fail with an error instead of waiting for the next token.
-        self.inner.poll_ready(cx).map_err(|err| {
+        self.inner.poll_ready(cx).map_err(|_err| {
             SdkError::construction_failure(format!("inner service failed to become ready"))
         })
     }

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! A token bucket intended for use with the standard smithy client retry policy.
+
 use super::Token as TokenTrait;
 use super::TokenBucket as TokenBucketTrait;
 use super::TokenBucketError;
@@ -21,8 +23,16 @@ const DEFAULT_RETRYABLE_ERROR_RETRY_COST: u32 = 5;
 /// The amount of tokens to add to the bucket when a request succeeds on the first try
 const SUCCESS_ON_FIRST_TRY_REFILL_AMOUNT: u32 = 1;
 
+/// The token type of [`TokenBucket`].
+#[derive(Debug)]
 pub struct Token {
     permit: OwnedSemaphorePermit,
+}
+
+impl Token {
+    fn empty() -> Self {
+        todo!()
+    }
 }
 
 impl TokenTrait for Token {
@@ -45,22 +55,25 @@ impl TokenTrait for Token {
 ///     are removed from the bucket.
 ///
 /// The number of tokens in the bucket will always be >= `0` and <= `<max_tokens>`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TokenBucket {
     inner: Arc<Semaphore>,
     max_tokens: usize,
-    success_on_first_try_refill_amount: u32,
+    // TODO how to use this value when refilling. Currently, the TokenBucket trait just takes a `usize`.
+    _success_on_first_try_refill_amount: u32,
     timeout_error_cost: u32,
     retryable_error_cost: u32,
 }
 
 impl TokenBucket {
+    /// Create a new `TokenBucket` using builder methods.
     pub fn builder() -> Builder {
         Builder::default()
     }
 }
 
-#[derive(Default)]
+/// A builder for `TokenBucket`s.
+#[derive(Default, Debug)]
 pub struct Builder {
     starting_tokens: Option<usize>,
     max_tokens: Option<usize>,
@@ -70,16 +83,21 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// The number of tokens the bucket will start with. Defaults to 500.
     pub fn starting_tokens(mut self, starting_tokens: usize) -> Self {
         self.starting_tokens = Some(starting_tokens);
         self
     }
 
+    /// The maximum number of tokens that the bucket can hold.
+    /// Defaults to the value of `starting_tokens`.
     pub fn max_tokens(mut self, max_tokens: usize) -> Self {
         self.max_tokens = Some(max_tokens);
         self
     }
 
+    /// Whenever a request succeeds on the first attempt, the bucket will be refilled by this amount
+    /// of tokens. Defaults to 1.
     pub fn success_on_first_try_refill_amount(
         mut self,
         success_on_first_try_refill_amount: u32,
@@ -88,20 +106,25 @@ impl Builder {
         self
     }
 
+    /// How many tokens to remove from the bucket when a request fails due to a timeout error.
+    /// Defaults to 10.
     pub fn timeout_error_cost(mut self, timeout_error_cost: u32) -> Self {
         self.timeout_error_cost = Some(timeout_error_cost);
         self
     }
 
+    /// How many tokens to remove from the bucket when a request fails due to a retryable error that
+    /// isn't timeout-related. Defaults to 5.
     pub fn retryable_error_cost(mut self, retryable_error_cost: u32) -> Self {
         self.retryable_error_cost = Some(retryable_error_cost);
         self
     }
 
+    /// Build this builder. Unset fields will be set to their default values.
     pub fn build(self) -> TokenBucket {
         let starting_tokens = self.starting_tokens.unwrap_or(DEFAULT_INITIAL_RETRY_TOKENS);
         let max_tokens = self.max_tokens.unwrap_or(starting_tokens);
-        let success_on_first_try_refill_amount = self
+        let _success_on_first_try_refill_amount = self
             .success_on_first_try_refill_amount
             .unwrap_or(SUCCESS_ON_FIRST_TRY_REFILL_AMOUNT);
         let timeout_error_cost = self
@@ -114,7 +137,7 @@ impl Builder {
         TokenBucket {
             inner: Arc::new(Semaphore::new(starting_tokens)),
             max_tokens,
-            success_on_first_try_refill_amount,
+            _success_on_first_try_refill_amount,
             timeout_error_cost,
             retryable_error_cost,
         }
@@ -128,19 +151,44 @@ impl TokenBucketTrait for TokenBucket {
         &self,
         previous_request_failed_because: Option<ErrorKind>,
     ) -> Result<Self::Token, TokenBucketError> {
-        match self.inner.clone().try_acquire_owned() {
+        let number_of_tokens_to_acquire = match previous_request_failed_because {
+            None => {
+                // Return an empty token because the quota layer lifecycle expects a for each
+                // request even though the standard token bucket only requires tokens for retry
+                // attempts.
+                return Ok(Token::empty());
+            }
+            Some(error_kind) => match error_kind {
+                ErrorKind::ServerError => self.retryable_error_cost,
+                ErrorKind::ThrottlingError | ErrorKind::TransientError => self.timeout_error_cost,
+                // I think these errors aren't relevant to the bucket. They should probably return
+                // an empty token just like in the "successful" request case.
+                ErrorKind::ClientError => todo!(),
+                _ => unreachable!("A new variant was added. Please update this."),
+            },
+        };
+
+        match self
+            .inner
+            .clone()
+            .try_acquire_many_owned(number_of_tokens_to_acquire)
+        {
             Ok(permit) => Ok(Token { permit }),
             Err(TryAcquireError::NoPermits) => Err(TokenBucketError::NoTokens),
             Err(other) => Err(TokenBucketError::Bug(other.to_string())),
         }
     }
 
-    fn refill(&self, tokens: usize) {
-        self.inner.add_permits(tokens)
-    }
-
     fn available(&self) -> usize {
         self.inner.available_permits()
+    }
+
+    fn refill(&self, tokens: usize) {
+        // Ensure the bucket doesn't overflow by limiting the amount of tokens to add, if necessary.
+        let amount_to_add = (self.available() + tokens).min(self.max_tokens) - self.available();
+        if amount_to_add > 0 {
+            self.inner.add_permits(amount_to_add)
+        }
     }
 }
 

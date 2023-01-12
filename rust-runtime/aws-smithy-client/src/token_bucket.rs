@@ -3,20 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Types and traits related to token buckets. Token buckets are used to limit the amount of
+//! requests a client sends in order to avoid getting throttled. Token buckets can also act as a
+//! form of concurrency control if a token is required to send a new request (as opposed to retry
+//! requests only).
+
 use aws_smithy_types::retry::ErrorKind;
 use std::fmt;
 
 pub mod standard;
 
+/// A trait implemented by types that represent a token dispensed from a [`TokenBucket`].
 pub trait Token {
-    /// Release this token back to the bucket.
+    /// Release this token back to the bucket. This should be called if the related request succeeds.
     fn release(self);
 
     /// Forget this token, forever banishing it to the shadow realm, from whence no tokens return.
+    /// This should be called if the related request fails.
     fn forget(self);
 }
 
+/// This trait is implemented by types that act as token buckets. Token buckets are used to regulate
+/// the amount of requests sent by clients. Different token buckets may apply different strategies
+/// to manage the number of tokens in a bucket.
+///
+/// related: [`Token`], [`TokenBucketError`]
 pub trait TokenBucket {
+    /// The type of tokens this bucket dispenses.
     type Token;
 
     /// Attempt to acquire a token from the bucket. This will fail if the bucket has no more tokens.
@@ -33,9 +46,12 @@ pub trait TokenBucket {
     fn refill(&self, tokens: usize);
 }
 
+/// Errors related to a token bucket.
 #[derive(Debug)]
 pub enum TokenBucketError {
+    /// A token was requested but there were no tokens left in the bucket.
     NoTokens,
+    /// This error should never occur and is a bug. Please report it.
     Bug(String),
 }
 

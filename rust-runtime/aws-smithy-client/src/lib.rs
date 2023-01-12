@@ -236,9 +236,6 @@ where
             .layer(DispatchLayer::new())
             .service(connector);
 
-        // let c: Box<dyn tower::Service<_, Response = _, Error = _, Future = _>> =
-        //     Box::new(svc.clone());
-
         // send_operation records the full request-response lifecycle.
         // NOTE: For operations that stream output, only the setup is captured in this span.
         let span = debug_span!(
@@ -259,7 +256,9 @@ where
 
         let result = async move {
             check_send_sync(svc)
-                // .ready().await?
+                // TODO
+                .ready()
+                .await?
                 .call(op)
                 .await
         }
