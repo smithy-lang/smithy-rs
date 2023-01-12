@@ -13,7 +13,7 @@ January 11th, 2023
 - 🐛 (client, [smithy-rs#2150](https://github.com/awslabs/smithy-rs/issues/2150)) Fix bug where string default values were not supported for endpoint parameters
 - 🐛 (all, [smithy-rs#2170](https://github.com/awslabs/smithy-rs/issues/2170), [aws-sdk-rust#706](https://github.com/awslabs/aws-sdk-rust/issues/706)) Remove the webpki-roots feature from `hyper-rustls`
 - 🐛 (server, [smithy-rs#2054](https://github.com/awslabs/smithy-rs/issues/2054)) Servers can generate a unique request ID and use it in their handlers.
-- 🐛 (server, [smithy-rs#2201](https://github.com/awslabs/smithy-rs/issues/2201)) Fix severe bug where a router fails to deserialize percent-encoded query strings, reporting no operation match when there could be one. If your Smithy model uses an operation with a request URI spec containing [query string literals](https://smithy.io/2.0/spec/http-bindings.html#query-string-literals), you are affected. This fix was released in `aws-smithy-http-server` v0.53.1; v0.53.0 has been yanked.
+- 🐛 (server, [smithy-rs#2201](https://github.com/awslabs/smithy-rs/issues/2201)) Fix severe bug where a router fails to deserialize percent-encoded query strings, reporting no operation match when there could be one. If your Smithy model uses an operation with a request URI spec containing [query string literals](https://smithy.io/2.0/spec/http-bindings.html#query-string-literals), you are affected. This fix was released in `aws-smithy-http-server` v0.53.1.
 
 
 December 12th, 2022
