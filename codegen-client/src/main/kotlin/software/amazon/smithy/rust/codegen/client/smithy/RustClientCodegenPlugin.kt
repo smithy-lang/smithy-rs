@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customize.SerdeDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
@@ -53,6 +54,7 @@ class RustClientCodegenPlugin : DecoratableBuildPlugin() {
         val codegenDecorator =
             CombinedClientCodegenDecorator.fromClasspath(
                 context,
+                SerdeDecorator(),
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
