@@ -27,16 +27,6 @@ references = ["smithy-rs#1784", "smithy-rs#2074"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "rcoh"
 
-[[smithy-rs]]
-message = """
-add serde support to blob.
-add ciborium crate for testing blob serialization/de-serialization.
-"""
-references = ["smithy-rs#1944"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "thomas-k-cameron"
-
-
 [[aws-sdk-rust]]
 message = """Add additional configuration parameters to `aws_sdk_s3::Config`.
 
