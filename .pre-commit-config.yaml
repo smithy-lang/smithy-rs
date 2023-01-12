@@ -19,6 +19,10 @@ repos:
     language: system
     files: ^.*$
     pass_filenames: false
+  - id: cargo-fix
+    name: Reorder imports and format code for rust-runtime
+    entry: ./.pre-commit-hooks/cargo-fix-imports.sh
+    language: system
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v1.6.1
   hooks:
