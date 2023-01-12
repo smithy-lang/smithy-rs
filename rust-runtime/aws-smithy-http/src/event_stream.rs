@@ -10,7 +10,7 @@ use std::error::Error as StdError;
 mod receiver;
 mod sender;
 
-#[cfg(aws_sdk_unstable, feature = "serde-deserialized")]
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialized"))]
 mod deserialized_stream;
 
 pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;

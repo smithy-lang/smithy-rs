@@ -1,7 +1,7 @@
 allowed_external_types = [
     "serde::de::Deserialize",
     "serde::ser::Serialize",
-    
+
     "aws_smithy_types::*",
     "bytes::buf::buf_impl::Buf",
     "bytes::bytes::Bytes",

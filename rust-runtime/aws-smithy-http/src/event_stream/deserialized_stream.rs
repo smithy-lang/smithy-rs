@@ -1,7 +1,5 @@
 use receiver::{RawMessage, Receiver};
 
-pub use deserialized_stream::*;
-
 use super::*;
 use aws_smithy_eventstream::frame::UnmarshallMessage;
 use std::{fmt::Debug, marker::PhantomData};
