@@ -1,4 +1,20 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 11th, 2023
+==================
+**Breaking Changes:**
+- ⚠ (client, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) The Rust client codegen plugin is now called `rust-client-codegen` instead of `rust-codegen`. Be sure to update your `smithy-build.json` files to refer to the correct plugin name.
+- ⚠ (client, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) Client codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`).
+- ⚠ (server, [smithy-rs#2099](https://github.com/awslabs/smithy-rs/issues/2099)) Server codegen plugins need to define a service named `software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator` (this is the new file name for the plugin definition in `resources/META-INF/services`).
+
+**New this release:**
+- 🐛 (server, [smithy-rs#2103](https://github.com/awslabs/smithy-rs/issues/2103)) In 0.52, `@length`-constrained collection shapes whose members are not constrained made the server code generator crash. This has been fixed.
+- (server, [smithy-rs#1879](https://github.com/awslabs/smithy-rs/issues/1879)) Servers support the `@default` trait: models can specify default values. Default values will be automatically supplied when not manually set.
+- (server, [smithy-rs#2131](https://github.com/awslabs/smithy-rs/issues/2131)) The constraint `@length` on non-streaming blob shapes is supported.
+- 🐛 (client, [smithy-rs#2150](https://github.com/awslabs/smithy-rs/issues/2150)) Fix bug where string default values were not supported for endpoint parameters
+- 🐛 (all, [smithy-rs#2170](https://github.com/awslabs/smithy-rs/issues/2170), [aws-sdk-rust#706](https://github.com/awslabs/aws-sdk-rust/issues/706)) Remove the webpki-roots feature from `hyper-rustls`
+- 🐛 (server, [smithy-rs#2054](https://github.com/awslabs/smithy-rs/issues/2054)) Servers can generate a unique request ID and use it in their handlers.
+
+
 December 12th, 2022
 ===================
 **Breaking Changes:**
