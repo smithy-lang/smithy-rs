@@ -99,14 +99,11 @@ pub use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyRetry;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
-use aws_smithy_http_tower::SendOperationError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ProvideErrorKind;
 use aws_smithy_types::timeout::OperationTimeoutConfig;
 use quota::QuotaLayer;
 use std::error::Error;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use timeout::ClientTimeoutParams;
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
@@ -181,14 +178,15 @@ where
     ///
     /// For ergonomics, this does not include the raw response for successful responses. To
     /// access the raw response use `call_raw`.
-    pub async fn call<O, T, E, Retry>(&self, op: Operation<O, Retry>) -> Result<T, SdkError<E>>
+    pub async fn call<H, T, E, Retry>(&self, op: Operation<H, Retry>) -> Result<T, SdkError<E>>
     where
-        O: Send + Sync,
-        E: std::error::Error + Send + Sync + 'static,
-        Retry: Send + Sync,
-        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
-        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
-            Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
+        H: Send + Sync + 'static,
+        T: 'static,
+        E: Error + Send + Sync + 'static,
+        Retry: Send + Sync + 'static,
+        R::Policy: bounds::SmithyRetryPolicy<H, T, E, Retry>,
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, H, Retry>:
+            Service<Operation<H, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         self.call_raw(op).await.map(|res| res.parsed)
     }
@@ -197,23 +195,24 @@ where
     ///
     /// The returned result contains the raw HTTP response which can be useful for debugging or
     /// implementing unsupported features.
-    pub async fn call_raw<O, T, E, Retry>(
+    pub async fn call_raw<H, T, E, Retry>(
         &self,
-        op: Operation<O, Retry>,
+        op: Operation<H, Retry>,
     ) -> Result<SdkSuccess<T>, SdkError<E>>
     where
-        O: Send + Sync,
-        E: std::error::Error + Send + Sync + 'static,
-        Retry: Send + Sync,
-        R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
+        H: Send + Sync + 'static,
+        T: 'static,
+        E: Error + Send + Sync + 'static,
+        Retry: Send + Sync + 'static,
+        R::Policy: bounds::SmithyRetryPolicy<H, T, E, Retry>,
         // This bound is not _technically_ inferred by all the previous bounds, but in practice it
         // is because _we_ know that there is only implementation of Service for Parsed
         // (ParsedResponseService), and it will apply as long as the bounds on C, M, and R hold,
         // and will produce (as expected) Response = SdkSuccess<T>, Error = SdkError<E>. But Rust
         // doesn't know that -- there _could_ theoretically be other implementations of Service for
         // Parsed that don't return those same types. So, we must give the bound.
-        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
-            Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
+        bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, H, Retry>:
+            Service<Operation<H, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         let connector = self.connector.clone();
 
@@ -221,16 +220,16 @@ where
             ClientTimeoutParams::new(&self.operation_timeout_config, self.sleep_impl.clone());
 
         let svc = ServiceBuilder::new()
-            // .layer(TimeoutLayer::new(timeout_params.operation_timeout))
+            .layer(TimeoutLayer::new(timeout_params.operation_timeout))
             .layer(QuotaLayer::new(|| {
                 token_bucket::standard::TokenBucket::builder().build()
             }))
-            // .retry(
-            //     self.retry_policy
-            //         .new_request_policy(self.sleep_impl.clone()),
-            // )
-            // .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
-            .layer(ParseResponseLayer::<O, Retry>::new())
+            .retry(
+                self.retry_policy
+                    .new_request_policy(self.sleep_impl.clone()),
+            )
+            .layer(TimeoutLayer::new(timeout_params.operation_attempt_timeout))
+            .layer(ParseResponseLayer::<H, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
             .layer(&self.middleware)
@@ -258,9 +257,14 @@ where
         }
         let op = Operation::from_parts(req, parts);
 
-        let result = async move { check_send_sync(svc).ready().await?.call(op).await }
-            .instrument(span.clone())
-            .await;
+        let result = async move {
+            check_send_sync(svc)
+                // .ready().await?
+                .call(op)
+                .await
+        }
+        .instrument(span.clone())
+        .await;
         match &result {
             Ok(_) => {
                 span.record("status", &"ok");
@@ -295,7 +299,8 @@ where
                 static_tests::ValidTestOperation,
                 SdkSuccess<()>,
                 SdkError<static_tests::TestOperationError>,
-            > + Clone,
+            > + Clone
+            + 'static,
     {
         let _ = |o: static_tests::ValidTestOperation| {
             let _ = self.call_raw(o);

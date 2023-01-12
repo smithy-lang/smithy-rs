@@ -134,7 +134,7 @@ where
 /// This trait has a blanket implementation for all compatible types, and should never be
 /// implemented.
 pub trait SmithyRetryPolicy<O, T, E, Retry>:
-    tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone
+    tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone + 'static
 {
     /// Forwarding type to `O` for bound inference.
     ///
@@ -153,7 +153,7 @@ pub trait SmithyRetryPolicy<O, T, E, Retry>:
 
 impl<R, O, T, E, Retry> SmithyRetryPolicy<O, T, E, Retry> for R
 where
-    R: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone,
+    R: tower::retry::Policy<Operation<O, Retry>, SdkSuccess<T>, SdkError<E>> + Clone + 'static,
     O: ParseHttpResponse<Output = Result<T, E>> + Send + Sync + Clone + 'static,
     E: Error,
     Retry: ClassifyRetry<SdkSuccess<T>, SdkError<E>>,
